@@ -35,7 +35,7 @@ the two agree. Constraint names follow a fixed naming convention.
 | `update_checks` | Check log | outcome: ok / not_configured / failed / rejected |
 | `cluster_nodes` | Nodes and their **dynamic roles** | `node_name` unique, `role`, `state`, `last_heartbeat_at` |
 | `cluster_events` | Switchover and role change history | |
-| `config_revisions` | Generated engine configuration revisions | `sequence` (identity), `state`, `content_hash`, `parent_id`; `artifacts` holds non-sensitive files in clear and sensitive files as `ciphertext` (installation key, M4) |
+| `config_revisions` | Generated engine configuration revisions | `sequence` (identity), `state`, `content_hash`, `parent_id`; `artifacts` holds non-sensitive files in clear and sensitive files as `ciphertext` (installation key, M4); `deploy_mode` (`now`/`when_idle`) and `deploy_requested_at` (migration `0005`, M5) |
 | `provisioning_templates` | Local and community templates | unique (`template_key`, `version`), `source`, `manifest`, `files` |
 
 Tenant-owned tables (`sites`, `buildings`, `departments`, `extensions`,

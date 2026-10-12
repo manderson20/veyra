@@ -130,6 +130,16 @@ the phones. Key rotation without re-encrypting is not supported yet
 In an HA pair both nodes must hold the same key
 ([HA_ARCHITECTURE.md](HA_ARCHITECTURE.md) §4).
 
+## 5a. Live state and click-to-dial (Milestone 5)
+
+Every extension response carries `registration: {registered, channels}`
+from the engine (null when the engine cannot report), shown as a badge in
+the list and on the page. "Call from this phone" on the extension page
+(and `POST /calls/originate {extension_id, number}`) rings the phone first
+and places the call when it is picked up; users may dial from their own
+extensions, administrators from any extension in their organizations.
+Until trunks exist the dialplan reaches internal numbers and feature codes.
+
 ## 6. Permissions and scope
 
 | Permission | Default roles | Allows |
@@ -138,6 +148,8 @@ In an HA pair both nodes must hold the same key
 | `extensions.write` | Organization and site administrators | Create, edit, renumber, enable/disable, delete; show and rotate SIP credentials |
 | `system.settings.write` | Platform administrators | Change the numbering plan |
 | `config.read` / `config.deploy` | Organization administrators / platform administrators | See pending changes / generate and deploy revisions |
+| `calls.read` | Organization and site administrators, technicians, read-only users | Active calls of their organizations |
+| `calls.originate` | Every role including standard users | Click-to-dial from their own extensions (administrators: any extension they manage) |
 
 Lists and reads are filtered by the caller's organizations; an extension in
 another organization answers 404. Creating an extension requires
