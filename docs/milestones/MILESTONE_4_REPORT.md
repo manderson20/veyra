@@ -3,7 +3,7 @@
 **Milestone:** 4 — Extension management (installation key and SIP secret encryption, numbering plan, extension CRUD, generated endpoints and dialplan, Extensions UI)
 **Date:** 2026-10-12
 **Branch:** `milestone-4` (pushed to `manderson20/veyra`; not merged to `main`)
-**Status:** Implementation complete and tested; the dev1 upgrade and the first live extension are pending the owner's `upgrade.sh` run (§3, §4).
+**Status:** Complete. Installed on veyra-dev1 and verified with the first real extension. Awaiting the project owner's review.
 
 ## 1. Scope (approved 2026-10-12)
 
@@ -24,11 +24,16 @@ endpoints and dialplan from real extensions, and the Extensions UI.
 | Generated configuration | Done. The snapshot carries the enabled extensions of active organizations with decrypted secrets; one endpoint/auth/AOR per extension and one dialplan entry each; duplicate numbers refused by the generator; `GET /telephony/engine` reports `changes_pending` and `installation_key_present`. | `backend/veyra/telephony/snapshot.py`, `asterisk/generator.py`, `api/v1/telephony.py` |
 | Extensions UI | Done. Extensions list (navigation entry now live), create dialog with "Suggest next free", detail page with SIP credentials (show, copy, rotate with confirmation), delete with typed confirmation, numbering plan card, pending-deployment and missing-key notices, global search for extensions; engine page shows pending changes. | `frontend/src/app/(app)/extensions/`, `frontend/src/components/extensions/` |
 | Setup wizard | Done. "Numbering plan" step (length, range; reserved digits explained) between Installation and Review. | `frontend/src/app/(public)/setup/page.tsx`, `backend/veyra/api/v1/setup.py` |
+| Apply changes (owner request) | Done. `POST /telephony/apply` generates and deploys in one step; the top bar shows an **Apply changes** button to platform administrators whenever `changes_pending` is true (badge for others, "Deploying #n" while queued), polls the result and reports it; the engine page remains the place to review diffs first. | `backend/veyra/api/v1/telephony.py`, `frontend/src/components/shell/ApplyChanges.tsx`, `frontend/src/hooks/useEngineStatus.tsx` |
+| Version next to the logo (owner request) | Done. The sidebar shows the version and the installed release revision; `GET /auth/session` carries `version` and `release` (from the installer's state file). | `backend/veyra/api/v1/auth.py`, `frontend/src/components/shell/Sidebar.tsx` |
 | Schema | Migration `0003`: `extensions.sip_secret_changed_at`. `alembic check` clean. | `backend/veyra/migrations/versions/0003_extension_secret_timestamp.py` |
 | Documentation | `docs/EXTENSIONS.md` (new), ADR 0014; architecture, security, schema, API, installation, telephony engine, development, MFA design and changelog updated. | `docs/` |
 
 Also in this branch: the doubled logo on the sign-in, setup and account pages
-reported by the owner (an inline style overrode the theme CSS) is fixed.
+and the doubled logo in the sidebar reported by the owner (inline styles
+overrode the CSS that hides the unused artwork) are fixed, and a successful
+`upgrade.sh` now clears the `upgrade_status` failure marker in the install
+state.
 
 ## 3. Testing (veyra-dev1, 2026-10-12, final tree)
 
@@ -36,14 +41,16 @@ reported by the owner (an inline style overrode the theme CSS) is fixed.
 |---|---|
 | Backend ruff (lint and format) | Clean |
 | Backend mypy | No issues (81 files) |
-| Backend pytest against PostgreSQL 18.6 | **173 passed** (19 new: crypto, numbering plan, extensions API) |
+| Backend pytest against PostgreSQL 18.6 | **175 passed** (21 new: crypto, numbering plan, extensions API, apply, session version) |
 | `alembic check` | No drift between models and migrations |
 | Frontend lint / typecheck / vitest | Clean / clean / **21 passed** (navigation test extended) |
 | Frontend `npm run build` | Passed; `/extensions` and `/extensions/view` exported |
 | ShellCheck; installer helper tests | Clean; **31 passed** (2 new for the key generator) |
 | `upgrade.sh --dry-run --yes` on dev1 | Shows "ARI credential exists (kept)" and "would generate /etc/veyra/secrets/installation.key"; migration and services as before |
 | **Owner's `upgrade.sh` to this milestone on dev1 (19:57 UTC)** | Passed first time: database and `/etc/veyra` backed up, installation key generated (0640 root:veyra, fingerprint `b18fd7d3337c63c3`), ARI credential kept, release `83094e022f` activated, migration `0003` applied (`current: 0003 head: 0003`), Asterisk unchanged and not reloaded, all three services restarted, **25/25 verification checks** including the new `installation-key` check; `veyra installation-key check` and the deployer start without a key warning; `/setup/status` lists the numbering step as available |
-| **Setup wizard with the numbering step, first extension created in the browser, deployed, endpoint visible in Asterisk** | *Pending* |
+| **Owner's second `upgrade.sh` (20:06 UTC, sidebar fix)** | Passed 25/25; installation key kept (same fingerprint) |
+| **Setup wizard, first extension, deployment, Asterisk (owner in a browser, 20:02–20:07 UTC)** | Passed. Setup completed with a 5-digit plan (10000–79999); extension 22214 created from the Extensions page; revision #2 ("2 file(s) changed") generated and deployed from the engine page in 5 s. Asterisk shows endpoint, auth and AOR `example-school-district-22214` (state Unavailable: no phone registered yet) and `veyra-internal` has `22214 → Dial(PJSIP/…,30)`; `/etc/asterisk/veyra/pjsip.endpoints.conf` is `0640 veyra:asterisk`; the stored artifact holds the endpoints file as ciphertext with no `password=` in clear; audit trail: `extension.create`, `telephony.config_generate`, `telephony.config_deploy_request`, `telephony.config_deploy` |
+| Apply button and version label on dev1 | *Pending the next `upgrade.sh`* (built and tested; see §8) |
 
 What the new tests cover: encryption round trip, purpose binding, other
 key, tampering and malformed tokens; key file format, mode, refusal to
@@ -64,8 +71,8 @@ without a valid plan; CLI key commands.
 
 ## 4. Not verified
 
-* The dev1 upgrade, the setup wizard and the first extension created from a
-  browser (no browser on the server): pending the owner's run (§3).
+* The top-bar Apply button and the version label have not yet been used on
+  dev1 (they arrive with the next upgrade); their API is covered by tests.
 * No phone has registered yet (Milestone 5 covers live registrations and
   internal calling), so the generated endpoints have not carried traffic.
 * Asterisk 20 (Ubuntu 24.04 container) has not been exercised with
@@ -85,6 +92,10 @@ without a valid plan; CLI key commands.
 * `changes_pending` is computed by regenerating the configuration on each
   engine status request (cheap at this scale; cached later if needed).
 * Registration status per extension arrives in Milestone 5.
+* SIP user names embed the organization slug (`example-school-district-22214`
+  on dev1). They work, but are long to type into a phone by hand; a
+  shorter per-organization endpoint prefix can be added if wanted, and
+  provisioning (Milestone 9) removes the typing altogether.
 
 ## 6. Open items
 
@@ -92,7 +103,15 @@ without a valid plan; CLI key commands.
 * Backups of `/etc/veyra` (with the key) and the database are both needed to
   recover credentials; the encrypted off-host backup design is Milestone 17.
 
-## 7. Proposed Milestone 4b (for approval)
+## 7. Owner feedback during the milestone (2026-10-12)
+
+* "Two logos in the top left corner" after setup: fixed (sidebar emblem).
+* "Is deploying like the Apply button in FreePBX? I want the button in the
+  top menu when there is a pending deploy": yes; built as **Apply changes**
+  in the top bar (§2).
+* "Show the software version next to the logo": built (§2).
+
+## 8. Proposed Milestone 4b (for approval)
 
 Multi-factor authentication as designed in `docs/MFA_DESIGN.md` and ADR
 0012: TOTP enrolment and verification with a pre-authentication session at

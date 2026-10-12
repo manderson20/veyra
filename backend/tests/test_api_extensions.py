@@ -343,6 +343,48 @@ def test_generated_configuration_and_encrypted_revision_artifacts(admin, app, tm
     assert (cfg / "pjsip.endpoints.conf").read_text() == written
 
 
+def test_apply_generates_and_deploys_in_one_step(admin, app, tmp_path):
+    adapter, deployer, cfg = _fake(app, tmp_path)
+    a = _org(admin)["id"]
+    _create(admin, a, "1001")
+    r = admin.post("/api/v1/telephony/apply")
+    assert r.status_code == 202, r.text
+    out = r.json()
+    assert out["applied"] is True and out["unchanged"] is False
+    assert out["revision"]["state"] == "deploying" and out["revision"]["files"] == []
+    # a second apply while the first is queued is refused
+    assert admin.post("/api/v1/telephony/apply").json()["code"] == "deployment_in_progress"
+    with session_scope() as db:
+        deployer.run_once(db)
+    assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is False
+    assert "[example-1001](veyra-endpoint)" in (cfg / "pjsip.endpoints.conf").read_text()
+    # nothing changed: the revision is discarded rather than queued
+    out = admin.post("/api/v1/telephony/apply").json()
+    assert out["applied"] is False and out["unchanged"] is True
+    assert out["revision"]["state"] == "superseded"
+    assert admin.get("/api/v1/telephony/engine").json()["pending_revision"] is None
+    # a generation problem comes back as a failed revision, nothing queued
+    with session_scope() as db:
+        from veyra.telephony.settings import SipSettings, save_sip_settings
+
+        save_sip_settings(db, SipSettings(rtp_start=5000, rtp_end=6000))
+    out = admin.post("/api/v1/telephony/apply").json()
+    assert out["applied"] is False and out["revision"]["state"] == "failed"
+    assert "RTP range" in out["revision"]["validation_errors"][0]
+    events = admin.get("/api/v1/audit", params={"q": "telephony.config_apply"}).json()["items"]
+    assert [e["outcome"] for e in events[:3]] == ["failure", "success", "success"]
+    # engine down and no deploy permission
+    adapter.state = "stopped"
+    assert admin.post("/api/v1/telephony/apply").json()["code"] == "engine_not_running"
+
+
+def test_session_reports_the_running_version(admin):
+    s = admin.get("/api/v1/auth/session").json()
+    from veyra.version import __version__
+
+    assert s["version"] == __version__ and "release" in s
+
+
 def test_generation_fails_clearly_when_a_secret_cannot_be_read(admin, app, tmp_path):
     _fake(app, tmp_path)
     a = _org(admin)["id"]

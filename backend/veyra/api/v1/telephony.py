@@ -355,6 +355,79 @@ def generate_revision(
     return out
 
 
+class ApplyOut(BaseModel):
+    revision: RevisionOut
+    # True when a deployment was queued; False when nothing changed or generation failed.
+    applied: bool
+    unchanged: bool
+
+
+@router.post(
+    "/apply",
+    response_model=ApplyOut,
+    status_code=202,
+    summary="Generate a revision from the database and deploy it in one step",
+)
+def apply_changes(
+    request: Request,
+    principal: Principal = Depends(require("config.deploy")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> ApplyOut:
+    """The "apply" button: the same as POST /revisions followed by
+    POST /revisions/{id}/deploy. A revision identical to the deployed one is
+    discarded instead of queued; a failed generation is returned as such."""
+    adapter = _adapter(request)
+    if Capability.CONFIG_GENERATION not in adapter.capabilities():
+        raise ProblemError(
+            409,
+            "Not available",
+            "The configured telephony engine cannot generate configuration.",
+            code="not_available",
+        )
+    health = adapter.health()
+    if health.state != "running":
+        raise conflict(
+            f"The telephony engine is not running ({health.state}): {health.message}",
+            code="engine_not_running",
+        )
+    if service.pending(db, adapter.name) is not None:
+        raise conflict("Another deployment is already in progress.", code="deployment_in_progress")
+    key = _key(request)
+    generated = service.create_revision(db, adapter, created_by=principal.label, key=key)
+    rev = generated.revision
+    failed = rev.state == RevisionState.FAILED
+    applied = False
+    if not failed:
+        if generated.unchanged:
+            rev.state = RevisionState.SUPERSEDED
+        else:
+            service.request_deploy(db, rev)
+            applied = True
+    audit.record(
+        db,
+        action="telephony.config_apply",
+        outcome="failure" if failed else "success",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        target_type="config_revision",
+        target_id=rev.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={
+            "sequence": rev.sequence,
+            "applied": applied,
+            "unchanged": generated.unchanged,
+            "changed_files": sorted(generated.diff),
+            "errors": rev.validation_errors,
+        },
+    )
+    db.commit()
+    out = _revision_out(db, rev, principal, with_files=False)
+    out.unchanged = generated.unchanged
+    return ApplyOut(revision=out, applied=applied, unchanged=generated.unchanged)
+
+
 @router.get("/revisions/{revision_id}", response_model=RevisionOut, summary="One revision")
 def get_revision(
     revision_id: uuid.UUID,

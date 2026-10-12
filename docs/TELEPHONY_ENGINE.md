@@ -64,7 +64,16 @@ POST /telephony/revisions/{id}/deploy                    -> deploying (queued)
                       on failure: restore previous files -> reload -> failed
 POST /telephony/revisions/{id}/deploy  on a superseded revision = rollback
 POST /telephony/revisions/{id}/discard on a validated revision
+POST /telephony/apply                  generate + deploy in one step ("Apply changes")
 ```
+
+`apply` is what the **Apply changes** button in the top bar calls (the
+equivalent of "Apply Config" elsewhere). It appears for platform
+administrators whenever `changes_pending` is true, generates a revision and
+queues it; a revision identical to the deployed one is discarded instead,
+and a generation problem is reported without queuing anything. The
+revision list on the engine page is the place to review a diff before
+applying.
 
 * A revision stores its files in `config_revisions.artifacts` (sensitive
   files encrypted with the installation key, the others in clear), the

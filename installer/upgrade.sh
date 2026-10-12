@@ -143,6 +143,7 @@ state_set version "$VERSION"
 state_set release "$RELEASE_NAME"
 state_set previous_release "$OLD_RELEASE_DIR"
 state_set upgrade_in_progress ""
+state_set upgrade_status "complete"
 state_set upgraded_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 [[ "$DRY_RUN" == "1" ]] || /usr/local/bin/veyra updates record --component veyra_core --target veyra \
     --from-version "$OLD_VERSION" --to-version "$VERSION" --outcome success \

@@ -26,8 +26,9 @@ Changing an extension changes the database only. The engine takes the
 change when a configuration revision is generated and deployed
 ([TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md) §4). `GET /telephony/engine`
 reports `changes_pending: true` from the moment the database differs from
-the deployed revision, and the Extensions pages show a notice until a
-platform administrator deploys.
+the deployed revision; the Extensions pages show a notice and platform
+administrators get an **Apply changes** button in the top bar
+(`POST /telephony/apply`) until the change is deployed.
 
 ## 2. Numbering plan
 

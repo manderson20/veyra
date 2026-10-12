@@ -30,6 +30,8 @@ export interface SessionInfo {
   installation_name: string;
   must_change_password: boolean;
   csrf_token?: string | null;
+  version: string;
+  release: string | null;
 }
 
 export interface UserSession {
@@ -120,6 +122,12 @@ export interface EngineStatus {
   /** The database differs from the deployed configuration (null: no generation). */
   changes_pending: boolean | null;
   installation_key_present: boolean;
+}
+
+export interface ApplyResult {
+  revision: ConfigRevision;
+  applied: boolean;
+  unchanged: boolean;
 }
 
 export interface NumberingPlan {

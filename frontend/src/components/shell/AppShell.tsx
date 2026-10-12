@@ -8,8 +8,10 @@ import { ErrorState, IconButton, LoadingState } from "../ui";
 import { api } from "@/lib/api";
 import type { SetupStatus } from "@/lib/types";
 import { useBrowserStore } from "@/hooks/useBrowserStore";
+import { EngineStatusProvider } from "@/hooks/useEngineStatus";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
+import { ApplyChanges } from "./ApplyChanges";
 import { GlobalSearch } from "./GlobalSearch";
 import { Sidebar } from "./Sidebar";
 import { UserMenu } from "./UserMenu";
@@ -59,6 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const cls = ["shell", collapsed && "shell--collapsed", drawer && "shell--drawer-open"].filter(Boolean).join(" ");
   return (
+    <EngineStatusProvider>
     <div className={cls}>
       <a className="skip-link" href="#main">Skip to main content</a>
       <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onNavigate={() => setDrawer(false)} />
@@ -75,6 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <GlobalSearch />
           <div className="topbar__spacer" />
+          <ApplyChanges />
           <ThemeToggle />
           <UserMenu />
         </header>
@@ -83,5 +87,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
       </div>
     </div>
+    </EngineStatusProvider>
   );
 }

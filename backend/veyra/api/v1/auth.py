@@ -34,6 +34,7 @@ from veyra.core.security.sessions import (
     load_principal,
     revoke_user_sessions,
 )
+from veyra.version import __version__
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -78,6 +79,9 @@ class SessionOut(BaseModel):
     # authentication endpoints work until the user chooses a new one.
     must_change_password: bool = False
     csrf_token: str | None = None
+    # Shown next to the logo so administrators know what they are running.
+    version: str = __version__
+    release: str | None = None
 
 
 class PasswordChangeIn(BaseModel):
@@ -134,6 +138,7 @@ def _session_out(
         installation_name=inst.name if inst else "Veyra",
         must_change_password=user.must_change_password,
         csrf_token=csrf,
+        release=get_settings().installed_release(),
     )
 
 

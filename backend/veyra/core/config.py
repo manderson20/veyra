@@ -107,6 +107,18 @@ class Settings(BaseSettings):
     def unsigned_modules_permitted(self) -> bool:
         return self.allow_unsigned_modules and not self.is_production
 
+    def installed_release(self) -> str | None:
+        """The release name written by the installer (``<version>-<revision>``),
+        or None in development where no install state exists."""
+        import json
+
+        try:
+            data = json.loads((self.config_dir / "install-state.json").read_text())
+        except (OSError, ValueError):
+            return None
+        release = data.get("release") if isinstance(data, dict) else None
+        return str(release) if release else None
+
     @property
     def installation_key_path(self) -> Path:
         return self.installation_key_file or self.config_dir / "secrets" / "installation.key"
