@@ -1,0 +1,13 @@
+; Managed by Veyra installer
+; ARI is reachable only on 127.0.0.1 (see http.conf). The password is also
+; stored in @VEYRA_ETC@/secrets/ari_password for the Veyra services.
+[general]
+enabled = yes
+pretty = no
+allowed_origins =
+
+[veyra]
+type = user
+read_only = no
+password = @ARI_PASSWORD@
+password_format = plain
