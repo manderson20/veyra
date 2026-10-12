@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="frontend/public/branding/logo.svg" alt="Veyra" width="220">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="frontend/public/branding/logo-dark.png">
+    <img src="frontend/public/branding/logo-light.png" alt="Veyra — Open Communications Platform" width="360">
+  </picture>
 </p>
 
 # Veyra

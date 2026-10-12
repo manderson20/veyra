@@ -7,6 +7,7 @@ uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased] — 0.1.0-dev.0 (Milestone 1)
 
 ### Added
+- Approved branding artwork (raster exports supplied by the owner) replaces the placeholder SVGs: compact and full logos for light and dark backgrounds, emblem, app icon, favicons, touch icon, a web manifest, and the owner's ASCII wordmark for the CLI and installer. The branding board is kept in `docs/branding/`.
 - First real installations: veyra-dev1 (Ubuntu 26.04) installed, verified and upgraded; Ubuntu 24.04 installed, verified, uninstalled and reinstalled in an LXD container. Reports in `docs/installations/`.
 - ADR 0010: Asterisk is installed from the Ubuntu archive (22.5.2 on 26.04, 20.6.0 on 24.04), not built by Veyra.
 - Installer: reinstalling after `uninstall.sh` is recognised and reported as a reinstall over kept data.

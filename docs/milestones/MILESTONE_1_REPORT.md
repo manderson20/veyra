@@ -3,7 +3,7 @@
 **Milestone:** 1 — Automated Ubuntu installation
 **Date:** 2026-10-12
 **Branch:** `milestone-1` (pushed to `manderson20/veyra`; not merged to `main`)
-**Status:** Complete for veyra-dev1 and Ubuntu 24.04; the veyra-dev2 installation is blocked on host access. Awaiting the project owner's review.
+**Status:** Complete for veyra-dev1 and Ubuntu 24.04; the veyra-dev2 installation is blocked on host access. **Approved by the project owner on 2026-10-12** ("proceed with the project"); the dev2 installation and report are deferred until the host is reachable and will be added to this report.
 
 ## 1. Scope (approved 2026-10-12)
 
@@ -75,7 +75,7 @@ The dry runs and unit tests of Milestone 0 did not catch any of these.
   and authenticate `gh` on dev1, or the owner checks the Actions tab.
 * **First-run setup on dev1** has not been completed; the owner has the
   token (24 h) or runs `sudo veyra setup-token`.
-* Still open from Milestone 0: license choice; approved branding artwork.
+* Still open from Milestone 0: license choice. (Branding artwork was supplied and installed on 2026-10-12; see `frontend/public/branding/README.md`.)
 
 ## 6. Development environment changes made on veyra-dev1
 
