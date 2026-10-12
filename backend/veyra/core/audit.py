@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Administrative audit logging.
 
 Every state-changing API operation records an audit event, including denied

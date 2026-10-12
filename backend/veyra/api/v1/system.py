@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """System health and installation information."""
 
 from __future__ import annotations

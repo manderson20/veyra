@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Local authentication: sign in, sign out, current session, password change,
 the caller's sessions, and one-time password reset links."""
 

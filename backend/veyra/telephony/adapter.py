@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Telephony engine adapter interface.
 
 Veyra services talk to the telephony engine only through this interface.

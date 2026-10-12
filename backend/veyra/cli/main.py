@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """The ``veyra`` administration command.
 
 Every command works without color or Unicode and returns a non-zero exit

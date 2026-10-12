@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** API response types (mirrors backend/veyra/api/v1). */
 
 export interface Page<T> {

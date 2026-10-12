@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Configuration revision state machine (deployment itself arrives in Milestone 3)."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Test fixtures. Tests run against a real PostgreSQL database.
 
 Set VEYRA_TEST_DATABASE_URL to a database the tests may freely drop and

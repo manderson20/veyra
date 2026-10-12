@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Semantic Versioning 2.0.0 parsing, comparison and version ranges.
 
 Range syntax (comparators separated by commas and/or whitespace, all must match):

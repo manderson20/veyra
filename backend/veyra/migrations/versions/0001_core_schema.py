@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Core schema: tenancy, identity, audit, modules, updates, HA, configuration, provisioning.
 
 Revision ID: 0001

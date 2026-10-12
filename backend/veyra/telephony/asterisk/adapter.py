@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Asterisk adapter (Milestone 0: health only).
 
 Uses the Asterisk REST Interface (ARI) over loopback HTTP. ARI is bound to

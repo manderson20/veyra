@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """In-process event bus.
 
 Core and modules publish domain events (``organization.created``,

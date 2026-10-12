@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Cluster status reporting (read-only in Milestone 0)."""
 
 from __future__ import annotations

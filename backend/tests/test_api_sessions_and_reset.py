@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Milestone 2: sessions, password reset links, forced password change,
 unlock, fetch-metadata rejection and purging."""
 

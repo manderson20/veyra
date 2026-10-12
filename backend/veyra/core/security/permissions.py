@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Permission catalog and built-in system roles.
 
 Permissions are plain strings ``<area>.<action>``. Core registers the ones

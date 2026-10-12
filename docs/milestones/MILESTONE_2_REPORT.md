@@ -97,8 +97,7 @@ type-check, lint and build).
 
 ## 6. Blocked and open items
 
-* veyra-dev2 (from Milestone 1) still unreachable.
-* License choice (from Milestone 0).
+* veyra-dev2 is not provisioned yet (deferred, not blocking).
 * veyra-dev1 runs this milestone's code (release `4700a4f8f5`); the
   manifest MIME fix lands with the next upgrade.
 
@@ -115,8 +114,8 @@ type-check, lint and build).
 4. Milestone 2 approved; Milestone 3 starts.
 5. `milestone-1` and `milestone-2` merged to `main` by the team.
 6. License: left to the team's judgement; see ADR 0013.
-7. veyra-dev2: the address given (172.16.2.250) is veyra-dev1's own
-   address, so dev2 remains unreachable until its real address is known.
+7. veyra-dev2 has not been provisioned yet. The second-node installation
+   and report are deferred until it exists (not a blocker for Milestones 3+).
 
 ## 7. Proposed Milestone 3 (approved)
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Host metrics read directly from /proc and statvfs (no extra dependencies).
 
 Every function returns ``None`` when a value cannot be read, so the UI can

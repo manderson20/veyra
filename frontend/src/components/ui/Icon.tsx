@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Inline SVG icons (24×24, stroke-based). No icon package dependency. */
 
 const PATHS: Record<string, string> = {

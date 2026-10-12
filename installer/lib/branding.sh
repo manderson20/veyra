@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Veyra terminal wordmark for the installer (shares the wordmark files used by
 # the `veyra` command; see backend/veyra/cli/branding.py).
 # shellcheck shell=bash

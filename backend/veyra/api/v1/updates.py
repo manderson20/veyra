@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Update management API: policies, checks, available updates and history."""
 
 from __future__ import annotations

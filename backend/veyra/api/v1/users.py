@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Users, roles and role assignments."""
 
 from __future__ import annotations

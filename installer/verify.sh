@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # check() always returns 0, so "cond && check pass || check fail" is safe.
 # shellcheck disable=SC2015
 # Verify a Veyra installation. Read-only.

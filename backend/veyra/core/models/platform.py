@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Platform tables: audit log, settings, modules, updates, HA, configuration revisions,
 provisioning templates."""
 

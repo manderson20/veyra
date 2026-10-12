@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """The authenticated caller and its effective, scoped permissions."""
 
 from __future__ import annotations

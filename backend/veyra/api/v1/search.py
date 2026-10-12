@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Global search across objects the caller may see."""
 
 from __future__ import annotations

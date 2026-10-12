@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Unit tests for installer helpers. Run: installer/tests/test_lib.sh
 # shellcheck disable=SC2034  # variables below are read by the sourced library
 # No root required; nothing outside a temporary directory is touched.

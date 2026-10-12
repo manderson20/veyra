@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Provisioning templates: catalog, validation, preview, import and export.
 
 Official and community templates are read from disk and are never modified

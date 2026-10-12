@@ -54,5 +54,5 @@ docs/         Documentation, ADRs, milestone reports
 
 ## License
 
-The license is under evaluation (see [docs/LICENSING.md](docs/LICENSING.md)).
+Veyra is licensed under the **GNU Affero General Public License v3.0 or later** (see [LICENSE](LICENSE), [docs/LICENSING.md](docs/LICENSING.md) and [ADR 0013](docs/adr/0013-license-agpl.md)).
 The repository is private during development.

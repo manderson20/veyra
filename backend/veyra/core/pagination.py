@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Offset pagination shared by list endpoints."""
 
 from __future__ import annotations

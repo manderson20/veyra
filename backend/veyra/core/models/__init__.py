@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """All core ORM models. Import this package so metadata is complete."""
 
 from veyra.core.models.base import Base

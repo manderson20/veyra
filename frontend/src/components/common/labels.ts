@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Tone } from "../ui";
 
 export const TELEPHONY_STATE: Record<string, string> = {

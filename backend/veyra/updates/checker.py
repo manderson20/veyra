@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Update checks: fetch, verify and record available updates. Never installs."""
 
 from __future__ import annotations

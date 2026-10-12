@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Password hashing (Argon2id) and password policy."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import io
 
 from veyra.cli.branding import _logo, banner, color_depth

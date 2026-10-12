@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Module manifest (``module.toml``) specification and validation.
 
 The authoritative specification is docs/MODULE_DEVELOPMENT.md. This file is

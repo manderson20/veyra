@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Update policy model and validation rules."""
 
 from __future__ import annotations

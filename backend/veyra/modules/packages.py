@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Module package format, integrity verification and safe extraction.
 
 A module package (``<id>-<version>.vmod``) is a gzip-compressed tar archive:

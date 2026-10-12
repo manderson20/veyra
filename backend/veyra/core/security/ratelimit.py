@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Small in-process sliding-window rate limiter.
 
 Limits are per API worker process. That is adequate for brute-force
