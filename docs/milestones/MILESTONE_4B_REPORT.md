@@ -4,7 +4,7 @@
 **Date:** 2026-10-12
 **Branch:** `milestone-4b` (pushed to `manderson20/veyra`; not merged to `main`)
 **Version:** 0.5.0-dev (becomes 0.5.0 on approval)
-**Status:** Implementation complete and tested. Pending: the dev1 upgrade and an enrolment with a real authenticator app by the owner (§3, §4).
+**Status:** Complete. Installed on veyra-dev1 and verified by the owner with a real authenticator app. Awaiting the project owner's approval.
 
 ## 1. Scope (approved 2026-10-12)
 
@@ -45,13 +45,14 @@ generated files differ; the roadmap gained the click-to-dial API (Milestone
 | `alembic check` | No drift |
 | Frontend lint / typecheck / vitest | Clean / clean / **22 passed** (new: redirect on `403 mfa_required`) |
 | Frontend `npm run build` | Passed |
-| **Owner's `upgrade.sh` to this milestone on dev1** | *Pending* |
-| **Enrolment with a real authenticator app on a phone, sign-in with a code, sign-in with a recovery code** | *Pending the owner* |
+| **Owner's `upgrade.sh` to this milestone on dev1 (20:49 UTC)** | Passed 25/25; migration `0004` applied (`current: 0004 head: 0004`); the owner's existing browser session survived (backfilled as verified); installation key kept |
+| **Deploy changes button (owner, 21:23 UTC)** | Renaming the extension raised the flag and the red button appeared; pressing it ran an apply that found the files unchanged, discarded revision #3 and cleared the flag (audit: `extension.update`, `telephony.config_apply` with `unchanged: true`) |
+| **Enrolment with a real authenticator app and sign-in with a code (owner, 21:23–21:24 UTC)** | Passed: `auth.mfa_enrol_begin` and `auth.mfa_enrol_confirm` (first device, QR scanned on a phone), then `auth.login` with `mfa: pending` and `auth.mfa_verify` with `method: totp`, 10 recovery codes unused. The method row holds an encrypted secret and a confirmation time |
+| Sign-in with a recovery code on dev1 | Not exercised by the owner (covered by tests; the owner kept the ten codes unused) |
 
 ## 4. Not verified
 
-* The UI flow with a real phone and authenticator app (no browser or phone
-  on the server). The API flow is covered by tests with generated codes.
+* A recovery-code sign-in in a browser (the API path is tested).
 * Clock drift larger than 30 seconds between the server and a phone is not
   tolerated by design; the server clock is synchronized (preflight checks
   it).
@@ -69,8 +70,8 @@ generated files differ; the roadmap gained the click-to-dial API (Milestone
 
 ## 6. Open items
 
-* The first platform administrator on dev1 is inside the 14-day grace
-  window; the account page and the shell remind them to enrol.
+* The owner's account on dev1 is enrolled; the recovery codes are in the
+  owner's keeping.
 * veyra-dev2 is not provisioned (deferred).
 
 ## 7. Proposed Milestone 5 (for approval)
