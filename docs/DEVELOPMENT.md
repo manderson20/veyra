@@ -94,6 +94,28 @@ New core migration:
 `.venv/bin/alembic revision --autogenerate -m "…"`. Then review the
 generated file and run `alembic check`.
 
+## 3a. Versioning
+
+`backend/veyra/version.py` is the single source of truth and
+`frontend/package.json` must match (`tests/test_version.py` checks). Before
+1.0 the scheme is:
+
+| Event | Version |
+|---|---|
+| A milestone completes (in roadmap order: 0, 1, 2, 3, 4, 4b, 5, …) | minor bump: Milestone 4 → `0.4.0`, Milestone 4b → `0.5.0`, Milestone 5 → `0.6.0` |
+| A fix shipped between milestones | patch bump: `0.4.1` |
+| Work in progress on a milestone branch | next version with `-dev`: `0.5.0-dev` |
+| Public release (Milestone 18) | `1.0.0`, then ordinary semantic versioning |
+
+The installer names each release `<version>-<git revision>` (visible in the
+sidebar tooltip and `/etc/veyra/install-state.json`) and refuses downgrades
+of the numeric version. Bump with:
+
+```
+sed -i 's/^__version__ = .*/__version__ = "0.5.0-dev"/' backend/veyra/version.py
+(cd frontend && npm version 0.5.0-dev --no-git-tag-version)
+```
+
 ## 4. Frontend
 
 ```
