@@ -4,20 +4,21 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import type { ApplyResult, ConfigRevision, EngineStatus } from "@/lib/types";
+import type { ApplyResult, ConfigRevision, DeployMode, EngineStatus } from "@/lib/types";
 import { useApiData } from "./useApiData";
 import { useSession } from "./useSession";
 
 const REFRESH_MS = 15_000;
 const POLL_MS = 2_000;
 const POLL_LIMIT = 45; // 90 s
+const IDLE_POLL_LIMIT = 10; // when waiting for calls to end, stop polling early and let the badge show it
 
 interface EngineState {
   /** Null while loading or when the caller cannot read the engine status. */
   engine: EngineStatus | null;
   reload: () => void;
   /** Generate and deploy in one step (config.deploy). Resolves when the deployer reports. */
-  apply: () => Promise<void>;
+  apply: (mode?: DeployMode) => Promise<void>;
   applying: boolean;
   /** Increments after every finished apply so pages can refresh their data. */
   version: number;
@@ -44,10 +45,10 @@ export function EngineStatusProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(t);
   }, [can, reload]);
 
-  const apply = useCallback(async () => {
+  const apply = useCallback(async (mode: DeployMode = "now") => {
     setApplying(true);
     try {
-      const result = await api.post<ApplyResult>("/telephony/apply");
+      const result = await api.post<ApplyResult>("/telephony/apply", { mode });
       const rev = result.revision;
       if (rev.state === "failed") {
         toast.error("Configuration could not be generated", rev.validation_errors[0]);
@@ -72,6 +73,11 @@ export function EngineStatusProvider({ children }: { children: ReactNode }) {
             }
           } catch {
             /* keep polling */
+          }
+          if (mode === "when_idle" && polls >= IDLE_POLL_LIMIT) {
+            toast.info("Waiting for calls to end", "The deployment runs as soon as no call is active. The top bar shows the wait.");
+            resolve();
+            return;
           }
           if (polls >= POLL_LIMIT) {
             toast.error("Still deploying", "The deployer has not reported yet. Check System → Telephony Engine.");

@@ -80,6 +80,13 @@ export default function ExtensionsPage() {
         </span>
       ),
     },
+    {
+      key: "reg",
+      header: "Phone",
+      render: (x) => x.registration === null ? <span className="subtle">—</span>
+        : x.registration.registered ? <Badge tone="ok" icon="checkCircle">{x.registration.channels ? `On a call (${x.registration.channels})` : "Registered"}</Badge>
+        : <Badge tone="neutral">Not registered</Badge>,
+    },
   ];
 
   return (

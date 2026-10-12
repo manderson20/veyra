@@ -183,6 +183,41 @@ export interface EngineStatus {
   pending_since: string | null;
   pending_by: string | null;
   installation_key_present: boolean;
+  pending_mode: "now" | "when_idle" | null;
+  pending_requested_at: string | null;
+  pending_active_calls: number | null;
+  active_calls: number | null;
+}
+
+export type DeployMode = "now" | "when_idle";
+
+export interface ActiveCall {
+  channel_id: string;
+  caller: string | null;
+  callee: string | null;
+  state: string;
+  duration_seconds: number;
+  endpoint: string | null;
+  extension_number: string | null;
+  extension_name: string | null;
+}
+
+export interface ActiveCalls {
+  calls: ActiveCall[];
+  available: boolean;
+  message: string | null;
+}
+
+export interface OriginateResult {
+  channel_id: string;
+  extension_number: string;
+  number: string;
+  message: string;
+}
+
+export interface Registration {
+  registered: boolean;
+  channels: number;
 }
 
 export interface ApplyResult {
@@ -222,6 +257,7 @@ export interface Extension {
   sip_secret_changed_at: string | null;
   created_at: string;
   updated_at: string;
+  registration: Registration | null;
 }
 
 export interface SipCredentials {
@@ -295,6 +331,8 @@ export interface ConfigRevision {
   unchanged: boolean | null;
   can_deploy: boolean;
   can_rollback: boolean;
+  deploy_mode: "now" | "when_idle" | null;
+  deploy_requested_at: string | null;
 }
 
 export type HealthStatus = "ok" | "degraded" | "failed" | "unknown";

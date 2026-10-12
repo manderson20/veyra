@@ -2,7 +2,8 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { ClickToDialDialog } from "@/components/extensions/ClickToDial";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { CopyButton } from "@/components/common/CopyButton";
 import {
@@ -30,12 +31,18 @@ import { useOnChange } from "@/hooks/useOnChange";
 function ExtensionView() {
   const id = useSearchParams().get("id");
   const router = useRouter();
-  const { can } = useSession();
+  const { can, session } = useSession();
   const toast = useToast();
   const errors = useFormErrors();
   const ext = useApiData<Extension>(id ? `/extensions/${encodeURIComponent(id)}` : null);
   const editable = can("extensions.write");
   const users = useApiData<Page<User>>(editable && ext.data ? "/users" : null, { limit: 200 });
+  const reloadExt = ext.reload;
+  useEffect(() => {
+    // live registration state
+    const t = window.setInterval(reloadExt, 15_000);
+    return () => window.clearInterval(t);
+  }, [reloadExt]);
   const [number, setNumber] = useState("");
   const [name, setName] = useState("");
   const [userId, setUserId] = useState("");
@@ -47,6 +54,7 @@ function ExtensionView() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [changed, setChanged] = useState(0);
+  const [dialing, setDialing] = useState(false);
 
   useOnChange(ext.data, (x) => {
     if (x) {
@@ -112,9 +120,15 @@ function ExtensionView() {
             <span>{x.organization_name}</span>
             <Badge tone={x.is_enabled ? "ok" : "neutral"}>{x.is_enabled ? "Enabled" : "Disabled"}</Badge>
             {x.user_display_name ? <Badge tone="info" icon="users">{x.user_display_name}</Badge> : <Badge tone="outline">Shared phone</Badge>}
+            {x.registration ? (x.registration.registered ? <Badge tone="ok" icon="checkCircle">{x.registration.channels ? `On a call (${x.registration.channels})` : "Registered"}</Badge> : <Badge tone="neutral">Not registered</Badge>) : null}
           </span>
         }
-        actions={editable ? <Button variant="danger" icon="trash" onClick={() => setDeleting(true)}>Delete</Button> : null}
+        actions={
+          <span className="row">
+            {(editable || x.user_id === session?.user.id) && can("calls.originate") ? <Button icon="phone" onClick={() => setDialing(true)}>Call from this phone</Button> : null}
+            {editable ? <Button variant="danger" icon="trash" onClick={() => setDeleting(true)}>Delete</Button> : null}
+          </span>
+        }
       />
       <PendingChanges refreshKey={changed} />
       <div className="grid grid--2" style={{ alignItems: "start" }}>
@@ -154,6 +168,7 @@ function ExtensionView() {
           </Card>
         </div>
       </div>
+      <ClickToDialDialog open={dialing} onClose={() => setDialing(false)} extension={x} />
       <ConfirmDialog
         open={deleting}
         title={`Delete extension ${x.number}?`}
