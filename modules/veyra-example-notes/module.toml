@@ -1,0 +1,77 @@
+# Example module: validates the Veyra module framework end to end
+# (manifest, permissions, configuration, migrations, API, events, health, UI).
+manifest_version = 1
+health_check = true
+
+[module]
+id = "veyra.example-notes"
+name = "Example: Notes"
+description = "A minimal example module that stores short notes per organization. Use it as a template for new modules."
+version = "0.1.0"
+author = "Veyra Project"
+license = "GPL-3.0-or-later"
+
+[compatibility]
+core_api = ">=1.0.0 <2.0.0"
+engines = []
+
+[runtime]
+type = "in_process"
+entrypoint = "backend:module"
+
+[[permissions]]
+key = "example_notes.read"
+description = "View notes"
+default_roles = ["org_admin", "site_admin", "technician", "read_only"]
+
+[[permissions]]
+key = "example_notes.write"
+description = "Create and delete notes"
+default_roles = ["org_admin"]
+
+[[config]]
+key = "max_notes_per_organization"
+label = "Maximum notes per organization"
+type = "integer"
+default = 500
+min = 1
+max = 10000
+
+[database]
+migrations = "migrations"
+table_prefix = "mod_example_notes_"
+
+[api]
+prefix = "example-notes"
+
+[events]
+subscribes = ["organization.created"]
+publishes = ["example_notes.note_created"]
+
+[[ui.nav]]
+label = "Notes"
+view = "notes"
+icon = "note"
+permission = "example_notes.read"
+
+[[ui.views]]
+id = "notes"
+title = "Notes"
+type = "resource_table"
+description = "Short notes shared with your organization's administrators."
+endpoint = "notes"
+permission = "example_notes.read"
+write_permission = "example_notes.write"
+delete = true
+empty_title = "No notes yet"
+empty_body = "Notes you add appear here for everyone in your organization with access."
+columns = [
+  { key = "title", label = "Title" },
+  { key = "body", label = "Note" },
+  { key = "created_by", label = "Author" },
+  { key = "created_at", label = "Created", format = "datetime" },
+]
+create_form = [
+  { key = "title", label = "Title", type = "text", required = true, max_length = 200 },
+  { key = "body", label = "Note", type = "textarea", max_length = 4000 },
+]

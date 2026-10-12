@@ -1,0 +1,19 @@
+spec_version = 1
+features = ["single_line", "ntp", "timezone_offset", "vlan"]
+
+[template]
+key = "poly.vvx.450"
+name = "Poly VVX 450"
+version = "0.1.0"
+manufacturer = "Poly"
+models = ["VVX 450"]
+parent = "poly.vvx.base"
+parent_version = "0.1.0"
+firmware = "UC Software 5.9 / 6.x"
+status = "experimental"
+description = "Poly VVX 450 desk phone. Initial hardware test target; not yet verified on hardware."
+
+[[files]]
+name = "veyra-{mac}.cfg"
+source = "phone.cfg.j2"
+format = "xml"

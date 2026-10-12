@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+*.tsbuildinfo
+
+# Local configuration and secrets — never commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Packages built locally
+*.vmod
