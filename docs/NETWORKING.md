@@ -20,8 +20,8 @@ Always confirm with `ss -ltnup` on the server.
 
 | Purpose | Default (Asterisk) | Milestone | Notes |
 |---|---|---|---|
-| SIP signaling | 5060/UDP+TCP, 5061/TCP (TLS) | M5 | Generated PJSIP transports; ports are configurable and will be read from the deployed configuration, not assumed |
-| RTP media | 10000–20000/UDP (`rtp.conf`) | M5 | Range configurable; firewall rules must follow it |
+| SIP signaling | 5060/UDP+TCP, 5061/TCP (TLS, off by default) | **M3** (transports are generated now; phones register from M5) | Generated PJSIP transports from the SIP settings (System → Telephony Engine); read the deployed revision, do not assume |
+| RTP media | 10000–20000/UDP (`rtp.conf`) | **M3** | Range set in the SIP settings; firewall rules must follow it |
 | Phone provisioning | HTTPS 443 (dedicated path or port) | M9 | HTTP only if explicitly enabled for phones that need it |
 | HA replication and control | 5432/TCP between nodes, VRRP (IP proto 112) | M16 | Peer addresses only |
 
@@ -29,7 +29,7 @@ Always confirm with `ss -ltnup` on the server.
 
 When phones or trunks are on the other side of NAT, PJSIP needs
 `external_media_address`, `external_signaling_address` and `local_net`.
-These become setup wizard and SIP settings in M5. Avoid SIP ALG on routers.
+These are the external addresses and local networks in the SIP settings (M3); the generated transports carry them. Avoid SIP ALG on routers.
 
 ## Firewall
 

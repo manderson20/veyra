@@ -97,7 +97,8 @@ ok "Configuration: $CONF_BACKUP"
 
 echo
 info "Expected impact: the web interface and API restart (typically under a minute)."
-info "Telephone service is not interrupted; Asterisk is not restarted."
+info "Telephone service is not interrupted: Asterisk is reloaded, not restarted, and only"
+info "when its Veyra-managed files changed."
 confirm "Upgrade Veyra from $OLD_VERSION to $VERSION now?" || die "Cancelled. Nothing has been changed (backups were kept)."
 state_set upgrade_in_progress "$RELEASE_NAME"
 
@@ -107,6 +108,7 @@ do_release
 
 begin switch "Switching to the new release"
 run systemctl stop veyra-worker veyra-api
+systemctl list-unit-files veyra-deployer.service >/dev/null 2>&1 && run systemctl stop veyra-deployer
 do_activate
 CURRENT_STEP="migrate"
 step "Applying database migrations"
@@ -120,6 +122,7 @@ if ! run /usr/local/bin/veyra db upgrade; then
 fi
 ok "Database schema is current"
 
+do_telephony
 do_services
 do_nginx
 

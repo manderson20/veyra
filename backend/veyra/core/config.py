@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     asterisk_ari_url: str = "http://127.0.0.1:8088/ari"
     asterisk_ari_username: str = "veyra"
     asterisk_ari_password_file: Path = Path("/etc/veyra/secrets/ari_password")
+    # Directory that Asterisk's managed stub files #tryinclude. Written only
+    # by the deployer service (never by the API process).
+    asterisk_config_dir: Path = Path("/etc/asterisk/veyra")
 
     # --- Updates --------------------------------------------------------------
     update_metadata_url: str = ""

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Configuration revision state machine (deployment itself arrives in Milestone 3)."""
+"""Configuration revision state machine, content hashing and diffs."""
 
 from __future__ import annotations
 
@@ -47,6 +47,15 @@ def transition(current: str, target: RevisionState) -> RevisionState:
 def content_hash(files: list[GeneratedFile]) -> str:
     payload = json.dumps(sorted((f.path, f.content) for f in files)).encode()
     return hashlib.sha256(payload).hexdigest()
+
+
+def artifacts_to_files_safe(artifacts: dict[str, Any] | None) -> list[GeneratedFile]:
+    """Files stored in a revision's ``artifacts`` column (tolerates missing data)."""
+    out = []
+    for f in (artifacts or {}).get("files", []):
+        if isinstance(f, dict) and "path" in f and "content" in f:
+            out.append(GeneratedFile(str(f["path"]), str(f["content"]), bool(f.get("sensitive"))))
+    return out
 
 
 def diff(old: list[GeneratedFile], new: list[GeneratedFile]) -> dict[str, Any]:

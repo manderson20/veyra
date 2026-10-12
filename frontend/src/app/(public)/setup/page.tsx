@@ -221,6 +221,13 @@ export default function SetupPage() {
                     error={fieldErrors.installation_name} onChange={(e) => set("installation_name", e.target.value)} />
                   <SelectField label="Time zone" value={f.timezone} error={fieldErrors["organization.timezone"]}
                     options={zones.map((z) => ({ value: z, label: z.replace(/_/g, " ") }))} onChange={(e) => set("timezone", e.target.value)} />
+                  <Callout tone={status.telephony_state === "running" ? "ok" : status.telephony_state === "not_configured" ? "neutral" : "warn"} title="Telephony engine check">
+                    {status.telephony_state === "running"
+                      ? "Asterisk is running and reachable. SIP settings and the first configuration deployment are done after setup, under System → Telephony Engine."
+                      : status.telephony_state === "not_configured"
+                        ? "No telephony engine is configured on this server. Setup can continue; telephony features stay unavailable until an engine is installed."
+                        : `The telephony engine is ${status.telephony_state.replace(/_/g, " ")}. Setup can continue; check the engine from System → Telephony Engine afterwards.`}
+                  </Callout>
                 </>
               ) : null}
               {step === "review" ? (

@@ -232,18 +232,40 @@ do_tls() {
 do_telephony() {
     [[ $SKIP_TELEPHONY == 1 ]] && { info "Skipping telephony engine (--skip-telephony)"; return; }
     begin telephony "Configuring Asterisk"
-    local password tmp
+    local password tmp core_changed=0 stub_changed=0
     password="$(cat "$VEYRA_ETC/secrets/ari_password" 2>/dev/null || echo DRYRUN)"
     tmp="$(mktemp)"
     render_template "$SCRIPT_DIR/templates/asterisk/ari.conf.in" "$tmp" \
         "ARI_PASSWORD=$password" "VEYRA_ETC=$VEYRA_ETC"
+    MANAGED_FILE_CHANGED=0
     install_managed_file "$tmp" /etc/asterisk/ari.conf 0640 root:asterisk
     rm -f "$tmp"
     install_managed_file "$SCRIPT_DIR/templates/asterisk/http.conf" /etc/asterisk/http.conf 0640 root:asterisk
     install_managed_file "$SCRIPT_DIR/templates/asterisk/manager.conf" /etc/asterisk/manager.conf 0640 root:asterisk
-    run install -d -m 0750 -o root -g asterisk /etc/asterisk/veyra
+    core_changed=$MANAGED_FILE_CHANGED
+    # Stub files that #tryinclude Veyra's generated configuration. The sample
+    # files shipped by the package are backed up beside them.
+    MANAGED_FILE_CHANGED=0
+    local stub
+    for stub in pjsip.conf extensions.conf rtp.conf; do
+        install_managed_file "$SCRIPT_DIR/templates/asterisk/$stub" "/etc/asterisk/$stub" 0640 root:asterisk
+    done
+    stub_changed=$MANAGED_FILE_CHANGED
+    # The include directory is written by the deployer (veyra) and read by
+    # Asterisk (group asterisk); setgid keeps new files in that group.
+    run install -d -m 2750 -o "$VEYRA_USER" -g asterisk /etc/asterisk/veyra
+    run chown "$VEYRA_USER:asterisk" /etc/asterisk/veyra
+    run chmod 2750 /etc/asterisk/veyra
     run systemctl enable asterisk
-    run systemctl restart asterisk
+    if (( core_changed )) || ! systemctl is-active --quiet asterisk; then
+        run systemctl restart asterisk
+    elif (( stub_changed )); then
+        # ARI/HTTP unchanged: a reload is enough and does not disturb calls.
+        info "Asterisk configuration files changed; reloading (calls are not interrupted)"
+        run asterisk -rx "core reload"
+    else
+        ok "Asterisk configuration unchanged"
+    fi
     if [[ "$DRY_RUN" != "1" ]]; then
 
         for _ in $(seq 1 20); do
@@ -256,10 +278,18 @@ do_telephony() {
     ok "Asterisk is running; ARI available on 127.0.0.1 only; AMI disabled"
 }
 
+# Units this installation runs. The deployer only exists with a telephony engine.
+veyra_units() {
+    local units=(veyra-api veyra-worker)
+    [[ "${TELEPHONY_ENGINE:-none}" != "none" ]] && units+=(veyra-deployer)
+    printf '%s\n' "${units[@]}"
+}
+
 do_services() {
     begin services "Installing and starting Veyra services"
-    local unit tmp
-    for unit in veyra-api veyra-worker; do
+    local unit tmp units=()
+    mapfile -t units < <(veyra_units)
+    for unit in "${units[@]}"; do
         tmp="$(mktemp)"
         render_template "$SCRIPT_DIR/templates/systemd/$unit.service.in" "$tmp" \
             "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_DATA=$VEYRA_DATA" \
@@ -267,9 +297,13 @@ do_services() {
         install_managed_file "$tmp" "/etc/systemd/system/$unit.service" 0644 root:root
         rm -f "$tmp"
     done
+    if [[ "${TELEPHONY_ENGINE:-none}" == "none" && -f /etc/systemd/system/veyra-deployer.service ]]; then
+        run systemctl disable --now veyra-deployer || true
+        run rm -f /etc/systemd/system/veyra-deployer.service
+    fi
     run systemctl daemon-reload
-    run systemctl enable veyra-api veyra-worker
-    run systemctl restart veyra-api veyra-worker
+    run systemctl enable "${units[@]}"
+    run systemctl restart "${units[@]}"
     if [[ "$DRY_RUN" != "1" ]]; then
 
         for _ in $(seq 1 30); do
@@ -279,7 +313,7 @@ do_services() {
         curl -fsS "http://$VEYRA_API_ADDR:$VEYRA_API_PORT/api/v1/system/ping" >/dev/null \
             || die "veyra-api did not become ready; see: journalctl -u veyra-api"
     fi
-    ok "veyra-api and veyra-worker are running"
+    ok "$(IFS=,; echo "${units[*]}") running"
 }
 
 listen_directives() {

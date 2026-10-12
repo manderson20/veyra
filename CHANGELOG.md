@@ -4,7 +4,17 @@ All notable changes to Veyra are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — 0.1.0-dev.0 (Milestone 2)
+## [Unreleased] — 0.1.0-dev.0 (Milestone 3)
+
+### Added
+- Telephony engine integration (`docs/TELEPHONY_ENGINE.md`): Asterisk configuration generated from the database (PJSIP transports and endpoint templates, dialplan with `*43` echo test and `*60` speaking clock, RTP settings) into `/etc/asterisk/veyra/`, which Veyra-managed stub files include.
+- Configuration revisions: generate, preview diffs, deploy, discard, and roll back by redeploying an older revision (`/telephony/revisions`, `veyra config`). Failed deployments restore the previous files.
+- `veyra-deployer` service: the only process that writes engine files; targeted module reloads over ARI (`res_pjsip.so`, `pbx_config.so`, `res_rtp_asterisk.so`) and post-reload verification.
+- SIP and media settings (`/telephony/settings`, System → Telephony Engine): bind address, ports, TLS, NAT addresses, local networks, RTP range, codecs, language, with validation.
+- Engine status (`/telephony/engine`): version, start and reload times, module status, endpoint and channel counts; `/system/health` now reports real `registrations` and `active_calls` counts. The setup wizard shows the engine state.
+- Installer: Asterisk stubs replace the package samples (backed up), `/etc/asterisk/veyra` is `2750 veyra:asterisk`, the deployer unit is installed and verified; upgrades reload Asterisk only when its managed files changed and never restart it.
+
+## 0.1.0-dev.0 (Milestone 2)
 
 ### Added
 - Sessions: `GET /auth/sessions`, `DELETE /auth/sessions/{id}`, `POST /auth/sessions/revoke-others`; administrators: `GET/DELETE /users/{id}/sessions`. "Your account" page with profile, password change and active sessions; the user page shows a user's sessions with "Sign out everywhere".

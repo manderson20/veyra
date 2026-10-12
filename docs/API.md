@@ -25,5 +25,6 @@ Conventions:
 | Modules | `/modules`, `/modules/ui-extensions`, `/modules/{id}`, `/modules/{id}/{install,enable,disable,update,uninstall}`, module routes under `/api/v1/ext/<prefix>/` |
 | Updates | `/updates/policies[/{component}]`, `/updates/check`, `/updates/checks/latest`, `/updates/available`, `/updates/history` |
 | Provisioning | `/provisioning/variables`, `/provisioning/templates[/{key}[/preview,/export]]`, `/provisioning/templates/{validate,import}` |
+| Telephony | `/telephony/engine`, `/telephony/settings`, `/telephony/revisions[/{id}]`, `/telephony/revisions/{id}/{deploy,discard}` (see [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md)) |
 
 Planned (later milestones): `/extensions`, `/devices`, `/trunks`, `/routes`, and others.

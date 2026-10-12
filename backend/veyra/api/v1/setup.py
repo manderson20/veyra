@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -36,7 +36,7 @@ STEPS = [
     {"key": "organization", "title": "Organization", "available": True},
     {"key": "installation", "title": "Installation name and time zone", "available": True},
     {"key": "network", "title": "Network settings", "available": False, "milestone": 1},
-    {"key": "telephony", "title": "Telephony engine check", "available": False, "milestone": 3},
+    {"key": "telephony", "title": "Telephony engine check", "available": True},
     {"key": "numbering", "title": "Extension numbering plan", "available": False, "milestone": 4},
     {"key": "sip", "title": "SIP settings", "available": False, "milestone": 5},
     {"key": "email", "title": "Email delivery", "available": False, "milestone": 7},
@@ -55,6 +55,9 @@ class SetupStatus(BaseModel):
     setup_required: bool
     token_issued: bool
     steps: list[dict[str, object]]
+    # Engine check for the wizard: the state only, never the version (public endpoint).
+    telephony_engine: str
+    telephony_state: str
 
 
 class AdminIn(BaseModel):
@@ -71,11 +74,14 @@ class SetupIn(BaseModel):
 
 
 @router.get("/status", response_model=SetupStatus, summary="Whether first-run setup is required")
-def status(db: Session = Depends(get_db)) -> SetupStatus:
+def status(request: Request, db: Session = Depends(get_db)) -> SetupStatus:
+    health = request.app.state.telephony.health()
     return SetupStatus(
         setup_required=bootstrap.setup_required(db),
         token_issued=db.get(SystemSetting, bootstrap.SETUP_TOKEN_KEY) is not None,
         steps=STEPS,
+        telephony_engine=health.engine,
+        telephony_state=health.state,
     )
 
 
