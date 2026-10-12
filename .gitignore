@@ -33,3 +33,7 @@ secrets/
 
 # Packages built locally
 *.vmod
+
+# Files written by `next dev` for AI agents
+frontend/AGENTS.md
+frontend/CLAUDE.md

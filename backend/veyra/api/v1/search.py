@@ -40,7 +40,7 @@ def search(
                 "id": str(o.id),
                 "title": o.name,
                 "subtitle": o.slug,
-                "href": f"/organizations/view?id={o.id}",
+                "href": f"/organizations/view/?id={o.id}",
             }
             for o in db.scalars(stmt)
         ]
@@ -56,7 +56,7 @@ def search(
                 "id": str(u.id),
                 "title": u.display_name,
                 "subtitle": u.email,
-                "href": f"/users/view?id={u.id}",
+                "href": f"/users/view/?id={u.id}",
             }
             for u in db.scalars(user_stmt)
         ]

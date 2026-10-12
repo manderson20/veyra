@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 168 40" role="img" aria-label="Veyra">
+  <!-- PLACEHOLDER logo: replace with approved Veyra artwork (see README.md). -->
+  <defs><linearGradient id="vg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#008CFF"/><stop offset="1" stop-color="#00D4B4"/></linearGradient></defs>
+  <path d="M4 6h9.5L20 24.5 26.5 6H36L24.6 34h-9.2z" fill="url(#vg)"/><path d="M20 24.5 26.5 6H36L24.6 34z" fill="#00D4B4" opacity=".55"/>
+  <text x="46" y="29" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="26" font-weight="700" letter-spacing="1" fill="#071629">veyra</text>
+</svg>
