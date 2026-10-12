@@ -81,7 +81,7 @@ function ExtensionView() {
         is_enabled: enabled,
       }));
       setChanged((n) => n + 1);
-      toast.success("Extension saved", renumbered ? "The SIP user name changed with the number: reconfigure the phone." : "Deploy the configuration to apply the change.");
+      toast.success("Extension saved", renumbered ? "The SIP user name changed with the number: reconfigure the phone and deploy." : "If the engine configuration changed, Deploy changes appears in the top bar.");
     } catch (err) {
       errors.set(err);
     } finally {
