@@ -69,6 +69,9 @@ export VEYRA_ENV_FILE=/dev/null VEYRA_ENVIRONMENT=development \
   VEYRA_COOKIE_SECURE=false VEYRA_ALLOW_UNSIGNED_MODULES=true \
   VEYRA_MODULE_PATHS=$PWD/../modules VEYRA_TEMPLATE_PATHS=$PWD/../provisioning/templates
 .venv/bin/veyra db upgrade
+# the key that encrypts SIP secrets (the installer creates it on a server)
+VEYRA_INSTALLATION_KEY_FILE=$PWD/.dev-installation.key .venv/bin/veyra installation-key generate
+export VEYRA_INSTALLATION_KEY_FILE=$PWD/.dev-installation.key
 .venv/bin/veyra setup-token
 .venv/bin/uvicorn veyra.main:create_app --factory --reload --port 8000
 ```

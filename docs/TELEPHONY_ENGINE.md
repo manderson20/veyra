@@ -32,8 +32,8 @@ generated files:
 | Stub in `/etc/asterisk/` | Generated file in `/etc/asterisk/veyra/` | Content | Reload |
 |---|---|---|---|
 | `pjsip.conf` | `pjsip.transports.conf` | UDP, TCP and optional TLS transports from the SIP settings, NAT addresses, local networks | `res_pjsip.so` |
-| `pjsip.conf` | `pjsip.endpoints.conf` | Endpoint, auth and AOR templates; one endpoint per extension (Milestone 4). **Sensitive** when it contains SIP secrets: never shown in diffs | `res_pjsip.so` |
-| `extensions.conf` | `extensions.conf` | `[veyra-features]` (`*43` echo test, `*60` speaking clock), `[veyra-internal]` (extensions, invalid-number handling), `[veyra-from-trunk]` (refuses calls until inbound routing exists, Milestone 6) | `pbx_config.so` |
+| `pjsip.conf` | `pjsip.endpoints.conf` | Endpoint, auth and AOR templates; one endpoint, auth and AOR section per enabled extension of an active organization ([EXTENSIONS.md](EXTENSIONS.md)). **Sensitive** when it contains SIP secrets: never shown in diffs, stored encrypted in the revision | `res_pjsip.so` |
+| `extensions.conf` | `extensions.conf` | `[veyra-features]` (`*43` echo test, `*60` speaking clock), `[veyra-internal]` (one `Dial(PJSIP/<endpoint>,30)` per extension, invalid-number handling), `[veyra-from-trunk]` (refuses calls until inbound routing exists, Milestone 6) | `pbx_config.so` |
 | `rtp.conf` | `rtp.conf` | RTP port range, strict RTP | `res_rtp_asterisk.so` |
 
 `/etc/asterisk/veyra` is `2750 veyra:asterisk`: the deployer (user `veyra`)
@@ -66,9 +66,13 @@ POST /telephony/revisions/{id}/deploy  on a superseded revision = rollback
 POST /telephony/revisions/{id}/discard on a validated revision
 ```
 
-* A revision stores its files in `config_revisions.artifacts`, the content
-  hash, the parent (the revision that was deployed when it was generated),
-  who created it and, after deployment, a short log in `validation_errors`.
+* A revision stores its files in `config_revisions.artifacts` (sensitive
+  files encrypted with the installation key, the others in clear), the
+  content hash, the parent (the revision that was deployed when it was
+  generated), who created it and, after deployment, a short log in
+  `validation_errors`. The deployer decrypts sensitive files when it writes
+  them; a deployer without the key fails the revision and restores the
+  previous files.
 * The API returns file contents and unified diffs to platform
   administrators only; organization administrators with `config.read` see
   the metadata. Sensitive files report only "changed".
@@ -83,6 +87,10 @@ POST /telephony/revisions/{id}/discard on a validated revision
   (`GET /asterisk/modules/{name}` must report `Running`, ARI must answer)
   is the authoritative check. Dialplan contexts cannot be listed through
   ARI; `sudo asterisk -rx "dialplan show veyra-internal"` shows them.
+
+* `GET /telephony/engine` reports `changes_pending` (the database differs
+  from the deployed revision; the Extensions pages show a notice) and
+  `installation_key_present`.
 
 Console equivalents: `veyra config status`, `veyra config generate
 [--deploy]`, `veyra config deploy <sequence>`.
@@ -107,9 +115,10 @@ counts from `/channels`.
 * Every value that reaches a generated file is validated against an
   allow-list pattern (section names, numbers, display names, addresses);
   newlines, brackets and semicolons cannot be injected.
-* SIP secrets in `pjsip.endpoints.conf` (from Milestone 4) are stored in the
-  revision artifacts in the database. Encrypting artifacts with the
-  installation key is part of Milestone 4's secret handling.
+* SIP secrets reach `pjsip.endpoints.conf` from the snapshot, which decrypts
+  them with the installation key; the revision stores that file encrypted
+  ([EXTENSIONS.md](EXTENSIONS.md) §4, [ADR 0014](adr/0014-installation-key.md)).
+  The file on disk is `0640 veyra:asterisk`, readable by Asterisk only.
 
 ## 7. Development
 
