@@ -352,6 +352,7 @@ button.sidebar__heading:hover { color: var(--sidebar-text); }
 @media (max-width: 760px) { .wizard { grid-template-columns: 1fr; } }
 
 /* Brand */
+.brand-logo { display: block; }
 .brand-theme-dark { display: none; }
 :root[data-theme="dark"] .brand-theme-dark { display: block; }
 :root[data-theme="dark"] .brand-theme-light { display: none; }

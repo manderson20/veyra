@@ -44,7 +44,8 @@ function logoImg(src: string, variant: LogoVariant, height: number, className: s
       width={art.width}
       height={art.height}
       decoding="async"
-      style={{ display: "block", height, width: "auto", maxWidth: "100%", objectFit: "contain" }}
+      // display comes from the .brand-logo rules so the theme can hide one variant.
+      style={{ height, width: "auto", maxWidth: "100%", objectFit: "contain" }}
       className={className}
     />
   );

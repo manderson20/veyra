@@ -3,7 +3,7 @@
 **Milestone:** 3 — Telephony engine integration (deployer service, configuration generation, ARI status, reload, rollback)
 **Date:** 2026-10-12
 **Branch:** `milestone-3` (pushed to `manderson20/veyra`; not merged to `main`)
-**Status:** Complete. Awaiting the project owner's review.
+**Status:** Complete. Approved by the project owner on 2026-10-12 (merged to `main`).
 
 ## 1. Scope (approved 2026-10-12)
 
@@ -92,10 +92,19 @@ cases; organization administrators see metadata only; CLI commands.
   TCP) on dev1. ufw is inactive on that VM; it sits on a private network.
   A generated firewall profile is scheduled for M5/M17 (NETWORKING.md).
 
-## 7. Proposed Milestone 4 (for approval)
+## 7. Proposed Milestone 4 (approved 2026-10-12)
 
 Extension management: the installation key and SIP secret encryption at
 rest (also used to encrypt revision artifacts and, later, MFA secrets), the
 numbering plan, extension CRUD with tenant scoping, generated endpoints and
 dialplan from real extensions, and the Extensions UI. Milestone 4b (MFA)
 follows it.
+
+## 8. Owner decisions (2026-10-12)
+
+* Milestone 3 approved; `main` fast-forwarded to this branch.
+* Milestone 4 as proposed in §7 approved and started on branch `milestone-4`.
+* Cosmetic report from the owner while reviewing the setup wizard: the
+  logo appeared twice side by side. Cause: the logo component rendered the
+  light and dark artwork together and an inline style overrode the CSS that
+  hides the unused one. Fixed in Milestone 4's first commit.
