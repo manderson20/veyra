@@ -26,7 +26,7 @@ interface EngineState {
 const EngineContext = createContext<EngineState | null>(null);
 
 /**
- * Shared engine status for the shell: the top-bar "Apply changes" button and
+ * Shared engine status for the shell: the top-bar "Deploy changes" button and
  * the pending-change notices read from one poll instead of several.
  */
 export function EngineStatusProvider({ children }: { children: ReactNode }) {
