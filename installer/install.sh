@@ -50,6 +50,9 @@ done
 VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$SOURCE_DIR/backend/veyra/version.py")"
 [[ -n "$VERSION" ]] || die "Cannot determine the Veyra version from $SOURCE_DIR"
 REVISION="$(git -C "$SOURCE_DIR" rev-parse --short=10 HEAD 2>/dev/null || echo local)"
+if [[ "$REVISION" != "local" ]] && ! git -C "$SOURCE_DIR" diff --quiet HEAD -- . 2>/dev/null; then
+    REVISION="${REVISION}-dirty"
+fi
 RELEASE_NAME="${VERSION}-${REVISION}"
 RELEASE_DIR="$VEYRA_PREFIX/releases/$RELEASE_NAME"
 TELEPHONY_ENGINE="asterisk"
@@ -57,6 +60,7 @@ TELEPHONY_ENGINE="asterisk"
 # shellcheck source=lib/steps.sh
 . "$SCRIPT_DIR/lib/steps.sh"
 trap on_error ERR
+trap on_exit EXIT
 
 # ------------------------------------------------------------------ main
 
@@ -74,7 +78,7 @@ previous_status="$(state_get status 2>/dev/null || true)"
 
 do_preflight
 state_set status "in_progress"
-state_set started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+[[ -n "$(state_get started_at 2>/dev/null || true)" ]] || state_set started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 do_packages
 do_versions
 do_account

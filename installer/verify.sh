@@ -94,7 +94,8 @@ for f in "$VEYRA_ETC"/secrets/*; do
 done
 [[ "$(perm "$VEYRA_ETC/tls/veyra.key" | cut -d' ' -f1)" == "600" ]] && check tls-key pass "600" \
     || check tls-key fail "TLS key permissions are $(perm "$VEYRA_ETC/tls/veyra.key")"
-if [[ -n "$(find "$VEYRA_PREFIX/current/" -xdev \( -user veyra -o -perm -o+w \) -print -quit 2>/dev/null)" ]]; then
+# Symbolic links (the venv's python and lib64 links) always report mode 777 and are skipped.
+if [[ -n "$(find "$VEYRA_PREFIX/current/" -xdev ! -type l \( -user veyra -o -perm -o+w \) -print -quit 2>/dev/null)" ]]; then
     check code-ownership fail "Application code is writable by the service account or others"
 else
     check code-ownership pass "Application code is read-only for the service account"

@@ -8,13 +8,21 @@
 
 CURRENT_STEP="start"
 
+# ERR fires for an unexpected command failure; EXIT fires for every exit,
+# including die(), so the failure is recorded there (die bypasses the ERR trap).
 on_error() {
     local rc=$?
     fail "Installation failed during step '$CURRENT_STEP' (exit $rc)."
+    exit "$rc"
+}
+
+on_exit() {
+    local rc=$?
+    (( rc == 0 )) && return 0
+    [[ "$DRY_RUN" == "1" ]] && return 0
     [[ -n "$INSTALL_LOG" ]] && fail "Details: $INSTALL_LOG"
     state_set "${STATE_STATUS_KEY:-status}" "failed:$CURRENT_STEP" || true
     fail "Fix the problem and run the installer again; completed steps are skipped or re-verified."
-    exit "$rc"
 }
 
 begin() { CURRENT_STEP="$1"; step "$2"; }
@@ -207,7 +215,8 @@ do_tls() {
     fi
     local host fqdn san addr
     host="$(hostname -s)"; fqdn="$(hostname -f 2>/dev/null || echo "$host")"
-    san="DNS:$host,DNS:$fqdn,DNS:localhost,IP:127.0.0.1"
+    san="DNS:$host,DNS:localhost,IP:127.0.0.1"
+    [[ "$fqdn" != "$host" ]] && san="DNS:$host,DNS:$fqdn,DNS:localhost,IP:127.0.0.1"
     for addr in $(host_addresses); do san+=",IP:$addr"; done
     run openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 825 \
         -subj "/CN=$fqdn/O=Veyra (self-signed)" -addext "subjectAltName=$san" \
@@ -298,6 +307,15 @@ do_nginx() {
     render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$tmp" \
         "LISTEN_HTTP=$(listen_directives 80 '')" "LISTEN_HTTPS=$(listen_directives 443 ' ssl')" \
         "API_PORT=$VEYRA_API_PORT" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_PREFIX=$VEYRA_PREFIX"
+    # Veyra listens on specific addresses. A reload cannot bind them while
+    # NGINX still holds wildcard sockets (the package default site) on the same
+    # ports: it binds 443, fails on 80, retries for ~2 s, then drops the whole
+    # new configuration and keeps the old one. So the server is restarted
+    # whenever the site changes or a wildcard listener is present, and only
+    # reloaded otherwise (upgrades with an unchanged site).
+    local restart=0
+    cmp -s "$tmp" /etc/nginx/sites-available/veyra.conf || restart=1
+    [[ -L /etc/nginx/sites-enabled/veyra.conf ]] || restart=1
     install_managed_file "$tmp" /etc/nginx/sites-available/veyra.conf 0644 root:root
     rm -f "$tmp"
     install_managed_file "$SCRIPT_DIR/templates/nginx/proxy.conf" "$VEYRA_ETC/nginx-proxy.conf" 0644 root:root
@@ -306,10 +324,28 @@ do_nginx() {
         # Only the symlink is removed; /etc/nginx/sites-available/default is untouched.
         run rm /etc/nginx/sites-enabled/default
         info "Disabled the NGINX default site (re-enable by restoring its symlink)"
+        restart=1
+    fi
+    if ss -H -ltn '( sport = :80 or sport = :443 )' 2>/dev/null | awk '{print $4}' \
+        | grep -qE '^(0\.0\.0\.0|\[::\]|\*):'; then
+        info "NGINX holds wildcard listeners on 80/443; a restart is needed to rebind"
+        restart=1
     fi
     run nginx -t
     run systemctl enable nginx
-    run systemctl reload-or-restart nginx
+    if (( restart )) || ! systemctl is-active --quiet nginx; then
+        run systemctl restart nginx
+    else
+        run systemctl reload nginx
+    fi
+    if [[ "$DRY_RUN" != "1" ]]; then
+        for _ in $(seq 1 15); do
+            curl -fsSk -m 3 https://127.0.0.1/api/v1/system/ping >/dev/null 2>&1 && break
+            sleep 1
+        done
+        curl -fsSk -m 3 https://127.0.0.1/api/v1/system/ping >/dev/null 2>&1 \
+            || die "NGINX is running but https://127.0.0.1/ does not answer; see /var/log/nginx/error.log"
+    fi
     ok "NGINX serving the Veyra web interface over HTTPS"
 }
 

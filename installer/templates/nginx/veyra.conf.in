@@ -12,6 +12,7 @@ limit_req_zone $binary_remote_addr zone=veyra_auth:10m rate=20r/m;
 server {
 @LISTEN_HTTP@
     server_name _;
+    server_tokens off;
     # Plain HTTP only redirects to HTTPS (phone provisioning over HTTP is a
     # separate, explicitly enabled server block in a later milestone).
     location / { return 301 https://$host$request_uri; }
@@ -58,7 +59,9 @@ server {
         try_files $uri =404;
     }
 
+    error_page 404 /404.html;
+
     location / {
-        try_files $uri $uri/index.html $uri/ /404.html;
+        try_files $uri $uri/index.html $uri/ =404;
     }
 }

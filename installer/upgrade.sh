@@ -44,6 +44,9 @@ OLD_VERSION="$(state_get version)"
 OLD_RELEASE_DIR="$(readlink -f "$VEYRA_PREFIX/current")"
 VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$SOURCE_DIR/backend/veyra/version.py")"
 REVISION="$(git -C "$SOURCE_DIR" rev-parse --short=10 HEAD 2>/dev/null || echo local)"
+if [[ "$REVISION" != "local" ]] && ! git -C "$SOURCE_DIR" diff --quiet HEAD -- . 2>/dev/null; then
+    REVISION="${REVISION}-dirty"
+fi
 RELEASE_NAME="${VERSION}-${REVISION}"
 RELEASE_DIR="$VEYRA_PREFIX/releases/$RELEASE_NAME"
 TELEPHONY_ENGINE="$(sed -n 's/^VEYRA_TELEPHONY_ENGINE=//p' "$VEYRA_ETC/veyra.env")"
@@ -54,6 +57,7 @@ STATE_STATUS_KEY="upgrade_status"
 # shellcheck source=lib/steps.sh
 . "$SCRIPT_DIR/lib/steps.sh"
 trap on_error ERR
+trap on_exit EXIT
 
 INSTALL_LOG="$VEYRA_LOG_DIR/upgrade-$(date -u +%Y%m%d-%H%M%S).log"
 [[ "$DRY_RUN" == "1" ]] && INSTALL_LOG=""
