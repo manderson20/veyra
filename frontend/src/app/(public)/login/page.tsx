@@ -3,17 +3,24 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { TotpEnrolment } from "@/components/account/TotpEnrolment";
 import { AuthLayout } from "@/components/AuthLayout";
 import { BrandLogo } from "@/components/Brand";
 import { Button, Callout, LoadingState, TextField } from "@/components/ui";
 import { api, ApiError, errorMessage } from "@/lib/api";
-import type { SessionInfo, SetupStatus } from "@/lib/types";
+import type { MfaChallenge, SessionInfo, SetupStatus } from "@/lib/types";
 import { useSession } from "@/hooks/useSession";
 
 function safeNext(value: string | null): string {
   // Only allow same-site relative paths (prevents open redirects).
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "/";
   return value;
+}
+
+type Stage = { kind: "password" } | { kind: "mfa"; challenge: MfaChallenge } | { kind: "enrol"; challenge: MfaChallenge };
+
+function isChallenge(value: unknown): value is MfaChallenge {
+  return typeof value === "object" && value !== null && (value as MfaChallenge).mfa_pending === true;
 }
 
 function LoginForm() {
@@ -25,20 +32,35 @@ function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
+  const [stage, setStage] = useState<Stage>({ kind: "password" });
   const next = safeNext(params.get("next"));
+
+  const finish = async (s: SessionInfo | undefined) => {
+    await refresh();
+    router.replace(s?.must_change_password ? "/account/?reason=signin" : next);
+  };
 
   useEffect(() => {
     if (session) {
       router.replace(session.must_change_password ? "/account/?reason=signin" : next);
       return;
     }
+    // A pre-authentication session may already exist (page reload during the second step).
     api
-      .get<SetupStatus>("/setup/status", undefined, { noRedirect: true })
-      .then((s) => {
-        if (s.setup_required) router.replace("/setup/");
-        else setChecking(false);
+      .get<MfaChallenge>("/auth/mfa/challenge", undefined, { noRedirect: true })
+      .then((c) => {
+        if (c.mfa_pending) setStage({ kind: c.enrol ? "enrol" : "mfa", challenge: c });
+        setChecking(false);
       })
-      .catch(() => setChecking(false));
+      .catch(() =>
+        api
+          .get<SetupStatus>("/setup/status", undefined, { noRedirect: true })
+          .then((s) => {
+            if (s.setup_required) router.replace("/setup/");
+            else setChecking(false);
+          })
+          .catch(() => setChecking(false)),
+      );
   }, [session, router, next]);
 
   const submit = async (e: FormEvent) => {
@@ -46,16 +68,49 @@ function LoginForm() {
     setBusy(true);
     setError(null);
     try {
-      const s = await api.post<SessionInfo>("/auth/login", { email, password }, { noRedirect: true });
-      await refresh();
-      router.replace(s.must_change_password ? "/account/?reason=signin" : next);
+      const s = await api.post<SessionInfo | MfaChallenge>("/auth/login", { email, password }, { noRedirect: true });
+      if (isChallenge(s)) {
+        setPassword("");
+        setStage({ kind: s.enrol ? "enrol" : "mfa", challenge: s });
+        setBusy(false);
+        return;
+      }
+      await finish(s);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail || err.title : errorMessage(err));
       setBusy(false);
     }
   };
 
+  const startOver = async () => {
+    try {
+      await api.post("/auth/logout", undefined, { noRedirect: true });
+    } catch {
+      /* the pre-auth session expires by itself */
+    }
+    setStage({ kind: "password" });
+    setError(null);
+  };
+
   if (checking) return <LoadingState />;
+
+  if (stage.kind === "mfa") {
+    return <MfaStep challenge={stage.challenge} onDone={finish} onStartOver={startOver} />;
+  }
+  if (stage.kind === "enrol") {
+    return (
+      <div className="stack">
+        <div className="row" style={{ marginBottom: 8 }}><BrandLogo height={30} /></div>
+        <div>
+          <h1 className="auth__title">Set up two-factor authentication</h1>
+          <p className="muted">Hello {stage.challenge.display_name}. Your role requires a second factor, and none is set up yet. This takes about a minute.</p>
+        </div>
+        <TotpEnrolment compact onDone={(r) => void finish(r.session)} />
+        <p className="subtle"><button type="button" className="link" onClick={startOver}>Not you? Sign in as someone else</button></p>
+      </div>
+    );
+  }
+
   return (
     <div className="stack">
       <div className="row" style={{ marginBottom: 8 }}>
@@ -78,6 +133,60 @@ function LoginForm() {
         sign in here, even when single sign-on is configured, and can be reset from the server with{" "}
         <span className="mono">veyra users reset-password</span>.
       </p>
+    </div>
+  );
+}
+
+function MfaStep({ challenge, onDone, onStartOver }: { challenge: MfaChallenge; onDone: (s: SessionInfo) => Promise<void>; onStartOver: () => Promise<void> }) {
+  const [code, setCode] = useState("");
+  const [recovery, setRecovery] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const s = await api.post<SessionInfo>("/auth/mfa/verify", { code: code.trim() }, { noRedirect: true });
+      await onDone(s);
+    } catch (err) {
+      // Locked after repeated failures, or the pre-auth session expired: back to the password.
+      if (err instanceof ApiError && (err.code === "mfa_locked" || err.code === "unauthorized")) {
+        setError(err.detail || err.title);
+        await onStartOver();
+        return;
+      }
+      setError(errorMessage(err));
+      setCode("");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="stack">
+      <div className="row" style={{ marginBottom: 8 }}><BrandLogo height={30} /></div>
+      <div>
+        <h1 className="auth__title">Second step</h1>
+        <p className="muted">Hello {challenge.display_name}. {recovery ? "Enter one of your recovery codes." : "Enter the code from your authenticator app."}</p>
+      </div>
+      <form className="stack stack--sm" onSubmit={submit}>
+        {recovery ? (
+          <TextField label="Recovery code" required autoFocus autoComplete="off" spellCheck={false} placeholder="ABCDE-FGHJK" value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())} help="Each recovery code works once." />
+        ) : (
+          <TextField label="Authenticator code" required autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code}
+            onChange={(e) => setCode(e.target.value.replace(/[^0-9 ]/g, ""))} help={challenge.methods.length > 1 ? `Any of your ${challenge.methods.length} devices.` : challenge.methods[0]?.label} />
+        )}
+        {error ? <Callout tone="danger">{error}</Callout> : null}
+        <Button variant="primary" type="submit" loading={busy} block disabled={!code.trim()}>Verify</Button>
+      </form>
+      <div className="row row--between">
+        <button type="button" className="link" onClick={() => { setRecovery((r) => !r); setCode(""); setError(null); }}>
+          {recovery ? "Use the authenticator app instead" : "Lost your phone? Use a recovery code"}
+        </button>
+        <button type="button" className="link subtle" onClick={() => void onStartOver()}>Start over</button>
+      </div>
     </div>
   );
 }

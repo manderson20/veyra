@@ -73,6 +73,8 @@ class TotpBeginOut(BaseModel):
 class TotpConfirmIn(BaseModel):
     method_id: uuid.UUID
     code: str = Field(min_length=1, max_length=64)
+    # Optional device name chosen while scanning the code.
+    label: str | None = Field(None, max_length=100)
 
 
 class TotpConfirmOut(BaseModel):
@@ -373,6 +375,8 @@ def totp_confirm(
     method.confirmed_at = now
     method.last_used_at = now
     method.last_used_step = matched
+    if body.label and body.label.strip():
+        method.label = body.label.strip()
     codes = mfa.replace_recovery_codes(db, user.id) if not existing else []
     csrf: str | None = None
     completed = session.mfa_verified_at is None

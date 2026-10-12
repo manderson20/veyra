@@ -76,6 +76,12 @@ describe("api client", () => {
     expect(assign).toHaveBeenCalledWith("/login/?next=%2Fusers%2F");
   });
 
+  it("redirects when a second factor is still pending (403 mfa_required)", async () => {
+    const { d, assign } = deps(jsonResponse(403, { title: "Second factor required", code: "mfa_required" }), { pathname: "/users/" });
+    await createApi(d).get("/users").catch(() => undefined);
+    expect(assign).toHaveBeenCalledWith("/login/?next=%2Fusers%2F");
+  });
+
   it("does not redirect on 401 from the login page or when disabled", async () => {
     const a = deps(jsonResponse(401, { title: "Unauthorized" }), { pathname: "/login/" });
     await createApi(a.d).get("/auth/session").catch(() => undefined);
