@@ -49,6 +49,9 @@ function UserView() {
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [unlockBusy, setUnlockBusy] = useState(false);
+  const [mfaReset, setMfaReset] = useState(false);
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
 
   useOnChange(user.data, (u) => {
     if (u) {
@@ -76,6 +79,21 @@ function UserView() {
       toast.error("Could not unlock the account", errorMessage(err));
     } finally {
       setUnlockBusy(false);
+    }
+  };
+
+  const resetMfa = async () => {
+    setMfaBusy(true);
+    setMfaError(null);
+    try {
+      const r = await api.post<{ message: string }>(`/users/${u.id}/mfa/reset`);
+      toast.success("Two-factor authentication reset", r.message);
+      setMfaReset(false);
+      user.reload();
+    } catch (err) {
+      setMfaError(errorMessage(err));
+    } finally {
+      setMfaBusy(false);
     }
   };
 
@@ -159,6 +177,13 @@ function UserView() {
             <dd>
               {u.must_change_password ? "Temporary; must be changed at next sign-in" : u.password_changed_at ? `Changed ${formatRelative(u.password_changed_at)}` : "Set at creation"}
             </dd>
+            <dt>Two-factor</dt>
+            <dd>
+              <span className="row">
+                <Badge tone={u.mfa_enabled ? "ok" : "neutral"}>{u.mfa_enabled ? "On" : "Off"}</Badge>
+                {editable && !isSelf && u.mfa_enabled ? <Button size="sm" icon="refresh" onClick={() => setMfaReset(true)}>Reset</Button> : null}
+              </span>
+            </dd>
             <dt>Lockout</dt>
             <dd>
               {locked ? (
@@ -194,6 +219,18 @@ function UserView() {
       ) : null}
       {editable && !isSelf ? <UserSessionsCard user={u} /> : null}
       <ResetPasswordDialog open={resetOpen} onClose={() => setResetOpen(false)} user={u} onChanged={user.reload} />
+      <ConfirmDialog
+        open={mfaReset}
+        title="Reset two-factor authentication?"
+        confirmLabel="Reset two-factor"
+        tone="danger"
+        busy={mfaBusy}
+        error={mfaError}
+        onConfirm={resetMfa}
+        onCancel={() => { setMfaReset(false); setMfaError(null); }}
+      >
+        <p>{u.display_name}&apos;s authenticator devices and recovery codes are removed and they are signed out everywhere. Use this when they lost their phone. They set up a new authenticator at their next sign-in.</p>
+      </ConfirmDialog>
       <AssignRoleDialog open={assignOpen} onClose={() => setAssignOpen(false)} userId={u.id} onAssigned={roles.reload} />
       <ConfirmDialog
         open={removing !== null}

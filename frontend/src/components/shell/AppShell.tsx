@@ -13,6 +13,7 @@ import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
 import { ApplyChanges } from "./ApplyChanges";
 import { GlobalSearch } from "./GlobalSearch";
+import { MfaNag } from "./MfaNag";
 import { Sidebar } from "./Sidebar";
 import { UserMenu } from "./UserMenu";
 
@@ -82,6 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <ThemeToggle />
           <UserMenu />
         </header>
+        <MfaNag />
         <main id="main" className="content" tabIndex={-1}>
           {children}
         </main>

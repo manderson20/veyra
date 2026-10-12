@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { NewPasswordFields, passwordsMatch } from "@/components/account/PasswordFields";
 import { SessionsTable } from "@/components/account/SessionsTable";
+import { TwoFactorCard } from "@/components/account/TwoFactorCard";
 import { Badge, Button, Callout, Card, ConfirmDialog, LoadingState, PageHeader, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
@@ -40,6 +41,7 @@ function AccountPage() {
               {session.is_platform_admin ? <Badge tone="info" icon="shield">Platform Administrator</Badge> : <span>{session.permissions.length} permission{session.permissions.length === 1 ? "" : "s"}</span>}
               {u.is_recovery_admin ? <Badge tone="info">Recovery admin</Badge> : null}
             </dd>
+            <dt>Two-factor</dt><dd><Badge tone={session.mfa.enabled ? "ok" : "neutral"}>{session.mfa.enabled ? "On" : "Off"}</Badge></dd>
             <dt>Password changed</dt><dd>{u.password_changed_at ? formatRelative(u.password_changed_at) : "unknown"}</dd>
             <dt>Last sign-in</dt><dd>{formatDateTime(u.last_login_at)}</dd>
           </dl>
@@ -49,14 +51,8 @@ function AccountPage() {
           <ChangePasswordForm onChanged={refresh} />
         </Card>
       </div>
+      <TwoFactorCard />
       <SessionsCard />
-      <Card title="Two-factor authentication">
-        <p className="muted">
-          Not available yet. The design (authenticator apps with recovery codes first, passkeys next, and enforcement for
-          administrators) is in <span className="mono">docs/MFA_DESIGN.md</span>; delivery is scheduled on the roadmap. Nothing here is
-          enabled until it works.
-        </p>
-      </Card>
     </div>
   );
 }

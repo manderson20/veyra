@@ -21,6 +21,15 @@ export interface User {
   locked_until: string | null;
   password_changed_at: string | null;
   must_change_password: boolean;
+  mfa_enabled: boolean;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+  required: boolean;
+  grace_until: string | null;
+  methods: number;
+  recovery_codes_remaining: number;
 }
 
 export interface SessionInfo {
@@ -32,6 +41,56 @@ export interface SessionInfo {
   csrf_token?: string | null;
   version: string;
   release: string | null;
+  mfa: MfaStatus;
+}
+
+export interface MfaMethod {
+  id: string;
+  type: string;
+  label: string;
+  created_at: string | null;
+  last_used_at: string | null;
+}
+
+/** Returned by sign-in (HTTP 202) while the second factor is pending. */
+export interface MfaChallenge {
+  mfa_pending: boolean;
+  enrol: boolean;
+  methods: MfaMethod[];
+  email: string;
+  display_name: string;
+  expires_at: string;
+}
+
+export interface TotpBegin {
+  method_id: string;
+  secret: string;
+  uri: string;
+  qr_svg: string;
+  expires_at: string | null;
+}
+
+export interface TotpConfirm {
+  method: MfaMethod;
+  recovery_codes: string[];
+  session: SessionInfo;
+}
+
+export interface MfaMethods {
+  status: MfaStatus;
+  methods: MfaMethod[];
+  allowed_methods: string[];
+}
+
+export interface MfaPolicy {
+  required_for: string[];
+  grace_days: number;
+  allowed_methods: string[];
+}
+
+export interface MfaPolicyOut {
+  policy: MfaPolicy;
+  roles: { key: string; name: string }[];
 }
 
 export interface UserSession {
@@ -121,6 +180,8 @@ export interface EngineStatus {
   pending_revision: number | null;
   /** The database differs from the deployed configuration (null: no generation). */
   changes_pending: boolean | null;
+  pending_since: string | null;
+  pending_by: string | null;
   installation_key_present: boolean;
 }
 

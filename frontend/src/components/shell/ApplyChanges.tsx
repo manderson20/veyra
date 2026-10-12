@@ -25,7 +25,7 @@ export function ApplyChanges() {
   return (
     <span className="row" style={{ gap: 8 }}>
       <Button variant="danger" icon="upload" className="topbar__deploy" onClick={() => void apply()} disabled={blocked}
-        title={blocked ? "The telephony engine is not running." : "Generate a configuration revision and deploy it to the telephony engine"}>
+        title={blocked ? "The telephony engine is not running." : engine.pending_by ? `Changes saved by ${engine.pending_by} are waiting to be deployed` : "Generate a configuration revision and deploy it to the telephony engine"}>
         Deploy changes
       </Button>
       <Link href="/system/telephony/" className="subtle nowrap" title="Review the pending changes before deploying">Review</Link>

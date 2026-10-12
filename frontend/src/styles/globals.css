@@ -91,6 +91,8 @@ button.sidebar__heading:hover { color: var(--sidebar-text); }
   backdrop-filter: saturate(180%) blur(8px); border-bottom: 1px solid var(--border);
 }
 .topbar__menu { display: none; }
+.link { background: none; border: 0; padding: 0; color: var(--primary); cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.link:hover { color: var(--primary-hover); }
 /* The deploy button: deliberately loud, square-cornered and red so pending changes are never missed. */
 .topbar__deploy { border-radius: 4px; font-weight: var(--weight-semibold); letter-spacing: 0.01em; box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent); }
 .topbar__deploy, :root[data-theme="dark"] .topbar__deploy { color: #fff; }

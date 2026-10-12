@@ -33,8 +33,10 @@ async function loadSession(): Promise<Loaded> {
     }
     return { session, extensions, error: null };
   } catch (e) {
-    // 401 simply means "not signed in"; anything else is a real error.
-    return { session: null, extensions: [], error: e instanceof ApiError && e.status === 401 ? null : e };
+    // 401 means "not signed in"; a pending second factor (403 mfa_required)
+    // is handled by the sign-in page; anything else is a real error.
+    const signedOut = e instanceof ApiError && (e.status === 401 || e.code === "mfa_required");
+    return { session: null, extensions: [], error: signedOut ? null : e };
   }
 }
 

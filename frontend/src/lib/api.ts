@@ -150,13 +150,17 @@ export function createApi(deps: ApiDeps = defaultDeps) {
         code: "network_error",
       });
     }
-    if (res.status === 401 && !opts.noRedirect) {
-      const loc = deps.location();
-      if (loc && !AUTH_FREE_PATHS.some((p) => loc.pathname.startsWith(p))) {
-        loc.assign(`/login/?next=${encodeURIComponent(loc.pathname)}`);
+    if (!res.ok) {
+      const problem = await parseProblem(res);
+      // Not signed in, or a second factor still pending: back to the sign-in page.
+      if ((res.status === 401 || (res.status === 403 && problem.code === "mfa_required")) && !opts.noRedirect) {
+        const loc = deps.location();
+        if (loc && !AUTH_FREE_PATHS.some((p) => loc.pathname.startsWith(p))) {
+          loc.assign(`/login/?next=${encodeURIComponent(loc.pathname)}`);
+        }
       }
+      throw new ApiError(res.status, problem);
     }
-    if (!res.ok) throw new ApiError(res.status, await parseProblem(res));
     if (res.status === 204) return undefined as T;
     const text = await res.text();
     return (text ? JSON.parse(text) : undefined) as T;
