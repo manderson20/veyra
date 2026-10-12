@@ -117,6 +117,59 @@ export interface EngineStatus {
   config_dir: string | null;
   deployed_revision: number | null;
   pending_revision: number | null;
+  /** The database differs from the deployed configuration (null: no generation). */
+  changes_pending: boolean | null;
+  installation_key_present: boolean;
+}
+
+export interface NumberingPlan {
+  extension_length: number;
+  first_extension: string;
+  last_extension: string;
+  reserved_prefixes: string[];
+}
+
+export interface NumberingOut {
+  plan: NumberingPlan;
+  problems: string[];
+  description: string;
+}
+
+export interface Extension {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  organization_slug: string;
+  number: string;
+  display_name: string;
+  endpoint_name: string;
+  user_id: string | null;
+  user_display_name: string | null;
+  user_email: string | null;
+  caller_id_name: string | null;
+  caller_id_number: string | null;
+  is_enabled: boolean;
+  sip_secret_set: boolean;
+  sip_secret_changed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SipCredentials {
+  extension_id: string;
+  number: string;
+  username: string;
+  secret: string;
+  udp_port: number;
+  tcp_port: number | null;
+  tls_port: number | null;
+  rotated_at: string | null;
+}
+
+export interface NextNumber {
+  number: string | null;
+  plan: string;
+  message: string | null;
 }
 
 export interface SipSettings {

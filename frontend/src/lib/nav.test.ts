@@ -28,6 +28,10 @@ describe("navigation filtering", () => {
     // Planned features and Settings need no permission
     expect(hrefs).toContain("/settings/");
     expect(hrefs.some((h) => h.startsWith("/planned/"))).toBe(true);
+    // Extensions is a real page now and needs its permission
+    expect(hrefs).not.toContain("/extensions/");
+    const withExt = buildNav({ permissions: ["extensions.read"], isPlatformAdmin: false });
+    expect(withExt.find((s) => s.id === "telephony")?.items[0]?.href).toBe("/extensions/");
   });
 
   it("adds module navigation only with the module permission", () => {
