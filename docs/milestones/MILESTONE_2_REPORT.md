@@ -56,10 +56,17 @@ refused while reads and same-origin pass; `Clear-Site-Data` on sign-out;
 the stronger password policy with personal-information and weak-word
 cases.
 
+The owner ran `upgrade.sh --yes` on veyra-dev1 at 18:05 UTC: backup taken,
+release `0.1.0-dev.0-4700a4f8f5` activated, migration `0002` applied,
+18/18 verification checks passed. Afterwards `/account/`,
+`/reset-password/`, the branding files and the new NGINX rate-limit rule
+were confirmed over HTTPS, and a bad reset token answered generically.
+One defect found: the web manifest was served as `application/octet-stream`
+(NGINX has no MIME entry for `.webmanifest`); the template now sets the
+type, effective at the next upgrade.
+
 Not tested: the UI in a browser (no browser on the server; the pages
-type-check, lint and build); the installed instance on dev1 has not been
-upgraded to this revision (that is an `upgrade.sh` run for the owner, as
-in Milestone 1).
+type-check, lint and build).
 
 ## 4. Decisions made (for the owner to confirm)
 
@@ -92,8 +99,8 @@ in Milestone 1).
 
 * veyra-dev2 (from Milestone 1) still unreachable.
 * License choice (from Milestone 0).
-* The installed instance on dev1 can be upgraded to this revision with
-  `sudo installer/upgrade.sh --yes` to see the new pages in a browser.
+* veyra-dev1 runs this milestone's code (release `4700a4f8f5`); the
+  manifest MIME fix lands with the next upgrade.
 
 ## 7. Proposed Milestone 3 (for approval)
 
