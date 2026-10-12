@@ -11,6 +11,7 @@
 | [0007](0007-signed-update-metadata.md) | Signed, expiring, sequence-numbered update metadata; no unattended installs by default | Accepted |
 | [0008](0008-sync-sqlalchemy-psycopg.md) | Synchronous SQLAlchemy with psycopg 3 and peer authentication | Accepted |
 | [0009](0009-license-pending.md) | License choice deferred to the project owner | Proposed |
+| [0010](0010-asterisk-ubuntu-packages.md) | Asterisk from the Ubuntu archive, not a Veyra-built package | Accepted |
 
 Format: Context, Decision, Consequences. Records are not edited once they
 are accepted; a later ADR supersedes them instead.

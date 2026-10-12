@@ -12,7 +12,7 @@ engine (Asterisk). It targets schools and districts, municipalities,
 businesses, MSPs and IT departments. It needs no cloud service and no
 subscription for self-hosted use.
 
-> **Status: early development (Milestone 0 — foundation).** Not for production use.
+> **Status: early development (Milestone 1 — automated installation).** Not for production use.
 > Telephony features (extensions, trunks, routing, voicemail…) arrive in later milestones;
 > see the [roadmap](docs/ROADMAP.md).
 
@@ -26,7 +26,7 @@ subscription for self-hosted use.
 | Provisioning templates (sandboxed, inheritance; Poly VVX 411/450 experimental) | Working, tested; phone delivery in M9 |
 | Update management (policies, signed metadata, checks) | Foundation; installs in M12 |
 | Admin web UI (Next.js static export, design system) | Foundation |
-| Ubuntu installer (preflight, install, verify, upgrade, uninstall) | Written and dry-run tested; first full run in M1 |
+| Ubuntu installer (preflight, install, verify, upgrade, uninstall) | Installed, verified and upgraded on veyra-dev1 (26.04); installed, verified, uninstalled and reinstalled on Ubuntu 24.04 ([reports](docs/installations/)) |
 | High availability (active/passive) | Designed; implemented and tested in M16 |
 
 ## Quick links
@@ -36,6 +36,7 @@ subscription for self-hosted use.
 - [Module development](docs/MODULE_DEVELOPMENT.md) · [Provisioning templates](docs/PROVISIONING_TEMPLATES.md) · [Update management](docs/UPDATE_MANAGEMENT.md)
 - [API](docs/API.md) · [Database schema](docs/DATABASE_SCHEMA.md) · [Networking](docs/NETWORKING.md)
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Licensing evaluation](docs/LICENSING.md)
+- [Installation reports](docs/installations/) · [Milestone reports](docs/milestones/)
 
 ## Repository layout
 

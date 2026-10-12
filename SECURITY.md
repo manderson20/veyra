@@ -1,6 +1,6 @@
 # Security
 
-Veyra is in early development (Milestone 0) and is **not yet suitable for
+Veyra is in early development (Milestone 1) and is **not yet suitable for
 production use**.
 
 ## Reporting a vulnerability
@@ -40,4 +40,5 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 * The rate limiter is per process. A shared limiter will come with HA.
 * The CSP allows `'unsafe-inline'` scripts because Next.js static export inlines its bootstrap. Moving to hashed inline scripts is planned.
 * No official release signing key or update server exists yet.
+* Asterisk comes from Ubuntu's `universe` component (ADR 0010), which is maintained by the community and by Ubuntu Pro `esm-apps`, not by Ubuntu's main security team. Production hosts should enable `esm-apps` or track Asterisk advisories; the production hardening milestone (M17) covers this.
 * Emergency calling is not configured and must not be relied on (see [docs/EMERGENCY_CALLING.md](docs/EMERGENCY_CALLING.md)).

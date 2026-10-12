@@ -150,4 +150,8 @@ for old in "${releases[@]:$KEEP_RELEASES}"; do
     run rm -rf "$old"
     info "Removed $old"
 done
-ok "Veyra upgraded from $OLD_VERSION to $VERSION."
+if [[ "$OLD_VERSION" == "$VERSION" ]]; then
+    ok "Veyra $VERSION upgraded to release $RELEASE_NAME (from $(basename "$OLD_RELEASE_DIR"))."
+else
+    ok "Veyra upgraded from $OLD_VERSION to $VERSION."
+fi

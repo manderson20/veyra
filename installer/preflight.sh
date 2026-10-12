@@ -194,6 +194,8 @@ check_services() {
         status="$(state_get status || true)"; version="$(state_get version || true)"
         if [[ "$status" == "complete" ]]; then
             record warn existing "Veyra $version is already installed; use upgrade.sh to upgrade"
+        elif [[ "$status" == "uninstalled" ]]; then
+            record pass existing "Veyra was uninstalled with its data kept; install.sh will reuse it"
         else
             record warn existing "A previous installation did not finish (state: ${status:-unknown}); install.sh will resume"
         fi
