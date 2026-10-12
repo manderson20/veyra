@@ -80,7 +80,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: {
         </Link>
         {session ? (
           <span className="sidebar__version" title={session.release ? `Release ${session.release}` : "Development build"}>
-            {session.version}{session.release && session.release !== session.version ? ` · ${session.release.slice(session.version.length + 1, session.version.length + 9)}` : ""}
+            v{session.version}
           </span>
         ) : null}
       </div>
