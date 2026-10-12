@@ -22,8 +22,8 @@ import { browserTimeZone, timeZones } from "@/lib/timezones";
 import type { SetupStatus } from "@/lib/types";
 import { useSession } from "@/hooks/useSession";
 
-type StepKey = "token" | "administrator" | "organization" | "installation" | "review";
-const FLOW: StepKey[] = ["token", "administrator", "organization", "installation", "review"];
+type StepKey = "token" | "administrator" | "organization" | "installation" | "numbering" | "review";
+const FLOW: StepKey[] = ["token", "administrator", "organization", "installation", "numbering", "review"];
 
 interface FormState {
   setup_token: string;
@@ -36,7 +36,16 @@ interface FormState {
   slug_touched: boolean;
   installation_name: string;
   timezone: string;
+  ext_length: string;
+  ext_first: string;
+  ext_last: string;
 }
+
+const RESERVED_DEFAULT = ["0", "9", "911", "933"];
+const LENGTH_OPTIONS = [3, 4, 5, 6].map((n) => ({ value: String(n), label: `${n} digits` }));
+const RANGE_DEFAULTS: Record<string, [string, string]> = {
+  "3": ["100", "799"], "4": ["1000", "7999"], "5": ["10000", "79999"], "6": ["100000", "799999"],
+};
 
 const FIELD_STEP: Record<string, StepKey> = {
   setup_token: "token",
@@ -47,6 +56,10 @@ const FIELD_STEP: Record<string, StepKey> = {
   "organization.slug": "organization",
   "organization.timezone": "installation",
   installation_name: "installation",
+  numbering: "numbering",
+  "numbering.extension_length": "numbering",
+  "numbering.first_extension": "numbering",
+  "numbering.last_extension": "numbering",
 };
 
 export default function SetupPage() {
@@ -63,6 +76,7 @@ export default function SetupPage() {
   const [f, setF] = useState<FormState>({
     setup_token: "", admin_email: "", admin_name: "", admin_password: "", admin_password2: "",
     org_name: "", org_slug: "", slug_touched: false, installation_name: "", timezone: "UTC",
+    ext_length: "4", ext_first: "1000", ext_last: "7999",
   });
 
   useEffect(() => {
@@ -88,6 +102,7 @@ export default function SetupPage() {
       { key: "administrator", title: "Administrator account", available: true },
       { key: "organization", title: "Organization", available: true },
       { key: "installation", title: "Installation", available: true },
+      { key: "numbering", title: "Numbering plan", available: true },
       { key: "review", title: "Review", available: true },
       ...later.map((s) => ({ key: s.key, title: s.title, available: false, note: s.milestone ? `Coming later (Milestone ${s.milestone})` : "Coming later" })),
     ];
@@ -107,6 +122,16 @@ export default function SetupPage() {
       if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(f.org_slug)) e["organization.slug"] = "Use lower-case letters, digits and dashes.";
     }
     if (k === "installation" && !f.installation_name.trim()) e.installation_name = "Enter a name for this installation.";
+    if (k === "numbering") {
+      const len = Number(f.ext_length);
+      if (!/^\d+$/.test(f.ext_first) || f.ext_first.length !== len) e["numbering.first_extension"] = `Enter a ${len}-digit number.`;
+      if (!/^\d+$/.test(f.ext_last) || f.ext_last.length !== len) e["numbering.last_extension"] = `Enter a ${len}-digit number.`;
+      if (!e["numbering.first_extension"] && !e["numbering.last_extension"] && Number(f.ext_last) < Number(f.ext_first)) e["numbering.last_extension"] = "Must not be lower than the first extension.";
+      const lead = f.ext_first[0];
+      if (!e["numbering.first_extension"] && !e["numbering.last_extension"] && lead === f.ext_last[0] && (lead === "0" || lead === "9")) {
+        e["numbering.first_extension"] = "The whole range starts with a reserved digit (0 or 9).";
+      }
+    }
     return e;
   };
 
@@ -136,6 +161,7 @@ export default function SetupPage() {
         installation_name: f.installation_name.trim(),
         administrator: { email: f.admin_email.trim(), display_name: f.admin_name.trim(), password: f.admin_password },
         organization: { name: f.org_name.trim(), slug: f.org_slug, timezone: f.timezone },
+        numbering: { extension_length: Number(f.ext_length), first_extension: f.ext_first, last_extension: f.ext_last, reserved_prefixes: RESERVED_DEFAULT },
       }, { noRedirect: true });
       await refresh();
       router.replace("/");
@@ -230,6 +256,26 @@ export default function SetupPage() {
                   </Callout>
                 </>
               ) : null}
+              {step === "numbering" ? (
+                <>
+                  <div>
+                    <h2 className="card__title">Numbering plan</h2>
+                    <p className="muted">How extensions are numbered. You can change this later under Extensions; existing extensions keep their numbers.</p>
+                  </div>
+                  <SelectField label="Extension length" value={f.ext_length} options={LENGTH_OPTIONS}
+                    onChange={(e) => { const [first, last] = RANGE_DEFAULTS[e.target.value] ?? ["", ""]; setF((s) => ({ ...s, ext_length: e.target.value, ext_first: first, ext_last: last })); }} />
+                  <div className="form-grid">
+                    <TextField label="First extension" required inputMode="numeric" value={f.ext_first} error={fieldErrors["numbering.first_extension"]}
+                      onChange={(e) => set("ext_first", e.target.value.replace(/\D/g, ""))} />
+                    <TextField label="Last extension" required inputMode="numeric" value={f.ext_last} error={fieldErrors["numbering.last_extension"]}
+                      onChange={(e) => set("ext_last", e.target.value.replace(/\D/g, ""))} />
+                  </div>
+                  {fieldErrors.numbering ? <Callout tone="danger">{fieldErrors.numbering}</Callout> : null}
+                  <Callout tone="neutral" title="Reserved numbers">
+                    Extensions never start with 0 (operator), 9 (outside line), 911 or 933 (emergency), whatever range you choose. Feature codes such as *43 use the star key and never collide.
+                  </Callout>
+                </>
+              ) : null}
               {step === "review" ? (
                 <>
                   <div>
@@ -241,9 +287,10 @@ export default function SetupPage() {
                     <dt>Organization</dt><dd>{f.org_name} <span className="subtle">({f.org_slug})</span></dd>
                     <dt>Installation</dt><dd>{f.installation_name}</dd>
                     <dt>Time zone</dt><dd>{f.timezone}</dd>
+                    <dt>Extensions</dt><dd>{f.ext_length}-digit numbers from <span className="mono">{f.ext_first}</span> to <span className="mono">{f.ext_last}</span></dd>
                   </dl>
                   <Callout tone="neutral">
-                    Network, telephony, numbering, email, backup, update and high availability settings are configured in later releases;
+                    Network, SIP, email, backup, update and high availability settings are configured in later releases;
                     they are listed on the left as “coming later”. High availability is optional.
                   </Callout>
                 </>

@@ -132,7 +132,14 @@ export default function TelephonyEnginePage() {
             <dl className="dl">
               <dt>Deployed revision</dt><dd>{e.deployed_revision !== null ? <span className="mono">#{e.deployed_revision}</span> : <span className="subtle">nothing deployed yet</span>}</dd>
               <dt>In progress</dt><dd>{e.pending_revision !== null ? <span className="row"><Badge tone="accent">Deploying #{e.pending_revision}</Badge></span> : <span className="subtle">none</span>}</dd>
+              <dt>Pending changes</dt>
+              <dd>{e.changes_pending === null ? <span className="subtle">not available</span> : e.changes_pending ? <Badge tone="warn" icon="alert">Database differs from the deployed configuration</Badge> : <Badge tone="ok" icon="check">None</Badge>}</dd>
             </dl>
+            {!e.installation_key_present ? (
+              <Callout tone="danger" title="Installation key missing">
+                Revisions that carry SIP secrets cannot be generated or deployed. Run <span className="mono">sudo veyra installation-key check</span> on the server.
+              </Callout>
+            ) : null}
             <p className="subtle" style={{ marginTop: 12 }}>
               Generate a revision to preview exactly what would change, then deploy it. Deploying an older revision again rolls back.
               {e.state !== "running" ? " Deployment needs the engine to be running." : ""}

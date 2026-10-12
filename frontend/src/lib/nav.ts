@@ -30,8 +30,6 @@ export interface PlannedFeature {
 }
 
 export const PLANNED_FEATURES: PlannedFeature[] = [
-  { key: "extensions", label: "Extensions", icon: "phone", milestone: 4,
-    summary: "Create and manage extensions, SIP credentials and caller ID for users and shared phones." },
   { key: "devices", label: "Devices", icon: "device", milestone: 9,
     summary: "Register desk phones by MAC address, assign provisioning templates and extensions." },
   { key: "trunks", label: "SIP Trunks", icon: "trunk", milestone: 6,
@@ -69,9 +67,12 @@ export const NAV: NavSection[] = [
     { label: "Organizations", href: "/organizations/", icon: "building", permissions: ["organizations.read"] },
     { label: "Users", href: "/users/", icon: "users", permissions: ["users.read"] },
   ] },
-  { id: "telephony", label: "Telephony", collapsible: true, items: PLANNED_FEATURES.map((f) => ({
-    label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
-  })) },
+  { id: "telephony", label: "Telephony", collapsible: true, items: [
+    { label: "Extensions", href: "/extensions/", icon: "phone", permissions: ["extensions.read"] },
+    ...PLANNED_FEATURES.map((f) => ({
+      label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
+    })),
+  ] },
   { id: "provisioning", label: "Provisioning", items: [
     { label: "Templates", href: "/provisioning/", icon: "template", permissions: ["provisioning.read"] },
   ] },

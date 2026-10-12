@@ -77,12 +77,17 @@ export function GlobalSearch() {
       .filter((i) => i.label.toLowerCase().includes(needle))
       .slice(0, 6)
       .map((i) => ({ group: "Pages", title: i.label, subtitle: i.planned ? "Coming later" : undefined, href: i.href, icon: i.icon }));
+    const kinds: Record<string, { group: string; icon: string }> = {
+      user: { group: "Users", icon: "users" },
+      organization: { group: "Organizations", icon: "building" },
+      extension: { group: "Extensions", icon: "phone" },
+    };
     const records = remoteResults.map((r) => ({
-      group: r.type === "user" ? "Users" : "Organizations",
+      group: kinds[r.type]?.group ?? "Results",
       title: r.title,
       subtitle: r.subtitle,
       href: r.href,
-      icon: r.type === "user" ? "users" : "building",
+      icon: kinds[r.type]?.icon ?? "search",
     }));
     return [...pages, ...records];
   }, [term, remoteResults, session, extensions]);
@@ -107,7 +112,7 @@ export function GlobalSearch() {
           id={`${listId}-input`}
           className="input"
           type="text"
-          placeholder="Search pages, organizations, users…"
+          placeholder="Search pages, organizations, users, extensions…"
           value={q}
           autoComplete="off"
           role="combobox"
