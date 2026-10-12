@@ -42,7 +42,7 @@ reported by the owner (an inline style overrode the theme CSS) is fixed.
 | Frontend `npm run build` | Passed; `/extensions` and `/extensions/view` exported |
 | ShellCheck; installer helper tests | Clean; **31 passed** (2 new for the key generator) |
 | `upgrade.sh --dry-run --yes` on dev1 | Shows "ARI credential exists (kept)" and "would generate /etc/veyra/secrets/installation.key"; migration and services as before |
-| **Owner's `upgrade.sh` on dev1** | *Pending* |
+| **Owner's `upgrade.sh` to this milestone on dev1 (19:57 UTC)** | Passed first time: database and `/etc/veyra` backed up, installation key generated (0640 root:veyra, fingerprint `b18fd7d3337c63c3`), ARI credential kept, release `83094e022f` activated, migration `0003` applied (`current: 0003 head: 0003`), Asterisk unchanged and not reloaded, all three services restarted, **25/25 verification checks** including the new `installation-key` check; `veyra installation-key check` and the deployer start without a key warning; `/setup/status` lists the numbering step as available |
 | **Setup wizard with the numbering step, first extension created in the browser, deployed, endpoint visible in Asterisk** | *Pending* |
 
 What the new tests cover: encryption round trip, purpose binding, other
