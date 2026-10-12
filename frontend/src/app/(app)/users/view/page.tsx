@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
+import { SessionsTable } from "@/components/account/SessionsTable";
 import {
   Badge,
   Button,
@@ -23,7 +24,8 @@ import {
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { Role, RoleAssignment, User } from "@/lib/types";
+import type { PasswordResetLink, Role, RoleAssignment, User, UserSession } from "@/lib/types";
+import { isLockedOut } from "@/lib/users";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
@@ -45,6 +47,7 @@ function UserView() {
   const [removing, setRemoving] = useState<RoleAssignment | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [unlockBusy, setUnlockBusy] = useState(false);
 
   useOnChange(user.data, (u) => {
     if (u) {
@@ -60,6 +63,20 @@ function UserView() {
   const editable = can("users.write");
   const isSelf = session?.user.id === u.id;
   const dirty = name !== u.display_name || active !== u.is_active;
+  const locked = isLockedOut(u);
+
+  const unlock = async () => {
+    setUnlockBusy(true);
+    try {
+      const r = await api.post<{ message: string }>(`/users/${u.id}/unlock`);
+      toast.success("Account unlocked", r.message);
+      user.reload();
+    } catch (err) {
+      toast.error("Could not unlock the account", errorMessage(err));
+    } finally {
+      setUnlockBusy(false);
+    }
+  };
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -116,6 +133,8 @@ function UserView() {
             <span>{u.email}</span>
             <Badge tone={u.is_active ? "ok" : "neutral"}>{u.is_active ? "Active" : "Disabled"}</Badge>
             {u.is_recovery_admin ? <Badge tone="info" icon="shield">Recovery admin</Badge> : null}
+            {locked ? <Badge tone="warn" icon="lock">Locked</Badge> : null}
+            {u.must_change_password ? <Badge tone="outline" icon="key">Temporary password</Badge> : null}
           </span>
         }
         actions={editable && !isSelf ? <Button icon="key" onClick={() => setResetOpen(true)}>Reset password</Button> : null}
@@ -135,6 +154,19 @@ function UserView() {
           <dl className="dl">
             <dt>Sign-in method</dt><dd>{u.auth_source === "local" ? "Local password" : u.auth_source}</dd>
             <dt>Last sign-in</dt><dd>{formatRelative(u.last_login_at)}</dd>
+            <dt>Password</dt>
+            <dd>
+              {u.must_change_password ? "Temporary; must be changed at next sign-in" : u.password_changed_at ? `Changed ${formatRelative(u.password_changed_at)}` : "Set at creation"}
+            </dd>
+            <dt>Lockout</dt>
+            <dd>
+              {locked ? (
+                <span className="row">
+                  <span>Locked after repeated failed sign-ins until {formatDateTime(u.locked_until)}.</span>
+                  {editable ? <Button size="sm" icon="lock" loading={unlockBusy} onClick={unlock}>Unlock now</Button> : null}
+                </span>
+              ) : "Not locked"}
+            </dd>
             <dt>Created</dt><dd>{formatDateTime(u.created_at)}</dd>
             <dt>User ID</dt><dd className="mono">{u.id}</dd>
           </dl>
@@ -159,7 +191,8 @@ function UserView() {
           />
         </Card>
       ) : null}
-      <ResetPasswordDialog open={resetOpen} onClose={() => setResetOpen(false)} user={u} />
+      {editable && !isSelf ? <UserSessionsCard user={u} /> : null}
+      <ResetPasswordDialog open={resetOpen} onClose={() => setResetOpen(false)} user={u} onChanged={user.reload} />
       <AssignRoleDialog open={assignOpen} onClose={() => setAssignOpen(false)} userId={u.id} onAssigned={roles.reload} />
       <ConfirmDialog
         open={removing !== null}
@@ -177,41 +210,136 @@ function UserView() {
   );
 }
 
-function ResetPasswordDialog({ open, onClose, user }: { open: boolean; onClose: () => void; user: User }) {
+function ResetPasswordDialog({ open, onClose, user, onChanged }: { open: boolean; onClose: () => void; user: User; onChanged: () => void }) {
   const toast = useToast();
   const errors = useFormErrors();
+  const [mode, setMode] = useState<"link" | "password">("link");
   const [password, setPassword] = useState("");
+  const [permanent, setPermanent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState<PasswordResetLink | null>(null);
+  const [copied, setCopied] = useState(false);
   useOnChange(open, () => {
     if (open) {
+      setMode("link");
       setPassword("");
+      setPermanent(false);
+      setLink(null);
+      setCopied(false);
       errors.clear();
     }
   });
+
+  const fullLink = link && typeof window !== "undefined" ? `${window.location.origin}${link.path}` : "";
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      await api.patch(`/users/${user.id}`, { password });
-      toast.success("Password reset", `${user.display_name} has been signed out of all sessions.`);
-      onClose();
+      if (mode === "link") {
+        setLink(await api.post<PasswordResetLink>(`/users/${user.id}/password-reset-link`));
+        toast.success("Reset link created", "Give it to the user; it is shown only once.");
+      } else {
+        await api.patch(`/users/${user.id}`, { password, require_password_change: !permanent });
+        toast.success("Password set", `${user.display_name} has been signed out of all sessions.`);
+        onClose();
+      }
+      onChanged();
     } catch (err) {
       errors.set(err);
     } finally {
       setBusy(false);
     }
   };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(fullLink);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} busy={busy} title={`Reset password for ${user.display_name}`}
-      description="The user is signed out everywhere and any account lockout is cleared."
-      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="pw-reset" loading={busy}>Reset password</Button></>}>
-      <form id="pw-reset" className="stack stack--sm" onSubmit={submit}>
-        <TextField label="New password" type="password" required autoFocus autoComplete="new-password" help="At least 12 characters."
-          value={password} error={errors.fields.password} onChange={(e) => setPassword(e.target.value)} />
-        {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
-      </form>
+      description="Either way the user is signed out everywhere and any lockout is cleared."
+      footer={link
+        ? <Button variant="primary" onClick={onClose}>Done</Button>
+        : <><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="pw-reset" loading={busy} disabled={mode === "password" && !password}>{mode === "link" ? "Create reset link" : "Set password"}</Button></>}>
+      {link ? (
+        <div className="stack stack--sm">
+          <Callout tone="ok" title="Reset link ready">
+            Valid until {formatDateTime(link.expires_at)} and usable once. Send it to {user.display_name} over a channel you trust; it is not stored and cannot be shown again.
+          </Callout>
+          <TextField label="Reset link" readOnly value={fullLink} onFocus={(e) => e.currentTarget.select()} spellCheck={false} />
+          <div className="form-actions">
+            <Button icon={copied ? "check" : "copy"} onClick={copy}>{copied ? "Copied" : "Copy link"}</Button>
+          </div>
+        </div>
+      ) : (
+        <form id="pw-reset" className="stack stack--sm" onSubmit={submit}>
+          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="field__label" style={{ marginBottom: 10 }}>How</legend>
+            <div className="stack stack--sm">
+              <label className="check">
+                <input type="radio" name="reset-mode" checked={mode === "link"} onChange={() => setMode("link")} />
+                <span className="check__text"><span>Create a one-time reset link</span><span className="subtle">The user chooses their own password. Recommended: you never see it.</span></span>
+              </label>
+              <label className="check">
+                <input type="radio" name="reset-mode" checked={mode === "password"} onChange={() => setMode("password")} />
+                <span className="check__text"><span>Set a password now</span><span className="subtle">Temporary by default: the user must change it at the next sign-in.</span></span>
+              </label>
+            </div>
+          </fieldset>
+          {mode === "password" ? (
+            <>
+              <TextField label="New password" type="password" required autoFocus autoComplete="new-password" help="At least 12 characters."
+                value={password} error={errors.fields.password} onChange={(e) => setPassword(e.target.value)} />
+              <Switch label="Permanent password" description="Do not require the user to change it at the next sign-in."
+                checked={permanent} onChange={(e) => setPermanent(e.target.checked)} />
+            </>
+          ) : null}
+          {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
+        </form>
+      )}
     </Dialog>
+  );
+}
+
+function UserSessionsCard({ user }: { user: User }) {
+  const toast = useToast();
+  const sessions = useApiData<UserSession[]>(`/users/${user.id}/sessions`);
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const count = sessions.data?.length ?? 0;
+
+  const revokeAll = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.del<{ message: string }>(`/users/${user.id}/sessions`);
+      toast.success("Sessions signed out", r.message);
+      setConfirm(false);
+      sessions.reload();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Active sessions" subtitle="Where this account is currently signed in." flush
+      actions={<Button icon="logout" disabled={count === 0} onClick={() => setConfirm(true)}>Sign out everywhere</Button>}>
+      <SessionsTable rows={sessions.data} loading={sessions.loading} error={sessions.error} onRetry={sessions.reload} />
+      <ConfirmDialog open={confirm} title="Sign out everywhere?" confirmLabel="Sign out" tone="danger" busy={busy} error={error}
+        onConfirm={revokeAll} onCancel={() => { setConfirm(false); setError(null); }}>
+        <p>{user.display_name} will be signed out of {count} session{count === 1 ? "" : "s"} and must sign in again. The password is not changed.</p>
+      </ConfirmDialog>
+    </Card>
   );
 }
 

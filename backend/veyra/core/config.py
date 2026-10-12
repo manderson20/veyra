@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     account_lockout_threshold: int = 10
     account_lockout_minutes: int = 15
     trusted_proxy_count: int = 1
+    # Expired and revoked sessions are kept this long (they are evidence for
+    # the audit trail), then deleted by the worker.
+    session_retention_days: int = 30
+    # Validity of administrator- and CLI-issued password reset links.
+    password_reset_ttl_hours: int = 24
 
     # --- Modules --------------------------------------------------------------
     # Unsigned modules may only be loaded in development. Never enable this

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from veyra.core.config import Settings
@@ -71,15 +71,52 @@ def resolve_session(
     return session, user
 
 
+def active_sessions(db: Session, user_id: uuid.UUID, settings: Settings) -> list[UserSession]:
+    """A user's sessions that can still be used, newest first.
+
+    A session that has passed its idle timeout is reported as active until a
+    request lazily revokes it, so the idle rule is applied here as well.
+    """
+    now = utcnow()
+    idle_cutoff = now - timedelta(minutes=settings.session_idle_minutes)
+    rows = db.scalars(
+        select(UserSession)
+        .where(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > now,
+            UserSession.last_seen_at > idle_cutoff,
+        )
+        .order_by(UserSession.last_seen_at.desc())
+    )
+    return list(rows)
+
+
 def revoke_user_sessions(
     db: Session, user_id: uuid.UUID, *, except_id: uuid.UUID | None = None
-) -> None:
+) -> int:
+    """Revoke every live session of a user (optionally keeping one). Returns the count."""
     now = utcnow()
+    count = 0
     for s in db.scalars(
         select(UserSession).where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
     ):
         if s.id != except_id:
             s.revoked_at = now
+            count += 1
+    return count
+
+
+def purge_sessions(db: Session, settings: Settings) -> int:
+    """Delete sessions that expired or were revoked longer ago than the retention
+    period. Returns the number of rows deleted."""
+    cutoff = utcnow() - timedelta(days=settings.session_retention_days)
+    result = db.execute(
+        delete(UserSession).where(
+            or_(UserSession.revoked_at < cutoff, UserSession.expires_at < cutoff)
+        )
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 def load_principal(db: Session, user: User, session_id: uuid.UUID | None = None) -> Principal:

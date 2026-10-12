@@ -339,6 +339,131 @@ def cmd_updates_record(args: argparse.Namespace) -> int:
     return 0
 
 
+def _find_user(db: Any, email: str) -> Any:
+    from sqlalchemy import select
+
+    from veyra.core.models import User
+
+    user = db.scalar(select(User).where(User.email == email.strip().lower()))
+    if user is None:
+        raise RuntimeError(f"no user with the email address {email!r}")
+    return user
+
+
+def cmd_users_reset_password(args: argparse.Namespace) -> int:
+    """Issue a one-time reset link from the server console.
+
+    This is the recovery path when no administrator can sign in: whoever can
+    run this command already controls the server, as with ``setup-token``.
+    """
+    from veyra.core import audit
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.core.security import password_reset
+
+    settings = get_settings()
+    with session_scope() as db:
+        user = _find_user(db, args.email)
+        if not user.is_active:
+            raise RuntimeError(f"{user.email} is disabled; enable the account first")
+        token, row = password_reset.issue_reset_token(db, user, settings, issued_by="cli")
+        audit.record(
+            db,
+            action="user.password_reset_link",
+            actor_type="system",
+            actor_label="cli",
+            organization_id=user.home_organization_id,
+            target_type="user",
+            target_id=user.id,
+            details={"expires_at": row.expires_at.isoformat(), "unlock": args.unlock},
+        )
+        if args.unlock:
+            user.locked_until = None
+            user.failed_login_count = 0
+        expires = row.expires_at
+        email = user.email
+    path = password_reset.reset_link_path(token)
+    if args.quiet:
+        print(path)
+        return 0
+    base = (args.base_url or "https://<server>").rstrip("/")
+    valid = f"valid until {expires:%Y-%m-%d %H:%M %Z}, single use"
+    print(f"Password reset link for {email} ({valid}):\n")
+    print(f"    {base}{path}\n")
+    print(
+        "Give it to the user over a channel you trust. Issuing another link, or "
+        "using this one, invalidates it."
+    )
+    return 0
+
+
+def cmd_users_unlock(args: argparse.Namespace) -> int:
+    from veyra.core import audit
+    from veyra.core.db import session_scope
+    from veyra.core.models.base import utcnow
+
+    with session_scope() as db:
+        user = _find_user(db, args.email)
+        was_locked = bool(user.locked_until and user.locked_until > utcnow())
+        user.locked_until = None
+        user.failed_login_count = 0
+        audit.record(
+            db,
+            action="user.unlock",
+            actor_type="system",
+            actor_label="cli",
+            organization_id=user.home_organization_id,
+            target_type="user",
+            target_id=user.id,
+            details={"was_locked": was_locked},
+        )
+        email = user.email
+    print(f"{email}: {'unlocked' if was_locked else 'was not locked'}")
+    return 0
+
+
+def cmd_sessions_revoke(args: argparse.Namespace) -> int:
+    from veyra.core import audit
+    from veyra.core.db import session_scope
+    from veyra.core.security.sessions import revoke_user_sessions
+
+    with session_scope() as db:
+        user = _find_user(db, args.email)
+        revoked = revoke_user_sessions(db, user.id)
+        audit.record(
+            db,
+            action="user.sessions_revoke",
+            actor_type="system",
+            actor_label="cli",
+            organization_id=user.home_organization_id,
+            target_type="user",
+            target_id=user.id,
+            details={"sessions_revoked": revoked},
+        )
+        email = user.email
+    print(f"{email}: {revoked} session(s) signed out")
+    return 0
+
+
+def cmd_sessions_purge(args: argparse.Namespace) -> int:
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+
+    with session_scope() as db:
+        sessions, resets = purge_expired(db, get_settings())
+    print(f"deleted {sessions} expired session(s) and {resets} used or expired reset token(s)")
+    return 0
+
+
+def purge_expired(db: Any, settings: Any) -> tuple[int, int]:
+    """Delete sessions and reset tokens past their retention. Used by the
+    worker (hourly) and ``veyra sessions purge``."""
+    from veyra.core.security.password_reset import purge_reset_tokens
+    from veyra.core.security.sessions import purge_sessions
+
+    return purge_sessions(db, settings), purge_reset_tokens(db, settings)
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
     """Background worker: node heartbeat and scheduled update checks."""
     import logging
@@ -358,11 +483,21 @@ def cmd_worker(args: argparse.Namespace) -> int:
     log = logging.getLogger("veyra.worker")
     settings = get_settings()
     log.info("%s worker started", plain_header())
+    last_purge = 0.0
     while True:
         try:
             with session_scope() as db:
                 if not bootstrap.setup_required(db):
                     bootstrap.ensure_local_node(db)
+                if time.monotonic() - last_purge >= 3600 or args.once:
+                    purged_sessions, purged_tokens = purge_expired(db, settings)
+                    last_purge = time.monotonic()
+                    if purged_sessions or purged_tokens:
+                        log.info(
+                            "Purged %d expired sessions and %d reset tokens",
+                            purged_sessions,
+                            purged_tokens,
+                        )
                 policy = db.get(UpdatePolicy, "veyra_core")
                 last = db.scalar(
                     select(UpdateCheck).order_by(UpdateCheck.checked_at.desc()).limit(1)
@@ -468,6 +603,29 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--outcome", choices=["success", "failed"], required=True)
     s.add_argument("--backup-ref")
     s.set_defaults(func=cmd_updates_record)
+
+    usr = sub.add_parser("users", help="User account recovery").add_subparsers(
+        dest="usr_cmd", metavar="<action>"
+    )
+    s = usr.add_parser("reset-password", help="Issue a one-time password reset link for a user")
+    s.add_argument("email")
+    s.add_argument("--unlock", action="store_true", help="Also clear an account lockout")
+    s.add_argument("--base-url", help="Public URL of this server, used to print the full link")
+    s.add_argument("--quiet", action="store_true", help="Print only the link path")
+    s.set_defaults(func=cmd_users_reset_password)
+    s = usr.add_parser("unlock", help="Clear an account lockout")
+    s.add_argument("email")
+    s.set_defaults(func=cmd_users_unlock)
+
+    ses = sub.add_parser("sessions", help="Sign-in sessions").add_subparsers(
+        dest="ses_cmd", metavar="<action>"
+    )
+    s = ses.add_parser("revoke", help="Sign a user out of every session")
+    s.add_argument("email")
+    s.set_defaults(func=cmd_sessions_revoke)
+    ses.add_parser("purge", help="Delete sessions and reset tokens past retention").set_defaults(
+        func=cmd_sessions_purge
+    )
 
     s = sub.add_parser("worker", help="Run the background worker")
     s.add_argument("--interval", type=int, default=60)

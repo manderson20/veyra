@@ -42,3 +42,14 @@ describe("formatting", () => {
     expect(humanize("system.health_read")).toBe("System health read");
   });
 });
+
+describe("isLockedOut", async () => {
+  const { isLockedOut } = await import("./users");
+  it("is true only while the lockout is in the future", () => {
+    const now = new Date("2026-10-12T12:00:00Z");
+    expect(isLockedOut({ locked_until: null }, now)).toBe(false);
+    expect(isLockedOut({ locked_until: "2026-10-12T11:00:00Z" }, now)).toBe(false);
+    expect(isLockedOut({ locked_until: "2026-10-12T12:10:00Z" }, now)).toBe(true);
+    expect(isLockedOut({ locked_until: "garbage" }, now)).toBe(false);
+  });
+});

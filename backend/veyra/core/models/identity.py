@@ -38,6 +38,10 @@ class User(UUIDPrimaryKey, Timestamps, Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set when an administrator assigns a temporary password: the user can only
+    # reach the authentication endpoints until they choose their own.
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Permission(Base):
@@ -116,3 +120,25 @@ class UserSession(UUIDPrimaryKey, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ip_address: Mapped[str | None] = mapped_column(String(64))
     user_agent: Mapped[str | None] = mapped_column(String(500))
+
+
+class PasswordResetToken(UUIDPrimaryKey, Base):
+    """One-time password reset link, issued by an administrator or the CLI.
+
+    Only the SHA-256 digest of the token is stored. A token is valid until
+    ``expires_at`` and until it is used (``used_at``). Issuing a new token for
+    a user deletes that user's unused tokens, so at most one link is live.
+    """
+
+    __tablename__ = "password_reset_tokens"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who issued the link: an administrator's email or "cli".
+    issued_by: Mapped[str] = mapped_column(String(320))
+    issued_from_ip: Mapped[str | None] = mapped_column(String(64))

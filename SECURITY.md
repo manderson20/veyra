@@ -1,6 +1,6 @@
 # Security
 
-Veyra is in early development (Milestone 1) and is **not yet suitable for
+Veyra is in early development (Milestone 2) and is **not yet suitable for
 production use**.
 
 ## Reporting a vulnerability
@@ -16,9 +16,10 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 
 | Area | Control |
 |---|---|
-| Passwords | Argon2id; minimum 12 characters; constant-time handling of unknown users |
-| Sessions | Server-side, token hashes only; HttpOnly + Secure + SameSite=Strict cookies; 12 h absolute / 60 min idle |
-| CSRF | Double-submit token checked against a per-session hash |
+| Passwords | Argon2id; 12+ characters with weak-word and personal-information checks; constant-time handling of unknown users; administrator-set passwords are temporary |
+| Password reset | One-time links (hashed, 24 h, single use) issued by an administrator or the server console; generic failures; rate limited; signs the account out everywhere |
+| Sessions | Server-side, token hashes only; HttpOnly + Secure + SameSite=Strict cookies; 12 h absolute / 60 min idle; users and administrators can list and end sessions; expired rows purged after 30 days |
+| CSRF | Double-submit token checked against a per-session hash, plus rejection of mutations the browser labels cross-site (fetch metadata) |
 | Brute force | NGINX + API rate limits; account lockout |
 | First run | One-time console-issued setup token; setup possible only while no user exists |
 | Authorization | Scoped RBAC (platform / organization / site) enforced in the backend; platform-only permissions; last-admin protection |
@@ -35,7 +36,8 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 ## Known gaps (tracked)
 
 * SIP credential encryption at rest arrives with extensions (M4).
-* Multi-factor authentication and SSO (OIDC, Entra ID, Google) are not yet implemented.
+* Multi-factor authentication is designed ([docs/MFA_DESIGN.md](docs/MFA_DESIGN.md)) but not implemented; SSO (OIDC, Entra ID, Google) is not yet implemented.
+* Self-service "forgot password" needs email delivery (Milestone 7); until then a reset link comes from an administrator or the server console.
 * The isolated service runtime for community and third-party modules is not yet implemented, so such modules are refused.
 * The rate limiter is per process. A shared limiter will come with HA.
 * The CSP allows `'unsafe-inline'` scripts because Next.js static export inlines its bootstrap. Moving to hashed inline scripts is planned.

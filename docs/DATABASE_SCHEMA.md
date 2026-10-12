@@ -14,12 +14,13 @@ the two agree. Constraint names follow a fixed naming convention.
 | `sites` | Locations of an organization | `organization_id`, unique (`organization_id`, `slug`), civic address (future dispatchable location) |
 | `buildings` | Buildings at a site | `site_id`, unique (`site_id`, `name`) |
 | `departments` | Departments | unique (`organization_id`, `name`) |
-| `users` | Accounts | `email` unique (stored lower-case), `password_hash` (Argon2id, NULL for SSO-only), `auth_source`, `is_recovery_admin`, `home_organization_id`, lockout fields |
+| `users` | Accounts | `email` unique (stored lower-case), `password_hash` (Argon2id, NULL for SSO-only), `auth_source`, `is_recovery_admin`, `home_organization_id`, lockout fields, `password_changed_at` and `must_change_password` (migration `0002`) |
 | `permissions` | Permission catalog (core + modules) | `key` PK, `module_id` |
 | `roles` | System and custom roles | unique (`organization_id`, `key`); `is_system` |
 | `role_permissions` | Role → permission | composite PK |
 | `role_assignments` | User ↔ role in a scope | `scope_type` ∈ platform/organization/site, with a check constraint for consistent scope columns |
-| `sessions` | Server-side sessions | `token_hash` unique, `csrf_token_hash`, `expires_at`, `last_seen_at`, `revoked_at` |
+| `sessions` | Server-side sessions | `token_hash` unique, `csrf_token_hash`, `expires_at`, `last_seen_at`, `revoked_at`, `ip_address`, `user_agent`; rows past retention are deleted by the worker |
+| `password_reset_tokens` | One-time password reset links (migration `0002`) | `token_hash` unique, `expires_at`, `used_at`, `issued_by` (administrator email or `cli`), `issued_from_ip`; at most one unused token per user |
 | `audit_log` | Append-only audit trail | indexed by time and organization; **UPDATE/DELETE blocked by trigger** `audit_log_append_only` (DELETE allowed only with `SET LOCAL veyra.audit_retention='on'`) |
 | `system_settings` | Key/value settings | e.g. `setup.token` (hash plus expiry), `updates.metadata_sequence` |
 | `extensions` | Extensions (engine-neutral) | unique (`organization_id`, `number`); `endpoint_name` globally unique; `sip_secret_ciphertext` |

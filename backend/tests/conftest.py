@@ -93,6 +93,12 @@ def settings(database_url: str, tmp_path: Path) -> Settings:
 
 @pytest.fixture
 def db_ready(settings: Settings) -> Iterator[None]:
+    import veyra.api.v1.auth as auth_mod
+
+    # The sign-in limiters are per process; a test run signs in far more
+    # often than ten times a minute from one address.
+    auth_mod._ip_limiter = None
+    auth_mod._reset_limiter = None
     _reset_database(settings.database_url)
     init_engine(settings)
     with session_scope() as db:

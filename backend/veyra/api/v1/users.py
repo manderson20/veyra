@@ -9,24 +9,29 @@ from sqlalchemy import Select, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.auth import session_summary
 from veyra.api.v1.schemas import (
     MessageOut,
+    PasswordResetLinkOut,
     RoleAssignmentIn,
     RoleAssignmentOut,
     RoleOut,
     UserCreate,
     UserOut,
     UserPatch,
+    UserSessionOut,
 )
 from veyra.core import audit
+from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.models import Organization, Role, RoleAssignment, Site, User
+from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
-from veyra.core.security import passwords
+from veyra.core.security import password_reset, passwords
 from veyra.core.security.principal import Principal
-from veyra.core.security.sessions import revoke_user_sessions
+from veyra.core.security.sessions import active_sessions, revoke_user_sessions
 
 router = APIRouter(tags=["users"])
 
@@ -106,7 +111,7 @@ def create_user(
     elif db.get(Organization, body.home_organization_id) is None:
         raise not_found("Organization")
     try:
-        passwords.validate_password(body.password, email=body.email)
+        passwords.validate_password(body.password, email=body.email, display_name=body.display_name)
     except passwords.PasswordPolicyError as e:
         raise ProblemError(
             422,
@@ -115,11 +120,15 @@ def create_user(
             code="password_policy",
             errors=[{"field": "password", "message": str(e)}],
         ) from e
+    # A password chosen by an administrator is temporary: the user picks their
+    # own at first sign-in.
     user = User(
         id=uuid.uuid4(),
         email=body.email,
         display_name=body.display_name,
         password_hash=passwords.hash_password(body.password),
+        password_changed_at=utcnow(),
+        must_change_password=body.require_password_change,
         home_organization_id=body.home_organization_id,
     )
     db.add(user)
@@ -138,7 +147,7 @@ def create_user(
         target_id=user.id,
         ip_address=ctx.ip,
         request_id=ctx.request_id,
-        details={"email": body.email},
+        details={"email": body.email, "require_password_change": body.require_password_change},
     )
     db.commit()
     return UserOut.model_validate(user)
@@ -175,8 +184,17 @@ def update_user(
         if not body.is_active:
             revoke_user_sessions(db, user.id)
     if body.password is not None:
+        if user.id == principal.user_id:
+            raise ProblemError(
+                409,
+                "Conflict",
+                "Change your own password from your account page.",
+                code="self_password_reset",
+            )
         try:
-            passwords.validate_password(body.password, email=user.email)
+            passwords.validate_password(
+                body.password, email=user.email, display_name=user.display_name
+            )
         except passwords.PasswordPolicyError as e:
             raise ProblemError(
                 422,
@@ -186,9 +204,12 @@ def update_user(
                 errors=[{"field": "password", "message": str(e)}],
             ) from e
         user.password_hash = passwords.hash_password(body.password)
+        user.password_changed_at = utcnow()
+        user.must_change_password = body.require_password_change
         user.failed_login_count, user.locked_until = 0, None
-        revoke_user_sessions(db, user.id)
+        details["sessions_revoked"] = revoke_user_sessions(db, user.id)
         details["password_reset"] = True
+        details["require_password_change"] = body.require_password_change
     audit.record(
         db,
         action="user.update",
@@ -203,6 +224,135 @@ def update_user(
     )
     db.commit()
     return UserOut.model_validate(user)
+
+
+@router.post(
+    "/users/{user_id}/unlock", response_model=MessageOut, summary="Clear an account lockout"
+)
+def unlock_user(
+    user_id: uuid.UUID,
+    principal: Principal = Depends(require("users.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    user = _get_visible_user(db, principal, user_id, "users.write")
+    _guard_platform_admin_target(db, principal, user)
+    was_locked = bool(user.locked_until and user.locked_until > utcnow())
+    user.locked_until = None
+    user.failed_login_count = 0
+    audit.record(
+        db,
+        action="user.unlock",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=user.home_organization_id,
+        target_type="user",
+        target_id=user.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"was_locked": was_locked},
+    )
+    db.commit()
+    return MessageOut(message="Account unlocked." if was_locked else "The account was not locked.")
+
+
+@router.post(
+    "/users/{user_id}/password-reset-link",
+    response_model=PasswordResetLinkOut,
+    status_code=201,
+    summary="Issue a one-time password reset link for a user",
+)
+def create_password_reset_link(
+    user_id: uuid.UUID,
+    principal: Principal = Depends(require("users.write")),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> PasswordResetLinkOut:
+    """The link is returned once and never stored in clear. Give it to the
+    user over a channel you trust; it is valid for a limited time and for a
+    single use, and it replaces any earlier unused link."""
+    user = _get_visible_user(db, principal, user_id, "users.write")
+    _guard_platform_admin_target(db, principal, user)
+    if user.id == principal.user_id:
+        raise ProblemError(
+            409,
+            "Conflict",
+            "Change your own password from your account page.",
+            code="self_password_reset",
+        )
+    if not user.is_active:
+        raise conflict("The account is disabled. Enable it before resetting the password.")
+    if user.auth_source != "local" and not user.is_recovery_admin:
+        raise conflict("This account signs in through an external identity provider.")
+    token, row = password_reset.issue_reset_token(
+        db, user, settings, issued_by=principal.label, issued_from_ip=ctx.ip
+    )
+    audit.record(
+        db,
+        action="user.password_reset_link",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=user.home_organization_id,
+        target_type="user",
+        target_id=user.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"expires_at": row.expires_at.isoformat()},
+    )
+    db.commit()
+    return PasswordResetLinkOut(
+        token=token, path=password_reset.reset_link_path(token), expires_at=row.expires_at
+    )
+
+
+@router.get(
+    "/users/{user_id}/sessions",
+    response_model=list[UserSessionOut],
+    summary="A user's active sessions",
+)
+def list_user_sessions(
+    user_id: uuid.UUID,
+    principal: Principal = Depends(require("users.write")),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> list[UserSessionOut]:
+    user = _get_visible_user(db, principal, user_id, "users.write")
+    _guard_platform_admin_target(db, principal, user)
+    current = principal.session_id if user.id == principal.user_id else None
+    return [session_summary(s, current) for s in active_sessions(db, user.id, settings)]
+
+
+@router.delete(
+    "/users/{user_id}/sessions",
+    response_model=MessageOut,
+    summary="Sign a user out of every session",
+)
+def revoke_user_sessions_endpoint(
+    user_id: uuid.UUID,
+    principal: Principal = Depends(require("users.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    user = _get_visible_user(db, principal, user_id, "users.write")
+    _guard_platform_admin_target(db, principal, user)
+    # An administrator acting on their own account keeps the session in use.
+    keep = principal.session_id if user.id == principal.user_id else None
+    revoked = revoke_user_sessions(db, user.id, except_id=keep)
+    audit.record(
+        db,
+        action="user.sessions_revoke",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=user.home_organization_id,
+        target_type="user",
+        target_id=user.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"sessions_revoked": revoked},
+    )
+    db.commit()
+    return MessageOut(message=f"Signed out of {revoked} session{'s' if revoked != 1 else ''}.")
 
 
 @router.get("/roles", response_model=list[RoleOut], summary="List roles")

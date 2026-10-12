@@ -127,6 +127,23 @@ journalctl -u veyra-api -u veyra-worker
 the network, that AMI is off, that secret files are 0640/0600, and that the
 application code cannot be written by the service account.
 
+### Account recovery from the server console
+
+When no administrator can sign in (forgotten password, lockout), whoever
+has shell access can recover an account; these commands are audited with
+the actor `cli`:
+
+```
+sudo veyra users reset-password admin@example.org --base-url https://pbx.example.org
+sudo veyra users reset-password admin@example.org --unlock   # also clears a lockout
+sudo veyra users unlock someone@example.org
+sudo veyra sessions revoke someone@example.org                # sign out everywhere
+```
+
+The reset link is valid for 24 hours and can be used once; the account is
+signed out everywhere when it is used. Administrators can do the same from
+a user's page in the UI.
+
 ## 6. Upgrade and uninstall
 
 ```
