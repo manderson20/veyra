@@ -9,6 +9,7 @@ import json
 from enum import StrEnum
 from typing import Any
 
+from veyra.core.security.crypto import DecryptionError, InstallationKey, InstallationKeyError
 from veyra.telephony.adapter import GeneratedFile
 
 
@@ -49,13 +50,76 @@ def content_hash(files: list[GeneratedFile]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def artifacts_to_files_safe(artifacts: dict[str, Any] | None) -> list[GeneratedFile]:
-    """Files stored in a revision's ``artifacts`` column (tolerates missing data)."""
-    out = []
+def artifact_purpose(revision_id: Any, path: str) -> str:
+    """Associated data binding an encrypted artifact to its revision and file."""
+    return f"config_revision.file:{revision_id}:{path}"
+
+
+def files_to_artifacts(
+    files: list[GeneratedFile], key: InstallationKey | None, revision_id: Any
+) -> dict[str, Any]:
+    """The ``artifacts`` document of a revision. Sensitive files (those that
+    carry credentials) are stored encrypted with the installation key; the
+    others stay readable so the history can be inspected in the database."""
+    out: list[dict[str, Any]] = []
+    for f in files:
+        if f.sensitive:
+            if key is None:
+                raise InstallationKeyError(
+                    f"{f.path} contains credentials but the installation key is not available"
+                )
+            out.append(
+                {
+                    "path": f.path,
+                    "sensitive": True,
+                    "ciphertext": key.encrypt(f.content, artifact_purpose(revision_id, f.path)),
+                }
+            )
+        else:
+            out.append({"path": f.path, "content": f.content, "sensitive": False})
+    return {"files": out}
+
+
+def artifacts_to_files(
+    artifacts: dict[str, Any] | None, key: InstallationKey | None, revision_id: Any
+) -> list[GeneratedFile]:
+    """Files stored in a revision's ``artifacts`` column, decrypted. Raises
+    :class:`InstallationKeyError` when an encrypted file cannot be read."""
+    out: list[GeneratedFile] = []
     for f in (artifacts or {}).get("files", []):
-        if isinstance(f, dict) and "path" in f and "content" in f:
-            out.append(GeneratedFile(str(f["path"]), str(f["content"]), bool(f.get("sensitive"))))
+        if not isinstance(f, dict) or "path" not in f:
+            continue
+        path = str(f["path"])
+        sensitive = bool(f.get("sensitive"))
+        if "ciphertext" in f:
+            if key is None:
+                raise InstallationKeyError(
+                    f"{path} is encrypted but the installation key is not available"
+                )
+            try:
+                content = key.decrypt(str(f["ciphertext"]), artifact_purpose(revision_id, path))
+            except DecryptionError as e:
+                raise InstallationKeyError(f"{path} cannot be decrypted: {e}") from e
+            out.append(GeneratedFile(path, content, True))
+        elif "content" in f:
+            out.append(GeneratedFile(path, str(f["content"]), sensitive))
     return out
+
+
+def artifacts_to_files_safe(
+    artifacts: dict[str, Any] | None, key: InstallationKey | None, revision_id: Any
+) -> list[GeneratedFile]:
+    """Like :func:`artifacts_to_files`, but an unreadable encrypted file is
+    returned with empty content instead of raising (for display code)."""
+    try:
+        return artifacts_to_files(artifacts, key, revision_id)
+    except InstallationKeyError:
+        out: list[GeneratedFile] = []
+        for f in (artifacts or {}).get("files", []):
+            if isinstance(f, dict) and "path" in f:
+                content = "" if "ciphertext" in f else str(f.get("content", ""))
+                out.append(GeneratedFile(str(f["path"]), content, bool(f.get("sensitive"))))
+        return out
 
 
 def diff(old: list[GeneratedFile], new: list[GeneratedFile]) -> dict[str, Any]:

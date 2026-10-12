@@ -22,6 +22,7 @@ from veyra.core.db import dispose_engine, init_engine, session_scope
 from veyra.core.deps import SAFE_METHODS
 from veyra.core.errors import PROBLEM_JSON, install_error_handlers, problem_body
 from veyra.core.events import bus
+from veyra.core.security.crypto import InstallationKeyError, load_installation_key
 from veyra.core.signing import Keyring
 from veyra.modules.manager import ModuleManager
 from veyra.provisioning.renderer import TemplateCatalog
@@ -57,6 +58,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if not bootstrap.setup_required(db):
                 bootstrap.ensure_local_node(db)
             app.state.modules.startup(app, db)
+        try:
+            key = load_installation_key(settings)
+            log.info("Installation key loaded (fingerprint %s)", key.fingerprint)
+        except InstallationKeyError as e:
+            log.warning("No usable installation key: %s. SIP secrets cannot be stored.", e)
         log.info("Veyra %s started (%s)", __version__, settings.environment.value)
         yield
         dispose_engine()

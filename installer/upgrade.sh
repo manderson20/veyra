@@ -104,6 +104,8 @@ state_set upgrade_in_progress "$RELEASE_NAME"
 
 do_packages
 do_versions
+# Credentials introduced after the original installation (kept when present).
+do_secrets
 do_release
 
 begin switch "Switching to the new release"

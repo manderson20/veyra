@@ -159,6 +159,7 @@ def _endpoints(sip: SipSettings, extensions: list[dict[str, Any]]) -> GeneratedF
         "",
     ]
     seen: set[str] = set()
+    numbers: set[str] = set()
     sensitive = False
     for ext in extensions:
         name = _check_section(str(ext["endpoint_name"]), "endpoint name")
@@ -168,6 +169,11 @@ def _endpoints(sip: SipSettings, extensions: list[dict[str, Any]]) -> GeneratedF
         number = str(ext["number"])
         if not _NUMBER_RE.match(number):
             raise GenerationError(f"extension number {number!r} is not valid")
+        # One dialplan context for the whole installation until Milestone 14,
+        # so a number can only be dialled to one endpoint.
+        if number in numbers:
+            raise GenerationError(f"extension number {number} is used more than once")
+        numbers.add(number)
         secret = ext.get("secret")
         if not secret:
             raise GenerationError(f"endpoint {name!r} has no SIP secret")

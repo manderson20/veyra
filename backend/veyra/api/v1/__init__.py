@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from veyra.api.v1 import (
     audit,
     auth,
+    extensions,
     ha,
     modules,
     organizations,
@@ -32,5 +33,6 @@ for r in (
     audit,
     provisioning,
     telephony,
+    extensions,
 ):
     api_router.include_router(r.router)

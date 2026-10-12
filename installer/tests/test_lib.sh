@@ -52,6 +52,10 @@ s1="$(random_secret)"; s2="$(random_secret)"
 t "random_secret length" test "${#s1}" -ge 32
 t "random_secret unique" test "$s1" != "$s2"
 
+k1="$(random_hex_key)"; k2="$(random_hex_key)"
+t "random_hex_key is 64 hex characters" grep -qxE '[0-9a-f]{64}' <<<"$k1"
+t "random_hex_key unique" test "$k1" != "$k2"
+
 DRY_RUN=1
 t "dry-run does not execute" run touch "$TMP/should-not-exist"
 t "dry-run left no file" test ! -e "$TMP/should-not-exist"

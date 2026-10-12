@@ -476,13 +476,21 @@ def cmd_deployer(args: argparse.Namespace) -> int:
     from veyra.configmgmt.service import Deployer
     from veyra.core.config import get_settings
     from veyra.core.db import session_scope
+    from veyra.core.security.crypto import InstallationKeyError, load_installation_key
     from veyra.telephony import get_adapter
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     log = logging.getLogger("veyra.deployer")
     settings = get_settings()
     adapter = get_adapter(settings)
-    deployer = Deployer(adapter, settings.asterisk_config_dir)
+    try:
+        key = load_installation_key(settings)
+    except InstallationKeyError as e:
+        # Revisions without credentials still deploy; the rest fail with
+        # this reason recorded on the revision.
+        log.warning("%s; revisions with credentials cannot be deployed", e)
+        key = None
+    deployer = Deployer(adapter, settings.asterisk_config_dir, key)
     log.info(
         "%s deployer started (engine %s, %s)",
         plain_header(),
@@ -561,11 +569,14 @@ def cmd_config_generate(args: argparse.Namespace) -> int:
     from veyra.core import audit
     from veyra.core.config import get_settings
     from veyra.core.db import session_scope
+    from veyra.core.security.crypto import try_load_installation_key
     from veyra.telephony import get_adapter
 
-    adapter = get_adapter(get_settings())
+    settings = get_settings()
+    adapter = get_adapter(settings)
+    key = try_load_installation_key(settings)
     with session_scope() as db:
-        generated = service.create_revision(db, adapter, created_by="cli")
+        generated = service.create_revision(db, adapter, created_by="cli", key=key)
         rev = generated.revision
         audit.record(
             db,
@@ -625,6 +636,59 @@ def cmd_config_deploy(args: argparse.Namespace) -> int:
             details={"sequence": rev.sequence},
         )
     print(f"revision #{args.sequence} queued for the deployer")
+    return 0
+
+
+def cmd_installation_key_generate(args: argparse.Namespace) -> int:
+    """Create the installation key by hand (the installer normally does it)."""
+    import grp
+    import shutil
+
+    from veyra.core.config import get_settings
+    from veyra.core.security.crypto import InstallationKey, InstallationKeyError
+
+    path = Path(args.path) if args.path else get_settings().installation_key_path
+    if path.exists() and not args.force:
+        print(
+            f"{path} already exists. Replacing it makes every SIP secret and encrypted "
+            "revision unreadable; use --force only if you mean that.",
+            file=sys.stderr,
+        )
+        return 1
+    key = InstallationKey.generate()
+    try:
+        key.write(path, overwrite=args.force)
+    except (InstallationKeyError, OSError) as e:
+        print(f"cannot write {path}: {e}", file=sys.stderr)
+        return 1
+    try:
+        grp.getgrnam("veyra")
+        shutil.chown(path, "root", "veyra")
+    except (KeyError, PermissionError, LookupError):
+        pass  # development: keep the current owner
+    print(f"installation key written to {path} (fingerprint {key.fingerprint})")
+    print("Back it up with /etc/veyra; without it SIP secrets cannot be recovered.")
+    return 0
+
+
+def cmd_installation_key_check(args: argparse.Namespace) -> int:
+    from veyra.core.config import get_settings
+    from veyra.core.security.crypto import InstallationKeyError, load_installation_key
+
+    settings = get_settings()
+    path = settings.installation_key_path
+    try:
+        key = load_installation_key(settings)
+    except InstallationKeyError as e:
+        if args.json:
+            print(json.dumps({"path": str(path), "present": False, "error": str(e)}))
+        else:
+            print(f"installation key: missing ({e})")
+        return 1
+    if args.json:
+        print(json.dumps({"path": str(path), "present": True, "fingerprint": key.fingerprint}))
+    else:
+        print(f"installation key: {path} (fingerprint {key.fingerprint})")
     return 0
 
 
@@ -804,6 +868,17 @@ def build_parser() -> argparse.ArgumentParser:
     s = cfg.add_parser("deploy", help="Queue a revision for deployment (rollback: an older one)")
     s.add_argument("sequence", type=int)
     s.set_defaults(func=cmd_config_deploy)
+
+    ik = sub.add_parser(
+        "installation-key", help="The key that encrypts secrets at rest"
+    ).add_subparsers(dest="subcommand", metavar="<action>", required=True)
+    s = ik.add_parser("generate", help="Create the installation key (refuses to replace one)")
+    s.add_argument("--path", help="Key file (default: the configured location)")
+    s.add_argument("--force", action="store_true", help="Replace an existing key")
+    s.set_defaults(func=cmd_installation_key_generate)
+    s = ik.add_parser("check", help="Show whether the key is present and its fingerprint")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_installation_key_check)
 
     s = sub.add_parser("deployer", help="Run the configuration deployer service")
     s.add_argument("--interval", type=int, default=2)
