@@ -1,0 +1,44 @@
+# Managed by Veyra installer
+[Unit]
+Description=Veyra background worker (heartbeat, scheduled update checks)
+Documentation=file://@VEYRA_PREFIX@/current/docs/ARCHITECTURE.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=exec
+User=veyra
+Group=veyra
+EnvironmentFile=@VEYRA_ETC@/veyra.env
+WorkingDirectory=@VEYRA_PREFIX@/current/backend
+ExecStart=@VEYRA_PREFIX@/current/backend/.venv/bin/veyra worker --interval 60
+Restart=on-failure
+RestartSec=3
+UMask=0027
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=@VEYRA_DATA@ @VEYRA_LOG_DIR@
+
+[Install]
+WantedBy=multi-user.target

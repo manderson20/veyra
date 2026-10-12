@@ -302,6 +302,43 @@ def cmd_updates_check(args: argparse.Namespace) -> int:
     return 0 if outcome in ("ok", "not_configured") else 1
 
 
+def cmd_updates_record(args: argparse.Namespace) -> int:
+    """Record an update performed outside the API (used by installer/upgrade.sh)."""
+    import uuid
+
+    from veyra.core import audit
+    from veyra.core.db import session_scope
+    from veyra.core.models import UpdateHistory
+    from veyra.core.models.base import utcnow
+
+    with session_scope() as db:
+        db.add(
+            UpdateHistory(
+                id=uuid.uuid4(),
+                component=args.component,
+                target=args.target,
+                from_version=args.from_version,
+                to_version=args.to_version,
+                started_at=utcnow(),
+                finished_at=utcnow(),
+                outcome=args.outcome,
+                initiated_by="upgrade.sh",
+                backup_ref=args.backup_ref,
+            )
+        )
+        audit.record(
+            db,
+            action="updates.applied",
+            actor_type="system",
+            actor_label="upgrade.sh",
+            target_type=args.component,
+            target_id=args.target,
+            outcome="success" if args.outcome == "success" else "failure",
+            details={"from": args.from_version, "to": args.to_version},
+        )
+    return 0
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
     """Background worker: node heartbeat and scheduled update checks."""
     import logging
@@ -421,6 +458,16 @@ def build_parser() -> argparse.ArgumentParser:
     upd.add_parser("check", help="Check for updates now (never installs)").set_defaults(
         func=cmd_updates_check
     )
+    s = upd.add_parser("record", help="Record an update applied by upgrade.sh")
+    s.add_argument(
+        "--component", required=True, choices=["veyra_core", "modules", "provisioning_templates"]
+    )
+    s.add_argument("--target", required=True)
+    s.add_argument("--from-version")
+    s.add_argument("--to-version", required=True)
+    s.add_argument("--outcome", choices=["success", "failed"], required=True)
+    s.add_argument("--backup-ref")
+    s.set_defaults(func=cmd_updates_record)
 
     s = sub.add_parser("worker", help="Run the background worker")
     s.add_argument("--interval", type=int, default=60)
