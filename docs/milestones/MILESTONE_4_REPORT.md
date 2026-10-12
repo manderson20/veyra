@@ -50,7 +50,8 @@ state.
 | **Owner's `upgrade.sh` to this milestone on dev1 (19:57 UTC)** | Passed first time: database and `/etc/veyra` backed up, installation key generated (0640 root:veyra, fingerprint `b18fd7d3337c63c3`), ARI credential kept, release `83094e022f` activated, migration `0003` applied (`current: 0003 head: 0003`), Asterisk unchanged and not reloaded, all three services restarted, **25/25 verification checks** including the new `installation-key` check; `veyra installation-key check` and the deployer start without a key warning; `/setup/status` lists the numbering step as available |
 | **Owner's second `upgrade.sh` (20:06 UTC, sidebar fix)** | Passed 25/25; installation key kept (same fingerprint) |
 | **Setup wizard, first extension, deployment, Asterisk (owner in a browser, 20:02–20:07 UTC)** | Passed. Setup completed with a 5-digit plan (10000–79999); extension 22214 created from the Extensions page; revision #2 ("2 file(s) changed") generated and deployed from the engine page in 5 s. Asterisk shows endpoint, auth and AOR `brookfield-r-iii-school-district-22214` (state Unavailable: no phone registered yet) and `veyra-internal` has `22214 → Dial(PJSIP/…,30)`; `/etc/asterisk/veyra/pjsip.endpoints.conf` is `0640 veyra:asterisk`; the stored artifact holds the endpoints file as ciphertext with no `password=` in clear; audit trail: `extension.create`, `telephony.config_generate`, `telephony.config_deploy_request`, `telephony.config_deploy` |
-| Owner's third `upgrade.sh` (20:16 UTC): Apply button and version label | Passed 25/25; the owner saw both. The release hash next to the version overflowed and was removed; the version bump to 0.4.0 ships with the next upgrade |
+| Owner's third `upgrade.sh` (20:16 UTC): Apply button and version label | Passed 25/25; the owner saw both. The release hash next to the version overflowed and was removed |
+| Owner's fourth `upgrade.sh` (20:21 UTC): **0.1.0-dev.0 → 0.4.0** | Passed 25/25; the installer's version comparison accepted the bump ("Veyra upgraded from 0.1.0-dev.0 to 0.4.0"); key kept |
 
 What the new tests cover: encryption round trip, purpose binding, other
 key, tampering and malformed tokens; key file format, mode, refusal to
@@ -71,9 +72,8 @@ without a valid plan; CLI key commands.
 
 ## 4. Not verified
 
-* The 0.4.0 version bump itself has not yet been installed on dev1 at the
-  time of writing (the upgrade from `0.1.0-dev.0` exercises the installer's
-  version comparison for the first time).
+* The Apply button has been seen on dev1 but the owner has not yet reported
+  applying a change with it; its API is covered by tests.
 * No phone has registered yet (Milestone 5 covers live registrations and
   internal calling), so the generated endpoints have not carried traffic.
 * Asterisk 20 (Ubuntu 24.04 container) has not been exercised with
