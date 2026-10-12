@@ -1,0 +1,80 @@
+"use client";
+
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
+import { ThemeToggle } from "../ThemeToggle";
+import { ErrorState, IconButton, LoadingState } from "../ui";
+import { api } from "@/lib/api";
+import type { SetupStatus } from "@/lib/types";
+import { useBrowserStore } from "@/hooks/useBrowserStore";
+import { useOnChange } from "@/hooks/useOnChange";
+import { useSession } from "@/hooks/useSession";
+import { GlobalSearch } from "./GlobalSearch";
+import { Sidebar } from "./Sidebar";
+import { UserMenu } from "./UserMenu";
+
+const COLLAPSE_KEY = "veyra.sidebar.collapsed";
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const { session, loading, error, refresh } = useSession();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [collapsedRaw, setCollapsedRaw] = useBrowserStore(COLLAPSE_KEY, "0");
+  const collapsed = collapsedRaw === "1";
+  const [drawer, setDrawer] = useState(false);
+  useOnChange(pathname, () => setDrawer(false));
+
+  useEffect(() => {
+    if (loading || session || error) return;
+    // Not signed in: go to setup if this installation has never been set up.
+    api
+      .get<SetupStatus>("/setup/status", undefined, { noRedirect: true })
+      .then((s) => router.replace(s.setup_required ? "/setup/" : `/login/?next=${encodeURIComponent(pathname)}`))
+      .catch(() => router.replace("/login/"));
+  }, [loading, session, error, router, pathname]);
+
+  if (error) {
+    return (
+      <div className="fullscreen-center">
+        <ErrorState title="Cannot load Veyra" error={error} onRetry={() => void refresh()} />
+      </div>
+    );
+  }
+  if (loading || !session) {
+    return (
+      <div className="fullscreen-center">
+        <LoadingState label="Loading Veyra…" />
+      </div>
+    );
+  }
+
+  const toggleCollapsed = () => setCollapsedRaw(collapsed ? "0" : "1");
+
+  const cls = ["shell", collapsed && "shell--collapsed", drawer && "shell--drawer-open"].filter(Boolean).join(" ");
+  return (
+    <div className={cls}>
+      <a className="skip-link" href="#main">Skip to main content</a>
+      <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onNavigate={() => setDrawer(false)} />
+      <div className="scrim" onClick={() => setDrawer(false)} aria-hidden="true" />
+      <div className="main">
+        <header className="topbar">
+          <IconButton
+            className="topbar__menu"
+            icon="menu"
+            label={drawer ? "Close navigation" : "Open navigation"}
+            aria-expanded={drawer}
+            aria-controls="sidebar"
+            onClick={() => setDrawer((d) => !d)}
+          />
+          <GlobalSearch />
+          <div className="topbar__spacer" />
+          <ThemeToggle />
+          <UserMenu />
+        </header>
+        <main id="main" className="content" tabIndex={-1}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
