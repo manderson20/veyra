@@ -43,6 +43,8 @@ Milestone 2 decisions.
 | **Live against Asterisk 22.5.2 on dev1 (ARI):** adapter health, info, eight watched modules, targeted reload of `pbx_config.so` with the engine's last-reload time advancing, verification | Passed |
 | **Live cycle with the real ARI and a scratch include directory:** `veyra config generate --deploy`, `veyra deployer --once` → deployed (four files, 0640); RTP settings change → revision with only `rtp.conf` changed → deployed with one reload; `veyra config deploy 2` → rolled back, file content restored | Passed (see §4 for what this does not prove) |
 | Deployer failure path (no ARI credential) | Revision marked failed with the reason, files restored, audited |
+| **Owner's `upgrade.sh` to this milestone on dev1 (18:38 and 18:40 UTC)** | First run: stubs installed with the samples backed up, Asterisk reloaded (not restarted), `veyra-deployer` started, but verification failed on a scripting error in the new include-directory check (helper defined after use); fixed, re-run passed 23/23 |
+| **First real deployment on dev1 (18:40 UTC)** | `sudo veyra config generate --deploy` → revision #1 deployed by the service in under 20 s: four files `0640 veyra:asterisk` in `/etc/asterisk/veyra`; Asterisk shows `veyra-internal` and `veyra-features` (12 priorities), transports `veyra-transport-udp` and `-tcp` bound to `0.0.0.0:5060`, RTP range applied; audit event recorded |
 
 What the new tests cover: deterministic and complete generation; NAT and
 TLS rendering; endpoints and dialplan from extensions with the sensitive
@@ -59,12 +61,9 @@ cases; organization administrators see metadata only; CLI commands.
 
 ## 4. Not verified
 
-* **The deployer has not written to the real `/etc/asterisk/veyra` yet.**
-  The installed instance runs the Milestone 2 release; the Asterisk stubs,
-  the directory ownership and the deployer unit are installed by the next
-  `upgrade.sh` run, which the owner performs. After that, the first
-  deployment from the UI is the real end-to-end test and will be added to
-  this report.
+* The first real deployment was made from the console (`veyra config`),
+  not from the engine page in a browser; the page uses the same API calls
+  the tests cover.
 * No phone has registered (no extensions exist until Milestone 4), so
   `registrations` has only been observed as 0 and the generated endpoint
   templates have not carried real traffic.
@@ -89,7 +88,9 @@ cases; organization administrators see metadata only; CLI commands.
 ## 6. Open items
 
 * veyra-dev2 is not provisioned (deferred).
-* First real deployment on dev1 after the owner's upgrade (§4).
+* Since this deployment Asterisk listens for SIP on `0.0.0.0:5060` (UDP and
+  TCP) on dev1. ufw is inactive on that VM; it sits on a private network.
+  A generated firewall profile is scheduled for M5/M17 (NETWORKING.md).
 
 ## 7. Proposed Milestone 4 (for approval)
 
