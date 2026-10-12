@@ -7,11 +7,24 @@ systems**.
 
 | Host | Initial role | vCPU | RAM | Disk | Notes |
 |---|---|---|---|---|---|
-| `veyra-dev1` | primary | 6 | 8 GB | 100 GB (root LV extended to 97 GB on 2026-10-12) | Ubuntu 26.04.1 LTS; development is done here |
+| `veyra-dev1` | primary | 6 | 8 GB | 100 GB (root LV extended to 97 GB on 2026-10-12) | Ubuntu 26.04.1 LTS; development is done here. **Also runs a real Veyra installation** made by `installer/install.sh` on 2026-10-12 (`/opt/veyra`, services `veyra-api`/`veyra-worker`, NGINX, Asterisk 22.5.2); see `docs/installations/`. The development database `veyra_dev` and the installed database `veyra` coexist in the same PostgreSQL. |
 | `veyra-dev2` | secondary | 6 | 8 GB | 100 GB | **Not reachable yet**: `veyra-dev2` does not resolve in DNS and there is no SSH trust from dev1 |
 
 Both VMs are on the **same physical Proxmox host**, so the pair can test
 application-level HA but not host failure.
+
+**Ubuntu 24.04 test container:** LXD is initialised on veyra-dev1
+(`lxd init --auto`). The stopped container `veyra-noble` holds the 24.04
+installation from Milestone 1; `lxc start veyra-noble` to inspect it,
+`lxc delete veyra-noble` to remove it, `lxc launch ubuntu:24.04 <name>` for a
+fresh one. Copy the source in with `lxc file push` (a tarball without
+`.git`, `node_modules` and `.venv`, with `frontend/out/` included).
+
+**Running the installer from Claude Code:** the auto-mode permission
+classifier refuses `sudo installer/install.sh` and `upgrade.sh`. The owner
+runs them with `! cd ~/veyra && sudo installer/install.sh --yes`; the output
+returns to the session. Read-only sudo commands, `--dry-run` runs and the
+LXD container work are allowed.
 
 > **Temporary development privilege:** `/etc/sudoers.d/90-veyra-dev` grants
 > `itadmin` password-less sudo on veyra-dev1 so the coding agent can
@@ -29,6 +42,9 @@ GitHub access from veyra-dev1 uses a **repository-scoped deploy key**
 | PostgreSQL | 18.6 | Ubuntu 26.04 |
 | Node.js / npm | 22.22.1 / 9.2.0 | Ubuntu 26.04 |
 | ShellCheck | Ubuntu 26.04 package | |
+| NGINX | 1.28.3 | Ubuntu 26.04 (installed by `install.sh`) |
+| Asterisk | 22.5.2 | Ubuntu 26.04 universe (installed by `install.sh`; ADR 0010) |
+| LXD | snap | for the Ubuntu 24.04 container |
 
 Install them with:
 

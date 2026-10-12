@@ -4,7 +4,23 @@ All notable changes to Veyra are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — 0.1.0-dev.0 (Milestone 0)
+## [Unreleased] — 0.1.0-dev.0 (Milestone 1)
+
+### Added
+- First real installations: veyra-dev1 (Ubuntu 26.04) installed, verified and upgraded; Ubuntu 24.04 installed, verified, uninstalled and reinstalled in an LXD container. Reports in `docs/installations/`.
+- ADR 0010: Asterisk is installed from the Ubuntu archive (22.5.2 on 26.04, 20.6.0 on 24.04), not built by Veyra.
+- Installer: reinstalling after `uninstall.sh` is recognised and reported as a reinstall over kept data.
+
+### Fixed
+- Installer: NGINX is restarted instead of reloaded when its listen sockets change (the package default site's wildcard sockets blocked Veyra's address-specific listeners, so HTTPS never came up), and the step verifies an HTTPS request before reporting success.
+- Installer: `verify.sh` no longer flags the venv's symbolic links as world-writable code.
+- Installer: failures that exit through `die` are recorded in the state file (`failed:<step>`); the original `started_at` survives resumed runs.
+- Installer: the HTTP redirect no longer reveals the NGINX version; unknown paths return 404 instead of 200; IPv6 setup URLs are bracketed; the self-signed certificate lists a hostname once when it equals the FQDN; a missing Node.js is reported as missing rather than as version 0; the upgrade summary names releases when the version number is unchanged.
+
+### Changed
+- Installer: release names carry a `-dirty` suffix when installed from a source tree with uncommitted changes.
+
+## 0.1.0-dev.0 (Milestone 0)
 
 ### Added
 - Architecture and design documentation: architecture, HA, engine evaluation (Asterisk selected), module development, provisioning templates, update management, installation, development, networking, database schema, licensing evaluation, emergency calling notes and ADRs 0001–0009.

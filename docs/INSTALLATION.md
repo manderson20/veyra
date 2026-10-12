@@ -1,10 +1,11 @@
 # Installation
 
-> **Status (Milestone 0):** the installer scripts are written, pass
-> ShellCheck and their unit tests, and `preflight.sh` and
-> `install.sh --dry-run` have been run on `veyra-dev1`. A full installation
-> has **not** been run end to end yet. That is the first task of
-> Milestone 1, and this page will be updated with verified results then.
+> **Status (Milestone 1, 2026-10-12):** `install.sh`, `verify.sh` and
+> `upgrade.sh` have been run end to end on `veyra-dev1` (Ubuntu 26.04) and
+> `install.sh`, `verify.sh`, `uninstall.sh` and a reinstall on an Ubuntu
+> 24.04 container. Reports: [veyra-dev1](installations/veyra-dev1-2026-10-12.md),
+> [Ubuntu 24.04](installations/ubuntu-24.04-container-2026-10-12.md).
+> `veyra-dev2` is not installed yet (host not reachable).
 
 ## 1. Requirements
 
@@ -19,10 +20,13 @@
 On Proxmox, use VirtIO network and VirtIO SCSI, enable the QEMU guest agent,
 and use bridged networking.
 
-**Ubuntu 24.04 note:** the Ubuntu-packaged Node.js on 24.04 is too old to
-build the web interface. Use a release bundle with a prebuilt
-`frontend/out/`, or install Node.js 20.9 or newer first. Python and
-PostgreSQL versions on 24.04 have not yet been verified for Veyra (M1).
+**Ubuntu 24.04 note:** verified on 2026-10-12 with Python 3.12.3,
+PostgreSQL 16.15, Asterisk 20.6.0 and NGINX 1.24.0. The Ubuntu-packaged
+Node.js (18.19) is too old to build the web interface, and the installer
+stops with a clear message if it would have to. Use a release bundle with a
+prebuilt `frontend/out/`, or build the web interface on a machine with
+Node.js 20.9 or newer and copy `frontend/out/` into the source tree first.
+Asterisk versions differ between releases by design (ADR 0010).
 
 ### Extending the default LVM volume
 
@@ -73,7 +77,7 @@ The installer then:
 9. Creates a self-signed TLS certificate for the hostname and addresses (see §4).
 10. Configures Asterisk: ARI on `127.0.0.1:8088` only, AMI disabled, originals backed up as `*.veyra-backup-<timestamp>`.
 11. Installs and starts `veyra-api` (127.0.0.1:8100) and `veyra-worker`, both with systemd hardening.
-12. Configures NGINX: HTTPS with an HTTP→HTTPS redirect, the default site disabled (its file is kept), and security headers.
+12. Configures NGINX: HTTPS with an HTTP→HTTPS redirect, the default site disabled (its file is kept), and security headers. NGINX is **restarted** (not reloaded) when the Veyra site is first installed or its addresses change, because its address-specific listeners cannot be bound while the default site's wildcard sockets are open; upgrades with an unchanged site only reload.
 13. Runs `verify.sh`.
 14. Prints a **one-time setup token** and the URL of the setup wizard.
 
@@ -140,6 +144,8 @@ system packages are never removed.
 |---|---|
 | Preflight: "public IP address" warning | The UI will not listen on public addresses. Use `--listen` or put the server behind a firewall or VPN. |
 | `veyra-api did not become ready` | `journalctl -u veyra-api -n 100`; `sudo veyra status` |
+| `NGINX is running but https://127.0.0.1/ does not answer` | `/var/log/nginx/error.log`; `bind() ... Address already in use` means another server holds port 80 or 443 |
+| Asterisk logs `radcli: rc_read_config ... radiusclient.conf` at start | Harmless: Ubuntu's module set loads `cdr_radius`/`cel_radius`; silenced by Veyra's generated `modules.conf` in Milestone 3 |
 | ARI not answering | `sudo asterisk -rx "http show status"`; check `/etc/asterisk/http.conf` |
 | Browser certificate warning | Expected with the self-signed certificate; see §4 |
 | Install stopped half-way | Fix the reported problem and run `install.sh` again; it resumes |

@@ -74,7 +74,11 @@ mode_note=""
 info "Veyra $RELEASE_NAME, role: $ROLE, telephony: $TELEPHONY_ENGINE$mode_note"
 [[ -n "$INSTALL_LOG" ]] && info "Log: $INSTALL_LOG"
 previous_status="$(state_get status 2>/dev/null || true)"
-[[ -n "$previous_status" && "$previous_status" != "complete" ]] && warn "Resuming an unfinished installation (last state: $previous_status)"
+if [[ "$previous_status" == "uninstalled" ]]; then
+    info "Reinstalling; the database, configuration and credentials kept by uninstall.sh are reused"
+elif [[ -n "$previous_status" && "$previous_status" != "complete" ]]; then
+    warn "Resuming an unfinished installation (last state: $previous_status)"
+fi
 
 do_preflight
 state_set status "in_progress"

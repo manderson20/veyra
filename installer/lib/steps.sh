@@ -69,8 +69,10 @@ do_versions() {
     ok "Python $py"
     if [[ ! -d "$SOURCE_DIR/frontend/out" ]]; then
         local node
-        node="$(node --version 2>/dev/null | tr -d v || echo 0)"
-        version_ge "$node" "20.9.0" || die "Node.js $node found; 20.9 or newer is needed to build the web interface. On Ubuntu 24.04 use a release bundle with a prebuilt frontend (see docs/INSTALLATION.md)."
+        node="$(node --version 2>/dev/null | tr -d v || true)"
+        local node_msg="Node.js ${node:-is not installed}"
+        [[ -n "$node" ]] && node_msg="Node.js $node found"
+        version_ge "${node:-0}" "20.9.0" || die "$node_msg; 20.9 or newer is needed to build the web interface. On Ubuntu 24.04 use a release bundle with a prebuilt frontend (see docs/INSTALLATION.md)."
         ok "Node.js $node"
     fi
     local pg
@@ -360,7 +362,9 @@ do_setup_token() {
         printf '      %s%s%s\n\n' "$C_BOLD" "$token" "$C_RESET"
         local addr
         for addr in $(host_addresses); do
-            is_private_address "$addr" && info "  https://$addr/setup/"
+            is_private_address "$addr" || continue
+            [[ "$addr" == *:* ]] && addr="[$addr]"
+            info "  https://$addr/setup/"
         done
         info "Lost it? Run: sudo veyra setup-token"
     else
