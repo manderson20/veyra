@@ -16,7 +16,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 - Numbering plan (`/telephony/numbering`): length, range and reserved leading digits (`0`, `9`, `911`, `933` by default), enforced on create and renumber; `GET /extensions/next-number` suggests the lowest free number; a numbering step in the setup wizard.
 - Extensions pages: list with search and organization filter, create dialog with "Suggest next free", detail page with SIP credentials (show, copy, rotate), delete with typed confirmation, numbering plan card; notices when changes are waiting to be deployed or the installation key is missing.
 - `GET /telephony/engine` reports `changes_pending` and `installation_key_present`; the engine page shows both.
-- **Apply changes** button in the top bar for platform administrators whenever changes are pending (`POST /telephony/apply` generates and deploys in one step, discards a no-change revision, reports generation problems); other users see a "changes pending" badge.
+- **Deploy changes** button in the top bar for platform administrators whenever changes are pending (`POST /telephony/apply` generates and deploys in one step, discards a no-change revision, reports generation problems); other users see a "changes pending" badge.
 - The running version is shown next to the logo (the installed release name in its tooltip); `GET /auth/session` carries `version` and `release`.
 - Versioning scheme adopted (see the top of this file); version 0.4.0 marks Milestone 4.
 - Migration `0003`: `extensions.sip_secret_changed_at`.

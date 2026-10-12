@@ -64,10 +64,10 @@ POST /telephony/revisions/{id}/deploy                    -> deploying (queued)
                       on failure: restore previous files -> reload -> failed
 POST /telephony/revisions/{id}/deploy  on a superseded revision = rollback
 POST /telephony/revisions/{id}/discard on a validated revision
-POST /telephony/apply                  generate + deploy in one step ("Apply changes")
+POST /telephony/apply                  generate + deploy in one step ("Deploy changes")
 ```
 
-`apply` is what the **Apply changes** button in the top bar calls (the
+`apply` is what the **Deploy changes** button in the top bar calls (the
 equivalent of "Apply Config" elsewhere). It appears for platform
 administrators whenever `changes_pending` is true, generates a revision and
 queues it; a revision identical to the deployed one is discarded instead,
