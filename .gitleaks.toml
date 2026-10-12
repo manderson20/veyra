@@ -1,0 +1,11 @@
+# Gitleaks configuration. The default rules apply; the allowlist covers only
+# throwaway credentials for local development/test databases.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local development and CI test database credentials (not secrets)"
+regexes = [
+  '''veyra_dev:veyra_dev@127\.0\.0\.1''',
+  '''veyra_ci:veyra_ci@127\.0\.0\.1''',
+]
