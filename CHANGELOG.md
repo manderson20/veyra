@@ -10,7 +10,14 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## [Unreleased] — 0.6.0-dev (Milestone 5)
 
-_Nothing yet._
+### Added
+- Live registration state per extension (badge in the list and on the page, refreshed every 15 s) from the engine's endpoint status.
+- Telephony → **Active Calls**: channels that are up, with the owning extension and real durations, scoped to the caller's organizations (`GET /calls`, permission `calls.read`).
+- **Click-to-dial**: "Call from this phone" on the extension page and `POST /calls/originate` ring the extension first and place the call when answered (ARI originate); users dial from their own extensions (`calls.originate`), administrators from any extension they manage. Internal numbers and feature codes until trunks exist.
+- **Deploy when no calls are active**: a drop-down on the Deploy changes button (and `{"mode": "when_idle"}` on apply/deploy, `veyra config deploy --when-idle`); the deployer waits while the engine reports active calls, up to `VEYRA_DEPLOY_IDLE_TIMEOUT_MINUTES` (30), then deploys and records the wait; the top bar shows "Waiting for N calls to end". Migration `0005`.
+
+### Changed
+- Active call durations are computed from the channel creation time (they were reported as 0).
 
 ## 0.5.0 — 2026-10-12 (Milestone 4b)
 

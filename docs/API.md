@@ -27,7 +27,8 @@ Conventions:
 | Modules | `/modules`, `/modules/ui-extensions`, `/modules/{id}`, `/modules/{id}/{install,enable,disable,update,uninstall}`, module routes under `/api/v1/ext/<prefix>/` |
 | Updates | `/updates/policies[/{component}]`, `/updates/check`, `/updates/checks/latest`, `/updates/available`, `/updates/history` |
 | Provisioning | `/provisioning/variables`, `/provisioning/templates[/{key}[/preview,/export]]`, `/provisioning/templates/{validate,import}` |
-| Telephony | `/telephony/engine`, `/telephony/settings`, `/telephony/numbering`, `/telephony/apply`, `/telephony/revisions[/{id}]`, `/telephony/revisions/{id}/{deploy,discard}` (see [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md)) |
+| Telephony | `/telephony/engine`, `/telephony/settings`, `/telephony/numbering`, `/telephony/apply` and `/telephony/revisions/{id}/deploy` (both take `{"mode": "now"\|"when_idle"}`), `/telephony/revisions[/{id}]`, `/telephony/revisions/{id}/discard` (see [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md)) |
 | Extensions | `/extensions[/{id}]`, `/extensions/next-number`, `/extensions/{id}/sip-credentials[/rotate]` (see [EXTENSIONS.md](EXTENSIONS.md)) |
+| Calls | `/calls` (active channels), `/calls/originate` (click-to-dial) |
 
 Planned (later milestones): `/devices`, `/trunks`, `/routes`, and others.

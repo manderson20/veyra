@@ -75,6 +75,21 @@ and a generation problem is reported without queuing anything. The
 revision list on the engine page is the place to review a diff before
 applying.
 
+**Deploy modes** (`{"mode": "now" | "when_idle"}` on `apply` and `deploy`,
+`veyra config deploy --when-idle`, the drop-down on the button):
+
+* `now` (default): the deployer writes and reloads at once. Reloads are
+  targeted and never restart Asterisk, so calls in progress continue; this
+  is safe for extension and dialplan changes.
+* `when_idle`: the deployer holds the queued revision while the engine
+  reports active channels and checks again every poll. It gives up waiting
+  after `VEYRA_DEPLOY_IDLE_TIMEOUT_MINUTES` (30) and deploys anyway, noting
+  the wait and the number of active calls in the revision log. Suggested
+  for SIP transport changes (bind address, ports, TLS), the one category
+  where a reload can briefly drop registrations. The engine status reports
+  `pending_mode`, `pending_requested_at` and `pending_active_calls`; the top
+  bar shows "Waiting for N calls to end".
+
 * A revision stores its files in `config_revisions.artifacts` (sensitive
   files encrypted with the installation key, the others in clear), the
   content hash, the parent (the revision that was deployed when it was
@@ -118,7 +133,15 @@ PJSIP endpoints exist and are registered, and how many channels are up.
 `active_calls` (`null` when the engine cannot report them, never a made-up
 number). The engine page under System shows all of this and refreshes
 every 15 seconds. Endpoint status comes from ARI `/endpoints`; channel
-counts from `/channels`.
+counts from `/channels`. Since Milestone 5 the extension list and page show
+each phone's registration state from the same data, `GET /calls` lists the
+channels that are up (with their owning extension and real durations, scoped
+to the caller's organizations; Telephony → Active Calls refreshes every five
+seconds), and `POST /calls/originate` is click-to-dial: ARI `POST /channels`
+rings the extension's endpoint and, once answered, runs the dialplan at the
+dialled number in `veyra-internal`, so the call is placed without typing on
+the handset. Standard users may dial from their own extensions
+(`calls.originate`); administrators from any extension they manage.
 
 ## 6. Security notes
 
