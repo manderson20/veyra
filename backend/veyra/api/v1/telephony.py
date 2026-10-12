@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -68,6 +68,11 @@ class EngineOut(BaseModel):
     pending_since: str | None = None
     pending_by: str | None = None
     installation_key_present: bool = True
+    # The queued deployment's mode and, for when_idle, what it waits for.
+    pending_mode: str | None = None
+    pending_requested_at: str | None = None
+    pending_active_calls: int | None = None
+    active_calls: int | None = None
 
 
 @router.get("/engine", response_model=EngineOut, summary="Telephony engine status")
@@ -99,6 +104,11 @@ def engine_status(
     flag = service.pending_change(db)
     if flag:
         out.pending_since, out.pending_by = flag.get("at"), flag.get("by")
+    wait = service.pending_wait(db, adapter)
+    if wait:
+        out.pending_mode = wait["mode"]
+        out.pending_requested_at = wait["requested_at"]
+        out.pending_active_calls = wait.get("active_calls")
     if health.state != "running":
         return out
     try:
@@ -115,6 +125,7 @@ def engine_status(
             out.endpoints_registered = sum(1 for e in eps if e.registered)
         if Capability.ACTIVE_CALLS in caps:
             out.active_channels = len(adapter.active_calls())
+            out.active_calls = out.active_channels
     except EngineUnavailable as e:
         out.message = f"{health.message} Live details unavailable: {e}"
     return out
@@ -247,6 +258,8 @@ class RevisionOut(BaseModel):
     unchanged: bool | None = None
     can_deploy: bool = False
     can_rollback: bool = False
+    deploy_mode: str | None = None
+    deploy_requested_at: datetime | None = None
 
 
 def _revision_out(
@@ -276,6 +289,8 @@ def _revision_out(
         validation_errors=list(rev.validation_errors or []),
         can_deploy=rev.state == RevisionState.VALIDATED,
         can_rollback=rev.state == RevisionState.SUPERSEDED,
+        deploy_mode=rev.deploy_mode,
+        deploy_requested_at=rev.deploy_requested_at,
     )
     if with_files and principal.is_platform_admin:
         files = artifacts_to_files_safe(rev.artifacts, key, rev.id)
@@ -363,6 +378,11 @@ def generate_revision(
     return out
 
 
+class DeployIn(BaseModel):
+    # "now" (default) or "when_idle": wait until the engine has no active calls.
+    mode: str = Field("now", pattern="^(now|when_idle)$")
+
+
 class ApplyOut(BaseModel):
     revision: RevisionOut
     # True when a deployment was queued; False when nothing changed or generation failed.
@@ -378,10 +398,12 @@ class ApplyOut(BaseModel):
 )
 def apply_changes(
     request: Request,
+    body: DeployIn | None = None,
     principal: Principal = Depends(require("config.deploy")),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
 ) -> ApplyOut:
+    mode = body.mode if body else service.DEPLOY_NOW
     """The "apply" button: the same as POST /revisions followed by
     POST /revisions/{id}/deploy. A revision identical to the deployed one is
     discarded instead of queued; a failed generation is returned as such."""
@@ -413,7 +435,7 @@ def apply_changes(
             rev.state = RevisionState.SUPERSEDED
             service.clear_changed(db)
         else:
-            service.request_deploy(db, rev)
+            service.request_deploy(db, rev, mode)
             applied = True
     audit.record(
         db,
@@ -428,6 +450,7 @@ def apply_changes(
         details={
             "sequence": rev.sequence,
             "applied": applied,
+            "mode": mode,
             "unchanged": generated.unchanged,
             "changed_files": sorted(generated.diff),
             "errors": rev.validation_errors,
@@ -461,10 +484,12 @@ def get_revision(
 def deploy_revision(
     revision_id: uuid.UUID,
     request: Request,
+    body: DeployIn | None = None,
     principal: Principal = Depends(require("config.deploy")),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
 ) -> RevisionOut:
+    mode = body.mode if body else service.DEPLOY_NOW
     rev = db.get(ConfigRevision, revision_id)
     if rev is None:
         raise not_found("Revision")
@@ -480,7 +505,7 @@ def deploy_revision(
         )
     was_superseded = rev.state == RevisionState.SUPERSEDED
     try:
-        service.request_deploy(db, rev)
+        service.request_deploy(db, rev, mode)
     except RuntimeError as e:
         raise conflict(str(e), code="deployment_in_progress") from e
     audit.record(
@@ -492,7 +517,7 @@ def deploy_revision(
         target_id=rev.id,
         ip_address=ctx.ip,
         request_id=ctx.request_id,
-        details={"sequence": rev.sequence, "rollback": was_superseded},
+        details={"sequence": rev.sequence, "rollback": was_superseded, "mode": mode},
     )
     db.commit()
     return _revision_out(db, rev, principal)

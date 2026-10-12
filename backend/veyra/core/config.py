@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     # Directory that Asterisk's managed stub files #tryinclude. Written only
     # by the deployer service (never by the API process).
     asterisk_config_dir: Path = Path("/etc/asterisk/veyra")
+    # "Deploy when no calls are active" waits at most this long, then deploys.
+    deploy_idle_timeout_minutes: int = 30
 
     # --- Updates --------------------------------------------------------------
     update_metadata_url: str = ""

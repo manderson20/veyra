@@ -12,6 +12,7 @@ import base64
 import contextlib
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -38,13 +39,16 @@ class AriClient:
         except OSError:
             return None
 
-    def _request(self, method: str, path: str) -> Any:
+    def _request(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
         if not self.is_loopback:
             raise EngineUnavailable("ARI must be reached over loopback.")
         password = self.password()
         if password is None:
             raise EngineUnavailable("ARI credentials are not configured.")
         url = f"{self.url}/{path.lstrip('/')}"
+        if params:
+            query = {k: str(v) for k, v in params.items() if v is not None}
+            url = f"{url}?{urllib.parse.urlencode(query)}"
         req = urllib.request.Request(url, method=method)  # noqa: S310
         auth = base64.b64encode(f"{self.username}:{password}".encode()).decode()
         req.add_header("Authorization", f"Basic {auth}")
@@ -89,3 +93,29 @@ class AriClient:
 
     def channels(self) -> list[dict[str, Any]]:
         return list(self._request("GET", "channels") or [])
+
+    def originate(
+        self,
+        endpoint: str,
+        extension: str,
+        context: str,
+        caller_id: str,
+        timeout: int,
+    ) -> dict[str, Any]:
+        """``POST /channels``: ring ``endpoint``; once it answers the channel
+        runs the dialplan at ``extension@context`` (which places the call)."""
+        return (
+            self._request(
+                "POST",
+                "channels",
+                {
+                    "endpoint": endpoint,
+                    "extension": extension,
+                    "context": context,
+                    "priority": 1,
+                    "callerId": caller_id,
+                    "timeout": timeout,
+                },
+            )
+            or {}
+        )
