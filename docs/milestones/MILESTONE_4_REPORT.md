@@ -3,7 +3,7 @@
 **Milestone:** 4 — Extension management (installation key and SIP secret encryption, numbering plan, extension CRUD, generated endpoints and dialplan, Extensions UI)
 **Date:** 2026-10-12
 **Branch:** `milestone-4` (pushed to `manderson20/veyra`; not merged to `main`)
-**Status:** Complete. Installed on veyra-dev1 and verified with the first real extension. Awaiting the project owner's review.
+**Status:** Complete. Installed on veyra-dev1 (0.4.0) and verified with the first real extension. Approved by the project owner on 2026-10-12 (merged to `main`).
 
 ## 1. Scope (approved 2026-10-12)
 
@@ -114,7 +114,7 @@ without a valid plan; CLI key commands.
   release hash next to it overflowed the sidebar; removed (tooltip only),
   and the owner asked for a systematic version number: 0.4.0 (§2).
 
-## 8. Proposed Milestone 4b (for approval)
+## 8. Proposed Milestone 4b (approved 2026-10-12)
 
 Multi-factor authentication as designed in `docs/MFA_DESIGN.md` and ADR
 0012: TOTP enrolment and verification with a pre-authentication session at
@@ -122,3 +122,14 @@ sign-in, recovery codes (Argon2id-hashed), per-role policy with a grace
 period, administrator reset, console reset for the recovery administrator;
 TOTP secrets encrypted with the installation key from this milestone.
 Milestone 5 (SIP registration and internal calling) follows.
+
+## 9. Owner decisions (2026-10-12)
+
+* Milestone 4 approved; `main` fast-forwarded to this branch; version 0.4.0.
+* Deployment behaviour confirmed: like FreePBX, deploying reloads only the
+  affected Asterisk modules and never interrupts calls in progress. The
+  owner asked for a **deploy-mode drop-down** on the Deploy changes button
+  (deploy now, or wait until no calls are active). Scheduled for Milestone 5
+  with live call tracking.
+* Milestone 4b (MFA) approved and started on branch `milestone-4b`
+  (version 0.5.0-dev).

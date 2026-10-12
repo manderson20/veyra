@@ -16,9 +16,9 @@ completed milestones in the order below (see
 | 1 | Automated Ubuntu installation (run and harden the installer on veyra-dev1/dev2; 24.04 verification; Asterisk packaging decision) | 0.1.0-dev.0 | **Complete, approved 2026-10-12**; veyra-dev2 installation deferred until that VM is provisioned ([report](milestones/MILESTONE_1_REPORT.md)) |
 | 2 | Backend, frontend, database and authentication (hardening, password reset, sessions UI, MFA design) | 0.1.0-dev.0 | **Complete, approved 2026-10-12** ([report](milestones/MILESTONE_2_REPORT.md)) |
 | 3 | Telephony engine integration (deployer service, config generation, ARI status, reload, rollback) | 0.1.0-dev.0 | **Complete, approved 2026-10-12** ([report](milestones/MILESTONE_3_REPORT.md)) |
-| 4 | Extension management (installation key and SIP secret encryption, numbering plan, extension CRUD, Extensions UI) | 0.4.0 | **Complete, awaiting approval** ([report](milestones/MILESTONE_4_REPORT.md)) |
-| 4b | Multi-factor authentication: TOTP, recovery codes, per-role policy ([design](MFA_DESIGN.md), [ADR 0012](adr/0012-mfa-approach.md)); passkeys in M17 | 0.5.0 | Scheduled 2026-10-12 (owner: MFA is required; placement decided by the team) |
-| 5 | SIP registration and internal calling (live registrations, active calls) | 0.6.0 | |
+| 4 | Extension management (installation key and SIP secret encryption, numbering plan, extension CRUD, Extensions UI) | 0.4.0 | **Complete, approved 2026-10-12** ([report](milestones/MILESTONE_4_REPORT.md)) |
+| 4b | Multi-factor authentication: TOTP, recovery codes, per-role policy ([design](MFA_DESIGN.md), [ADR 0012](adr/0012-mfa-approach.md)); passkeys in M17 | 0.5.0 | **In progress** (started 2026-10-12) |
+| 5 | SIP registration and internal calling (live registrations, active calls); deploy-mode drop-down on the Deploy changes button: deploy now (default) or wait until no calls are active (timeout, visible waiting state; suggested for SIP transport changes) | 0.6.0 | Owner request 2026-10-12 (deploy mode) |
 | 6 | SIP trunks and routing (inbound/outbound, DIDs, time conditions, loop detection) | 0.7.0 | |
 | 7 | Voicemail and IVR (voicemail-to-email, MWI, prompts) | 0.8.0 | |
 | 8 | Ring groups and queues | 0.9.0 | |
