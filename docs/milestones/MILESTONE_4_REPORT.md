@@ -24,7 +24,7 @@ endpoints and dialplan from real extensions, and the Extensions UI.
 | Generated configuration | Done. The snapshot carries the enabled extensions of active organizations with decrypted secrets; one endpoint/auth/AOR per extension and one dialplan entry each; duplicate numbers refused by the generator; `GET /telephony/engine` reports `changes_pending` and `installation_key_present`. | `backend/veyra/telephony/snapshot.py`, `asterisk/generator.py`, `api/v1/telephony.py` |
 | Extensions UI | Done. Extensions list (navigation entry now live), create dialog with "Suggest next free", detail page with SIP credentials (show, copy, rotate with confirmation), delete with typed confirmation, numbering plan card, pending-deployment and missing-key notices, global search for extensions; engine page shows pending changes. | `frontend/src/app/(app)/extensions/`, `frontend/src/components/extensions/` |
 | Setup wizard | Done. "Numbering plan" step (length, range; reserved digits explained) between Installation and Review. | `frontend/src/app/(public)/setup/page.tsx`, `backend/veyra/api/v1/setup.py` |
-| Apply changes (owner request) | Done. `POST /telephony/apply` generates and deploys in one step; the top bar shows an **Apply changes** button to platform administrators whenever `changes_pending` is true (badge for others, "Deploying #n" while queued), polls the result and reports it; the engine page remains the place to review diffs first. | `backend/veyra/api/v1/telephony.py`, `frontend/src/components/shell/ApplyChanges.tsx`, `frontend/src/hooks/useEngineStatus.tsx` |
+| Deploy changes (owner request) | Done. `POST /telephony/apply` generates and deploys in one step; the top bar shows an **Deploy changes** button to platform administrators whenever `changes_pending` is true (badge for others, "Deploying #n" while queued), polls the result and reports it; the engine page remains the place to review diffs first. | `backend/veyra/api/v1/telephony.py`, `frontend/src/components/shell/ApplyChanges.tsx`, `frontend/src/hooks/useEngineStatus.tsx` |
 | Version next to the logo (owner request) | Done. The sidebar shows `v0.4.0` (the installed release name in the tooltip); `GET /auth/session` carries `version` and `release`. A versioning scheme was adopted at the owner's request: `0.<n>.0` per completed milestone in roadmap order, patch for fixes in between, `-dev` for work in progress, `1.0.0` at the public release ([DEVELOPMENT.md](../DEVELOPMENT.md) §Versioning, roadmap Version column). This milestone is **0.4.0**. | `backend/veyra/version.py`, `backend/veyra/api/v1/auth.py`, `frontend/src/components/shell/Sidebar.tsx` |
 | Schema | Migration `0003`: `extensions.sip_secret_changed_at`. `alembic check` clean. | `backend/veyra/migrations/versions/0003_extension_secret_timestamp.py` |
 | Documentation | `docs/EXTENSIONS.md` (new), ADR 0014; architecture, security, schema, API, installation, telephony engine, development, MFA design and changelog updated. | `docs/` |
@@ -108,7 +108,7 @@ without a valid plan; CLI key commands.
 
 * "Two logos in the top left corner" after setup: fixed (sidebar emblem).
 * "Is deploying like the Apply button in FreePBX? I want the button in the
-  top menu when there is a pending deploy": yes; built as **Apply changes**
+  top menu when there is a pending deploy": yes; built as **Deploy changes**
   in the top bar (§2).
 * "Show the software version next to the logo": built (§2). Follow-up: the
   release hash next to it overflowed the sidebar; removed (tooltip only),
