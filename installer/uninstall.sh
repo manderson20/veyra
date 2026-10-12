@@ -49,7 +49,7 @@ else
     confirm "Remove the Veyra application from this server?" || die "Cancelled."
 fi
 
-for svc in veyra-api veyra-worker; do
+for svc in veyra-api veyra-worker veyra-deployer; do
     if systemctl list-unit-files "$svc.service" >/dev/null 2>&1; then
         run systemctl disable --now "$svc" || true
     fi

@@ -92,6 +92,87 @@ export interface SetupStatus {
   setup_required: boolean;
   token_issued: boolean;
   steps: SetupStep[];
+  telephony_engine: string;
+  telephony_state: string;
+}
+
+export interface EngineModule {
+  name: string;
+  status: string;
+}
+
+export interface EngineStatus {
+  engine: string;
+  state: string;
+  version: string | null;
+  message: string;
+  capabilities: string[];
+  started_at: string | null;
+  last_reload_at: string | null;
+  entity_id: string | null;
+  modules: EngineModule[];
+  endpoints_total: number | null;
+  endpoints_registered: number | null;
+  active_channels: number | null;
+  config_dir: string | null;
+  deployed_revision: number | null;
+  pending_revision: number | null;
+}
+
+export interface SipSettings {
+  bind_address: string;
+  udp_port: number;
+  tcp_enabled: boolean;
+  tcp_port: number;
+  tls_enabled: boolean;
+  tls_port: number;
+  external_signaling_address: string | null;
+  external_media_address: string | null;
+  local_nets: string[];
+  rtp_start: number;
+  rtp_end: number;
+  codecs: string[];
+  default_language: string;
+}
+
+export interface SipSettingsOut {
+  settings: SipSettings;
+  problems: string[];
+  codecs_available: string[];
+}
+
+export interface RevisionFile {
+  path: string;
+  sensitive: boolean;
+  content: string | null;
+  lines: number;
+}
+
+export interface FileDiff {
+  changed: boolean;
+  diff: string | null;
+  sensitive: boolean;
+}
+
+export type RevisionState = "draft" | "validated" | "deploying" | "deployed" | "failed" | "superseded" | "rolled_back";
+
+export interface ConfigRevision {
+  id: string;
+  sequence: number;
+  engine: string;
+  state: RevisionState;
+  summary: string;
+  content_hash: string | null;
+  created_by: string;
+  created_at: string;
+  deployed_at: string | null;
+  parent_sequence: number | null;
+  validation_errors: string[];
+  files: RevisionFile[];
+  diff: Record<string, FileDiff> | null;
+  unchanged: boolean | null;
+  can_deploy: boolean;
+  can_rollback: boolean;
 }
 
 export type HealthStatus = "ok" | "degraded" | "failed" | "unknown";

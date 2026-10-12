@@ -144,6 +144,18 @@ The reset link is valid for 24 hours and can be used once; the account is
 signed out everywhere when it is used. Administrators can do the same from
 a user's page in the UI.
 
+### Services
+
+| Unit | Runs as | Purpose |
+|---|---|---|
+| `veyra-api` | veyra | Management API behind NGINX |
+| `veyra-worker` | veyra | Heartbeat, update checks, session purge |
+| `veyra-deployer` | veyra | Writes generated telephony configuration to `/etc/asterisk/veyra` and reloads Asterisk (only with a telephony engine) |
+| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf` and `rtp.conf` are Veyra-managed stubs that include the generated files |
+
+`journalctl -u veyra-deployer` shows deployments; `sudo veyra config status`
+summarises the engine and recent revisions.
+
 ## 6. Upgrade and uninstall
 
 ```

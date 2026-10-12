@@ -106,6 +106,9 @@ backup_file() {
 # install_managed_file SRC DEST MODE OWNER:GROUP MARKER
 # Installs SRC to DEST. An existing DEST that does not carry MARKER (i.e. was
 # not written by Veyra) is backed up first; an identical file is left alone.
+# Sets MANAGED_FILE_CHANGED=1 when it (re)writes DEST, so callers can decide
+# whether a service needs a reload.
+MANAGED_FILE_CHANGED=0
 install_managed_file() {
     local src="$1" dest="$2" mode="$3" owner="$4" marker="${5:-Managed by Veyra}"
     if [[ -f "$dest" ]] && cmp -s "$src" "$dest"; then
@@ -115,6 +118,7 @@ install_managed_file() {
         backup_file "$dest"
     fi
     run install -D -m "$mode" -o "${owner%%:*}" -g "${owner##*:}" "$src" "$dest"
+    MANAGED_FILE_CHANGED=1
 }
 
 # render_template SRC DEST KEY=VALUE...  (replaces @KEY@ placeholders)

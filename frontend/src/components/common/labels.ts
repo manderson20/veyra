@@ -26,6 +26,16 @@ export const TRUST: Record<string, { label: string; tone: Tone; icon: string }> 
   unsigned: { label: "Unsigned", tone: "danger", icon: "alert" },
 };
 
+export const REVISION_STATE: Record<string, { label: string; tone: Tone }> = {
+  draft: { label: "Draft", tone: "outline" },
+  validated: { label: "Ready to deploy", tone: "info" },
+  deploying: { label: "Deploying…", tone: "accent" },
+  deployed: { label: "Deployed", tone: "ok" },
+  failed: { label: "Failed", tone: "danger" },
+  superseded: { label: "Superseded", tone: "neutral" },
+  rolled_back: { label: "Rolled back", tone: "warn" },
+};
+
 export const OUTCOME: Record<string, Tone> = { success: "ok", failure: "danger", denied: "warn" };
 
 export const TEMPLATE_SOURCE: Record<string, { label: string; tone: Tone }> = {

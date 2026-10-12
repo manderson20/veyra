@@ -78,6 +78,7 @@ export const NAV: NavSection[] = [
   { id: "modules", label: "Modules", items: [] },
   { id: "system", label: "System", items: [
     { label: "Health", href: "/system/health/", icon: "health", permissions: ["system.health.read"] },
+    { label: "Telephony Engine", href: "/system/telephony/", icon: "server", permissions: ["config.read"] },
     { label: "High Availability", href: "/system/ha/", icon: "ha", permissions: ["ha.read"] },
     { label: "Updates", href: "/updates/", icon: "update", permissions: ["updates.read"] },
     { label: "Module Manager", href: "/modules/", icon: "modules", permissions: ["modules.read"] },

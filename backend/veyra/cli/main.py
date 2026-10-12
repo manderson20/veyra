@@ -465,6 +465,169 @@ def purge_expired(db: Any, settings: Any) -> tuple[int, int]:
     return purge_sessions(db, settings), purge_reset_tokens(db, settings)
 
 
+def cmd_deployer(args: argparse.Namespace) -> int:
+    """Deployer service: applies queued configuration revisions to the engine.
+
+    The only Veyra process with write access to the engine's include
+    directory. See docs/TELEPHONY_ENGINE.md.
+    """
+    import logging
+
+    from veyra.configmgmt.service import Deployer
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.telephony import get_adapter
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    log = logging.getLogger("veyra.deployer")
+    settings = get_settings()
+    adapter = get_adapter(settings)
+    deployer = Deployer(adapter, settings.asterisk_config_dir)
+    log.info(
+        "%s deployer started (engine %s, %s)",
+        plain_header(),
+        adapter.name,
+        settings.asterisk_config_dir,
+    )
+    while True:
+        try:
+            with session_scope() as db:
+                rev = deployer.run_once(db)
+                if rev is not None:
+                    log.info("revision %s -> %s", rev.sequence, rev.state)
+        except Exception:
+            log.exception("Deployer iteration failed")
+        if args.once:
+            return 0
+        time.sleep(args.interval)
+
+
+def cmd_config_status(args: argparse.Namespace) -> int:
+    from sqlalchemy import select
+
+    from veyra.configmgmt import service
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.core.models import ConfigRevision
+    from veyra.telephony import get_adapter
+
+    adapter = get_adapter(get_settings())
+    with session_scope() as db:
+        deployed = service.current_deployed(db, adapter.name)
+        queued = service.pending(db, adapter.name)
+        recent = db.scalars(
+            select(ConfigRevision)
+            .where(ConfigRevision.engine == adapter.name)
+            .order_by(ConfigRevision.sequence.desc())
+            .limit(args.limit)
+        ).all()
+        health = adapter.health()
+        rows: list[dict[str, Any]] = [
+            {
+                "sequence": r.sequence,
+                "state": r.state,
+                "summary": r.summary,
+                "created_by": r.created_by,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in recent
+        ]
+        deployed_seq = deployed.sequence if deployed else None
+        pending_seq = queued.sequence if queued else None
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "engine": health.engine,
+                    "state": health.state,
+                    "deployed": deployed_seq,
+                    "pending": pending_seq,
+                    "revisions": rows,
+                }
+            )
+        )
+        return 0
+    print(f"engine: {health.engine} ({health.state}) {health.message}")
+    print(f"deployed revision: {deployed_seq if deployed_seq is not None else 'none'}")
+    print(f"pending revision:  {pending_seq if pending_seq is not None else 'none'}")
+    for r in rows:
+        when = r["created_at"][:16].replace("T", " ")
+        print(f"  #{r['sequence']:<4} {r['state']:<11} {when} {r['created_by']:<24} {r['summary']}")
+    return 0
+
+
+def cmd_config_generate(args: argparse.Namespace) -> int:
+    from veyra.configmgmt import service
+    from veyra.core import audit
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.telephony import get_adapter
+
+    adapter = get_adapter(get_settings())
+    with session_scope() as db:
+        generated = service.create_revision(db, adapter, created_by="cli")
+        rev = generated.revision
+        audit.record(
+            db,
+            action="telephony.config_generate",
+            outcome="failure" if rev.validation_errors else "success",
+            actor_type="system",
+            actor_label="cli",
+            target_type="config_revision",
+            target_id=rev.id,
+            details={"sequence": rev.sequence, "errors": rev.validation_errors},
+        )
+        if args.deploy and rev.state == "validated":
+            service.request_deploy(db, rev)
+        seq, state = rev.sequence, rev.state
+        errors, unchanged, changed = (
+            list(rev.validation_errors),
+            generated.unchanged,
+            sorted(generated.diff),
+        )
+    print(f"revision #{seq}: {state}")
+    for e in errors:
+        print(f"  problem: {e}")
+    if unchanged:
+        print("  no change from the deployed configuration")
+    elif changed:
+        print("  changed files: " + ", ".join(changed))
+    if state == "deploying":
+        print("  queued for the deployer (watch: journalctl -u veyra-deployer)")
+    return 0 if state in ("validated", "deploying") else 1
+
+
+def cmd_config_deploy(args: argparse.Namespace) -> int:
+    from sqlalchemy import select
+
+    from veyra.configmgmt import service
+    from veyra.core import audit
+    from veyra.core.db import session_scope
+    from veyra.core.models import ConfigRevision
+
+    with session_scope() as db:
+        rev = db.scalar(select(ConfigRevision).where(ConfigRevision.sequence == args.sequence))
+        if rev is None:
+            raise RuntimeError(f"no revision #{args.sequence}")
+        if rev.state not in ("validated", "superseded"):
+            raise RuntimeError(
+                f"revision #{args.sequence} is {rev.state}; "
+                "only validated or superseded revisions can be deployed"
+            )
+        service.request_deploy(db, rev)
+        audit.record(
+            db,
+            action="telephony.config_deploy_request",
+            actor_type="system",
+            actor_label="cli",
+            target_type="config_revision",
+            target_id=rev.id,
+            details={"sequence": rev.sequence},
+        )
+    print(f"revision #{args.sequence} queued for the deployer")
+    return 0
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
     """Background worker: node heartbeat and scheduled update checks."""
     import logging
@@ -627,6 +790,25 @@ def build_parser() -> argparse.ArgumentParser:
     ses.add_parser("purge", help="Delete sessions and reset tokens past retention").set_defaults(
         func=cmd_sessions_purge
     )
+
+    cfg = sub.add_parser("config", help="Telephony configuration revisions").add_subparsers(
+        dest="cfg_cmd", metavar="<action>"
+    )
+    s = cfg.add_parser("status", help="Engine state and recent revisions")
+    s.add_argument("--json", action="store_true")
+    s.add_argument("--limit", type=int, default=10)
+    s.set_defaults(func=cmd_config_status)
+    s = cfg.add_parser("generate", help="Generate and validate a revision from the database")
+    s.add_argument("--deploy", action="store_true", help="Queue it for deployment when valid")
+    s.set_defaults(func=cmd_config_generate)
+    s = cfg.add_parser("deploy", help="Queue a revision for deployment (rollback: an older one)")
+    s.add_argument("sequence", type=int)
+    s.set_defaults(func=cmd_config_deploy)
+
+    s = sub.add_parser("deployer", help="Run the configuration deployer service")
+    s.add_argument("--interval", type=int, default=2)
+    s.add_argument("--once", action="store_true")
+    s.set_defaults(func=cmd_deployer)
 
     s = sub.add_parser("worker", help="Run the background worker")
     s.add_argument("--interval", type=int, default=60)

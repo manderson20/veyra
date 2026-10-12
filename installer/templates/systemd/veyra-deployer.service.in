@@ -1,0 +1,45 @@
+# Managed by Veyra installer
+[Unit]
+Description=Veyra configuration deployer (writes the telephony engine's Veyra-managed files)
+Documentation=file://@VEYRA_PREFIX@/current/docs/TELEPHONY_ENGINE.md
+After=network-online.target postgresql.service asterisk.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=exec
+User=veyra
+Group=veyra
+EnvironmentFile=@VEYRA_ETC@/veyra.env
+WorkingDirectory=@VEYRA_PREFIX@/current/backend
+ExecStart=@VEYRA_PREFIX@/current/backend/.venv/bin/veyra deployer --interval 2
+Restart=on-failure
+RestartSec=3
+UMask=0027
+
+# Hardening: the only Veyra process allowed to write under /etc/asterisk, and
+# only in Veyra's own include directory.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=@VEYRA_DATA@ @VEYRA_LOG_DIR@ /etc/asterisk/veyra
+
+[Install]
+WantedBy=multi-user.target

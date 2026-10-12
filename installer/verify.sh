@@ -29,7 +29,7 @@ ENGINE="$(sed -n 's/^VEYRA_TELEPHONY_ENGINE=//p' "$VEYRA_ETC/veyra.env" 2>/dev/n
 
 # --- services
 services=(postgresql veyra-api veyra-worker nginx)
-[[ "$ENGINE" == "asterisk" ]] && services+=(asterisk)
+[[ "$ENGINE" == "asterisk" ]] && services+=(asterisk veyra-deployer)
 for svc in "${services[@]}"; do
     if systemctl is-active --quiet "$svc"; then
         check "service:$svc" pass "active"
@@ -81,6 +81,18 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     else
         check ari fail "ARI does not answer or rejects the Veyra credential"
     fi
+fi
+
+# --- engine include directory and stub files (Milestone 3)
+if [[ "$ENGINE" == "asterisk" ]]; then
+    [[ "$(perm /etc/asterisk/veyra)" == "2750 veyra:asterisk" ]] \
+        && check engine-include-dir pass "2750 veyra:asterisk" \
+        || check engine-include-dir fail "/etc/asterisk/veyra is $(perm /etc/asterisk/veyra) (expected 2750 veyra:asterisk)"
+    for f in pjsip.conf extensions.conf rtp.conf; do
+        grep -qs "Managed by Veyra" "/etc/asterisk/$f" \
+            && check "engine-stub:$f" pass "Veyra-managed" \
+            || check "engine-stub:$f" fail "/etc/asterisk/$f is not the Veyra-managed stub"
+    done
 fi
 
 # --- permissions

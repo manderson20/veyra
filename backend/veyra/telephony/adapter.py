@@ -5,7 +5,7 @@ Veyra services talk to the telephony engine only through this interface.
 Engine-specific behaviour (Asterisk today) lives in its own package. An
 adapter reports what it can do through :class:`Capability`; callers must
 check capabilities instead of assuming them. See docs/ARCHITECTURE.md
-§Telephony adapter and docs/ENGINE_EVALUATION.md.
+§Telephony adapter, docs/TELEPHONY_ENGINE.md and docs/ENGINE_EVALUATION.md.
 """
 
 from __future__ import annotations
@@ -44,6 +44,17 @@ class EngineHealth:
     version: str | None = None
     message: str = ""
     details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class EngineInfo:
+    """Static and runtime facts about the engine process (for the engine page)."""
+
+    version: str | None
+    started_at: str | None  # ISO 8601 as reported by the engine
+    last_reload_at: str | None
+    entity_id: str | None
+    modules: dict[str, str] = field(default_factory=dict)  # module -> status text
 
 
 @dataclass(frozen=True)
@@ -89,17 +100,40 @@ class TelephonyAdapter(ABC):
     @abstractmethod
     def health(self) -> EngineHealth: ...
 
+    def info(self) -> EngineInfo:
+        raise NotSupported(f"{self.name}: engine information not available")
+
     def endpoint_statuses(self) -> list[EndpointStatus]:
         raise NotSupported(f"{self.name}: endpoint status not implemented yet")
 
     def active_calls(self) -> list[ActiveCall]:
         raise NotSupported(f"{self.name}: active calls not implemented yet")
 
+    # --- configuration -------------------------------------------------------
+
+    def managed_files(self) -> list[str]:
+        """Every file name the adapter may generate. The deployer removes a
+        managed file that a new revision no longer produces, and never touches
+        anything else in the configuration directory."""
+        return []
+
     def generate_config(self, snapshot: dict[str, Any]) -> list[GeneratedFile]:
         raise NotSupported(f"{self.name}: configuration generation not implemented yet")
 
-    def reload(self, scope: str = "all") -> None:
+    def validate_config(self, files: list[GeneratedFile]) -> list[str]:
+        """Static checks on generated files. Returns problems (empty = valid)."""
+        return []
+
+    def reload_scopes(self, changed_paths: list[str]) -> list[str]:
+        """Which reloads a set of changed files needs, in order."""
+        return []
+
+    def reload(self, scope: str) -> None:
         raise NotSupported(f"{self.name}: reload not implemented yet")
+
+    def verify_loaded(self, scopes: list[str]) -> list[str]:
+        """After reloading, confirm the engine took the configuration. Returns problems."""
+        return []
 
 
 class NullAdapter(TelephonyAdapter):

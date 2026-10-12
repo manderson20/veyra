@@ -17,6 +17,7 @@ from veyra.core.models import Installation, InstalledModule
 from veyra.core.security.principal import Principal
 from veyra.ha.status import cluster_status
 from veyra.system import metrics
+from veyra.telephony.adapter import Capability, EngineUnavailable
 from veyra.version import MODULE_API_VERSION, __version__
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -54,10 +55,21 @@ def health(
         db.rollback()
         components["database"] = _component("failed", f"Database error: {type(e).__name__}")
 
-    engine = request.app.state.telephony.health()
+    adapter = request.app.state.telephony
+    engine = adapter.health()
     engine_status = {"running": "ok", "not_configured": "unknown", "not_installed": "unknown"}.get(
         engine.state, "failed"
     )
+    active_calls = registrations = None
+    if engine.state == "running":
+        try:
+            caps = adapter.capabilities()
+            if Capability.ACTIVE_CALLS in caps:
+                active_calls = len(adapter.active_calls())
+            if Capability.ENDPOINT_STATUS in caps:
+                registrations = sum(1 for e in adapter.endpoint_statuses() if e.registered)
+        except EngineUnavailable:
+            active_calls = registrations = None
     components["telephony"] = _component(
         engine_status,
         engine.message,
@@ -93,8 +105,9 @@ def health(
         "components": components,
         "host": host.as_dict(),
         "cluster": cluster_status(db),
-        "active_calls": None,  # available once call tracking lands (Milestone 5)
-        "registrations": None,  # available once SIP endpoints land (Milestone 5)
+        # Live counts from the engine; None when the engine cannot report them.
+        "active_calls": active_calls,
+        "registrations": registrations,
     }
 
 

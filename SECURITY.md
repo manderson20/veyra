@@ -27,7 +27,8 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 | Audit | Append-only audit log enforced by a database trigger; secrets redacted; denied and failed attempts recorded |
 | Secrets | No database password (peer authentication); generated ARI credential (0640); nothing secret in the repository or config files |
 | Exposure | API, ARI and PostgreSQL on loopback only; AMI disabled; UI only on private addresses by default; checked by `verify.sh` |
-| Services | Dedicated `veyra` account; systemd sandboxing; code is root-owned and read-only |
+| Services | Dedicated `veyra` account; systemd sandboxing; code is root-owned and read-only; only the deployer unit may write under `/etc/asterisk/veyra` |
+| Engine configuration | Generated from the database by a pure function with allow-list validation of every value; targeted reloads over loopback ARI; failed deployments restore the previous files; rollback by redeploying |
 | Modules | Ed25519-signed packages; trust set by the local keyring; only official modules run in-process; integrity re-verified at load |
 | Templates | Jinja2 sandbox with no globals; validated variables and filenames; XML auto-escaping; secrets masked and never exported |
 | Updates | Signed metadata with expiry and rollback protection; HTTPS only; no remote scripts executed; no unattended installs by default |

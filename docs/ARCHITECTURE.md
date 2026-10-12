@@ -47,7 +47,7 @@ backend/veyra/
   updates/       update policy, signed metadata, checker
   ha/            cluster status
   system/        host metrics
-  cli/           `veyra` command and terminal branding
+  cli/           `veyra` command and terminal branding (worker, deployer, config, users, sessions)
   migrations/    core Alembic migrations
   sdk.py         public surface for module authors
 frontend/        Next.js (static export) admin UI and design system
@@ -140,14 +140,15 @@ delivery (worker, deployer, the other HA node) is planned via PostgreSQL
 ```
 Veyra services ─► TelephonyAdapter (capabilities, health, endpoint status,
                   active calls, generate_config, reload)
-                     ├─ AsteriskAdapter (M0: health via ARI; M3+: config, status)
+                     ├─ AsteriskAdapter (health, info, endpoints and channels via ARI;
+                     │                   generation, targeted reloads, verification)
                      └─ NullAdapter (no engine configured)
 ```
 
 Callers check `capabilities()` before using a feature, and anything the
-adapter cannot provide is reported as unavailable rather than invented. The
-dashboard therefore shows "not available yet" for active calls and
-registrations until M5.
+adapter cannot provide is reported as unavailable rather than invented.
+Registration and channel counts come from ARI since M3 and are `null` when
+the engine cannot report them. Details: [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md).
 
 ## 10. Configuration management
 
@@ -166,7 +167,7 @@ API request ──► change rows in DB ──► "draft" revision
 * Diffs never show the content of files that contain credentials.
 * Reloads are targeted (for example `module reload res_pjsip.so` or `dialplan reload`) to avoid disturbing calls in progress.
 * Asterisk reads only generated files and does not depend on Veyra at call time, so telephone service continues if the web application stops.
-* Status: the state machine and diff are implemented. Generation and deployment arrive in M3.
+* Implemented in M3: generation (`veyra/telephony/asterisk/generator.py`), the revision service and deployer (`veyra/configmgmt/service.py`), the `veyra-deployer` systemd unit, rollback by redeploying an older revision, and the engine page. See [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md).
 
 ## 11. Update management
 
