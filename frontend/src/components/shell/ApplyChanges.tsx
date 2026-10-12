@@ -15,7 +15,7 @@ export function ApplyChanges() {
   const { engine, apply, applying } = useEngineStatus();
   if (!engine) return null;
   if (engine.pending_revision !== null || applying) {
-    return <Badge tone="accent" icon="upload">{applying ? "Applying…" : `Deploying #${engine.pending_revision}`}</Badge>;
+    return <Badge tone="accent" icon="upload">{applying ? "Deploying…" : `Deploying #${engine.pending_revision}`}</Badge>;
   }
   if (!engine.changes_pending) return null;
   if (!can("config.deploy")) {
@@ -24,9 +24,9 @@ export function ApplyChanges() {
   const blocked = engine.state !== "running";
   return (
     <span className="row" style={{ gap: 8 }}>
-      <Button variant="primary" icon="upload" onClick={() => void apply()} disabled={blocked}
-        title={blocked ? "The telephony engine is not running." : "Generate a configuration revision and deploy it"}>
-        Apply changes
+      <Button variant="danger" icon="upload" className="topbar__deploy" onClick={() => void apply()} disabled={blocked}
+        title={blocked ? "The telephony engine is not running." : "Generate a configuration revision and deploy it to the telephony engine"}>
+        Deploy changes
       </Button>
       <Link href="/system/telephony/" className="subtle nowrap" title="Review the pending changes before deploying">Review</Link>
     </span>

@@ -27,7 +27,7 @@ export function PendingChanges({ refreshKey }: { refreshKey?: unknown }) {
       {engine.changes_pending ? (
         <Callout tone="info" title="Changes not yet deployed">
           Extensions have changed since the last deployment. Phones will not see the change until the configuration is applied
-          {can("config.deploy") ? <>: use <strong>Apply changes</strong> in the top bar, or review first under <Link href="/system/telephony/">System → Telephony Engine</Link>.</> : " by a platform administrator."}
+          {can("config.deploy") ? <>: use <strong>Deploy changes</strong> in the top bar, or review first under <Link href="/system/telephony/">System → Telephony Engine</Link>.</> : " by a platform administrator."}
         </Callout>
       ) : null}
     </>
