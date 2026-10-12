@@ -9,9 +9,10 @@ before the next begins.
 |---|---|---|
 | 0 | Architecture, repository foundation, modular framework | **Complete, approved 2026-10-12** ([report](milestones/MILESTONE_0_REPORT.md)) |
 | 1 | Automated Ubuntu installation (run and harden the installer on veyra-dev1/dev2; 24.04 verification; Asterisk packaging decision) | **Complete, approved 2026-10-12**; veyra-dev2 installation deferred until the host is reachable ([report](milestones/MILESTONE_1_REPORT.md)) |
-| 2 | Backend, frontend, database and authentication (hardening, password reset, sessions UI, MFA design) | **Complete, awaiting approval** ([report](milestones/MILESTONE_2_REPORT.md)) |
-| 3 | Telephony engine integration (deployer service, config generation, ARI status, reload, rollback) | |
+| 2 | Backend, frontend, database and authentication (hardening, password reset, sessions UI, MFA design) | **Complete, approved 2026-10-12** ([report](milestones/MILESTONE_2_REPORT.md)) |
+| 3 | Telephony engine integration (deployer service, config generation, ARI status, reload, rollback) | **In progress** (started 2026-10-12) |
 | 4 | Extension management (SIP secret encryption, numbering plan) | |
+| 4b | Multi-factor authentication: TOTP, recovery codes, per-role policy ([design](MFA_DESIGN.md), [ADR 0012](adr/0012-mfa-approach.md)); passkeys in M17 | Scheduled 2026-10-12 (owner: MFA is required; placement decided by the team) |
 | 5 | SIP registration and internal calling (live registrations, active calls) | |
 | 6 | SIP trunks and routing (inbound/outbound, DIDs, time conditions, loop detection) | |
 | 7 | Voicemail and IVR (voicemail-to-email, MWI, prompts) | |
