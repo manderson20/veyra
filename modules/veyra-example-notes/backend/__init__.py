@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Example: Notes — reference implementation of a Veyra module.
 
 Only ``veyra.sdk`` is imported from the core; everything else is the

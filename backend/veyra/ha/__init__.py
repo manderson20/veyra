@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """High availability. See docs/HA_ARCHITECTURE.md.
 
 Milestone 0 provides node identity and status reporting only. Replication,

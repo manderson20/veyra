@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Installation and tenancy hierarchy: installation → organization → site → building/department."""
 
 from __future__ import annotations

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Veyra preflight checks. Read-only: inspects the host and reports whether it
 # is ready for installation. Never changes anything.
 #
@@ -16,7 +17,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --json) JSON=1 ;;
         --role) ROLE="${2:?}"; shift ;;
-        -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
+        -h|--help) sed -n '3,9p' "$0"; exit 0 ;;
         *) die "Unknown option: $1" ;;
     esac
     shift

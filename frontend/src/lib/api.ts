@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * Typed client for the Veyra management API (same origin, /api/v1).
  *

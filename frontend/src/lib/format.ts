@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Pure formatting helpers (unit tested). */
 
 export function formatBytes(bytes: number | null | undefined, digits = 1): string {

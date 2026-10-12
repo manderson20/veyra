@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Remove Veyra from this server.
 #
 # By default only the Veyra application, services and web configuration are
@@ -22,7 +23,7 @@ while [[ $# -gt 0 ]]; do
         --yes|-y) ASSUME_YES=1 ;;
         --dry-run) DRY_RUN=1 ;;
         --purge) PURGE=1 ;;
-        -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '3,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "Unknown option: $1" ;;
     esac
     shift

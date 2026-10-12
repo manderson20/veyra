@@ -1,15 +1,19 @@
 # Licensing Evaluation
 
-**Status:** Undecided. **The decision belongs to the project owner** before
-publication (Milestone 18). The repository stays private.
+**Status:** Decided 2026-10-12: **AGPL-3.0-or-later** ([ADR 0013](adr/0013-license-agpl.md)).
+The owner delegated the choice to the team ("change as necessary"); the
+evaluation below is kept as the record of why. The repository stays private
+until Milestone 18.
 
 ## Current state
 
-The repository was created with a **GPL-3.0** `LICENSE` file. That differs
-from the two candidates named in the development directive (AGPLv3 and
-Apache 2.0). The file has been left unchanged until the owner decides.
-Source files do not yet carry license headers, and the example module
-declares `GPL-3.0-or-later` to match the current file.
+`LICENSE` is the AGPL-3.0 text. Python, TypeScript and shell sources carry
+`SPDX-License-Identifier: AGPL-3.0-or-later` headers; `pyproject.toml`,
+`package.json` and the example module manifest declare the same. Before
+accepting outside contributions (Milestone 18) adopt DCO sign-off.
+
+The repository was originally created with a GPL-3.0 file, which was never
+the intended license.
 
 ## Candidates
 

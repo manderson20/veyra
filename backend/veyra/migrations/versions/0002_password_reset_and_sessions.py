@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Password reset tokens, forced password change, password change timestamp.
 
 Revision ID: 0002

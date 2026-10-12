@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # shellcheck disable=SC1090  # sources the fixed environment file below
 # Managed by Veyra installer
 # Runs the `veyra` administration command as the veyra service account with

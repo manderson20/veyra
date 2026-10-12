@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Server-side sessions and principal loading."""
 
 from __future__ import annotations

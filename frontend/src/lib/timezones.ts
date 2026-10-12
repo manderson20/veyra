@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** IANA time zones supported by this browser, with a safe fallback list. */
 export function timeZones(): string[] {
   try {

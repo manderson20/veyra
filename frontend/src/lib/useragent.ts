@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /** Turns a User-Agent string into "Browser on OS" for the sessions list (unit tested).
  *  Deliberately small: it names the common browsers and platforms and falls
  *  back to "Unknown device" rather than guessing. */

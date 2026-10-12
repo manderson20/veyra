@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Terminal branding: the Veyra wordmark in truecolor, 256-color, 16-color,
 monochrome and ASCII-only forms.
 

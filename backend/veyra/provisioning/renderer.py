@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Template catalog, inheritance resolution and sandboxed rendering.
 
 Security properties:

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """The module API (version ``veyra.version.MODULE_API_VERSION``).
 
 A module's entrypoint object receives a :class:`ModuleContext` in

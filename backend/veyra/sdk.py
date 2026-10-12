@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Public SDK surface for Veyra modules (module API v1).
 
 Modules should import only from here. Anything else under ``veyra.`` is an

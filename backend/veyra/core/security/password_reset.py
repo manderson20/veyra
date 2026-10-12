@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """One-time password reset links.
 
 Veyra has no email delivery until Milestone 7, so reset links are issued by

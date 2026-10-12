@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, complete_setup, csrf_headers, login
 
 from veyra.core import bootstrap

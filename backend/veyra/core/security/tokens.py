@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Opaque random tokens; only their SHA-256 digests are ever persisted."""
 
 from __future__ import annotations

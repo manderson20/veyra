@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Database engine and session management (SQLAlchemy 2.x, synchronous psycopg 3).
 
 FastAPI runs synchronous dependencies in a worker thread pool, so a sync

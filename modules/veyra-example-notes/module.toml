@@ -9,7 +9,7 @@ name = "Example: Notes"
 description = "A minimal example module that stores short notes per organization. Use it as a template for new modules."
 version = "0.1.0"
 author = "Veyra Project"
-license = "GPL-3.0-or-later"
+license = "AGPL-3.0-or-later"
 
 [compatibility]
 core_api = ">=1.0.0 <2.0.0"

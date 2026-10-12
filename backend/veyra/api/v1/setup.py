@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """First-run setup.
 
 Setup can run exactly once, while no user exists, and only with the one-time

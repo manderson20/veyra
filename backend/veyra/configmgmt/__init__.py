@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Configuration management: the database is authoritative for Veyra-managed
 engine configuration. HTTP handlers create *draft* revisions only; a separate,
 privileged deployer service validates, writes and reloads engine

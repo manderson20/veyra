@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Consistent error responses using RFC 9457 problem details."""
 
 from __future__ import annotations

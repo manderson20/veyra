@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Installation steps shared by install.sh and upgrade.sh. Each step checks the
 # current state first, so running it again is safe.
 # Expects: SCRIPT_DIR SOURCE_DIR RELEASE_DIR RELEASE_NAME TELEPHONY_ENGINE

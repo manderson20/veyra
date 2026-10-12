@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Per-module database migrations.
 
 Each module keeps an independent Alembic history with its own version table

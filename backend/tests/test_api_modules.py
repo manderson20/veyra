@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from conftest import make_settings
 from sqlalchemy import inspect
 

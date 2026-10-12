@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Declarative base and shared column helpers."""
 
 from __future__ import annotations

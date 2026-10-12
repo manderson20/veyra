@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Ed25519 signing and verification shared by module packages, provisioning
 template packages and update metadata.
 

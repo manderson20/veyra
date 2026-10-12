@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { LoadingState } from "@/components/ui";

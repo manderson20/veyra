@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The only place branding artwork is referenced. The files live in
  * public/branding/ (see its README for what each one is for). The artwork is
