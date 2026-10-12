@@ -1,0 +1,111 @@
+"""Server-side sessions and principal loading."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timedelta
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from veyra.core.config import Settings
+from veyra.core.models import Role, RoleAssignment, RolePermission, User, UserSession
+from veyra.core.models.base import utcnow
+from veyra.core.security import tokens
+from veyra.core.security.principal import Grant, Principal
+
+# Refresh last_seen_at at most this often to avoid a write on every request.
+_TOUCH_INTERVAL = timedelta(seconds=60)
+
+
+def create_session(
+    db: Session, user: User, settings: Settings, *, ip: str | None, user_agent: str | None
+) -> tuple[str, str, UserSession]:
+    token = tokens.new_token()
+    csrf = tokens.new_token()
+    now = utcnow()
+    session = UserSession(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        token_hash=tokens.digest(token),
+        csrf_token_hash=tokens.digest(csrf),
+        created_at=now,
+        last_seen_at=now,
+        expires_at=now + timedelta(hours=settings.session_ttl_hours),
+        ip_address=ip,
+        user_agent=(user_agent or "")[:500] or None,
+    )
+    db.add(session)
+    return token, csrf, session
+
+
+def rotate_csrf(session: UserSession) -> str:
+    csrf = tokens.new_token()
+    session.csrf_token_hash = tokens.digest(csrf)
+    return csrf
+
+
+def resolve_session(
+    db: Session, token: str, settings: Settings, *, now: datetime | None = None
+) -> tuple[UserSession, User] | None:
+    now = now or utcnow()
+    row = db.execute(
+        select(UserSession, User)
+        .join(User, User.id == UserSession.user_id)
+        .where(UserSession.token_hash == tokens.digest(token))
+    ).first()
+    if row is None:
+        return None
+    session, user = row
+    if session.revoked_at is not None or session.expires_at <= now:
+        return None
+    if session.last_seen_at + timedelta(minutes=settings.session_idle_minutes) <= now:
+        session.revoked_at = now
+        db.commit()
+        return None
+    if not user.is_active:
+        return None
+    if now - session.last_seen_at >= _TOUCH_INTERVAL:
+        session.last_seen_at = now
+        db.commit()
+    return session, user
+
+
+def revoke_user_sessions(
+    db: Session, user_id: uuid.UUID, *, except_id: uuid.UUID | None = None
+) -> None:
+    now = utcnow()
+    for s in db.scalars(
+        select(UserSession).where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+    ):
+        if s.id != except_id:
+            s.revoked_at = now
+
+
+def load_principal(db: Session, user: User, session_id: uuid.UUID | None = None) -> Principal:
+    rows = db.execute(
+        select(RoleAssignment, Role.id)
+        .join(Role, Role.id == RoleAssignment.role_id)
+        .where(RoleAssignment.user_id == user.id)
+    ).all()
+    role_ids = {role_id for _, role_id in rows}
+    perms_by_role: dict[uuid.UUID, set[str]] = {rid: set() for rid in role_ids}
+    if role_ids:
+        for rp in db.scalars(select(RolePermission).where(RolePermission.role_id.in_(role_ids))):
+            perms_by_role[rp.role_id].add(rp.permission_key)
+    grants = [
+        Grant(
+            scope_type=a.scope_type,
+            organization_id=a.organization_id,
+            site_id=a.site_id,
+            permissions=frozenset(perms_by_role.get(role_id, set())),
+        )
+        for a, role_id in rows
+    ]
+    return Principal(
+        user_id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        grants=grants,
+        session_id=session_id,
+    )

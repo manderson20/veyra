@@ -1,0 +1,37 @@
+spec_version = 1
+features = ["single_line", "ntp", "timezone_offset", "vlan"]
+
+[template]
+key = "poly.vvx.base"
+name = "Poly VVX (common settings)"
+version = "0.1.0"
+manufacturer = "Poly"
+abstract = true
+firmware = "UC Software 5.9 / 6.x"
+status = "experimental"
+description = """
+Shared configuration for Poly VVX phones running UC Software. Produces the
+master configuration file ({mac}.cfg) and a per-phone configuration file.
+Not yet verified on hardware — see docs/PROVISIONING_TEMPLATES.md."""
+
+[[files]]
+name = "{mac}.cfg"
+source = "master.cfg.j2"
+format = "xml"
+
+[[files]]
+name = "veyra-{mac}.cfg"
+source = "phone.cfg.j2"
+format = "xml"
+
+[[variables]]
+name = "sip_transport"
+description = "SIP transport for the registration"
+default = "UDPOnly"
+pattern = "^(UDPOnly|TCPOnly|TLS|DNSnaptr)$"
+
+[[variables]]
+name = "registration_expires"
+type = "integer"
+description = "Registration interval in seconds"
+default = 300

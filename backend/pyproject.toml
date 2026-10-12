@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "veyra"
+description = "Veyra — Open Communications Platform (management backend)"
+requires-python = ">=3.12"
+dynamic = ["version", "dependencies"]
+license-files = []
+
+[project.scripts]
+veyra = "veyra.cli.main:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "veyra.version.__version__" }
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["veyra*"]
+
+[tool.setuptools.package-data]
+veyra = ["migrations/*.py", "migrations/versions/*.py", "migrations/script.py.mako", "cli/*.txt", "py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["veyra/migrations/versions"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+  "B008",   # FastAPI dependency injection uses calls in defaults
+  "RUF012", # SQLAlchemy/Pydantic class attributes
+  "S101",   # asserts state internal invariants (type narrowing), never security checks
+  "UP046",  # keep Generic[T] for Pydantic models
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S108"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["veyra"]
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
+exclude = ["veyra/migrations/versions/"]

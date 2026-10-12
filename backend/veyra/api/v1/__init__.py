@@ -1,0 +1,33 @@
+"""Version 1 of the Veyra management API."""
+
+from fastapi import APIRouter
+
+from veyra.api.v1 import (
+    audit,
+    auth,
+    ha,
+    modules,
+    organizations,
+    provisioning,
+    search,
+    setup,
+    system,
+    updates,
+    users,
+)
+
+api_router = APIRouter(prefix="/api/v1")
+for r in (
+    auth,
+    setup,
+    system,
+    organizations,
+    users,
+    search,
+    modules,
+    updates,
+    ha,
+    audit,
+    provisioning,
+):
+    api_router.include_router(r.router)
