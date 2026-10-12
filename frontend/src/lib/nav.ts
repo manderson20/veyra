@@ -69,6 +69,7 @@ export const NAV: NavSection[] = [
   ] },
   { id: "telephony", label: "Telephony", collapsible: true, items: [
     { label: "Extensions", href: "/extensions/", icon: "phone", permissions: ["extensions.read"] },
+    { label: "Active Calls", href: "/calls/", icon: "activity", permissions: ["calls.read"] },
     ...PLANNED_FEATURES.map((f) => ({
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
     })),
