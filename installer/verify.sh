@@ -27,6 +27,8 @@ check() { # name status message
 require_root
 ENGINE="$(sed -n 's/^VEYRA_TELEPHONY_ENGINE=//p' "$VEYRA_ETC/veyra.env" 2>/dev/null || echo unknown)"
 
+perm() { stat -c '%a %U:%G' "$1" 2>/dev/null || echo missing; }
+
 # --- services
 services=(postgresql veyra-api veyra-worker nginx)
 [[ "$ENGINE" == "asterisk" ]] && services+=(asterisk veyra-deployer)
@@ -96,7 +98,6 @@ if [[ "$ENGINE" == "asterisk" ]]; then
 fi
 
 # --- permissions
-perm() { stat -c '%a %U:%G' "$1" 2>/dev/null || echo missing; }
 [[ "$(perm "$VEYRA_ETC/secrets")" == "750 root:veyra" ]] && check secrets-dir pass "750 root:veyra" \
     || check secrets-dir fail "$VEYRA_ETC/secrets is $(perm "$VEYRA_ETC/secrets") (expected 750 root:veyra)"
 for f in "$VEYRA_ETC"/secrets/*; do
