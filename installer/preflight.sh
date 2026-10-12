@@ -17,7 +17,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --json) JSON=1 ;;
         --role) ROLE="${2:?}"; shift ;;
-        -h|--help) sed -n '3,9p' "$0"; exit 0 ;;
+        -h|--help) sed -n '3,7p' "$0"; exit 0 ;;
         *) die "Unknown option: $1" ;;
     esac
     shift

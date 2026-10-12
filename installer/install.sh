@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
         --allow-public-admin) ALLOW_PUBLIC=1 ;;
         --listen) LISTEN+=("${2:?--listen requires an address}"); shift ;;
         --role) ROLE="${2:?}"; shift ;;
-        -h|--help) sed -n '3,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "Unknown option: $1 (see --help)" ;;
     esac
     shift
