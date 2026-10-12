@@ -20,7 +20,7 @@ export default function SettingsPage() {
 
   return (
     <div className="stack">
-      <PageHeader title="Settings" description="Installation information and your personal preferences." />
+      <PageHeader title="Settings" description="Installation information and your personal preferences. Your password and sessions are on the account page." />
       <div className="grid grid--2" style={{ alignItems: "start" }}>
         <Card title="Installation">
           {!can("system.health.read") ? <p className="muted">Your role does not include installation details.</p>

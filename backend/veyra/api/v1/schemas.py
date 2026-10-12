@@ -87,6 +87,11 @@ class UserOut(ORM):
     home_organization_id: uuid.UUID | None
     last_login_at: datetime | None
     created_at: datetime
+    # Lockout ends at this time (None when not locked). The sign-in response
+    # never reveals it; administrators see it here.
+    locked_until: datetime | None = None
+    password_changed_at: datetime | None = None
+    must_change_password: bool = False
 
 
 class UserCreate(BaseModel):
@@ -94,12 +99,35 @@ class UserCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=200)
     password: str = Field(min_length=1, max_length=1024)
     home_organization_id: uuid.UUID | None = None
+    # The initial password is temporary by default (see UserPatch).
+    require_password_change: bool = True
 
 
 class UserPatch(BaseModel):
     display_name: str | None = Field(None, min_length=1, max_length=200)
     is_active: bool | None = None
     password: str | None = Field(None, min_length=1, max_length=1024)
+    # When an administrator sets a password it is temporary by default: the
+    # user must choose their own at the next sign-in.
+    require_password_change: bool = True
+
+
+class UserSessionOut(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    ip_address: str | None
+    user_agent: str | None
+    is_current: bool = False
+
+
+class PasswordResetLinkOut(BaseModel):
+    """Shown once to the administrator; the token is not stored in clear."""
+
+    token: str
+    path: str
+    expires_at: datetime
 
 
 class RoleOut(ORM):

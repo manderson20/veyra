@@ -15,6 +15,7 @@ def make_user(admin, email, org_id, role=None, scope="organization"):
             "display_name": email.split("@")[0],
             "password": ADMIN_PASSWORD,
             "home_organization_id": org_id,
+            "require_password_change": False,
         },
     )
     assert r.status_code == 201, r.text

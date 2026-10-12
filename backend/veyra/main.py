@@ -12,12 +12,14 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from veyra.api.v1 import api_router
 from veyra.core import bootstrap
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import dispose_engine, init_engine, session_scope
-from veyra.core.errors import install_error_handlers
+from veyra.core.deps import SAFE_METHODS
+from veyra.core.errors import PROBLEM_JSON, install_error_handlers, problem_body
 from veyra.core.events import bus
 from veyra.core.signing import Keyring
 from veyra.modules.manager import ModuleManager
@@ -33,6 +35,14 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Cache-Control": "no-store",
 }
+
+# Fetch metadata (Sec-Fetch-Site) is sent by every current browser. The UI
+# is served from the API's own origin, so a state-changing request that a
+# browser labels as coming from another site is refused before any handler
+# runs. Requests without the header (older clients, scripts, tests) fall
+# through to the CSRF token check, so this is defence in depth, not the
+# primary control.
+_REJECTED_FETCH_SITES = frozenset({"cross-site", "same-site"})
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -76,7 +86,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request.state.request_id = (
             incoming if 8 <= len(incoming) <= 64 and incoming.isalnum() else uuid.uuid4().hex
         )
-        response = await call_next(request)
+        response: Response
+        if (
+            request.method not in SAFE_METHODS
+            and request.url.path.startswith("/api/")
+            and request.headers.get("sec-fetch-site", "").lower() in _REJECTED_FETCH_SITES
+        ):
+            response = JSONResponse(
+                problem_body(
+                    request,
+                    403,
+                    "Forbidden",
+                    "Cross-site requests are not accepted.",
+                    "cross_site_request",
+                ),
+                status_code=403,
+                media_type=PROBLEM_JSON,
+            )
+        else:
+            response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
         for k, v in SECURITY_HEADERS.items():
             response.headers.setdefault(k, v)

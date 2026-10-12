@@ -25,6 +25,30 @@ def test_password_policy():
     passwords.validate_password("twelve chars ok")
 
 
+@pytest.mark.parametrize(
+    "password",
+    [
+        "aaaaaaaaaaaa",  # too few distinct characters
+        "password1234",  # weak word padded with digits
+        "PasswordPassword",  # weak word repeated
+        "qwertyuiop12!!",
+        "Veyra-2026-!!",  # the product name
+        "Taylor loves cats",  # the user's own name
+        "mtaylor-rocks-2026",  # the email local part
+    ],
+)
+def test_password_policy_rejects_weak_and_personal(password):
+    with pytest.raises(passwords.PasswordPolicyError):
+        passwords.validate_password(
+            password, email="mtaylor@district.local", display_name="Taylor Morgan"
+        )
+
+
+def test_password_policy_accepts_ordinary_passphrases():
+    for ok in ("correct horse battery staple", "Rain on the 5th floor!", "x7#Lq9!pR2vZ"):
+        passwords.validate_password(ok, email="mtaylor@district.local", display_name="Taylor")
+
+
 def test_tokens_only_digest_matches():
     t = tokens.new_token()
     assert tokens.matches(t, tokens.digest(t))

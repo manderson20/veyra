@@ -49,7 +49,7 @@ def conflict(detail: str, code: str = "conflict") -> ProblemError:
     return ProblemError(409, "Conflict", detail, code=code)
 
 
-def _body(
+def problem_body(
     request: Request,
     status: int,
     title: str,
@@ -77,7 +77,7 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ProblemError)
     async def _problem(request: Request, exc: ProblemError) -> JSONResponse:
         return JSONResponse(
-            _body(request, exc.status, exc.title, exc.detail, exc.code, exc.errors),
+            problem_body(request, exc.status, exc.title, exc.detail, exc.code, exc.errors),
             status_code=exc.status,
             media_type=PROBLEM_JSON,
             headers=exc.headers,
@@ -88,7 +88,7 @@ def install_error_handlers(app: FastAPI) -> None:
         title = {404: "Not found", 405: "Method not allowed"}.get(exc.status_code, "Error")
         detail = exc.detail if isinstance(exc.detail, str) else None
         return JSONResponse(
-            _body(request, exc.status_code, title, detail, None),
+            problem_body(request, exc.status_code, title, detail, None),
             status_code=exc.status_code,
             media_type=PROBLEM_JSON,
             headers=getattr(exc, "headers", None),
@@ -105,7 +105,7 @@ def install_error_handlers(app: FastAPI) -> None:
             for err in exc.errors()
         ]
         return JSONResponse(
-            _body(
+            problem_body(
                 request,
                 422,
                 "Validation failed",
@@ -123,7 +123,7 @@ def install_error_handlers(app: FastAPI) -> None:
             "Unhandled error", extra={"request_id": getattr(request.state, "request_id", None)}
         )
         return JSONResponse(
-            _body(
+            problem_body(
                 request,
                 500,
                 "Internal server error",

@@ -2,6 +2,7 @@
 
 from veyra.core.models.base import Base
 from veyra.core.models.identity import (
+    PasswordResetToken,
     Permission,
     Role,
     RoleAssignment,
@@ -41,6 +42,7 @@ __all__ = [
     "InstalledModule",
     "ModuleConfig",
     "Organization",
+    "PasswordResetToken",
     "Permission",
     "ProvisioningTemplate",
     "Role",

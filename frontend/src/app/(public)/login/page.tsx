@@ -6,7 +6,7 @@ import { AuthLayout } from "@/components/AuthLayout";
 import { BrandLogo } from "@/components/Brand";
 import { Button, Callout, LoadingState, TextField } from "@/components/ui";
 import { api, ApiError, errorMessage } from "@/lib/api";
-import type { SetupStatus } from "@/lib/types";
+import type { SessionInfo, SetupStatus } from "@/lib/types";
 import { useSession } from "@/hooks/useSession";
 
 function safeNext(value: string | null): string {
@@ -28,7 +28,7 @@ function LoginForm() {
 
   useEffect(() => {
     if (session) {
-      router.replace(next);
+      router.replace(session.must_change_password ? "/account/?reason=signin" : next);
       return;
     }
     api
@@ -45,9 +45,9 @@ function LoginForm() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/auth/login", { email, password }, { noRedirect: true });
+      const s = await api.post<SessionInfo>("/auth/login", { email, password }, { noRedirect: true });
       await refresh();
-      router.replace(next);
+      router.replace(s.must_change_password ? "/account/?reason=signin" : next);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail || err.title : errorMessage(err));
       setBusy(false);
@@ -73,7 +73,9 @@ function LoginForm() {
         </Button>
       </form>
       <p className="subtle">
-        Locked out? The local recovery administrator can always sign in here, even when single sign-on is configured.
+        Forgotten your password? Ask an administrator for a reset link. The local recovery administrator can always
+        sign in here, even when single sign-on is configured, and can be reset from the server with{" "}
+        <span className="mono">veyra users reset-password</span>.
       </p>
     </div>
   );

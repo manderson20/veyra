@@ -17,6 +17,9 @@ export interface User {
   home_organization_id: string | null;
   last_login_at: string | null;
   created_at: string;
+  locked_until: string | null;
+  password_changed_at: string | null;
+  must_change_password: boolean;
 }
 
 export interface SessionInfo {
@@ -24,7 +27,30 @@ export interface SessionInfo {
   permissions: string[];
   is_platform_admin: boolean;
   installation_name: string;
+  must_change_password: boolean;
   csrf_token?: string | null;
+}
+
+export interface UserSession {
+  id: string;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  is_current: boolean;
+}
+
+export interface PasswordResetLink {
+  token: string;
+  path: string;
+  expires_at: string;
+}
+
+export interface ResetTokenInfo {
+  display_name: string;
+  email: string;
+  expires_at: string;
 }
 
 export interface Organization {

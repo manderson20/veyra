@@ -4,7 +4,22 @@ All notable changes to Veyra are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — 0.1.0-dev.0 (Milestone 1)
+## [Unreleased] — 0.1.0-dev.0 (Milestone 2)
+
+### Added
+- Sessions: `GET /auth/sessions`, `DELETE /auth/sessions/{id}`, `POST /auth/sessions/revoke-others`; administrators: `GET/DELETE /users/{id}/sessions`. "Your account" page with profile, password change and active sessions; the user page shows a user's sessions with "Sign out everywhere".
+- Password reset links (ADR 0011): `POST /users/{id}/password-reset-link`, public `/reset-password/` page, `POST /auth/password-reset/check` and `POST /auth/password-reset`; `veyra users reset-password` and `veyra users unlock` on the server; `POST /users/{id}/unlock` and an "Unlock now" button.
+- Forced password change: passwords set by an administrator (on creation or reset) are temporary unless `require_password_change` is false; the user is taken to the account page and can reach nothing else until they choose a password. `password_changed_at` and `must_change_password` on users (migration `0002`).
+- Password policy: at least four distinct characters, no weak words however padded, no personal information (name, email local part), new password must differ from the current one.
+- Fetch-metadata check: mutations labelled `cross-site` or `same-site` by the browser are refused (`403 cross_site_request`). `Clear-Site-Data` on sign-out. NGINX rate limits the password-reset endpoints like sign-in.
+- Worker purges expired and revoked sessions and used reset tokens after the retention period (`VEYRA_SESSION_RETENTION_DAYS`, default 30); `veyra sessions purge` and `veyra sessions revoke`.
+- MFA design (`docs/MFA_DESIGN.md`, ADR 0012): TOTP with recovery codes first, passkeys second, pre-auth session at sign-in; implementation scheduled later.
+
+### Changed
+- `UserOut` includes `locked_until`, `password_changed_at` and `must_change_password` (administrators only see these through the users API; the sign-in form stays generic).
+- The user menu links to the account page instead of a password dialog.
+
+## 0.1.0-dev.0 (Milestone 1)
 
 ### Added
 - Approved branding artwork (raster exports supplied by the owner) replaces the placeholder SVGs: compact and full logos for light and dark backgrounds, emblem, app icon, favicons, touch icon, a web manifest, and the owner's ASCII wordmark for the CLI and installer. The branding board is kept in `docs/branding/`.

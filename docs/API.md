@@ -13,12 +13,14 @@ Conventions:
 * **Lists:** `?limit=` (≤ 200) and `?offset=`, returning `{items, total, limit, offset}`; `?q=` search where supported.
 * **Authorization:** enforced on every endpoint. Objects outside the caller's scope return 404.
 * **Audit:** every mutation is recorded, including denied and failed attempts.
+* **Forced password change:** while `must_change_password` is true in the session document, every route outside `/auth/` answers `403 password_change_required`.
+* **Fetch metadata:** a mutation whose `Sec-Fetch-Site` header says `cross-site` or `same-site` is refused with `403 cross_site_request` before any handler runs; requests without the header fall through to the CSRF token check.
 
 | Area | Paths |
 |---|---|
-| Auth | `/auth/login`, `/auth/logout`, `/auth/session`, `/auth/password` |
+| Auth | `/auth/login`, `/auth/logout`, `/auth/session`, `/auth/password`, `/auth/sessions[/{id}]`, `/auth/sessions/revoke-others`, `/auth/password-reset/check`, `/auth/password-reset` (the last two are public and rate limited) |
 | Setup | `/setup/status`, `/setup/initialize` |
-| Directory | `/organizations[/{id}]`, `/users[/{id}]`, `/users/{id}/roles[/{assignment}]`, `/roles`, `/search` |
+| Directory | `/organizations[/{id}]`, `/users[/{id}]`, `/users/{id}/roles[/{assignment}]`, `/users/{id}/unlock`, `/users/{id}/password-reset-link`, `/users/{id}/sessions`, `/roles`, `/search` |
 | System | `/system/ping` (public), `/system/health`, `/system/info`, `/ha/status`, `/audit` |
 | Modules | `/modules`, `/modules/ui-extensions`, `/modules/{id}`, `/modules/{id}/{install,enable,disable,update,uninstall}`, module routes under `/api/v1/ext/<prefix>/` |
 | Updates | `/updates/policies[/{component}]`, `/updates/check`, `/updates/checks/latest`, `/updates/available`, `/updates/history` |

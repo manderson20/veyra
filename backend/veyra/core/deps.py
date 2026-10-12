@@ -20,6 +20,8 @@ from veyra.core.security.sessions import load_principal, resolve_session
 SESSION_COOKIE = "veyra_session"
 CSRF_HEADER = "X-CSRF-Token"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# A user who must change a temporary password may only use these routes.
+FORCED_CHANGE_ALLOWED_PREFIX = "/api/v1/auth/"
 
 
 @dataclass
@@ -72,6 +74,13 @@ def current_principal(
             raise ProblemError(
                 403, "Forbidden", "Missing or invalid CSRF token.", code="csrf_failed"
             )
+    if user.must_change_password and not request.url.path.startswith(FORCED_CHANGE_ALLOWED_PREFIX):
+        raise ProblemError(
+            403,
+            "Password change required",
+            "Choose a new password before continuing.",
+            code="password_change_required",
+        )
     principal = load_principal(db, user, session.id)
     request.state.principal = principal
     return principal

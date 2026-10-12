@@ -24,6 +24,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   useOnChange(pathname, () => setDrawer(false));
 
+  // A temporary password must be replaced before anything else is usable.
+  const forcedChange = Boolean(session?.must_change_password) && !pathname.startsWith("/account");
+  useEffect(() => {
+    if (forcedChange) router.replace("/account/?reason=signin");
+  }, [forcedChange, router]);
+
   useEffect(() => {
     if (loading || session || error) return;
     // Not signed in: go to setup if this installation has never been set up.
@@ -40,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  if (loading || !session) {
+  if (loading || !session || forcedChange) {
     return (
       <div className="fullscreen-center">
         <LoadingState label="Loading Veyra…" />

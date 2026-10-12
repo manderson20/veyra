@@ -67,7 +67,7 @@ export function readCookie(name: string, cookieString?: string): string | null {
 }
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const AUTH_FREE_PATHS = ["/login", "/setup"];
+const AUTH_FREE_PATHS = ["/login", "/setup", "/reset-password"];
 
 export interface ApiOptions {
   method?: string;
