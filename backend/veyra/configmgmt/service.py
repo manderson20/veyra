@@ -18,6 +18,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,10 @@ from veyra.telephony.snapshot import build_snapshot
 log = logging.getLogger("veyra.configmgmt")
 
 FILE_MODE = 0o640
+DEPLOY_NOW = "now"
+DEPLOY_WHEN_IDLE = "when_idle"
+DEPLOY_MODES = (DEPLOY_NOW, DEPLOY_WHEN_IDLE)
+DEFAULT_IDLE_TIMEOUT = timedelta(minutes=30)
 
 
 # ----------------------------------------------------------------- pending flag
@@ -213,12 +218,44 @@ def changes_pending(
     return content_hash(files) != deployed.content_hash
 
 
-def request_deploy(db: Session, rev: ConfigRevision) -> None:
-    """Queue a validated (or superseded, for rollback) revision for the deployer."""
+def request_deploy(db: Session, rev: ConfigRevision, mode: str = DEPLOY_NOW) -> None:
+    """Queue a validated (or superseded, for rollback) revision for the deployer.
+
+    ``when_idle`` asks the deployer to wait until the engine reports no
+    active calls (up to its idle timeout) before writing and reloading."""
+    if mode not in DEPLOY_MODES:
+        raise ValueError(f"unknown deploy mode {mode!r}")
     if pending(db, rev.engine) is not None:
         raise RuntimeError("Another deployment is already in progress.")
     rev.state = transition(rev.state, RevisionState.DEPLOYING)
+    rev.deploy_mode = mode
+    rev.deploy_requested_at = utcnow()
     db.flush()
+
+
+def active_call_count(adapter: TelephonyAdapter) -> int | None:
+    """How many calls the engine reports, or None when it cannot say."""
+    if Capability.ACTIVE_CALLS not in adapter.capabilities():
+        return None
+    try:
+        return len(adapter.active_calls())
+    except (EngineUnavailable, NotSupported):
+        return None
+
+
+def pending_wait(db: Session, adapter: TelephonyAdapter) -> dict[str, Any] | None:
+    """What a queued when-idle deployment is waiting for (for the engine status)."""
+    rev = pending(db, adapter.name)
+    if rev is None:
+        return None
+    out: dict[str, Any] = {
+        "sequence": rev.sequence,
+        "mode": rev.deploy_mode or DEPLOY_NOW,
+        "requested_at": (rev.deploy_requested_at or rev.created_at).isoformat(),
+    }
+    if rev.deploy_mode == DEPLOY_WHEN_IDLE:
+        out["active_calls"] = active_call_count(adapter)
+    return out
 
 
 # ----------------------------------------------------------------- deploy
@@ -293,24 +330,55 @@ class Deployer:
     veyra-deployer) or directly in tests."""
 
     def __init__(
-        self, adapter: TelephonyAdapter, config_dir: Path, key: InstallationKey | None = None
+        self,
+        adapter: TelephonyAdapter,
+        config_dir: Path,
+        key: InstallationKey | None = None,
+        idle_timeout: timedelta = DEFAULT_IDLE_TIMEOUT,
     ) -> None:
         self.adapter = adapter
         self.config_dir = config_dir
         self.key = key
+        self.idle_timeout = idle_timeout
+        # (active calls, requested at) while a when-idle revision is held back.
+        self.waiting: tuple[int, Any] | None = None
 
     def run_once(self, db: Session) -> ConfigRevision | None:
         rev = pending(db, self.adapter.name)
         if rev is None:
+            self.waiting = None
             return None
-        self.deploy(db, rev)
+        note: str | None = None
+        if rev.deploy_mode == DEPLOY_WHEN_IDLE:
+            calls = active_call_count(self.adapter) or 0
+            requested = rev.deploy_requested_at or rev.created_at
+            waited = utcnow() - requested
+            if calls and waited < self.idle_timeout:
+                if self.waiting is None or self.waiting[0] != calls:
+                    log.info(
+                        "Revision %s waits for %d active call(s) to end (%s left)",
+                        rev.sequence,
+                        calls,
+                        self.idle_timeout - waited,
+                    )
+                self.waiting = (calls, requested)
+                return None
+            if calls:
+                note = (
+                    f"idle timeout of {self.idle_timeout} reached after waiting since "
+                    f"{requested:%H:%M:%S}; deployed with {calls} active call(s)"
+                )
+            else:
+                note = f"deployed when idle after waiting {waited.total_seconds():.0f} s"
+        self.waiting = None
+        self.deploy(db, rev, note=note)
         return rev
 
-    def deploy(self, db: Session, rev: ConfigRevision) -> None:
+    def deploy(self, db: Session, rev: ConfigRevision, *, note: str | None = None) -> None:
         managed = self.adapter.managed_files()
         previous_on_disk = read_directory(self.config_dir, managed)
         previous_rev = current_deployed(db, rev.engine)
-        log_lines: list[str] = []
+        log_lines: list[str] = [note] if note else []
         try:
             if not self.config_dir.is_dir():
                 raise DeployError(f"configuration directory {self.config_dir} does not exist")

@@ -524,7 +524,14 @@ def cmd_deployer(args: argparse.Namespace) -> int:
         # this reason recorded on the revision.
         log.warning("%s; revisions with credentials cannot be deployed", e)
         key = None
-    deployer = Deployer(adapter, settings.asterisk_config_dir, key)
+    from datetime import timedelta
+
+    deployer = Deployer(
+        adapter,
+        settings.asterisk_config_dir,
+        key,
+        idle_timeout=timedelta(minutes=settings.deploy_idle_timeout_minutes),
+    )
     log.info(
         "%s deployer started (engine %s, %s)",
         plain_header(),
@@ -659,7 +666,8 @@ def cmd_config_deploy(args: argparse.Namespace) -> int:
                 f"revision #{args.sequence} is {rev.state}; "
                 "only validated or superseded revisions can be deployed"
             )
-        service.request_deploy(db, rev)
+        mode = service.DEPLOY_WHEN_IDLE if args.when_idle else service.DEPLOY_NOW
+        service.request_deploy(db, rev, mode)
         audit.record(
             db,
             action="telephony.config_deploy_request",
@@ -667,9 +675,12 @@ def cmd_config_deploy(args: argparse.Namespace) -> int:
             actor_label="cli",
             target_type="config_revision",
             target_id=rev.id,
-            details={"sequence": rev.sequence},
+            details={"sequence": rev.sequence, "mode": mode},
         )
-    print(f"revision #{args.sequence} queued for the deployer")
+    print(
+        f"revision #{args.sequence} queued for the deployer"
+        + (" (waits until no calls are active)" if args.when_idle else "")
+    )
     return 0
 
 
@@ -903,6 +914,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--deploy", action="store_true", help="Queue it for deployment when valid")
     s.set_defaults(func=cmd_config_generate)
     s = cfg.add_parser("deploy", help="Queue a revision for deployment (rollback: an older one)")
+    s.add_argument(
+        "--when-idle",
+        action="store_true",
+        help="Wait until the engine has no active calls (up to the idle timeout)",
+    )
     s.add_argument("sequence", type=int)
     s.set_defaults(func=cmd_config_deploy)
 

@@ -9,7 +9,9 @@ console, so no shell command and no CLI socket access is needed.
 
 from __future__ import annotations
 
+import re
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +41,30 @@ WATCHED_MODULES = (
 )
 
 
+_CHANNEL_ENDPOINT_RE = re.compile(r"^PJSIP/([A-Za-z0-9_.-]+)-[0-9a-f]+$")
+
+
+def _endpoint_of(channel_name: str) -> str | None:
+    m = _CHANNEL_ENDPOINT_RE.match(channel_name)
+    return m.group(1) if m else None
+
+
+def _age_seconds(creation: Any, now: datetime) -> int:
+    """Seconds since an ARI ``creationtime`` (``2026-10-12T20:07:31.123+0000``)."""
+    if not creation:
+        return 0
+    text = str(creation)
+    if re.search(r"[+-]\d{4}$", text):
+        text = text[:-2] + ":" + text[-2:]
+    try:
+        created = datetime.fromisoformat(text)
+    except ValueError:
+        return 0
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return max(0, int((now - created).total_seconds()))
+
+
 class AsteriskAdapter(TelephonyAdapter):
     name = "asterisk"
 
@@ -52,6 +78,7 @@ class AsteriskAdapter(TelephonyAdapter):
             Capability.ACTIVE_CALLS,
             Capability.CONFIG_GENERATION,
             Capability.CONFIG_RELOAD,
+            Capability.CLICK_TO_DIAL,
         }
 
     # --- status -------------------------------------------------------------
@@ -120,6 +147,7 @@ class AsteriskAdapter(TelephonyAdapter):
 
     def active_calls(self) -> list[ActiveCall]:
         out = []
+        now = datetime.now(UTC)
         for ch in self.ari.channels():
             caller = ch.get("caller", {}) or {}
             connected = ch.get("connected", {}) or {}
@@ -129,10 +157,17 @@ class AsteriskAdapter(TelephonyAdapter):
                     caller=caller.get("number") or caller.get("name"),
                     callee=connected.get("number") or ch.get("dialplan", {}).get("exten"),
                     state=str(ch.get("state", "unknown")),
-                    duration_seconds=0,  # ARI gives creationtime; durations arrive with M5
+                    duration_seconds=_age_seconds(ch.get("creationtime"), now),
+                    endpoint=_endpoint_of(str(ch.get("name", ""))),
                 )
             )
         return out
+
+    def originate(
+        self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30
+    ) -> str:
+        ch = self.ari.originate(f"PJSIP/{endpoint}", number, context, caller_id, timeout)
+        return str(ch.get("id") or "")
 
     # --- configuration ------------------------------------------------------
 

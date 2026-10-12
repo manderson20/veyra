@@ -32,7 +32,9 @@ class FakeAdapter(TelephonyAdapter):
         self.fail_verify: list[str] = []
         self.fail_reload: str | None = None
         self.endpoints = [EndpointStatus("1001", True), EndpointStatus("1002", False)]
-        self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12)]
+        self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="brookfield-1001")]
+        self.originated: list[tuple[str, str, str]] = []
+        self.fail_originate: str | None = None
 
     def capabilities(self) -> set[Capability]:
         return {
@@ -41,6 +43,7 @@ class FakeAdapter(TelephonyAdapter):
             Capability.ACTIVE_CALLS,
             Capability.CONFIG_GENERATION,
             Capability.CONFIG_RELOAD,
+            Capability.CLICK_TO_DIAL,
         }
 
     def health(self) -> EngineHealth:
@@ -60,6 +63,14 @@ class FakeAdapter(TelephonyAdapter):
 
     def active_calls(self) -> list[ActiveCall]:
         return list(self.calls)
+
+    def originate(
+        self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30
+    ) -> str:
+        if self.fail_originate:
+            raise EngineUnavailable(self.fail_originate)
+        self.originated.append((endpoint, number, context))
+        return f"orig-{len(self.originated)}"
 
     def managed_files(self) -> list[str]:
         return list(generator.MANAGED_FILES)

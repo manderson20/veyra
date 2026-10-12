@@ -36,6 +36,7 @@ from veyra.core.security.crypto import (
     load_installation_key,
 )
 from veyra.core.security.principal import Principal
+from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 from veyra.telephony.numbering import NumberingPlan, load_numbering_plan
 from veyra.telephony.settings import load_sip_settings
 from veyra.telephony.snapshot import secret_purpose
@@ -159,6 +160,12 @@ class ExtensionPatch(BaseModel):
         return _caller_id_number(v)
 
 
+class RegistrationOut(BaseModel):
+    registered: bool
+    # Channels currently up on this endpoint (0 when idle).
+    channels: int = 0
+
+
 class ExtensionOut(BaseModel):
     id: uuid.UUID
     organization_id: uuid.UUID
@@ -177,6 +184,8 @@ class ExtensionOut(BaseModel):
     sip_secret_changed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # Live state from the engine; None when the engine cannot report it.
+    registration: RegistrationOut | None = None
 
 
 class SipCredentialsOut(BaseModel):
@@ -219,7 +228,24 @@ def _get_visible(
     return ext
 
 
-def _outs(db: Session, rows: list[Extension]) -> list[ExtensionOut]:
+def _registrations(request: Request | None) -> dict[str, RegistrationOut] | None:
+    """Endpoint name -> live registration, one engine call per request."""
+    if request is None:
+        return None
+    adapter = request.app.state.telephony
+    if Capability.ENDPOINT_STATUS not in adapter.capabilities():
+        return None
+    try:
+        return {
+            s.endpoint: RegistrationOut(registered=s.registered, channels=len(s.contacts))
+            for s in adapter.endpoint_statuses()
+        }
+    except (EngineUnavailable, NotSupported):
+        return None
+
+
+def _outs(db: Session, rows: list[Extension], request: Request | None = None) -> list[ExtensionOut]:
+    live = _registrations(request)
     org_ids = {r.organization_id for r in rows}
     user_ids = {r.user_id for r in rows if r.user_id}
     orgs = (
@@ -253,13 +279,18 @@ def _outs(db: Session, rows: list[Extension]) -> list[ExtensionOut]:
                 sip_secret_changed_at=r.sip_secret_changed_at,
                 created_at=r.created_at,
                 updated_at=r.updated_at,
+                registration=(
+                    live.get(r.endpoint_name, RegistrationOut(registered=False))
+                    if live is not None
+                    else None
+                ),
             )
         )
     return out
 
 
-def _out(db: Session, ext: Extension) -> ExtensionOut:
-    return _outs(db, [ext])[0]
+def _out(db: Session, ext: Extension, request: Request | None = None) -> ExtensionOut:
+    return _outs(db, [ext], request)[0]
 
 
 def _validation(field: str, message: str, code: str = "validation_failed") -> ProblemError:
@@ -371,6 +402,7 @@ def _record(
 
 @router.get("", response_model=Page[ExtensionOut], summary="List extensions")
 def list_extensions(
+    request: Request,
     q: str | None = Query(None, max_length=100, description="Search number or name"),
     organization_id: uuid.UUID | None = Query(None),
     page: PageParams = Depends(page_params),
@@ -390,7 +422,7 @@ def list_extensions(
             )
         )
     rows, total = paginate(db, stmt, page)
-    return Page(items=_outs(db, rows), total=total, limit=page.limit, offset=page.offset)
+    return Page(items=_outs(db, rows, request), total=total, limit=page.limit, offset=page.offset)
 
 
 @router.get(
@@ -478,10 +510,11 @@ def create_extension(
 @router.get("/{extension_id}", response_model=ExtensionOut, summary="Get an extension")
 def get_extension(
     extension_id: uuid.UUID,
+    request: Request,
     principal: Principal = Depends(require("extensions.read")),
     db: Session = Depends(get_db),
 ) -> ExtensionOut:
-    return _out(db, _get_visible(db, principal, extension_id, "extensions.read"))
+    return _out(db, _get_visible(db, principal, extension_id, "extensions.read"), request)
 
 
 @router.patch("/{extension_id}", response_model=ExtensionOut, summary="Update an extension")

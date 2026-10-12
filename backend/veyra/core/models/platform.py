@@ -216,6 +216,10 @@ class ConfigRevision(UUIDPrimaryKey, Base):
     created_by: Mapped[str] = mapped_column(String(320))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     deployed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # now | when_idle: the deployer waits for the engine to have no active
+    # calls (up to a timeout) before applying a when_idle revision.
+    deploy_mode: Mapped[str] = mapped_column(String(16), default="now")
+    deploy_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 # --------------------------------------------------------------------------- provisioning

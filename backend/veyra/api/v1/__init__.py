@@ -7,6 +7,7 @@ from veyra.api.v1 import (
     audit,
     auth,
     auth_mfa,
+    calls,
     extensions,
     ha,
     modules,
@@ -36,5 +37,6 @@ for r in (
     provisioning,
     telephony,
     extensions,
+    calls,
 ):
     api_router.include_router(r.router)

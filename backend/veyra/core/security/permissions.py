@@ -85,6 +85,16 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         "extensions.write", "Create and edit extensions", default_roles=("org_admin", "site_admin")
     ),
     PermissionDef(
+        "calls.read",
+        "View active calls",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef(
+        "calls.originate",
+        "Place calls from your own extensions (click-to-dial)",
+        default_roles=("org_admin", "site_admin", "technician", "standard_user", "read_only"),
+    ),
+    PermissionDef(
         "devices.read",
         "View devices",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),

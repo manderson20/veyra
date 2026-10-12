@@ -22,6 +22,7 @@ class Capability(StrEnum):
     ACTIVE_CALLS = "active_calls"
     CONFIG_GENERATION = "config_generation"
     CONFIG_RELOAD = "config_reload"
+    CLICK_TO_DIAL = "click_to_dial"  # originate a call from an endpoint
     TRUNK_STATUS = "trunk_status"
     CALL_RECORDS = "call_records"
     VOICEMAIL = "voicemail"
@@ -72,6 +73,8 @@ class ActiveCall:
     callee: str | None
     state: str
     duration_seconds: int
+    # The engine endpoint the channel belongs to (``PJSIP/<endpoint>-…``), when known.
+    endpoint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -108,6 +111,13 @@ class TelephonyAdapter(ABC):
 
     def active_calls(self) -> list[ActiveCall]:
         raise NotSupported(f"{self.name}: active calls not implemented yet")
+
+    def originate(
+        self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30
+    ) -> str:
+        """Ring ``endpoint`` and, when it answers, send the call to ``number``
+        in ``context`` (click-to-dial). Returns the engine's channel id."""
+        raise NotSupported(f"{self.name}: click-to-dial not implemented")
 
     # --- configuration -------------------------------------------------------
 
