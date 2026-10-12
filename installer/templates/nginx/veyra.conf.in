@@ -44,7 +44,7 @@ server {
     index index.html;
 
     # Sign-in and password-reset endpoints share one per-address budget.
-    location ~ ^/api/v1/auth/(login|password-reset(/check)?)$ {
+    location ~ ^/api/v1/auth/(login|mfa/verify|password-reset(/check)?)$ {
         limit_req zone=veyra_auth burst=10 nodelay;
         proxy_pass http://veyra_api;
         include @VEYRA_ETC@/nginx-proxy.conf;

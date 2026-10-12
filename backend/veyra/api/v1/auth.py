@@ -5,9 +5,11 @@ the caller's sessions, and one-time password reset links."""
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,10 +27,11 @@ from veyra.core.deps import (
 from veyra.core.errors import ProblemError, conflict, not_found
 from veyra.core.models import Installation, User, UserSession
 from veyra.core.models.base import utcnow
-from veyra.core.security import password_reset, passwords
+from veyra.core.security import mfa, password_reset, passwords
 from veyra.core.security.principal import Principal
 from veyra.core.security.ratelimit import SlidingWindowLimiter
 from veyra.core.security.sessions import (
+    PRE_AUTH_TTL,
     active_sessions,
     create_session,
     load_principal,
@@ -70,6 +73,37 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
+class MfaStatusOut(BaseModel):
+    """The caller's second-factor situation, for the account page and the nag."""
+
+    enabled: bool
+    required: bool
+    grace_until: datetime | None = None
+    methods: int = 0
+    recovery_codes_remaining: int = 0
+
+
+class MfaMethodOut(BaseModel):
+    id: uuid.UUID
+    type: str
+    label: str
+    created_at: datetime | None = None
+    last_used_at: datetime | None = None
+
+
+class MfaChallengeOut(BaseModel):
+    """Returned by sign-in (202) while the second factor is pending."""
+
+    mfa_pending: bool = True
+    # True when policy requires a factor and none is enrolled: the pre-auth
+    # session may enrol one (and only then).
+    enrol: bool
+    methods: list[MfaMethodOut]
+    email: str
+    display_name: str
+    expires_at: datetime
+
+
 class SessionOut(BaseModel):
     user: UserOut
     permissions: list[str]
@@ -82,6 +116,7 @@ class SessionOut(BaseModel):
     # Shown next to the logo so administrators know what they are running.
     version: str = __version__
     release: str | None = None
+    mfa: MfaStatusOut = MfaStatusOut(enabled=False, required=False)
 
 
 class PasswordChangeIn(BaseModel):
@@ -104,8 +139,10 @@ class PasswordResetIn(BaseModel):
     new_password: str = Field(min_length=1, max_length=1024)
 
 
-def _set_cookies(response: Response, settings: Settings, token: str, csrf: str) -> None:
-    max_age = settings.session_ttl_hours * 3600
+def _set_cookies(
+    response: Response, settings: Settings, token: str, csrf: str, max_age: int | None = None
+) -> None:
+    max_age = max_age if max_age is not None else settings.session_ttl_hours * 3600
     response.set_cookie(
         SESSION_COOKIE,
         token,
@@ -127,19 +164,64 @@ def _set_cookies(response: Response, settings: Settings, token: str, csrf: str) 
     )
 
 
+def mfa_status(db: Session, user: User) -> MfaStatusOut:
+    methods = mfa.confirmed_methods(db, user.id)
+    return MfaStatusOut(
+        enabled=bool(methods),
+        required=mfa.is_required(db, mfa.load_policy(db), user),
+        grace_until=user.mfa_grace_until if not methods else None,
+        methods=len(methods),
+        recovery_codes_remaining=mfa.recovery_codes_remaining(db, user.id) if methods else 0,
+    )
+
+
 def _session_out(
     db: Session, user: User, principal: Principal, csrf: str | None = None
 ) -> SessionOut:
     inst = db.scalar(select(Installation))
+    out = UserOut.model_validate(user)
+    status = mfa_status(db, user)
+    out.mfa_enabled = status.enabled
     return SessionOut(
-        user=UserOut.model_validate(user),
+        user=out,
         permissions=principal.effective_permissions(),
         is_platform_admin=principal.is_platform_admin,
         installation_name=inst.name if inst else "Veyra",
         must_change_password=user.must_change_password,
         csrf_token=csrf,
         release=get_settings().installed_release(),
+        mfa=status,
     )
+
+
+def mfa_challenge(db: Session, user: User, session: UserSession) -> MfaChallengeOut:
+    methods = mfa.confirmed_methods(db, user.id)
+    return MfaChallengeOut(
+        enrol=not methods,
+        methods=[
+            MfaMethodOut(
+                id=m.id,
+                type=m.type,
+                label=m.label,
+                created_at=m.created_at,
+                last_used_at=m.last_used_at,
+            )
+            for m in methods
+        ],
+        email=user.email,
+        display_name=user.display_name,
+        expires_at=session.expires_at,
+    )
+
+
+def pre_auth_response(
+    db: Session, user: User, session: UserSession, settings: Settings, token: str, csrf: str
+) -> JSONResponse:
+    response = JSONResponse(
+        status_code=202, content=jsonable_encoder(mfa_challenge(db, user, session))
+    )
+    _set_cookies(response, settings, token, csrf, max_age=int(PRE_AUTH_TTL.total_seconds()))
+    return response
 
 
 def _policy_error(e: passwords.PasswordPolicyError, field: str = "new_password") -> ProblemError:
@@ -167,14 +249,19 @@ def session_summary(s: UserSession, current_id: uuid.UUID | None) -> UserSession
 # ----------------------------------------------------------------- sign in / out
 
 
-@router.post("/login", response_model=SessionOut, summary="Sign in with email and password")
+@router.post(
+    "/login",
+    response_model=SessionOut,
+    responses={202: {"model": MfaChallengeOut, "description": "Second factor required"}},
+    summary="Sign in with email and password",
+)
 def login(
     body: LoginIn,
     response: Response,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     ctx: RequestContext = Depends(request_context),
-) -> SessionOut:
+) -> SessionOut | JSONResponse:
     if not _limiter(settings).hit(ctx.ip or "unknown"):
         raise _too_many("Too many sign-in attempts. Wait a minute and try again.")
     user = db.scalar(select(User).where(User.email == body.email))
@@ -236,8 +323,20 @@ def login(
         user.password_hash = passwords.hash_password(body.password)
     user.failed_login_count = 0
     user.locked_until = None
-    user.last_login_at = now
-    token, csrf, session = create_session(db, user, settings, ip=ctx.ip, user_agent=ctx.user_agent)
+    # Second factor (docs/MFA_DESIGN.md §4): enrolled users verify before the
+    # session becomes usable; users whom policy requires to enrol get a grace
+    # window first, then must enrol inside the pre-authentication session.
+    policy = mfa.load_policy(db)
+    required = mfa.is_required(db, policy, user)
+    mfa.ensure_requirement(user, policy, required, now)
+    enrolled = bool(mfa.confirmed_methods(db, user.id))
+    pending = enrolled or (required and not mfa.in_grace(user, now))
+    mfa_state = "pending" if enrolled else "enrol" if pending else "grace" if required else "none"
+    if not pending:
+        user.last_login_at = now
+    token, csrf, session = create_session(
+        db, user, settings, ip=ctx.ip, user_agent=ctx.user_agent, mfa_pending=pending
+    )
     audit.record(
         db,
         action="auth.login",
@@ -245,9 +344,11 @@ def login(
         actor_label=user.email,
         ip_address=ctx.ip,
         request_id=ctx.request_id,
-        details={"must_change_password": user.must_change_password},
+        details={"must_change_password": user.must_change_password, "mfa": mfa_state},
     )
     db.commit()
+    if pending:
+        return pre_auth_response(db, user, session, settings, token, csrf)
     _set_cookies(response, settings, token, csrf)
     return _session_out(db, user, load_principal(db, user, session.id), csrf)
 
