@@ -5,7 +5,7 @@ export function AuthLayout({ children, wide = false }: { children: ReactNode; wi
   return (
     <div className="auth">
       <aside className="auth__aside" aria-hidden="true">
-        <BrandLogo onDark height={34} />
+        <BrandLogo onDark height={36} />
         <div>
           <h2>Open Communications Platform</h2>
           <p>Self-hosted, modular telephony management for schools, governments and businesses.</p>

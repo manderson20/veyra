@@ -9,7 +9,14 @@ import "@/styles/globals.css";
 export const metadata: Metadata = {
   title: { default: "Veyra", template: "%s · Veyra" },
   description: "Veyra — Open Communications Platform",
-  icons: { icon: BRANDING.favicon, apple: BRANDING.icon },
+  icons: {
+    icon: [
+      { url: BRANDING.favicon, sizes: "any" },
+      { url: BRANDING.favicon32, type: "image/png", sizes: "32x32" },
+    ],
+    apple: BRANDING.appleTouchIcon,
+  },
+  manifest: "/manifest.webmanifest",
   robots: { index: false, follow: false },
 };
 

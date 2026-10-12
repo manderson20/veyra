@@ -8,8 +8,8 @@ before the next begins.
 | # | Milestone | Status |
 |---|---|---|
 | 0 | Architecture, repository foundation, modular framework | **Complete, approved 2026-10-12** ([report](milestones/MILESTONE_0_REPORT.md)) |
-| 1 | Automated Ubuntu installation (run and harden the installer on veyra-dev1/dev2; 24.04 verification; Asterisk packaging decision) | **Complete except veyra-dev2 (unreachable), awaiting approval** ([report](milestones/MILESTONE_1_REPORT.md)) |
-| 2 | Backend, frontend, database and authentication (hardening, password reset, sessions UI, MFA design) | |
+| 1 | Automated Ubuntu installation (run and harden the installer on veyra-dev1/dev2; 24.04 verification; Asterisk packaging decision) | **Complete, approved 2026-10-12**; veyra-dev2 installation deferred until the host is reachable ([report](milestones/MILESTONE_1_REPORT.md)) |
+| 2 | Backend, frontend, database and authentication (hardening, password reset, sessions UI, MFA design) | **In progress** (started 2026-10-12) |
 | 3 | Telephony engine integration (deployer service, config generation, ARI status, reload, rollback) | |
 | 4 | Extension management (SIP secret encryption, numbering plan) | |
 | 5 | SIP registration and internal calling (live registrations, active calls) | |
