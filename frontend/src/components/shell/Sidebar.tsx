@@ -78,6 +78,11 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate }: {
           <BrandLogo onDark height={26} />
           <BrandIcon />
         </Link>
+        {session ? (
+          <span className="sidebar__version" title={session.release ? `Release ${session.release}` : "Development build"}>
+            {session.version}{session.release && session.release !== session.version ? ` · ${session.release.slice(session.version.length + 1, session.version.length + 9)}` : ""}
+          </span>
+        ) : null}
       </div>
       <nav className="sidebar__nav" aria-label="Primary">
         {sections.map(renderSection)}

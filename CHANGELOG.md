@@ -12,6 +12,8 @@ uses [Semantic Versioning](https://semver.org/).
 - Numbering plan (`/telephony/numbering`): length, range and reserved leading digits (`0`, `9`, `911`, `933` by default), enforced on create and renumber; `GET /extensions/next-number` suggests the lowest free number; a numbering step in the setup wizard.
 - Extensions pages: list with search and organization filter, create dialog with "Suggest next free", detail page with SIP credentials (show, copy, rotate), delete with typed confirmation, numbering plan card; notices when changes are waiting to be deployed or the installation key is missing.
 - `GET /telephony/engine` reports `changes_pending` and `installation_key_present`; the engine page shows both.
+- **Apply changes** button in the top bar for platform administrators whenever changes are pending (`POST /telephony/apply` generates and deploys in one step, discards a no-change revision, reports generation problems); other users see a "changes pending" badge.
+- The running version (and installed release) is shown next to the logo; `GET /auth/session` carries `version` and `release`.
 - Migration `0003`: `extensions.sip_secret_changed_at`.
 
 ### Changed
@@ -19,7 +21,8 @@ uses [Semantic Versioning](https://semver.org/).
 - The `Extensions` navigation entry is live (needs `extensions.read`) instead of "coming later".
 
 ### Fixed
-- The logo appeared twice side by side on the sign-in, setup and account pages: an inline style overrode the CSS that hides the artwork of the other theme.
+- The logo appeared twice side by side on the sign-in, setup and account pages, and the emblem showed next to the wordmark in the sidebar: inline styles overrode the CSS that hides the unused artwork.
+- `upgrade.sh` now records `upgrade_status: complete`, so a failure marker from an earlier attempt does not linger in the install state.
 
 ## 0.1.0-dev.0 (Milestone 3)
 
