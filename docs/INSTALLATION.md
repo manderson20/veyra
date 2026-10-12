@@ -62,14 +62,14 @@ The installer then:
    | `/opt/veyra/releases/<version>-<rev>/` | root, read-only | Application code, venv, built UI |
    | `/opt/veyra/current` | symlink | Active release |
    | `/etc/veyra/veyra.env` | root:veyra 0640 | Settings (no secrets) |
-   | `/etc/veyra/secrets/` | root:veyra 0750 | Generated credentials |
+   | `/etc/veyra/secrets/` | root:veyra 0750 | Generated credentials: `ari_password`, `installation.key` (encrypts SIP secrets at rest; **back it up**, see [EXTENSIONS.md](EXTENSIONS.md) §5) |
    | `/etc/veyra/trust/{official,community,third_party}/` | root 0755 | Trusted signing keys |
    | `/etc/veyra/tls/` | root 0700 | HTTPS certificate and key |
    | `/var/lib/veyra/` | veyra 0750 | Data |
    | `/var/log/veyra/` | veyra 0750 | Installer and upgrade logs |
    | `/var/backups/veyra/` | root 0700 | Backups |
 
-4. Generates credentials. The ARI password is random, and **PostgreSQL uses peer authentication** over the local socket, so no database password exists.
+4. Generates credentials. The ARI password is random, the installation key is 256 random bits, and **PostgreSQL uses peer authentication** over the local socket, so no database password exists. Existing credentials are never replaced, on install or upgrade.
 5. Creates the PostgreSQL role and database `veyra` (no superuser).
 6. Copies the release, creates its virtualenv, builds the web interface, and makes the code root-owned and read-only.
 7. Activates the release atomically and writes `/etc/veyra/veyra.env`.
@@ -105,7 +105,8 @@ sudo veyra setup-token
 The token is valid for 24 hours and for one use. Generating a new token
 invalidates the old one. The wizard creates the first platform
 administrator (also the local recovery administrator), the first
-organization, the installation name and the time zone. Steps marked
+organization, the installation name and the time zone, and the extension
+numbering plan (length and range; it can be changed later). Steps marked
 "coming later" arrive in later milestones.
 
 ## 4. TLS
@@ -124,8 +125,10 @@ journalctl -u veyra-api -u veyra-worker
 ```
 
 `verify.sh` checks that the API, ARI and PostgreSQL are not reachable from
-the network, that AMI is off, that secret files are 0640/0600, and that the
-application code cannot be written by the service account.
+the network, that AMI is off, that secret files are 0640/0600, that the
+installation key is present and well formed, and that the application code
+cannot be written by the service account. `sudo veyra installation-key
+check` prints the key's fingerprint.
 
 ### Account recovery from the server console
 

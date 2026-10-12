@@ -22,8 +22,8 @@ the two agree. Constraint names follow a fixed naming convention.
 | `sessions` | Server-side sessions | `token_hash` unique, `csrf_token_hash`, `expires_at`, `last_seen_at`, `revoked_at`, `ip_address`, `user_agent`; rows past retention are deleted by the worker |
 | `password_reset_tokens` | One-time password reset links (migration `0002`) | `token_hash` unique, `expires_at`, `used_at`, `issued_by` (administrator email or `cli`), `issued_from_ip`; at most one unused token per user |
 | `audit_log` | Append-only audit trail | indexed by time and organization; **UPDATE/DELETE blocked by trigger** `audit_log_append_only` (DELETE allowed only with `SET LOCAL veyra.audit_retention='on'`) |
-| `system_settings` | Key/value settings | e.g. `setup.token` (hash plus expiry), `updates.metadata_sequence`, `telephony.sip` (SIP and media settings, M3) |
-| `extensions` | Extensions (engine-neutral) | unique (`organization_id`, `number`); `endpoint_name` globally unique; `sip_secret_ciphertext` |
+| `system_settings` | Key/value settings | e.g. `setup.token` (hash plus expiry), `updates.metadata_sequence`, `telephony.sip` (SIP and media settings, M3), `telephony.numbering` (numbering plan, M4) |
+| `extensions` | Extensions (engine-neutral) | unique (`organization_id`, `number`); `endpoint_name` globally unique (`<org slug>-<number>`); numbers also unique installation-wide (enforced by the API with an advisory lock until M14); `sip_secret_ciphertext` (AES-256-GCM token, installation key) and `sip_secret_changed_at` (migration `0003`) |
 | `devices` | Phones | `mac_address` unique (12 hex digits), `template_key`, `primary_extension_id` |
 | `installed_modules` | Module registry | `module_id` PK, `version`, `state`, `trust_level`, `signature_verified`, `manifest` (JSONB) |
 | `module_configs` | Module configuration | unique (`module_id`, `organization_id`) |
@@ -33,7 +33,7 @@ the two agree. Constraint names follow a fixed naming convention.
 | `update_checks` | Check log | outcome: ok / not_configured / failed / rejected |
 | `cluster_nodes` | Nodes and their **dynamic roles** | `node_name` unique, `role`, `state`, `last_heartbeat_at` |
 | `cluster_events` | Switchover and role change history | |
-| `config_revisions` | Generated engine configuration revisions | `sequence` (identity), `state`, `content_hash`, `parent_id` |
+| `config_revisions` | Generated engine configuration revisions | `sequence` (identity), `state`, `content_hash`, `parent_id`; `artifacts` holds non-sensitive files in clear and sensitive files as `ciphertext` (installation key, M4) |
 | `provisioning_templates` | Local and community templates | unique (`template_key`, `version`), `source`, `manifest`, `files` |
 
 Tenant-owned tables (`sites`, `buildings`, `departments`, `extensions`,
