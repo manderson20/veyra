@@ -8,6 +8,19 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## [Unreleased] — 0.5.0-dev (Milestone 4b)
+
+### Added
+- Two-factor authentication (`docs/MFA_DESIGN.md`): authenticator apps (TOTP, RFC 6238) with ten single-use recovery codes; sign-in answers 202 and opens a 5-minute pre-authentication session that can reach only the second-step routes; codes accept one step of clock drift and are never accepted twice; five wrong codes lock the attempt. Enrolment with a server-rendered QR code or manual key, device labels, recovery codes shown once with download and copy; devices removed and codes regenerated behind the password. Account page card, sign-in second step with inline enrolment, grace notice in the shell.
+- Two-factor policy (`/auth/mfa/policy`, Settings → Two-factor policy): which roles must use it (Platform and Organization Administrators by default) and how many days they have (14); saving re-evaluates every user and is audited. Administrators reset a user's factors from the user page (`POST /users/{id}/mfa/reset`); `veyra users mfa-reset <email>` on the server is the escape hatch for the recovery administrator.
+- `GET /auth/session` and `GET /users/{id}` report the two-factor status (`mfa`, `mfa_enabled`). NGINX rate-limits code verification like sign-in.
+- Migration `0004`: `mfa_methods`, `mfa_recovery_codes`, `users.mfa_required_at/mfa_grace_until`, `sessions.mfa_verified_at/mfa_failures` (existing sessions stay valid).
+- Roadmap: click-to-dial API (Milestone 5) and the Veyra Companion browser extension (Milestone 6b).
+
+### Changed
+- **Deploy changes** now appears after any save that may affect the engine (extensions, SIP settings) and stays until a deployment runs, whether or not the generated files differ; the engine status reports who saved and when (`pending_since`, `pending_by`).
+- Dependency: `segno` 1.6.6 for QR codes.
+
 ## 0.4.0 — 2026-10-12 (Milestone 4)
 
 ### Added

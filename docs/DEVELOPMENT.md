@@ -143,7 +143,7 @@ sudo installer/install.sh --dry-run --yes
 * Only adopt versions that have been published for **at least two weeks**. For npm, regenerate the lockfile with npm 11 or newer and a date cutoff, for example `npx npm@11.6.2 install --before=<date>`. (Ubuntu's npm 9.2 can run `npm ci` from the lockfile but crashes when resolving dependencies.)
 * **Security exception (recorded 2026-10-12):** `next` and `eslint-config-next` 16.3.8 (published 2026-09-30) are used instead of 16.3.6 because 16.3.6 has high-severity advisories fixed in 16.3.8. The lockfile was generated with `--before=2026-09-30T17:00:00Z`, so every package is at least 12 days old.
 * ESLint stays on 9.x because the `eslint-config-next` 16.3 plugins do not support ESLint 10.
-* Prefer the standard library and existing dependencies over new ones. Add a dependency only with a stated reason in the pull request.
+* Prefer the standard library and existing dependencies over new ones. Add a dependency only with a stated reason in the pull request. Current additions and their reasons: `segno` (QR codes for authenticator enrolment rendered server-side; pure Python, BSD, no transitive dependencies).
 * Dependabot opens weekly update PRs. CI runs `pip-audit` and `npm audit` (production dependencies).
 
 ## 7. Git workflow

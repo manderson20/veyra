@@ -97,9 +97,14 @@ applying.
   is the authoritative check. Dialplan contexts cannot be listed through
   ARI; `sudo asterisk -rx "dialplan show veyra-internal"` shows them.
 
-* `GET /telephony/engine` reports `changes_pending` (the database differs
-  from the deployed revision; the Extensions pages show a notice) and
-  `installation_key_present`.
+* `GET /telephony/engine` reports `changes_pending`, `pending_since` and
+  `pending_by`: any save that may affect the engine (extensions, SIP
+  settings) raises a flag that stays until a deployment runs, like "Apply
+  Config" elsewhere, even when the generated files turn out identical; the
+  flag also clears when an apply finds nothing to change. A database that
+  differs from the deployed revision counts as pending too. The Extensions
+  pages show a notice and the top bar shows the red **Deploy changes**
+  button. Also reported: `installation_key_present`.
 
 Console equivalents: `veyra config status`, `veyra config generate
 [--deploy]`, `veyra config deploy <sequence>`.
