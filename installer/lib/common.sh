@@ -142,6 +142,16 @@ random_secret() {
     head -c 32 /dev/urandom | base64 | tr -d '=+/\n' | cut -c1-40
 }
 
+# 256-bit key as 64 lower-case hexadecimal characters (the installation key
+# format read by veyra.core.security.crypto).
+random_hex_key() {
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex 32
+    else
+        od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
+    fi
+}
+
 # ---------------------------------------------------------------- state
 state_get() {
     local key="$1"

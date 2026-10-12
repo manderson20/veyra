@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.extensions import _visible as visible_extensions
 from veyra.api.v1.organizations import _visible as visible_orgs
 from veyra.api.v1.users import _user_scope
 from veyra.core.db import get_db
 from veyra.core.deps import current_principal
-from veyra.core.models import Organization, User
+from veyra.core.models import Extension, Organization, User
 from veyra.core.security.principal import Principal
 
 router = APIRouter(tags=["search"])
@@ -21,7 +22,7 @@ router = APIRouter(tags=["search"])
 LIMIT = 8
 
 
-@router.get("/search", summary="Search organizations and users")
+@router.get("/search", summary="Search organizations, users and extensions")
 def search(
     q: str = Query(..., min_length=2, max_length=100),
     principal: Principal = Depends(current_principal),
@@ -60,5 +61,22 @@ def search(
                 "href": f"/users/view/?id={u.id}",
             }
             for u in db.scalars(user_stmt)
+        ]
+    if principal.has_any_scope("extensions.read"):
+        ext_stmt = (
+            visible_extensions(principal, "extensions.read")
+            .where(or_(Extension.number.ilike(like), Extension.display_name.ilike(like)))
+            .order_by(Extension.number)
+            .limit(LIMIT)
+        )
+        results += [
+            {
+                "type": "extension",
+                "id": str(e.id),
+                "title": f"{e.number} {e.display_name}",
+                "subtitle": e.endpoint_name,
+                "href": f"/extensions/view/?id={e.id}",
+            }
+            for e in db.scalars(ext_stmt)
         ]
     return {"results": results}

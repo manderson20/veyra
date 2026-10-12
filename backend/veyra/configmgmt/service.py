@@ -24,11 +24,20 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from veyra.configmgmt.revisions import RevisionState, content_hash, diff, transition
+from veyra.configmgmt.revisions import (
+    RevisionState,
+    artifacts_to_files,
+    content_hash,
+    diff,
+    files_to_artifacts,
+    transition,
+)
 from veyra.core import audit
 from veyra.core.models import ConfigRevision
 from veyra.core.models.base import utcnow
+from veyra.core.security.crypto import InstallationKey, InstallationKeyError
 from veyra.telephony.adapter import (
+    Capability,
     EngineUnavailable,
     GeneratedFile,
     NotSupported,
@@ -39,22 +48,6 @@ from veyra.telephony.snapshot import build_snapshot
 log = logging.getLogger("veyra.configmgmt")
 
 FILE_MODE = 0o640
-
-
-# ----------------------------------------------------------------- artifacts
-
-
-def files_to_artifacts(files: list[GeneratedFile]) -> dict[str, Any]:
-    return {
-        "files": [{"path": f.path, "content": f.content, "sensitive": f.sensitive} for f in files]
-    }
-
-
-def artifacts_to_files(artifacts: dict[str, Any]) -> list[GeneratedFile]:
-    return [
-        GeneratedFile(str(f["path"]), str(f["content"]), bool(f.get("sensitive", False)))
-        for f in artifacts.get("files", [])
-    ]
 
 
 def current_deployed(db: Session, engine: str) -> ConfigRevision | None:
@@ -86,11 +79,41 @@ class Generated:
     unchanged: bool
 
 
+def _generate(
+    db: Session, adapter: TelephonyAdapter, key: InstallationKey | None
+) -> tuple[list[GeneratedFile], list[str]]:
+    """Generated files and the problems found (empty when valid)."""
+    files: list[GeneratedFile] = []
+    try:
+        snapshot = build_snapshot(db, key)
+        files = adapter.generate_config(snapshot)
+        errors = adapter.validate_config(files)
+    except NotSupported as e:
+        errors = [str(e)]
+    except ValueError as e:  # GenerationError, SnapshotError and pydantic validation
+        errors = [str(e)]
+    return files, errors
+
+
+def _previous_files(
+    deployed: ConfigRevision | None, key: InstallationKey | None
+) -> list[GeneratedFile]:
+    if deployed is None:
+        return []
+    try:
+        return artifacts_to_files(deployed.artifacts, key, deployed.id)
+    except InstallationKeyError:
+        # The diff against an unreadable deployed revision is reported as a
+        # full change rather than hiding the problem.
+        return []
+
+
 def create_revision(
     db: Session,
     adapter: TelephonyAdapter,
     *,
     created_by: str,
+    key: InstallationKey | None,
     summary: str = "",
 ) -> Generated:
     """Generate configuration from the database and record it as a revision.
@@ -98,19 +121,18 @@ def create_revision(
     The revision is ``validated`` when the static checks pass and ``failed``
     (with the problems in ``validation_errors``) when they do not, so that a
     bad revision is visible in the history and can never be deployed.
+    Sensitive files are stored encrypted with the installation key.
     """
-    snapshot = build_snapshot(db)
     deployed = current_deployed(db, adapter.name)
-    previous_files = artifacts_to_files(deployed.artifacts) if deployed else []
-    errors: list[str] = []
-    files: list[GeneratedFile] = []
-    try:
-        files = adapter.generate_config(snapshot)
-        errors = adapter.validate_config(files)
-    except NotSupported as e:
-        errors = [str(e)]
-    except ValueError as e:  # GenerationError and pydantic validation
-        errors = [str(e)]
+    previous_files = _previous_files(deployed, key)
+    files, errors = _generate(db, adapter, key)
+    rev_id = uuid.uuid4()
+    artifacts: dict[str, Any] = {"files": []}
+    if not errors:
+        try:
+            artifacts = files_to_artifacts(files, key, rev_id)
+        except InstallationKeyError as e:
+            errors = [str(e)]
     changes = diff(previous_files, files) if not errors else {}
     unchanged = deployed is not None and not errors and content_hash(files) == deployed.content_hash
     if not summary:
@@ -121,12 +143,12 @@ def create_revision(
         else:
             summary = f"{len(changes)} file(s) changed" if deployed else "Initial configuration"
     rev = ConfigRevision(
-        id=uuid.uuid4(),
+        id=rev_id,
         engine=adapter.name,
         state=RevisionState.FAILED if errors else RevisionState.VALIDATED,
         summary=summary,
         content_hash=content_hash(files) if not errors else None,
-        artifacts=files_to_artifacts(files) if not errors else {"files": []},
+        artifacts=artifacts,
         validation_errors=errors,
         parent_id=deployed.id if deployed else None,
         created_by=created_by,
@@ -135,6 +157,25 @@ def create_revision(
     db.add(rev)
     db.flush()
     return Generated(rev, files, changes, unchanged)
+
+
+def changes_pending(
+    db: Session, adapter: TelephonyAdapter, key: InstallationKey | None
+) -> bool | None:
+    """Whether the database now differs from the deployed configuration.
+
+    ``None`` when the engine cannot generate configuration. Generation
+    problems count as pending: the deployed files do not reflect the data.
+    """
+    if Capability.CONFIG_GENERATION not in adapter.capabilities():
+        return None
+    files, errors = _generate(db, adapter, key)
+    if errors:
+        return True
+    deployed = current_deployed(db, adapter.name)
+    if deployed is None:
+        return True
+    return content_hash(files) != deployed.content_hash
 
 
 def request_deploy(db: Session, rev: ConfigRevision) -> None:
@@ -216,9 +257,12 @@ class Deployer:
     """Applies queued revisions. Run by ``veyra deployer`` (systemd unit
     veyra-deployer) or directly in tests."""
 
-    def __init__(self, adapter: TelephonyAdapter, config_dir: Path) -> None:
+    def __init__(
+        self, adapter: TelephonyAdapter, config_dir: Path, key: InstallationKey | None = None
+    ) -> None:
         self.adapter = adapter
         self.config_dir = config_dir
+        self.key = key
 
     def run_once(self, db: Session) -> ConfigRevision | None:
         rev = pending(db, self.adapter.name)
@@ -229,13 +273,16 @@ class Deployer:
 
     def deploy(self, db: Session, rev: ConfigRevision) -> None:
         managed = self.adapter.managed_files()
-        files = artifacts_to_files(rev.artifacts)
         previous_on_disk = read_directory(self.config_dir, managed)
         previous_rev = current_deployed(db, rev.engine)
         log_lines: list[str] = []
         try:
             if not self.config_dir.is_dir():
                 raise DeployError(f"configuration directory {self.config_dir} does not exist")
+            try:
+                files = artifacts_to_files(rev.artifacts, self.key, rev.id)
+            except InstallationKeyError as e:
+                raise DeployError(str(e)) from e
             changed = write_files(self.config_dir, managed, files)
             log_lines.append(f"wrote {len(changed)} changed file(s): {', '.join(changed) or '-'}")
             scopes = self.adapter.reload_scopes(changed)

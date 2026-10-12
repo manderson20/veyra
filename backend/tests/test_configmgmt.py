@@ -10,22 +10,27 @@ from fake_adapter import FakeAdapter
 from veyra.configmgmt import service
 from veyra.configmgmt.revisions import RevisionState
 from veyra.core.db import session_scope
+from veyra.core.security.crypto import load_installation_key
 from veyra.telephony.settings import SipSettings, save_sip_settings
 
 
-def _deployer(adapter, tmp_path):
+def _key(client):
+    return load_installation_key(client.app.state.settings)
+
+
+def _deployer(adapter, tmp_path, client):
     d = tmp_path / "asterisk-veyra"
     d.mkdir()
-    return service.Deployer(adapter, d), d
+    return service.Deployer(adapter, d, _key(client)), d
 
 
 def test_generate_deploy_supersede_and_rollback(client, tmp_path):
     complete_setup(client)
     adapter = FakeAdapter()
-    deployer, cfg = _deployer(adapter, tmp_path)
+    deployer, cfg = _deployer(adapter, tmp_path, client)
 
     with session_scope() as db:
-        g1 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        g1 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         assert g1.revision.state == RevisionState.VALIDATED
         assert g1.revision.summary == "Initial configuration"
         assert set(g1.diff) == set(adapter.managed_files())
@@ -47,14 +52,14 @@ def test_generate_deploy_supersede_and_rollback(client, tmp_path):
 
     # No change -> a revision that says so and deploys without reloading anything
     with session_scope() as db:
-        g2 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        g2 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         assert g2.unchanged and g2.diff == {}
         assert g2.revision.summary == "No change from the deployed configuration"
 
     # A settings change -> only the affected files and reloads
     with session_scope() as db:
         save_sip_settings(db, SipSettings(rtp_start=20000, rtp_end=30000))
-        g3 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        g3 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         assert set(g3.diff) == {"rtp.conf"}
         assert g3.revision.parent_id == r1
         service.request_deploy(db, g3.revision)
@@ -82,9 +87,9 @@ def test_generate_deploy_supersede_and_rollback(client, tmp_path):
 def test_failed_deployment_restores_previous_files(client, tmp_path):
     complete_setup(client)
     adapter = FakeAdapter()
-    deployer, cfg = _deployer(adapter, tmp_path)
+    deployer, cfg = _deployer(adapter, tmp_path, client)
     with session_scope() as db:
-        g1 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        g1 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         service.request_deploy(db, g1.revision)
         r1 = g1.revision.id
     with session_scope() as db:
@@ -94,7 +99,7 @@ def test_failed_deployment_restores_previous_files(client, tmp_path):
     adapter.fail_verify = ["res_rtp_asterisk.so: status is 'Not Running', expected 'Running'"]
     with session_scope() as db:
         save_sip_settings(db, SipSettings(rtp_start=30000, rtp_end=40000))
-        g2 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        g2 = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         service.request_deploy(db, g2.revision)
         r2 = g2.revision.id
     with session_scope() as db:
@@ -118,9 +123,9 @@ def test_failed_deployment_restores_previous_files(client, tmp_path):
 def test_reload_failure_and_missing_directory(client, tmp_path):
     complete_setup(client)
     adapter = FakeAdapter()
-    deployer = service.Deployer(adapter, tmp_path / "missing")
+    deployer = service.Deployer(adapter, tmp_path / "missing", _key(client))
     with session_scope() as db:
-        g = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        g = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         service.request_deploy(db, g.revision)
         rid = g.revision.id
     with session_scope() as db:
@@ -129,9 +134,9 @@ def test_reload_failure_and_missing_directory(client, tmp_path):
         assert rev.state == RevisionState.FAILED and "does not exist" in rev.validation_errors[0]
 
     adapter.fail_reload = "pbx_config.so"
-    deployer, cfg = _deployer(adapter, tmp_path)
+    deployer, cfg = _deployer(adapter, tmp_path, client)
     with session_scope() as db:
-        g = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        g = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         service.request_deploy(db, g.revision)
         rid = g.revision.id
     with session_scope() as db:
@@ -146,7 +151,7 @@ def test_generation_problems_make_a_failed_revision(client):
     adapter = FakeAdapter()
     with session_scope() as db:
         save_sip_settings(db, SipSettings(rtp_start=5000, rtp_end=6000))
-        g = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        g = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         assert g.revision.state == RevisionState.FAILED
         assert "inside the RTP range" in g.revision.validation_errors[0]
         assert g.revision.artifacts == {"files": []}
@@ -156,8 +161,8 @@ def test_only_one_deployment_at_a_time(client, tmp_path):
     complete_setup(client)
     adapter = FakeAdapter()
     with session_scope() as db:
-        a = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
-        b = service.create_revision(db, adapter, created_by=ADMIN_EMAIL)
+        a = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
+        b = service.create_revision(db, adapter, created_by=ADMIN_EMAIL, key=_key(client))
         service.request_deploy(db, a.revision)
         import pytest
 

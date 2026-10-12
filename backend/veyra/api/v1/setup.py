@@ -26,6 +26,7 @@ from veyra.core.models import Installation, Organization, Role, RoleAssignment, 
 from veyra.core.models.base import utcnow
 from veyra.core.security import passwords
 from veyra.core.security.sessions import create_session, load_principal
+from veyra.telephony.numbering import NumberingPlan, save_numbering_plan
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 
@@ -37,7 +38,7 @@ STEPS = [
     {"key": "installation", "title": "Installation name and time zone", "available": True},
     {"key": "network", "title": "Network settings", "available": False, "milestone": 1},
     {"key": "telephony", "title": "Telephony engine check", "available": True},
-    {"key": "numbering", "title": "Extension numbering plan", "available": False, "milestone": 4},
+    {"key": "numbering", "title": "Extension numbering plan", "available": True},
     {"key": "sip", "title": "SIP settings", "available": False, "milestone": 5},
     {"key": "email", "title": "Email delivery", "available": False, "milestone": 7},
     {"key": "backup", "title": "Backups", "available": False, "milestone": 17},
@@ -71,6 +72,8 @@ class SetupIn(BaseModel):
     installation_name: str = Field(min_length=1, max_length=200)
     administrator: AdminIn
     organization: OrganizationIn
+    # Optional: the defaults (4 digits, 1000-7999) apply when omitted.
+    numbering: NumberingPlan | None = None
 
 
 @router.get("/status", response_model=SetupStatus, summary="Whether first-run setup is required")
@@ -120,6 +123,16 @@ def initialize(
             "'sudo veyra setup-token' on the server to issue a new one.",
             code="invalid_setup_token",
         )
+    if body.numbering is not None:
+        problems = body.numbering.problems()
+        if problems:
+            raise ProblemError(
+                422,
+                "Validation failed",
+                " ".join(problems),
+                code="validation_failed",
+                errors=[{"field": "numbering", "message": p} for p in problems],
+            )
     try:
         passwords.validate_password(body.administrator.password, email=body.administrator.email)
     except passwords.PasswordPolicyError as e:
@@ -134,6 +147,8 @@ def initialize(
     inst = bootstrap.bootstrap(db)
     inst.name = body.installation_name
     inst.setup_completed_at = utcnow()
+    if body.numbering is not None:
+        save_numbering_plan(db, body.numbering)
 
     org = Organization(
         id=uuid.uuid4(),
@@ -165,7 +180,11 @@ def initialize(
         actor_label=user.email,
         ip_address=ctx.ip,
         request_id=ctx.request_id,
-        details={"organization": org.slug, "installation_name": inst.name},
+        details={
+            "organization": org.slug,
+            "installation_name": inst.name,
+            "numbering": body.numbering.model_dump(mode="json") if body.numbering else None,
+        },
     )
     token, csrf, session = create_session(db, user, settings, ip=ctx.ip, user_agent=ctx.user_agent)
     db.commit()

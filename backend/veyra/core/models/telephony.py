@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -28,8 +29,10 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # Engine endpoint name. Globally unique because SIP endpoints share one
     # namespace inside the telephony engine regardless of organization.
     endpoint_name: Mapped[str] = mapped_column(String(80), unique=True)
-    # SIP secret encrypted with the installation secret key (never plaintext).
+    # SIP secret encrypted with the installation key (veyra.core.security.crypto);
+    # never plaintext. Purpose string: ``extension.sip_secret:<id>``.
     sip_secret_ciphertext: Mapped[str | None] = mapped_column(Text)
+    sip_secret_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     caller_id_name: Mapped[str | None] = mapped_column(String(80))
     caller_id_number: Mapped[str | None] = mapped_column(String(32))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

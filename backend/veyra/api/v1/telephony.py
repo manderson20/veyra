@@ -21,8 +21,10 @@ from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, not_found
 from veyra.core.models import ConfigRevision
 from veyra.core.pagination import Page, PageParams, page_params, paginate
+from veyra.core.security.crypto import InstallationKey, try_load_installation_key
 from veyra.core.security.principal import Principal
 from veyra.telephony.adapter import Capability, EngineUnavailable, TelephonyAdapter
+from veyra.telephony.numbering import NumberingPlan, load_numbering_plan, save_numbering_plan
 from veyra.telephony.settings import CODECS, SipSettings, load_sip_settings, save_sip_settings
 
 router = APIRouter(prefix="/telephony", tags=["telephony"])
@@ -30,6 +32,12 @@ router = APIRouter(prefix="/telephony", tags=["telephony"])
 
 def _adapter(request: Request) -> TelephonyAdapter:
     return request.app.state.telephony
+
+
+def _key(request: Request) -> InstallationKey | None:
+    """The installation key, or None when it is missing: generation then
+    fails with a clear message instead of the API refusing to answer."""
+    return try_load_installation_key(request.app.state.settings)
 
 
 class ModuleStatus(BaseModel):
@@ -53,6 +61,10 @@ class EngineOut(BaseModel):
     config_dir: str | None = None
     deployed_revision: int | None = None
     pending_revision: int | None = None
+    # True when the database differs from the deployed configuration (a
+    # revision should be generated and deployed); None without generation.
+    changes_pending: bool | None = None
+    installation_key_present: bool = True
 
 
 @router.get("/engine", response_model=EngineOut, summary="Telephony engine status")
@@ -78,6 +90,9 @@ def engine_status(
     queued = service.pending(db, adapter.name)
     out.deployed_revision = deployed.sequence if deployed else None
     out.pending_revision = queued.sequence if queued else None
+    key = _key(request)
+    out.installation_key_present = key is not None
+    out.changes_pending = service.changes_pending(db, adapter, key)
     if health.state != "running":
         return out
     try:
@@ -152,6 +167,58 @@ def put_settings(
     return SipSettingsOut(settings=body, problems=[], codecs_available=list(CODECS))
 
 
+# ----------------------------------------------------------------- numbering
+
+
+class NumberingOut(BaseModel):
+    plan: NumberingPlan
+    problems: list[str]
+    description: str
+
+
+@router.get("/numbering", response_model=NumberingOut, summary="Extension numbering plan")
+def get_numbering(
+    principal: Principal = Depends(require("extensions.read")),
+    db: Session = Depends(get_db),
+) -> NumberingOut:
+    plan = load_numbering_plan(db)
+    return NumberingOut(plan=plan, problems=plan.problems(), description=plan.describe())
+
+
+@router.put("/numbering", response_model=NumberingOut, summary="Change the numbering plan")
+def put_numbering(
+    body: NumberingPlan,
+    principal: Principal = Depends(require("system.settings.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> NumberingOut:
+    problems = body.problems()
+    if problems:
+        raise ProblemError(
+            422,
+            "Numbering plan not saved",
+            " ".join(problems),
+            code="validation_failed",
+            errors=[{"field": "plan", "message": p} for p in problems],
+        )
+    before = load_numbering_plan(db).model_dump(mode="json")
+    save_numbering_plan(db, body, updated_by=principal.user_id)
+    after = body.model_dump(mode="json")
+    audit.record(
+        db,
+        action="telephony.numbering_update",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        target_type="settings",
+        target_id="telephony.numbering",
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"changed": {k: after[k] for k in after if before.get(k) != after[k]}},
+    )
+    db.commit()
+    return NumberingOut(plan=body, problems=[], description=body.describe())
+
+
 # ----------------------------------------------------------------- revisions
 
 
@@ -175,7 +242,12 @@ class RevisionOut(BaseModel):
 
 
 def _revision_out(
-    db: Session, rev: ConfigRevision, principal: Principal, *, with_files: bool = False
+    db: Session,
+    rev: ConfigRevision,
+    principal: Principal,
+    *,
+    with_files: bool = False,
+    key: InstallationKey | None = None,
 ) -> RevisionOut:
     parent_seq = None
     if rev.parent_id:
@@ -198,7 +270,7 @@ def _revision_out(
         can_rollback=rev.state == RevisionState.SUPERSEDED,
     )
     if with_files and principal.is_platform_admin:
-        files = artifacts_to_files_safe(rev.artifacts)
+        files = artifacts_to_files_safe(rev.artifacts, key, rev.id)
         out.files = [
             {
                 "path": f.path,
@@ -209,7 +281,7 @@ def _revision_out(
             for f in files
         ]
         if deployed is not None and deployed.id != rev.id:
-            out.diff = diff(artifacts_to_files_safe(deployed.artifacts), files)
+            out.diff = diff(artifacts_to_files_safe(deployed.artifacts, key, deployed.id), files)
         elif deployed is None:
             out.diff = diff([], files)
         else:
@@ -259,7 +331,8 @@ def generate_revision(
             "The configured telephony engine cannot generate configuration.",
             code="not_available",
         )
-    generated = service.create_revision(db, adapter, created_by=principal.label)
+    key = _key(request)
+    generated = service.create_revision(db, adapter, created_by=principal.label, key=key)
     audit.record(
         db,
         action="telephony.config_generate",
@@ -277,7 +350,7 @@ def generate_revision(
         },
     )
     db.commit()
-    out = _revision_out(db, generated.revision, principal, with_files=True)
+    out = _revision_out(db, generated.revision, principal, with_files=True, key=key)
     out.unchanged = generated.unchanged
     return out
 
@@ -285,13 +358,14 @@ def generate_revision(
 @router.get("/revisions/{revision_id}", response_model=RevisionOut, summary="One revision")
 def get_revision(
     revision_id: uuid.UUID,
+    request: Request,
     principal: Principal = Depends(require("config.read")),
     db: Session = Depends(get_db),
 ) -> RevisionOut:
     rev = db.get(ConfigRevision, revision_id)
     if rev is None:
         raise not_found("Revision")
-    return _revision_out(db, rev, principal, with_files=True)
+    return _revision_out(db, rev, principal, with_files=True, key=_key(request))
 
 
 @router.post(

@@ -25,6 +25,7 @@ from veyra.core import bootstrap
 from veyra.core.config import Environment, Settings
 from veyra.core.db import dispose_engine, init_engine, session_scope
 from veyra.core.events import bus
+from veyra.core.security.crypto import InstallationKey
 from veyra.core.security.permissions import registry
 from veyra.main import create_app
 
@@ -66,7 +67,11 @@ def make_settings(database_url: str, tmp_path: Path, **overrides: object) -> Set
         "telephony_engine": "none",
     }
     values.update(overrides)
-    return Settings(**values)  # type: ignore[arg-type]
+    settings = Settings(**values)  # type: ignore[arg-type]
+    # Every test installation has its own key, like a real one.
+    if not settings.installation_key_path.exists():
+        InstallationKey.generate().write(settings.installation_key_path)
+    return settings
 
 
 def _reset_database(url: str) -> None:

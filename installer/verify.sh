@@ -106,6 +106,14 @@ for f in "$VEYRA_ETC"/secrets/*; do
     [[ "$mode" == "640" || "$mode" == "600" ]] && check "secret:$(basename "$f")" pass "$mode" \
         || check "secret:$(basename "$f")" fail "mode $mode (expected 640 or 600)"
 done
+# The installation key (Milestone 4): present, readable by the service account, well formed.
+if [[ -s "$VEYRA_ETC/secrets/installation.key" ]] \
+    && grep -qxE '[0-9a-fA-F]{64}' "$VEYRA_ETC/secrets/installation.key" \
+    && [[ "$(stat -c '%G' "$VEYRA_ETC/secrets/installation.key")" == "$VEYRA_USER" ]]; then
+    check installation-key pass "present (fingerprint $(/usr/local/bin/veyra installation-key check --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("fingerprint", "?"))' 2>/dev/null || echo '?'))"
+else
+    check installation-key fail "$VEYRA_ETC/secrets/installation.key is missing, malformed or not group $VEYRA_USER (run: sudo veyra installation-key generate)"
+fi
 [[ "$(perm "$VEYRA_ETC/tls/veyra.key" | cut -d' ' -f1)" == "600" ]] && check tls-key pass "600" \
     || check tls-key fail "TLS key permissions are $(perm "$VEYRA_ETC/tls/veyra.key")"
 # Symbolic links (the venv's python and lib64 links) always report mode 777 and are skipped.

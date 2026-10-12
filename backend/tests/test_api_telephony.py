@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from veyra.cli.main import main
 from veyra.configmgmt import service
 from veyra.core.db import session_scope
+from veyra.core.security.crypto import load_installation_key
 
 
 def _fake(app, tmp_path, state="running"):
@@ -14,7 +15,7 @@ def _fake(app, tmp_path, state="running"):
     cfg = tmp_path / "asterisk-veyra"
     cfg.mkdir(exist_ok=True)
     app.state.settings.asterisk_config_dir = cfg
-    return adapter, service.Deployer(adapter, cfg)
+    return adapter, service.Deployer(adapter, cfg, load_installation_key(app.state.settings))
 
 
 def test_engine_status_without_engine(admin):

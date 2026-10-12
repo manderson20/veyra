@@ -118,6 +118,20 @@ do_secrets() {
         chmod 0640 "$f"
         ok "Generated ARI credential"
     fi
+    # The installation key encrypts SIP secrets (and later MFA secrets) at
+    # rest. It is never regenerated: a new key would make every stored secret
+    # unreadable. Back it up with the rest of $VEYRA_ETC (docs/EXTENSIONS.md).
+    local k="$VEYRA_ETC/secrets/installation.key"
+    if [[ -s "$k" ]]; then
+        ok "Installation key exists (kept)"
+    elif [[ "$DRY_RUN" == "1" ]]; then
+        info "[dry-run] would generate $k"
+    else
+        (umask 027; random_hex_key >"$k")
+        chown root:"$VEYRA_USER" "$k"
+        chmod 0640 "$k"
+        ok "Generated installation key; keep a backup of $k (without it SIP secrets cannot be recovered)"
+    fi
 }
 
 do_database() {
