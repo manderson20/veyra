@@ -1,8 +1,8 @@
 # Multi-factor authentication: design
 
-**Status:** Design accepted for implementation in a later milestone (see
-[ADR 0012](adr/0012-mfa-approach.md)). Nothing in this document is
-implemented yet; the UI says so on the account page.
+**Status:** Implemented in Milestone 4b (version 0.5.0) as designed, with
+the implementation notes in §11 ([ADR 0012](adr/0012-mfa-approach.md)).
+Passkeys (§2) remain scheduled for Milestone 17.
 
 ## 1. Goals
 
@@ -141,8 +141,41 @@ upgrades the session; lockout after failures; policy grace window; admin
 reset; audit events. UI: enrolment with a real authenticator app on a
 phone (manual, recorded in the milestone report).
 
-## 10. Out of scope
+## 10. Out of scope (unchanged)
 
 Hardware OTP tokens (HOTP), push notifications, SMS, email codes, trusted
 devices, and step-up authentication for individual actions. Each can be
 added behind the same `mfa_methods` table.
+
+## 11. Implementation notes (Milestone 4b)
+
+* Code: `veyra/core/security/totp.py` (RFC 6238 with the standard library),
+  `veyra/core/security/mfa.py` (policy, recovery codes, enrolment windows),
+  `veyra/api/v1/auth_mfa.py` (routes), migration `0004`.
+* Columns differ slightly from §3: `secret_ciphertext` is `text` (the
+  installation-key token format), `mfa_methods.last_used_step` records the
+  last accepted TOTP step for replay protection, and `sessions.mfa_failures`
+  counts wrong codes (five lock the pre-auth session, which is revoked).
+  Existing sessions were backfilled with `mfa_verified_at = created_at`.
+* The pre-auth session can reach an explicit allow-list
+  (`veyra.core.deps.PRE_AUTH_ALLOWED_PATHS`): challenge, verify, TOTP
+  begin/confirm (the last two only while no factor is enrolled) and logout.
+  `GET /auth/session` answers `403 mfa_required`, which the UI treats as
+  "not signed in" and sends to the sign-in page, where the second step is
+  resumed from `GET /auth/mfa/challenge`.
+* Recovery codes may be entered with or without the dash and in any case.
+  Entering a code that is not six digits is tried as a recovery code.
+* The QR code is rendered server-side with `segno` as an SVG data URI; the
+  device label can be set when confirming.
+* Policy defaults: required for Platform Administrators and Organization
+  Administrators, 14 days of grace, TOTP only. The first administrator's
+  grace window starts at setup. Saving the policy re-evaluates every
+  active local user (starts or clears their window) and is audited
+  (`security.mfa_policy_update`).
+* Audit actions: `auth.mfa_enrol_begin`, `auth.mfa_enrol_confirm`,
+  `auth.mfa_verify` (with `method` and `recovery_codes_remaining`, or
+  `failures`/`locked`), `auth.mfa_method_remove`,
+  `auth.mfa_recovery_codes_regenerate`, `user.mfa_reset`; `auth.login`
+  carries `mfa: none|grace|pending|enrol`.
+* NGINX rate-limits `/api/v1/auth/mfa/verify` like sign-in; the API's
+  per-address limiter is shared with sign-in.

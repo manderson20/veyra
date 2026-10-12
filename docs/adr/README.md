@@ -13,7 +13,7 @@
 | [0009](0009-license-pending.md) | License choice deferred to the project owner | Superseded by 0013 |
 | [0010](0010-asterisk-ubuntu-packages.md) | Asterisk from the Ubuntu archive, not a Veyra-built package | Accepted |
 | [0011](0011-password-reset-links.md) | Password reset by administrator- and console-issued one-time links; administrator-set passwords are temporary | Accepted |
-| [0012](0012-mfa-approach.md) | MFA: TOTP with recovery codes first, passkeys second, pre-auth session at sign-in | Accepted design |
+| [0012](0012-mfa-approach.md) | MFA: TOTP with recovery codes first, passkeys second, pre-auth session at sign-in | Accepted; TOTP implemented in Milestone 4b |
 | [0013](0013-license-agpl.md) | AGPL-3.0-or-later for Veyra | Accepted |
 | [0014](0014-installation-key.md) | One installation key (AES-256-GCM, purpose-bound) encrypts server-readable secrets at rest | Accepted |
 

@@ -132,6 +132,11 @@ check` prints the key's fingerprint.
 
 ### Account recovery from the server console
 
+Two-factor authentication: `sudo veyra users mfa-reset <email>` removes a
+user's authenticator devices and recovery codes and signs them out; they set
+up a new authenticator at the next sign-in. This is the only way back in for
+the recovery administrator, who is not exempt from the policy.
+
 When no administrator can sign in (forgotten password, lockout), whoever
 has shell access can recover an account; these commands are audited with
 the actor `cli`:

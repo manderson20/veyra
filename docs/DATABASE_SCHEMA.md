@@ -14,15 +14,17 @@ the two agree. Constraint names follow a fixed naming convention.
 | `sites` | Locations of an organization | `organization_id`, unique (`organization_id`, `slug`), civic address (future dispatchable location) |
 | `buildings` | Buildings at a site | `site_id`, unique (`site_id`, `name`) |
 | `departments` | Departments | unique (`organization_id`, `name`) |
-| `users` | Accounts | `email` unique (stored lower-case), `password_hash` (Argon2id, NULL for SSO-only), `auth_source`, `is_recovery_admin`, `home_organization_id`, lockout fields, `password_changed_at` and `must_change_password` (migration `0002`) |
+| `users` | Accounts | `email` unique (stored lower-case), `password_hash` (Argon2id, NULL for SSO-only), `auth_source`, `is_recovery_admin`, `home_organization_id`, lockout fields, `password_changed_at` and `must_change_password` (migration `0002`), `mfa_required_at` and `mfa_grace_until` (migration `0004`) |
 | `permissions` | Permission catalog (core + modules) | `key` PK, `module_id` |
 | `roles` | System and custom roles | unique (`organization_id`, `key`); `is_system` |
 | `role_permissions` | Role → permission | composite PK |
 | `role_assignments` | User ↔ role in a scope | `scope_type` ∈ platform/organization/site, with a check constraint for consistent scope columns |
-| `sessions` | Server-side sessions | `token_hash` unique, `csrf_token_hash`, `expires_at`, `last_seen_at`, `revoked_at`, `ip_address`, `user_agent`; rows past retention are deleted by the worker |
+| `sessions` | Server-side sessions | `token_hash` unique, `csrf_token_hash`, `expires_at`, `last_seen_at`, `revoked_at`, `ip_address`, `user_agent`; `mfa_verified_at` (NULL = pre-authentication session) and `mfa_failures` (migration `0004`); rows past retention are deleted by the worker |
+| `mfa_methods` | Second factors (migration `0004`) | `type` (`totp`), `label`, `secret_ciphertext` (installation key), `credential` (WebAuthn, later), `last_used_step` (replay protection), `confirmed_at` |
+| `mfa_recovery_codes` | Single-use recovery codes (migration `0004`) | `code_hash` (Argon2id), `used_at` |
 | `password_reset_tokens` | One-time password reset links (migration `0002`) | `token_hash` unique, `expires_at`, `used_at`, `issued_by` (administrator email or `cli`), `issued_from_ip`; at most one unused token per user |
 | `audit_log` | Append-only audit trail | indexed by time and organization; **UPDATE/DELETE blocked by trigger** `audit_log_append_only` (DELETE allowed only with `SET LOCAL veyra.audit_retention='on'`) |
-| `system_settings` | Key/value settings | e.g. `setup.token` (hash plus expiry), `updates.metadata_sequence`, `telephony.sip` (SIP and media settings, M3), `telephony.numbering` (numbering plan, M4) |
+| `system_settings` | Key/value settings | e.g. `setup.token` (hash plus expiry), `updates.metadata_sequence`, `telephony.sip` (SIP and media settings, M3), `telephony.numbering` (numbering plan, M4), `telephony.pending_change` (set by any engine-relevant save until the next deployment), `security.mfa` (two-factor policy, M4b) |
 | `extensions` | Extensions (engine-neutral) | unique (`organization_id`, `number`); `endpoint_name` globally unique (`<org slug>-<number>`); numbers also unique installation-wide (enforced by the API with an advisory lock until M14); `sip_secret_ciphertext` (AES-256-GCM token, installation key) and `sip_secret_changed_at` (migration `0003`) |
 | `devices` | Phones | `mac_address` unique (12 hex digits), `template_key`, `primary_extension_id` |
 | `installed_modules` | Module registry | `module_id` PK, `version`, `state`, `trust_level`, `signature_verified`, `manifest` (JSONB) |

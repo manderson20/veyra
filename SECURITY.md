@@ -1,6 +1,6 @@
 # Security
 
-Veyra is in early development (Milestone 4) and is **not yet suitable for
+Veyra is in early development (Milestone 4b) and is **not yet suitable for
 production use**.
 
 ## Reporting a vulnerability
@@ -19,6 +19,7 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 | Passwords | Argon2id; 12+ characters with weak-word and personal-information checks; constant-time handling of unknown users; administrator-set passwords are temporary |
 | Password reset | One-time links (hashed, 24 h, single use) issued by an administrator or the server console; generic failures; rate limited; signs the account out everywhere |
 | Sessions | Server-side, token hashes only; HttpOnly + Secure + SameSite=Strict cookies; 12 h absolute / 60 min idle; users and administrators can list and end sessions; expired rows purged after 30 days |
+| Two-factor authentication | TOTP (RFC 6238) with single-use Argon2id-hashed recovery codes; per-role policy with an enrolment grace window (administrators required by default); a 5-minute pre-authentication session that can reach only the MFA routes; replay protection; lockout after five wrong codes; secrets encrypted with the installation key; administrator and console resets, all audited |
 | CSRF | Double-submit token checked against a per-session hash, plus rejection of mutations the browser labels cross-site (fetch metadata) |
 | Brute force | NGINX + API rate limits; account lockout |
 | First run | One-time console-issued setup token; setup possible only while no user exists |
@@ -37,7 +38,7 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 ## Known gaps (tracked)
 
 * Installation key rotation with re-encryption is not implemented; a lost key means rotating every SIP secret ([docs/EXTENSIONS.md](docs/EXTENSIONS.md) §5).
-* Multi-factor authentication is designed ([docs/MFA_DESIGN.md](docs/MFA_DESIGN.md)) but not implemented; SSO (OIDC, Entra ID, Google) is not yet implemented.
+* Passkeys (WebAuthn) and "remember this browser" are not implemented ([docs/MFA_DESIGN.md](docs/MFA_DESIGN.md)); SSO (OIDC, Entra ID, Google) is not yet implemented.
 * Self-service "forgot password" needs email delivery (Milestone 7); until then a reset link comes from an administrator or the server console.
 * The isolated service runtime for community and third-party modules is not yet implemented, so such modules are refused.
 * The rate limiter is per process. A shared limiter will come with HA.
