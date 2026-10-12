@@ -1,6 +1,6 @@
 # 0001: Asterisk as the initial telephony engine
 
-**Status:** Accepted (2026-10-12)
+**Status:** Accepted (2026-10-12); confirmed by the project owner on 2026-10-12
 
 **Context:** Veyra manages an existing engine rather than implementing SIP.
 The candidates were Asterisk and FreeSWITCH. Only one engine will be

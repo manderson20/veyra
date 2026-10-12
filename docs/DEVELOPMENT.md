@@ -7,7 +7,7 @@ systems**.
 
 | Host | Initial role | vCPU | RAM | Disk | Notes |
 |---|---|---|---|---|---|
-| `veyra-dev1` | primary | 6 | 8 GB | 100 GB (48 GB LV allocated; see INSTALLATION.md §1) | Ubuntu 26.04.1 LTS; development is done here |
+| `veyra-dev1` | primary | 6 | 8 GB | 100 GB (root LV extended to 97 GB on 2026-10-12) | Ubuntu 26.04.1 LTS; development is done here |
 | `veyra-dev2` | secondary | 6 | 8 GB | 100 GB | **Not reachable yet**: `veyra-dev2` does not resolve in DNS and there is no SSH trust from dev1 |
 
 Both VMs are on the **same physical Proxmox host**, so the pair can test

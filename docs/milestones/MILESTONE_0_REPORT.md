@@ -3,7 +3,7 @@
 **Milestone:** 0 — Architecture, repository foundation and modular framework
 **Date:** 2026-10-12
 **Branch:** `milestone-0` (pushed to `manderson20/veyra`; not merged to `main`)
-**Status:** Complete, awaiting the project owner's review. Work stops here; Milestone 1 has not been started.
+**Status:** Complete. Approved by the project owner on 2026-10-12 and merged to `main`.
 
 ## 1. Scope
 
@@ -112,3 +112,11 @@ Run and harden the installer on veyra-dev1, then on veyra-dev2 once it is
 reachable. Verify with `verify.sh`, produce per-node installation reports,
 confirm CI is green, check Ubuntu 24.04 compatibility, and decide between
 the Ubuntu Asterisk package and a Veyra-built one.
+
+## 9. Owner decisions (2026-10-12)
+
+* Asterisk confirmed as the telephony engine.
+* veyra-dev1 root volume extended to the full disk (97 GB).
+* `milestone-0` merged to `main` (fast-forward).
+* Milestone 1 approved.
+* Still open: license choice; veyra-dev2 address and SSH access; approved branding artwork.
