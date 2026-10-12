@@ -3,8 +3,8 @@
 **Milestone:** 4b — Multi-factor authentication (TOTP, recovery codes, per-role policy)
 **Date:** 2026-10-12
 **Branch:** `milestone-4b` (pushed to `manderson20/veyra`; not merged to `main`)
-**Version:** 0.5.0-dev (becomes 0.5.0 on approval)
-**Status:** Complete. Installed on veyra-dev1 and verified by the owner with a real authenticator app. Awaiting the project owner's approval.
+**Version:** 0.5.0
+**Status:** Complete. Installed on veyra-dev1 and verified by the owner with a real authenticator app. Approved by the project owner on 2026-10-12 (merged to `main`).
 
 ## 1. Scope (approved 2026-10-12)
 
@@ -74,10 +74,16 @@ generated files differ; the roadmap gained the click-to-dial API (Milestone
   owner's keeping.
 * veyra-dev2 is not provisioned (deferred).
 
-## 7. Proposed Milestone 5 (for approval)
+## 7. Proposed Milestone 5 (approved 2026-10-12)
 
 SIP registration and internal calling: live registration status per
 extension (ARI endpoint events), active calls view, a first phone registered
 and an internal call between two extensions on dev1, the click-to-dial API
 (originate from a user's extension), and the deploy-mode drop-down on the
 Deploy changes button (deploy now, or wait until no calls are active).
+
+## 8. Owner decisions (2026-10-12)
+
+* Milestone 4b approved; version 0.5.0; `main` fast-forwarded to this branch.
+* Milestone 5 as proposed in §7 approved and started on branch
+  `milestone-5` (version 0.6.0-dev).

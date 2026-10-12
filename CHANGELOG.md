@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## [Unreleased] — 0.5.0-dev (Milestone 4b)
+## 0.5.0 — 2026-10-12 (Milestone 4b)
 
 ### Added
 - Two-factor authentication (`docs/MFA_DESIGN.md`): authenticator apps (TOTP, RFC 6238) with ten single-use recovery codes; sign-in answers 202 and opens a 5-minute pre-authentication session that can reach only the second-step routes; codes accept one step of clock drift and are never accepted twice; five wrong codes lock the attempt. Enrolment with a server-rendered QR code or manual key, device labels, recovery codes shown once with download and copy; devices removed and codes regenerated behind the password. Account page card, sign-in second step with inline enrolment, grace notice in the shell.
