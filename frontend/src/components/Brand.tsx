@@ -84,7 +84,8 @@ export function BrandIcon({ size = 30 }: { size?: number }) {
       width={size}
       height={size}
       decoding="async"
-      style={{ display: "block", objectFit: "contain" }}
+      // display comes from the .brand-icon rules (hidden in the expanded sidebar).
+      style={{ objectFit: "contain" }}
       className="brand-icon"
     />
   );
