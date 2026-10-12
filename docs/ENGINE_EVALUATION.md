@@ -1,6 +1,6 @@
 # Telephony Engine Evaluation: Asterisk vs FreeSWITCH
 
-**Status:** Decided. **Recommendation:** Asterisk (22 LTS initially). See [ADR 0001](adr/0001-telephony-engine-asterisk.md).
+**Status:** Decided and confirmed by the project owner (2026-10-12). **Recommendation:** Asterisk (22 LTS initially). See [ADR 0001](adr/0001-telephony-engine-asterisk.md).
 **Date:** 2026-10-12. **Author:** Veyra core team (Milestone 0).
 
 Veyra does not implement SIP signaling or media. It manages an established
