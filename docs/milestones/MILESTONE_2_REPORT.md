@@ -3,7 +3,7 @@
 **Milestone:** 2 — Backend, frontend, database and authentication (hardening, password reset, sessions UI, MFA design)
 **Date:** 2026-10-12
 **Branch:** `milestone-2` (pushed to `manderson20/veyra`; not merged to `main`)
-**Status:** Complete. Awaiting the project owner's review.
+**Status:** Complete. **Approved by the project owner on 2026-10-12** (§8).
 
 ## 1. Scope (approved 2026-10-12 with "proceed with the project")
 
@@ -102,7 +102,23 @@ type-check, lint and build).
 * veyra-dev1 runs this milestone's code (release `4700a4f8f5`); the
   manifest MIME fix lands with the next upgrade.
 
-## 7. Proposed Milestone 3 (for approval)
+## 8. Owner decisions (2026-10-12)
+
+1. Password reset by one-time link confirmed; self-service by email comes
+   with email delivery or SSO (Google Workspace) later.
+2. Administrator-set passwords stay temporary by default, with the
+   per-case opt-out, as implemented.
+3. MFA is required; the owner left the placement to the team. Decision:
+   a dedicated milestone **4b** right after Milestone 4, because the TOTP
+   secrets use the installation key that Milestone 4 introduces for SIP
+   secrets; passkeys follow in Milestone 17.
+4. Milestone 2 approved; Milestone 3 starts.
+5. `milestone-1` and `milestone-2` merged to `main` by the team.
+6. License: left to the team's judgement; see ADR 0013.
+7. veyra-dev2: the address given (172.16.2.250) is veyra-dev1's own
+   address, so dev2 remains unreachable until its real address is known.
+
+## 7. Proposed Milestone 3 (approved)
 
 Telephony engine integration per the roadmap: the deployer service,
 configuration generation from the database, ARI status, reload and
