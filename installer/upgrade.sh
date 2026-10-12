@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
         --yes|-y) ASSUME_YES=1 ;;
         --dry-run) DRY_RUN=1 ;;
         --keep-releases) KEEP_RELEASES="${2:?}"; shift ;;
-        -h|--help) sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '3,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "Unknown option: $1" ;;
     esac
     shift

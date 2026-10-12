@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
         --yes|-y) ASSUME_YES=1 ;;
         --dry-run) DRY_RUN=1 ;;
         --purge) PURGE=1 ;;
-        -h|--help) sed -n '3,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '3,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "Unknown option: $1" ;;
     esac
     shift
