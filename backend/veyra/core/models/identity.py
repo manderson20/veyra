@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -16,6 +18,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, Timestamps, UUIDPrimaryKey
@@ -43,6 +46,10 @@ class User(UUIDPrimaryKey, Timestamps, Base):
     # Set when an administrator assigns a temporary password: the user can only
     # reach the authentication endpoints until they choose their own.
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Multi-factor policy (docs/MFA_DESIGN.md §7): when the requirement started
+    # for this user and until when sign-in without a factor is still allowed.
+    mfa_required_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    mfa_grace_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Permission(Base):
@@ -121,6 +128,46 @@ class UserSession(UUIDPrimaryKey, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ip_address: Mapped[str | None] = mapped_column(String(64))
     user_agent: Mapped[str | None] = mapped_column(String(500))
+    # NULL while the session is a short-lived pre-authentication session that
+    # may only complete the second factor (docs/MFA_DESIGN.md §4).
+    mfa_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    mfa_failures: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class MfaMethod(UUIDPrimaryKey, Base):
+    """A second factor. ``totp`` today; ``webauthn`` with passkeys later."""
+
+    __tablename__ = "mfa_methods"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    type: Mapped[str] = mapped_column(String(16))
+    label: Mapped[str] = mapped_column(String(100), default="Authenticator app")
+    # TOTP shared secret encrypted with the installation key
+    # (purpose ``user.totp_secret:<user id>``); never stored in clear.
+    secret_ciphertext: Mapped[str | None] = mapped_column(Text)
+    # WebAuthn credential (id, public key, sign count, transports); unused until passkeys.
+    credential: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # The last TOTP time step that produced an accepted code (replay protection).
+    last_used_step: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # NULL until the user proves the app works by entering a first code.
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MfaRecoveryCode(UUIDPrimaryKey, Base):
+    """Single-use recovery code, Argon2id-hashed like a password."""
+
+    __tablename__ = "mfa_recovery_codes"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    code_hash: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PasswordResetToken(UUIDPrimaryKey, Base):

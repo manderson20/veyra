@@ -61,9 +61,12 @@ class EngineOut(BaseModel):
     config_dir: str | None = None
     deployed_revision: int | None = None
     pending_revision: int | None = None
-    # True when the database differs from the deployed configuration (a
-    # revision should be generated and deployed); None without generation.
+    # True after any save that may affect the engine until a deployment runs,
+    # or when the database differs from the deployed configuration; None
+    # without generation.
     changes_pending: bool | None = None
+    pending_since: str | None = None
+    pending_by: str | None = None
     installation_key_present: bool = True
 
 
@@ -93,6 +96,9 @@ def engine_status(
     key = _key(request)
     out.installation_key_present = key is not None
     out.changes_pending = service.changes_pending(db, adapter, key)
+    flag = service.pending_change(db)
+    if flag:
+        out.pending_since, out.pending_by = flag.get("at"), flag.get("by")
     if health.state != "running":
         return out
     try:
@@ -152,6 +158,8 @@ def put_settings(
     save_sip_settings(db, body, updated_by=principal.user_id)
     after = body.model_dump(mode="json")
     changed = {k: after[k] for k in after if before.get(k) != after[k]}
+    if changed:
+        service.mark_changed(db, by=principal.label, what="telephony.settings_update")
     audit.record(
         db,
         action="telephony.settings_update",
@@ -400,7 +408,10 @@ def apply_changes(
     applied = False
     if not failed:
         if generated.unchanged:
+            # Nothing for the engine: the saved change had no effect on the
+            # files, so the pending flag can go.
             rev.state = RevisionState.SUPERSEDED
+            service.clear_changed(db)
         else:
             service.request_deploy(db, rev)
             applied = True

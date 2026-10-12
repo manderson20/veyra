@@ -17,10 +17,19 @@ from veyra.core.security.principal import Grant, Principal
 
 # Refresh last_seen_at at most this often to avoid a write on every request.
 _TOUCH_INTERVAL = timedelta(seconds=60)
+# A pre-authentication session (password accepted, second factor pending)
+# lives this long and can reach only the MFA routes.
+PRE_AUTH_TTL = timedelta(minutes=5)
 
 
 def create_session(
-    db: Session, user: User, settings: Settings, *, ip: str | None, user_agent: str | None
+    db: Session,
+    user: User,
+    settings: Settings,
+    *,
+    ip: str | None,
+    user_agent: str | None,
+    mfa_pending: bool = False,
 ) -> tuple[str, str, UserSession]:
     token = tokens.new_token()
     csrf = tokens.new_token()
@@ -32,12 +41,26 @@ def create_session(
         csrf_token_hash=tokens.digest(csrf),
         created_at=now,
         last_seen_at=now,
-        expires_at=now + timedelta(hours=settings.session_ttl_hours),
+        expires_at=now
+        + (PRE_AUTH_TTL if mfa_pending else timedelta(hours=settings.session_ttl_hours)),
         ip_address=ip,
         user_agent=(user_agent or "")[:500] or None,
+        mfa_verified_at=None if mfa_pending else now,
+        mfa_failures=0,
     )
     db.add(session)
     return token, csrf, session
+
+
+def complete_mfa(session: UserSession, settings: Settings) -> str:
+    """Turn a pre-authentication session into an ordinary one: full lifetime
+    and a fresh CSRF token (returned) so the pre-auth token is not reused."""
+    now = utcnow()
+    session.mfa_verified_at = now
+    session.expires_at = now + timedelta(hours=settings.session_ttl_hours)
+    session.last_seen_at = now
+    session.mfa_failures = 0
+    return rotate_csrf(session)
 
 
 def rotate_csrf(session: UserSession) -> str:
@@ -87,6 +110,7 @@ def active_sessions(db: Session, user_id: uuid.UUID, settings: Settings) -> list
             UserSession.revoked_at.is_(None),
             UserSession.expires_at > now,
             UserSession.last_seen_at > idle_cutoff,
+            UserSession.mfa_verified_at.is_not(None),  # pre-auth sessions are not "signed in"
         )
         .order_by(UserSession.last_seen_at.desc())
     )

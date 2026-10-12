@@ -93,6 +93,8 @@ class UserOut(ORM):
     locked_until: datetime | None = None
     password_changed_at: datetime | None = None
     must_change_password: bool = False
+    # Whether a confirmed second factor exists (filled in by the handlers).
+    mfa_enabled: bool = False
 
 
 class UserCreate(BaseModel):

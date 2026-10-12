@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from veyra.api.v1 import (
     audit,
     auth,
+    auth_mfa,
     extensions,
     ha,
     modules,
@@ -22,6 +23,7 @@ from veyra.api.v1 import (
 api_router = APIRouter(prefix="/api/v1")
 for r in (
     auth,
+    auth_mfa,
     setup,
     system,
     organizations,

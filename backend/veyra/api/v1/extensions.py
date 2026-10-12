@@ -21,6 +21,7 @@ from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
@@ -360,6 +361,9 @@ def _record(
         request_id=ctx.request_id,
         details={"number": ext.number, **details},
     )
+    # Like "Apply Config" elsewhere: the Deploy changes button appears after
+    # every save that may affect the engine, until a deployment runs.
+    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {ext.number}")
 
 
 # ----------------------------------------------------------------- routes

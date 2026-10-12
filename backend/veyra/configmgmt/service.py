@@ -33,7 +33,7 @@ from veyra.configmgmt.revisions import (
     transition,
 )
 from veyra.core import audit
-from veyra.core.models import ConfigRevision
+from veyra.core.models import ConfigRevision, SystemSetting
 from veyra.core.models.base import utcnow
 from veyra.core.security.crypto import InstallationKey, InstallationKeyError
 from veyra.telephony.adapter import (
@@ -48,6 +48,39 @@ from veyra.telephony.snapshot import build_snapshot
 log = logging.getLogger("veyra.configmgmt")
 
 FILE_MODE = 0o640
+
+
+# ----------------------------------------------------------------- pending flag
+
+PENDING_KEY = "telephony.pending_change"
+
+
+def mark_changed(db: Session, *, by: str, what: str) -> None:
+    """Record that something the engine configuration is built from was saved.
+
+    The flag stays until a deployment runs (or an apply finds nothing to
+    change), so the "Deploy changes" button is shown after every relevant
+    save, whether or not the generated files turn out different.
+    """
+    value = {"at": utcnow().isoformat(), "by": by, "what": what}
+    row = db.get(SystemSetting, PENDING_KEY)
+    if row is None:
+        db.add(SystemSetting(key=PENDING_KEY, value=value))
+    else:
+        row.value = value
+    db.flush()
+
+
+def clear_changed(db: Session) -> None:
+    row = db.get(SystemSetting, PENDING_KEY)
+    if row is not None:
+        db.delete(row)
+        db.flush()
+
+
+def pending_change(db: Session) -> dict[str, Any] | None:
+    row = db.get(SystemSetting, PENDING_KEY)
+    return dict(row.value) if row is not None and isinstance(row.value, dict) else None
 
 
 def current_deployed(db: Session, engine: str) -> ConfigRevision | None:
@@ -169,6 +202,8 @@ def changes_pending(
     """
     if Capability.CONFIG_GENERATION not in adapter.capabilities():
         return None
+    if pending_change(db) is not None:
+        return True
     files, errors = _generate(db, adapter, key)
     if errors:
         return True
@@ -320,6 +355,7 @@ class Deployer:
         rev.state = transition(rev.state, RevisionState.DEPLOYED)
         rev.deployed_at = now
         rev.validation_errors = log_lines
+        clear_changed(db)
         db.flush()
         self._audit(db, rev, "success", {"log": log_lines})
         db.commit()

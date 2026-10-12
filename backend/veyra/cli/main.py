@@ -398,6 +398,40 @@ def cmd_users_reset_password(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_users_mfa_reset(args: argparse.Namespace) -> int:
+    """Remove a user's second factors from the server console (the escape hatch
+    for the recovery administrator, who is not exempt from the MFA policy)."""
+    from veyra.core import audit
+    from veyra.core.db import session_scope
+    from veyra.core.models.base import utcnow
+    from veyra.core.security import mfa
+    from veyra.core.security.sessions import revoke_user_sessions
+
+    with session_scope() as db:
+        user = _find_user(db, args.email)
+        removed = mfa.remove_all_factors(db, user.id)
+        policy = mfa.load_policy(db)
+        user.mfa_required_at = None
+        user.mfa_grace_until = None
+        mfa.ensure_requirement(user, policy, mfa.is_required(db, policy, user), utcnow())
+        revoked = revoke_user_sessions(db, user.id)
+        audit.record(
+            db,
+            action="user.mfa_reset",
+            actor_type="system",
+            actor_label="cli",
+            organization_id=user.home_organization_id,
+            target_type="user",
+            target_id=user.id,
+            details={"methods_removed": removed, "sessions_revoked": revoked},
+        )
+        email = user.email
+    print(f"{email}: removed {removed} second-factor method(s), signed out {revoked} session(s)")
+    if removed:
+        print("The user sets up a new authenticator at the next sign-in.")
+    return 0
+
+
 def cmd_users_unlock(args: argparse.Namespace) -> int:
     from veyra.core import audit
     from veyra.core.db import session_scope
@@ -841,6 +875,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--base-url", help="Public URL of this server, used to print the full link")
     s.add_argument("--quiet", action="store_true", help="Print only the link path")
     s.set_defaults(func=cmd_users_reset_password)
+    s = usr.add_parser("mfa-reset", help="Remove a user's second factors (they enrol again)")
+    s.add_argument("email")
+    s.set_defaults(func=cmd_users_mfa_reset)
     s = usr.add_parser("unlock", help="Clear an account lockout")
     s.add_argument("email")
     s.set_defaults(func=cmd_users_unlock)

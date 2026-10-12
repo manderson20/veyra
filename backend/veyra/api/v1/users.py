@@ -30,7 +30,7 @@ from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.models import Organization, Role, RoleAssignment, Site, User
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
-from veyra.core.security import password_reset, passwords
+from veyra.core.security import mfa, password_reset, passwords
 from veyra.core.security.principal import Principal
 from veyra.core.security.sessions import active_sessions, revoke_user_sessions
 
@@ -58,6 +58,31 @@ def _get_visible_user(
     return user
 
 
+def _outs(db: Session, users: list[User]) -> list[UserOut]:
+    ids = [u.id for u in users]
+    enabled: set[uuid.UUID] = set()
+    if ids:
+        from veyra.core.models import MfaMethod
+
+        enabled = set(
+            db.scalars(
+                select(MfaMethod.user_id).where(
+                    MfaMethod.user_id.in_(ids), MfaMethod.confirmed_at.is_not(None)
+                )
+            ).all()
+        )
+    out = []
+    for u in users:
+        o = UserOut.model_validate(u)
+        o.mfa_enabled = u.id in enabled
+        out.append(o)
+    return out
+
+
+def _out(db: Session, user: User) -> UserOut:
+    return _outs(db, [user])[0]
+
+
 def _guard_platform_admin_target(db: Session, principal: Principal, user: User) -> None:
     """Only platform administrators may modify platform-scoped accounts."""
     if principal.is_platform_admin:
@@ -83,12 +108,7 @@ def list_users(
         like = f"%{q.lower()}%"
         stmt = stmt.where(or_(User.email.ilike(like), User.display_name.ilike(like)))
     rows, total = paginate(db, stmt, page)
-    return Page(
-        items=[UserOut.model_validate(u) for u in rows],
-        total=total,
-        limit=page.limit,
-        offset=page.offset,
-    )
+    return Page(items=_outs(db, rows), total=total, limit=page.limit, offset=page.offset)
 
 
 @router.post("/users", response_model=UserOut, status_code=201, summary="Create a local user")
@@ -160,7 +180,7 @@ def get_user(
     principal: Principal = Depends(require("users.read")),
     db: Session = Depends(get_db),
 ) -> UserOut:
-    return UserOut.model_validate(_get_visible_user(db, principal, user_id, "users.read"))
+    return _out(db, _get_visible_user(db, principal, user_id, "users.read"))
 
 
 @router.patch("/users/{user_id}", response_model=UserOut, summary="Update a user")
@@ -224,7 +244,55 @@ def update_user(
         details=details,
     )
     db.commit()
-    return UserOut.model_validate(user)
+    return _out(db, user)
+
+
+@router.post(
+    "/users/{user_id}/mfa/reset",
+    response_model=MessageOut,
+    summary="Remove a user's second factors so they enrol again at the next sign-in",
+)
+def reset_user_mfa(
+    user_id: uuid.UUID,
+    principal: Principal = Depends(require("users.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    user = _get_visible_user(db, principal, user_id, "users.write")
+    _guard_platform_admin_target(db, principal, user)
+    if user.id == principal.user_id:
+        raise ProblemError(
+            409,
+            "Conflict",
+            "Manage your own second factor from your account page.",
+            code="self_mfa_reset",
+        )
+    removed = mfa.remove_all_factors(db, user.id)
+    policy = mfa.load_policy(db)
+    # A fresh grace window, so the user can sign in and enrol a new device.
+    user.mfa_required_at = None
+    user.mfa_grace_until = None
+    mfa.ensure_requirement(user, policy, mfa.is_required(db, policy, user), utcnow())
+    revoked = revoke_user_sessions(db, user.id)
+    audit.record(
+        db,
+        action="user.mfa_reset",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=user.home_organization_id,
+        target_type="user",
+        target_id=user.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"methods_removed": removed, "sessions_revoked": revoked},
+    )
+    db.commit()
+    if removed == 0:
+        return MessageOut(message="The user had no second factor; nothing was removed.")
+    return MessageOut(
+        message=f"Removed {removed} method(s) and the recovery codes; the user has been signed out "
+        "and will set up a new authenticator at the next sign-in."
+    )
 
 
 @router.post(

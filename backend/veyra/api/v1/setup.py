@@ -24,7 +24,7 @@ from veyra.core.deps import RequestContext, request_context
 from veyra.core.errors import ProblemError
 from veyra.core.models import Installation, Organization, Role, RoleAssignment, SystemSetting, User
 from veyra.core.models.base import utcnow
-from veyra.core.security import passwords
+from veyra.core.security import mfa, passwords
 from veyra.core.security.sessions import create_session, load_principal
 from veyra.telephony.numbering import NumberingPlan, save_numbering_plan
 
@@ -171,6 +171,11 @@ def initialize(
     role = db.scalar(select(Role).where(Role.key == "platform_admin", Role.is_system.is_(True)))
     assert role is not None
     db.add(RoleAssignment(id=uuid.uuid4(), user_id=user.id, role_id=role.id, scope_type="platform"))
+    db.flush()
+    # The policy requires a second factor for platform administrators by
+    # default: the enrolment window starts now (docs/MFA_DESIGN.md §7).
+    policy = mfa.load_policy(db)
+    mfa.ensure_requirement(user, policy, mfa.is_required(db, policy, user), utcnow())
     bootstrap.consume_setup_token(db)
     bootstrap.ensure_local_node(db)
     audit.record(

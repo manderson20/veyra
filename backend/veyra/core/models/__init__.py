@@ -3,6 +3,8 @@
 
 from veyra.core.models.base import Base
 from veyra.core.models.identity import (
+    MfaMethod,
+    MfaRecoveryCode,
     PasswordResetToken,
     Permission,
     Role,
@@ -41,6 +43,8 @@ __all__ = [
     "Extension",
     "Installation",
     "InstalledModule",
+    "MfaMethod",
+    "MfaRecoveryCode",
     "ModuleConfig",
     "Organization",
     "PasswordResetToken",

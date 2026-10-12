@@ -23,6 +23,18 @@ CSRF_HEADER = "X-CSRF-Token"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 # A user who must change a temporary password may only use these routes.
 FORCED_CHANGE_ALLOWED_PREFIX = "/api/v1/auth/"
+# A pre-authentication session (second factor pending) may only use these.
+# An explicit list, not a prefix, so nothing under /auth/mfa/ (such as the
+# policy) is reachable before the factor is verified.
+PRE_AUTH_ALLOWED_PATHS = frozenset(
+    {
+        "/api/v1/auth/mfa/challenge",
+        "/api/v1/auth/mfa/verify",
+        "/api/v1/auth/mfa/totp/begin",
+        "/api/v1/auth/mfa/totp/confirm",
+        "/api/v1/auth/logout",
+    }
+)
 
 
 @dataclass
@@ -75,6 +87,13 @@ def current_principal(
             raise ProblemError(
                 403, "Forbidden", "Missing or invalid CSRF token.", code="csrf_failed"
             )
+    if session.mfa_verified_at is None and request.url.path not in PRE_AUTH_ALLOWED_PATHS:
+        raise ProblemError(
+            403,
+            "Second factor required",
+            "Complete two-factor sign-in to continue.",
+            code="mfa_required",
+        )
     if user.must_change_password and not request.url.path.startswith(FORCED_CHANGE_ALLOWED_PREFIX):
         raise ProblemError(
             403,

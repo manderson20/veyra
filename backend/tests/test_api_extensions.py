@@ -324,6 +324,14 @@ def test_generated_configuration_and_encrypted_revision_artifacts(admin, app, tm
     assert f"password={secret}" in written and "[example-1001](veyra-endpoint)" in written
     assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is False
 
+    # a save that does not change the files still raises the flag (like
+    # "Apply Config"); applying clears it without deploying anything
+    admin.patch(f"{EXT}/{ext['id']}", json={"display_name": "Front Desk"})
+    e = admin.get("/api/v1/telephony/engine").json()
+    assert e["changes_pending"] is True and e["pending_by"] == "admin@district.local"
+    out = admin.post("/api/v1/telephony/apply").json()
+    assert out["applied"] is False and out["unchanged"] is True
+    assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is False
     # enabling the second extension makes changes pending again; only the
     # changed files are reported, and the sensitive one stays hidden
     admin.patch(f"{EXT}/{disabled['id']}", json={"is_enabled": True})
