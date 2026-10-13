@@ -43,9 +43,11 @@ the generated files:
 writes, Asterisk (group `asterisk`) reads, files are `0640`. `verify.sh`
 checks the directory, the stubs and the deployer service.
 
-`ari.conf`, `http.conf` and `manager.conf` are still installed by the
-installer, not generated: they hold the ARI credential and never change
-between deployments.
+`ari.conf`, `http.conf`, `manager.conf` and `modules.conf` are still
+installed by the installer, not generated: they hold the ARI credential and
+the module selection (only `app_voicemail.so` of the voicemail backends, no
+RADIUS accounting) and never change between deployments; a change to them
+restarts Asterisk during the upgrade.
 
 ## 3. Settings
 

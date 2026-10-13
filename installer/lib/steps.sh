@@ -304,6 +304,8 @@ do_telephony() {
     rm -f "$tmp"
     install_managed_file "$SCRIPT_DIR/templates/asterisk/http.conf" /etc/asterisk/http.conf 0640 root:asterisk
     install_managed_file "$SCRIPT_DIR/templates/asterisk/manager.conf" /etc/asterisk/manager.conf 0640 root:asterisk
+    # Module selection needs a restart to take effect, hence a core file.
+    install_managed_file "$SCRIPT_DIR/templates/asterisk/modules.conf" /etc/asterisk/modules.conf 0640 root:asterisk
     core_changed=$MANAGED_FILE_CHANGED
     # Stub files that #tryinclude Veyra's generated configuration. The sample
     # files shipped by the package are backed up beside them.
