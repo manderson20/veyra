@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## [Unreleased] — 0.7.0-dev (Milestone 6)
+## 0.7.0 — 2026-10-13 (Milestone 6)
 
 ### Added
 - **SIP trunks** (`/trunks`, Telephony → SIP Trunks): registration and IP-authenticated carrier connections with write-only passwords encrypted at rest, codec and caller-ID options, channel caps and live reachability from the engine's qualify ping. Generated `pjsip.trunks.conf` (the installer's `pjsip.conf` stub includes it).
