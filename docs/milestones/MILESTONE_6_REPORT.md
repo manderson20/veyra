@@ -1,10 +1,10 @@
 # Milestone 6: Completion Report (draft)
 
 **Milestone:** 6 — SIP trunks and routing (trunks, DIDs and inbound routing, outbound routing with dial patterns and trunk selection, time conditions, loop detection, emergency-number handling notes)
-**Date:** 2026-10-13 (in progress)
+**Date:** 2026-10-13
 **Branch:** `milestone-6` (pushed to `manderson20/veyra`; not merged to `main`)
 **Version:** 0.7.0-dev
-**Status:** Software in progress; see §3 for what has been verified.
+**Status:** Software complete and verified on veyra-dev1 with a software carrier (§3). Awaiting the owner's approval; a real carrier trunk has not been tested yet (§4).
 
 ## 1. Scope (approved 2026-10-13)
 
@@ -38,17 +38,24 @@ reference: [TRUNKS_ROUTING.md](../TRUNKS_ROUTING.md).
 | Backend mypy | No issues (88 files) |
 | Backend pytest against PostgreSQL 18.6 | **229 passed** (29 new: trunk sections for both modes and their validation; outbound contexts with emergency ordering, failover, caps and loop check; pattern validation; inbound shared, restricted, alias, catch-all and time-condition rendering; duplicate DIDs; routing helpers and `is_open`; API CRUD, validation, uniqueness, in-use conflicts, organization scoping, ordering and warnings; apply + deploy writing `pjsip.trunks.conf` and the routing contexts with the password absent from readable artifacts) |
 | `alembic check` | No drift (migration `0006`) |
-| Frontend lint / typecheck / vitest | *Pending* |
-| Frontend `npm run build` | *Pending* |
-| **Owner's `upgrade.sh` to this milestone on dev1** | *Pending* |
-| **Live on dev1: IP trunk to a software carrier (`tools/fakephone.py --no-register`), inbound DID call to extension 22214, outbound route call through the trunk, trunk status, time condition** | *Pending* |
+| Frontend lint / typecheck / vitest | Clean / clean / **28 passed** (6 new: navigation order and gating, routing helpers) |
+| Frontend `npm run build` | Passed; `/trunks`, `/trunks/view`, `/routing/inbound[/view]`, `/routing/outbound[/view]`, `/routing/time-conditions[/view]` exported |
+| **Owner's `upgrade.sh` to this milestone on dev1 (11:12 UTC)** | Passed: release `0.7.0-dev-1f8ab5a1e6`, migration 0006, the new `pjsip.conf` stub installed and PJSIP reloaded, all verify checks OK. Revision 7 (first with the new file layout) deployed cleanly. |
+| **Live on dev1: trunk, DID and route objects deployed (revision 8)** | Passed: an IP trunk `fakecarrier` (127.0.0.1:5082, match 127.0.0.1/32), DID `5735550100` → 22214 with a time condition and caller-ID prefix, and route `8XXXX` → trunk, created through the models and deployed; `pjsip show endpoint trunk-fakecarrier` shows the contact and identify match; `dialplan show` shows `veyra-from-trunk` with the DID and its `1`/`+1` aliases, the per-trunk context with both includes, the fallback, and `veyra-out-test-out`. |
+| **Trunk status** | Passed: after the qualify ping the contact is `Avail`, ARI reports the endpoint online and the adapter returns `registered=True` for `trunk-fakecarrier` (shown as *Online*). |
+| **Inbound call: software carrier → DID → extension (11:16 UTC)** | Passed: the carrier's INVITE to `5735550100` was identified as the trunk, ran the time condition (open), rang the software phone registered as 22214 with caller ID `"Main: 5735551234"`, was answered; Active Calls listed both channels (trunk leg attributed to `trunk-fakecarrier`, phone leg to the extension); the carrier's BYE ended both. |
+| **Outbound call: click-to-dial 22214 → 81234 through the route (11:16 UTC)** | Passed: the phone rang and answered, the route stripped the prefix and dialled the carrier, which rang with caller ID `5735550100` (the trunk default) and answered; Active Calls showed both legs; hanging up over ARI ended the carrier leg. |
+| **Clean-up** | Test objects removed, revision 9 deployed: no trunk endpoints or routing contexts remain. |
 
 ## 4. Not verified
 
 * A real carrier registration (no carrier account is available to the
   project yet). The registration sections follow the Asterisk PJSIP
-  reference; the first real trunk will be the test.
+  reference; the first real trunk will be the test. IP identification,
+  inbound and outbound calls were verified with a software carrier.
 * TLS trunks (no certificate chain to a carrier available).
+* The browser pages were not exercised by the owner yet (lint, type check,
+  tests and build pass).
 
 ## 5. Known limitations
 
@@ -61,10 +68,18 @@ reference: [TRUNKS_ROUTING.md](../TRUNKS_ROUTING.md).
   Milestone 14.
 * Holidays repeat yearly (`MM-DD`); `GotoIfTime` cannot express a year.
 * Emergency calling is **not certified** (`docs/EMERGENCY_CALLING.md`).
+* Calls are identified as a trunk by source address first (Asterisk's
+  default `endpoint_identifier_order`), so a phone that shares a trunk's
+  address is treated as that trunk; this surfaced in the live test and was
+  avoided by binding the test phone to another address. Real phones and
+  carriers do not share addresses in normal deployments.
+* Outbound calls carry the trunk default or route caller-ID *number*; the
+  caller-ID *name* is left as the phone sent it.
 
 ## 6. Open items
 
-* Owner's live checks with a real carrier when one is available.
+* Owner's live checks with a real carrier when one is available, and a
+  look at the four new pages in a browser.
 * veyra-dev2 is not provisioned (deferred).
 
 ## 7. Proposed Milestone 6b (for approval)

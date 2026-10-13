@@ -146,6 +146,13 @@ print(a.originate('<endpoint-name>', '*43', caller_id='*43 <*43>', context=CONTE
 print(a.active_calls())"
 ```
 
+To test trunks, run a second instance as the carrier (`--no-register
+--local-port 5082 --answer-after 2`, optionally `--call <did> --from-user
+<number>` to place an inbound call) and point an IP trunk at
+`127.0.0.1:5082`; bind the phone instance to another address
+(`--local-ip 172.16.2.250 --server 172.16.2.250`) so the trunk's address
+match does not catch it.
+
 A freshly registered phone shows as registered only after the engine's
 first qualify ping (`qualify_frequency`, 60 s), because ARI's endpoint
 state is derived from contact reachability, not from the REGISTER itself.

@@ -22,6 +22,9 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ### Changed
 - Phone endpoints carry `set_var=VEYRA_ORG=<organization>` for later per-tenant routing; `veyra-internal` now includes `veyra-outbound` between the feature codes and the invalid-number catch-all.
 
+### Development
+- `tools/fakephone.py` can act as a carrier (`--no-register`, `--call`, `--from-user`, `--header`, `--hangup-after`) and bind to a chosen address (`--local-ip`).
+
 ## 0.6.0 — 2026-10-13 (Milestone 5)
 
 ### Added
