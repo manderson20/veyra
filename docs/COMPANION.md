@@ -136,9 +136,12 @@ ARI events; the deployer and worker do not.
 
 ## 5. The extension
 
-Directory `companion/` (TypeScript, built with Vite into `companion/dist`,
-loaded unpacked or packed as a zip with `npm run zip`; store publication is a
-later step). `companion/README.md` has the build and load-unpacked steps.
+Directory `companion/` (TypeScript, built with Vite into `companion/dist`;
+store publication is a later step). The installer packages the build as
+`veyra-companion.zip`, served by NGINX at `/downloads/veyra-companion.zip`;
+the account page's *Connected apps* card links to it with the load-unpacked
+steps, so users never need the source tree. `companion/README.md` has the
+developer build steps.
 
 | Part | Role |
 |---|---|
