@@ -82,7 +82,7 @@ of §2) and `in_use_by` (routes and keys pointing at the box).
 [general]
 format=wav49|gsm|wav        ; wav49 for email attachments
 serveremail=<from_address>  fromstring=<from_name>
-attach=yes  maxmsg=100  maxsecs=180  minsecs=2  maxgreet=60
+attach=yes  maxmsg=100  maxsecs=180  maxgreet=60
 maxsilence=10  silencethreshold=128  maxlogins=3  pbxskip=yes
 emailsubject=New voicemail ${VM_MSGNUM} in mailbox ${VM_MAILBOX} (${VM_NAME})
 emailbody=...  (name, mailbox, caller, date, duration)
@@ -294,6 +294,14 @@ broken; deleting a box or a menu that something points at is refused.
   (`vm-*`, `pbx-invalid`, `beep`) are in `asterisk-core-sounds-en`;
   `app_voicemail`, `app_record`, `app_read` and `res_pjsip_mwi` are core
   modules loaded by default.
+* The installer now manages `/etc/asterisk/modules.conf` (the package list
+  plus `noload` for `app_voicemail_odbc.so`, `app_voicemail_imap.so`,
+  `cdr_radius.so`, `cel_radius.so`): Ubuntu ships all voicemail backends and
+  the ODBC one, failing to load beside `app_voicemail.so`, unregisters the
+  `VoiceMail` applications on its way out (seen on dev1: `No application
+  'VoiceMail'` with the module "Running"). A changed `modules.conf` makes the
+  installer restart Asterisk once; `verify.sh` checks that the application is
+  registered.
 * New Python dependency: `python-multipart` (file uploads; pure Python).
 
 ## 8. Known limitations

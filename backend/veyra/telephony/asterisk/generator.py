@@ -862,7 +862,6 @@ def _voicemail(
         "attach=yes",
         "maxmsg=100",
         "maxsecs=180",
-        "minsecs=2",
         "maxgreet=60",
         "maxsilence=10",
         "silencethreshold=128",

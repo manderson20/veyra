@@ -182,7 +182,8 @@ system packages are never removed.
 | Preflight: "public IP address" warning | The UI will not listen on public addresses. Use `--listen` or put the server behind a firewall or VPN. |
 | `veyra-api did not become ready` | `journalctl -u veyra-api -n 100`; `sudo veyra status` |
 | `NGINX is running but https://127.0.0.1/ does not answer` | `/var/log/nginx/error.log`; `bind() ... Address already in use` means another server holds port 80 or 443 |
-| Asterisk logs `radcli: rc_read_config ... radiusclient.conf` at start | Harmless: Ubuntu's module set loads `cdr_radius`/`cel_radius`; silenced by Veyra's generated `modules.conf` in Milestone 3 |
+| Asterisk logs `radcli: rc_read_config ... radiusclient.conf` at start | Harmless: Ubuntu's module set loads `cdr_radius`/`cel_radius`; Veyra's managed `modules.conf` (since 0.9.0) keeps them from loading |
+| Calls to voicemail fail with `No application 'VoiceMail'` | `app_voicemail_odbc.so` loaded beside `app_voicemail.so` and unregistered the applications; Veyra's `modules.conf` prevents it, `sudo systemctl restart asterisk` recovers, `sudo installer/verify.sh` checks (`engine-voicemail-app`) |
 | ARI not answering | `sudo asterisk -rx "http show status"`; check `/etc/asterisk/http.conf` |
 | Browser certificate warning | Expected with the self-signed certificate; see §4 |
 | Install stopped half-way | Fix the reported problem and run `install.sh` again; it resumes |

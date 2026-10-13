@@ -95,6 +95,16 @@ if [[ "$ENGINE" == "asterisk" ]]; then
             && check "engine-stub:$f" pass "Veyra-managed" \
             || check "engine-stub:$f" fail "/etc/asterisk/$f is not the Veyra-managed stub"
     done
+    grep -qs "Managed by Veyra" /etc/asterisk/modules.conf \
+        && check engine-modules-conf pass "Veyra-managed" \
+        || check engine-modules-conf fail "/etc/asterisk/modules.conf is not Veyra-managed (voicemail may not work)"
+    # The VoiceMail application must be registered (Milestone 7): a competing
+    # voicemail module that failed to load unregisters it.
+    if asterisk -rx "core show application VoiceMail" 2>/dev/null | grep -q "^\s*-= Info about application 'VoiceMail'"; then
+        check engine-voicemail-app pass "VoiceMail application registered"
+    else
+        check engine-voicemail-app fail "the VoiceMail application is not registered in Asterisk (restart Asterisk after the modules.conf change: sudo systemctl restart asterisk)"
+    fi
     # Directories shared with Asterisk (Milestone 7): prompts and the mail queue.
     [[ "$(perm "$VEYRA_DATA")" == "750 veyra:asterisk" ]] \
         && check data-dir pass "750 veyra:asterisk" \
