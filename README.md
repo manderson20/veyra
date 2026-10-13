@@ -16,6 +16,7 @@ businesses, MSPs and IT departments. It needs no cloud service and no
 subscription for self-hosted use.
 
 > **Status: early development (Milestone 1 — automated installation).** Not for production use.
+> The `companion/` directory holds the Veyra Companion browser extension (docs/COMPANION.md).
 > Telephony features (extensions, trunks, routing, voicemail…) arrive in later milestones;
 > see the [roadmap](docs/ROADMAP.md).
 
