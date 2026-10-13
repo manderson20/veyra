@@ -1,0 +1,25 @@
+{
+  "name": "veyra-companion",
+  "version": "0.8.0-dev",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "Veyra Companion browser extension (Chrome and Edge, Manifest V3)",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "icons": "node scripts/icons.mjs",
+    "zip": "node scripts/zip.mjs"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.4",
+    "@types/node": "26.6.3",
+    "typescript": "6.0.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
+  }
+}

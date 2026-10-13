@@ -169,6 +169,16 @@ npm run lint && npm run typecheck && npm test && npm run build   # build → out
 The UI is a static export served by NGINX in production
 ([ADR 0002](adr/0002-static-frontend.md)).
 
+## 4a. Companion extension
+
+`companion/` is a separate npm package (Vite, TypeScript, Vitest; no
+framework). `npm ci && npm run build` produces `companion/dist`, loadable
+unpacked in Chrome or Edge; `npm run typecheck`, `npm run test` and
+`npm run zip` as expected. The build fails if the service worker or the
+content script would import a shared chunk (each must stay a single file).
+The installer does not ship the extension; it is distributed to users as a
+zip or through browser policy ([COMPANION.md](COMPANION.md) §5).
+
 ## 5. Installer
 
 ```

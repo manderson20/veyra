@@ -53,12 +53,12 @@ event stream with the `Upgrade` headers and a long read timeout.
 
 ```
 POST /auth/companion/login    {email, password, device}
-   200 {token, expires_at, user, extensions}          no second factor needed
-   202 {challenge, methods, expires_at}               second factor pending
+   200 {token, token_id, expires_at, user, permissions, extensions, installation_name, version}
+   202 {challenge, enrol, methods (count), expires_at}  second factor pending
    401 invalid_credentials | 423 account_locked | 429 rate_limited
    403 mfa_enrolment_required                         must enrol in the web interface first
 POST /auth/companion/verify   {challenge, code, device}
-   200 {token, expires_at, user, extensions}
+   200 (same body as a successful login)
    401 invalid_code | 401 mfa_locked | 410 challenge_expired
 POST /auth/companion/logout   (Bearer)  -> 204, revokes this token
 ```
@@ -94,8 +94,8 @@ browser-page flow with the QR code and recovery codes.
 GET  /me/extensions                 the caller's own extensions with registration state
 GET  /me/preferences                {companion: {...}}
 PUT  /me/preferences                validated document, replaces the companion section
-GET  /directory?q=                  [{type: "extension", id, number, name, organization, user_display_name, user_email, registered}]
-POST /events/ticket                 {ticket, expires_in}  (one-time, 60 s)
+GET  /directory?q=                  {results: [{type: "extension", id, number, name, organization, user_display_name, user_email, registered}], total}
+POST /events/ticket                 {ticket, expires_in, url}  (one-time, 60 s)
 WS   /events/calls?ticket=…         call events for the caller's extensions
 POST /calls/originate               (existing) {extension_id, number}
 ```
@@ -137,7 +137,8 @@ ARI events; the deployer and worker do not.
 ## 5. The extension
 
 Directory `companion/` (TypeScript, built with Vite into `companion/dist`,
-loaded unpacked or packed as a zip; store publication is a later step).
+loaded unpacked or packed as a zip with `npm run zip`; store publication is a
+later step). `companion/README.md` has the build and load-unpacked steps.
 
 | Part | Role |
 |---|---|
