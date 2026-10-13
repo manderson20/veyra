@@ -65,7 +65,7 @@ The installer then:
    | `/etc/veyra/secrets/` | root:veyra 0750 | Generated credentials: `ari_password`, `installation.key` (encrypts SIP secrets at rest; **back it up**, see [EXTENSIONS.md](EXTENSIONS.md) §5) |
    | `/etc/veyra/trust/{official,community,third_party}/` | root 0755 | Trusted signing keys |
    | `/etc/veyra/tls/` | root 0700 | HTTPS certificate and key |
-   | `/var/lib/veyra/` | veyra 0750 | Data |
+   | `/var/lib/veyra/` | veyra:asterisk 0750 | Data; `prompts/` (IVR prompts, recordings from phones) and `mailqueue/` (outgoing email handed over by Asterisk) are `2770 veyra:asterisk` so Asterisk can write there |
    | `/var/log/veyra/` | veyra 0750 | Installer and upgrade logs |
    | `/var/backups/veyra/` | root 0700 | Backups |
 
@@ -157,9 +157,9 @@ a user's page in the UI.
 | Unit | Runs as | Purpose |
 |---|---|---|
 | `veyra-api` | veyra | Management API behind NGINX |
-| `veyra-worker` | veyra | Heartbeat, update checks, session purge |
+| `veyra-worker` | veyra | Heartbeat, update checks, session purge, outgoing mail queue (voicemail notifications), prompt folders |
 | `veyra-deployer` | veyra | Writes generated telephony configuration to `/etc/asterisk/veyra` and reloads Asterisk (only with a telephony engine) |
-| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf` and `rtp.conf` are Veyra-managed stubs that include the generated files |
+| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf` and `voicemail.conf` are Veyra-managed stubs that include the generated files |
 
 `journalctl -u veyra-deployer` shows deployments; `sudo veyra config status`
 summarises the engine and recent revisions.

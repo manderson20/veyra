@@ -43,7 +43,9 @@ setup wizard):
 | `reserved_prefixes` | `0`, `9`, `911`, `933` | No extension may start with these: operator, outside line, emergency and the emergency test number |
 
 Rules: numbers are digits only, of the configured length, inside the range,
-and not reserved. Feature codes start with `*` (`*43`, `*60`) and never
+and not reserved. Feature codes start with `*` (`*43` echo test, `*60`
+speaking clock, `*95` record a prompt, `*97` own voicemail, `*98` any
+voicemail box; see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md)) and never
 collide. `GET /extensions/next-number[?after=]` suggests the lowest free
 number; the "Suggest next free" button in the interface uses it.
 
