@@ -33,7 +33,7 @@ generated files:
 |---|---|---|---|
 | `pjsip.conf` | `pjsip.transports.conf` | UDP, TCP and optional TLS transports from the SIP settings, NAT addresses, local networks | `res_pjsip.so` |
 | `pjsip.conf` | `pjsip.endpoints.conf` | Endpoint, auth and AOR templates; one endpoint, auth and AOR section per enabled extension of an active organization ([EXTENSIONS.md](EXTENSIONS.md)). **Sensitive** when it contains SIP secrets: never shown in diffs, stored encrypted in the revision | `res_pjsip.so` |
-| `extensions.conf` | `extensions.conf` | `[veyra-features]` (`*43` echo test, `*60` speaking clock), `[veyra-internal]` (one `Dial(PJSIP/<endpoint>,30)` per extension, invalid-number handling), `[veyra-from-trunk]` (refuses calls until inbound routing exists, Milestone 6) | `pbx_config.so` |
+| `extensions.conf` | `extensions.conf` | `[veyra-features]` (`*43` echo test, `*60` speaking clock), `[veyra-internal]` (one `Dial(PJSIP/<endpoint>,30)` per extension; includes `veyra-features`, then `veyra-invalid`), `[veyra-invalid]` (invalid-number handling; kept out of `veyra-internal` because Asterisk matches a context's own patterns before its includes, which would shadow the feature codes), `[veyra-from-trunk]` (refuses calls until inbound routing exists, Milestone 6) | `pbx_config.so` |
 | `rtp.conf` | `rtp.conf` | RTP port range, strict RTP | `res_rtp_asterisk.so` |
 
 `/etc/asterisk/veyra` is `2750 veyra:asterisk`: the deployer (user `veyra`)

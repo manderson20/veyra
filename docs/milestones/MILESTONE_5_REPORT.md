@@ -23,26 +23,34 @@ extension), and the deploy-mode drop-down on the Deploy changes button.
 | Deploy mode | Done. `now` (default) or `when_idle` on apply and deploy, `veyra config deploy --when-idle`; the deployer holds a when-idle revision while the engine reports active calls, logs the wait, and after `VEYRA_DEPLOY_IDLE_TIMEOUT_MINUTES` (30) deploys anyway with a note in the revision log. Split button with a drop-down in the top bar; "Waiting for N calls to end" badge while held. Migration `0005`. | `backend/veyra/configmgmt/service.py`, `api/v1/telephony.py`, `frontend/src/components/shell/ApplyChanges.tsx` |
 | Documentation | Telephony engine, extensions, API, schema and changelog updated. | `docs/` |
 
-## 3. Testing (veyra-dev1, 2026-10-12, final tree)
+## 3. Testing (veyra-dev1, 2026-10-12/13, final tree)
 
 | Suite | Result |
 |---|---|
 | Backend ruff (lint and format) | Clean |
-| Backend mypy | No issues (85 files) |
-| Backend pytest against PostgreSQL 18.6 | **199 passed** (6 new: channel parsing helpers; registration in responses; scoped active calls; click-to-dial permissions, validation, failures and audit; deploy-when-idle wait, deploy after calls end, timeout, `now` ignores calls; CLI `--when-idle`) |
+| Backend mypy | No issues (84 files) |
+| Backend pytest against PostgreSQL 18.6 | **200 passed** (7 new: channel parsing helpers; registration in responses; scoped active calls; click-to-dial permissions, validation, failures and audit; deploy-when-idle wait, deploy after calls end, timeout, `now` ignores calls; CLI `--when-idle`; feature codes not shadowed by the catch-all) |
 | `alembic check` | No drift |
 | Frontend lint / typecheck / vitest | Clean / clean / **22 passed** |
 | Frontend `npm run build` | Passed; `/calls` exported |
-| **Owner's `upgrade.sh` to this milestone on dev1** | *Pending* |
-| **A real phone registered against dev1 (extension 22214 or a second one), shown as Registered** | *Pending the owner* |
-| **Internal call between two extensions, visible under Active Calls with a running duration** | *Pending the owner (needs two phones or a softphone)* |
-| **Click-to-dial from the extension page: the desk phone rings, then dials** | *Pending the owner* |
-| **Deploy when idle while a call is up: top bar shows the wait, deployment follows when the call ends** | *Pending the owner* |
+| **Owner's `upgrade.sh` to this milestone on dev1 (2026-10-13 09:18 UTC)** | Passed: backups taken, release `0.6.0-dev-2b0e5a2ffb` activated, migration 0005 applied, Asterisk left running (no managed file changed), all verify checks OK, 0.1.0 release pruned. |
+| **Registration (software phone, `tools/fakephone.py`, on dev1, 09:27 UTC)** | Passed: REGISTER with digest auth accepted; after the first qualify ping the contact is `Avail`, ARI reports the endpoint `online` and the adapter returns `registered=True`. Until that ping (up to 60 s) the badge reads unregistered (§5). |
+| **Click-to-dial through the production adapter (09:28 UTC)** | Passed: `adapter.originate(<endpoint>, "*43", context=veyra-internal)` rang the phone (INVITE with caller ID `*43`), the phone answered after 3 s, then the dialplan ran. Active calls showed the channel as `Ringing` (1 s, 3 s) then `Up` (6 s) with the owning endpoint, and empty after hangup. |
+| **Deploy when idle during a call (09:29–09:30 UTC)** | Passed: with a call held `Up`, `veyra config deploy 4 --when-idle` left revision 4 `deploying`; the deployer logged "waits for 1 active call(s) to end (0:29:58 left)"; hanging up over ARI made it deploy within seconds (audit `telephony.config_deploy` by deployer, revision 4 `deployed`). |
+| **Dialplan: feature codes from a phone** | **Failed, fixed.** The `*43` call hit `veyra-internal`'s catch-all ("no such extension", `pbx-invalid`, hangup after 4 s) because Asterisk matches a context's own patterns before its includes. The catch-all moved to `veyra-invalid`, included after `veyra-features`; regression test added. Needs a new generated revision on dev1 (§6). |
+| **A real desk phone registered against dev1, shown as Registered** | *Pending the owner (on site later on 2026-10-13)* |
+| **Internal call between two extensions under Active Calls** | *Pending the owner (needs a second extension and phone)* |
+| **"Call from this phone" in the browser: desk phone rings, then dials** | *Pending the owner* |
+| **Deploy-when-idle from the top bar: waiting badge, deployment after hangup** | *Pending the owner (CLI path verified above)* |
 
 ## 4. Not verified
 
-* Everything in §3 marked pending: no phone or softphone exists on the
-  server. The API paths are covered by tests with a fake engine.
+* The rows in §3 marked pending: a real handset, a second extension, and the
+  browser side of click-to-dial and deploy-when-idle. The engine paths behind
+  them were exercised remotely with `tools/fakephone.py` (§3) and the API
+  paths are covered by tests with a fake engine.
+* The waiting badge in the top bar was not seen live (the CLI path and the
+  deployer log were); `pending_wait` is unit-tested.
 * Registration details beyond on/off (contact address, user agent) are not
   exposed by ARI's endpoint resource; they would need AMI or the console.
 
@@ -55,10 +63,18 @@ extension), and the deploy-mode drop-down on the Deploy changes button.
 * Registration and call data are polled (15 s / 5 s), not pushed; ARI
   events over a WebSocket are a later refinement.
 * Active calls cannot be hung up from the interface yet.
+* A phone that has just registered shows as unregistered until the engine's
+  first qualify ping (`qualify_frequency` 60 s): ARI's endpoint state follows
+  contact reachability, not the REGISTER. A later refinement could read
+  contacts directly or subscribe to ARI events.
+* The fix for the shadowed feature codes changes the generated dialplan only;
+  an installed server needs one generated and deployed revision to pick it
+  up (`sudo veyra config generate --deploy`).
 
 ## 6. Open items
 
-* Dev1 verification with real phones (§3).
+* Dev1 verification with a real phone (§3), after upgrading to the tree with
+  the dialplan fix and running `sudo veyra config generate --deploy`.
 * veyra-dev2 is not provisioned (deferred).
 
 ## 7. Proposed Milestone 6 (for approval)
