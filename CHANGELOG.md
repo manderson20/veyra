@@ -8,6 +8,20 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## [Unreleased] — 0.7.0-dev (Milestone 6)
+
+### Added
+- **SIP trunks** (`/trunks`, Telephony → SIP Trunks): registration and IP-authenticated carrier connections with write-only passwords encrypted at rest, codec and caller-ID options, channel caps and live reachability from the engine's qualify ping. Generated `pjsip.trunks.conf` (the installer's `pjsip.conf` stub includes it).
+- **Inbound routes** (`/routing/inbound`, Telephony → Inbound Routes): DIDs to extensions per organization, optionally restricted to one trunk, with North American `1`/`+1` aliases, a caller-ID name prefix and a catch-all (`any`) route per trunk or shared.
+- **Outbound routes** (`/routing/outbound`, Telephony → Outbound Routes): dial patterns (prefix, match, prepend) to an ordered list of trunks with failover on CHANUNAVAIL/CONGESTION, per-route caller ID, drag-free reordering, and emergency routes that are always evaluated first; warnings when no emergency route exists.
+- **Time conditions** (`/routing/time-conditions`, Telephony → Time Conditions): weekly ranges and yearly holidays in a time zone, used by inbound routes to pick an in-hours or after-hours destination; `open_now` in the API.
+- Loop detection: calls arriving from a trunk may not leave through a trunk; trunk channel caps enforced with `GROUP_COUNT`.
+- Permissions `trunks.read`, `trunks.write` (platform), `routing.read`, `routing.write`. Migration `0006`.
+- Design and reference: `docs/TRUNKS_ROUTING.md`; emergency routing status in `docs/EMERGENCY_CALLING.md`.
+
+### Changed
+- Phone endpoints carry `set_var=VEYRA_ORG=<organization>` for later per-tenant routing; `veyra-internal` now includes `veyra-outbound` between the feature codes and the invalid-number catch-all.
+
 ## 0.6.0 — 2026-10-13 (Milestone 5)
 
 ### Added

@@ -30,5 +30,7 @@ Conventions:
 | Telephony | `/telephony/engine`, `/telephony/settings`, `/telephony/numbering`, `/telephony/apply` and `/telephony/revisions/{id}/deploy` (both take `{"mode": "now"\|"when_idle"}`), `/telephony/revisions[/{id}]`, `/telephony/revisions/{id}/discard` (see [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md)) |
 | Extensions | `/extensions[/{id}]`, `/extensions/next-number`, `/extensions/{id}/sip-credentials[/rotate]` (see [EXTENSIONS.md](EXTENSIONS.md)) |
 | Calls | `/calls` (active channels), `/calls/originate` (click-to-dial) |
+| Trunks | `/trunks[/{id}]` (SIP trunks with live status; see [TRUNKS_ROUTING.md](TRUNKS_ROUTING.md)) |
+| Routing | `/routing/inbound[/{id}]` (DIDs), `/routing/outbound[/{id}]`, `/routing/outbound/order`, `/routing/time-conditions[/{id}]` |
 
-Planned (later milestones): `/devices`, `/trunks`, `/routes`, and others.
+Planned (later milestones): `/devices`, ring groups, queues, voicemail and others.

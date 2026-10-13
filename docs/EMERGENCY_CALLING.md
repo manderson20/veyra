@@ -25,3 +25,18 @@ regulations that apply to them. These notes are not legal advice.
 
 Paging integration (for example Algo SIP speakers) is not a substitute for a
 life-safety mass notification system.
+
+## Status after Milestone 6 (routing only)
+
+Implemented ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §7): outbound routes
+marked *emergency* are evaluated before every other route, so `911` (and
+`933`) dial directly from any extension without a prefix; the numbering plan
+reserves both; an emergency route uses its own caller ID (the ELIN or the
+registered DID), a 120-second dial timeout, ignores trunk channel caps and
+the loop check, and logs each call at WARNING level in the Asterisk log; the
+Outbound Routes page warns when no enabled emergency route exists.
+
+Not implemented: on-site notification (Kari's Law), per-site trunk selection
+and dispatchable location (RAY BAUM'S Act), callback handling, carrier test
+records and the readiness dashboard (Milestone 17). **Emergency calling is
+still not certified and must not be relied on.**

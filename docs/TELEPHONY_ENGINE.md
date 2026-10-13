@@ -25,7 +25,8 @@ the milestones after it.
 ## 2. Files
 
 The installer replaces the package's sample `pjsip.conf`, `extensions.conf`
-and `rtp.conf` with Veyra-managed stubs (the samples are backed up beside
+and `rtp.conf` with Veyra-managed stubs (the `pjsip.conf` stub includes the
+three generated PJSIP files) (the samples are backed up beside
 them as `*.veyra-backup-<timestamp>`). Each stub only `#tryinclude`s the
 generated files:
 
@@ -33,7 +34,8 @@ generated files:
 |---|---|---|---|
 | `pjsip.conf` | `pjsip.transports.conf` | UDP, TCP and optional TLS transports from the SIP settings, NAT addresses, local networks | `res_pjsip.so` |
 | `pjsip.conf` | `pjsip.endpoints.conf` | Endpoint, auth and AOR templates; one endpoint, auth and AOR section per enabled extension of an active organization ([EXTENSIONS.md](EXTENSIONS.md)). **Sensitive** when it contains SIP secrets: never shown in diffs, stored encrypted in the revision | `res_pjsip.so` |
-| `extensions.conf` | `extensions.conf` | `[veyra-features]` (`*43` echo test, `*60` speaking clock), `[veyra-internal]` (one `Dial(PJSIP/<endpoint>,30)` per extension; includes `veyra-features`, then `veyra-invalid`), `[veyra-invalid]` (invalid-number handling; kept out of `veyra-internal` because Asterisk matches a context's own patterns before its includes, which would shadow the feature codes), `[veyra-from-trunk]` (refuses calls until inbound routing exists, Milestone 6) | `pbx_config.so` |
+| `pjsip.conf` | `pjsip.trunks.conf` | Per enabled trunk: endpoint, AOR, identify and, in registration mode, auth and registration sections ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §8). **Sensitive** when it carries a trunk password | `res_pjsip.so` |
+| `extensions.conf` | `extensions.conf` | `[veyra-features]` (`*43` echo test, `*60` speaking clock), `[veyra-internal]` (one `Dial(PJSIP/<endpoint>,30)` per extension; includes `veyra-features`, `veyra-outbound`, then `veyra-invalid`), `[veyra-invalid]` (invalid-number handling; kept out of `veyra-internal` because Asterisk matches a context's own patterns before its includes, which would shadow the feature codes), `[veyra-outbound]` and one `[veyra-out-<slug>]` per outbound route, `[veyra-from-trunk]` (shared DIDs) and `[veyra-from-trunk-<slug>]` plus `-fallback` per trunk ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §3-§4) | `pbx_config.so` |
 | `rtp.conf` | `rtp.conf` | RTP port range, strict RTP | `res_rtp_asterisk.so` |
 
 `/etc/asterisk/veyra` is `2750 veyra:asterisk`: the deployer (user `veyra`)

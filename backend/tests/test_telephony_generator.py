@@ -95,6 +95,7 @@ def test_feature_codes_are_not_shadowed_by_the_catch_all():
     includes = [ln for ln in internal if ln.startswith("include =>")]
     assert includes == [
         f"include => {generator.CONTEXT_FEATURES}",
+        f"include => {generator.CONTEXT_OUTBOUND}",
         f"include => {generator.CONTEXT_INVALID}",
     ]
     assert any(ln.startswith("exten => _[0-9*#+].") for ln in sections[generator.CONTEXT_INVALID])

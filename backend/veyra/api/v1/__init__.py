@@ -13,10 +13,12 @@ from veyra.api.v1 import (
     modules,
     organizations,
     provisioning,
+    routing,
     search,
     setup,
     system,
     telephony,
+    trunks,
     updates,
     users,
 )
@@ -38,5 +40,7 @@ for r in (
     telephony,
     extensions,
     calls,
+    trunks,
+    routing,
 ):
     api_router.include_router(r.router)
