@@ -86,15 +86,24 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         ForeignKey("sip_trunks.id", ondelete="RESTRICT")
     )
     description: Mapped[str | None] = mapped_column(Text)
+    # extension | voicemail (of the extension) | ivr, with the matching target
+    # column (docs/VOICEMAIL_IVR.md §6). A missing target is flagged, not fatal.
     destination_type: Mapped[str] = mapped_column(String(16), default="extension")
     destination_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
     )
+    destination_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL")
+    )
     time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("time_conditions.id", ondelete="RESTRICT")
     )
+    after_hours_type: Mapped[str] = mapped_column(String(16), default="extension")
     after_hours_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
+    )
+    after_hours_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL")
     )
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

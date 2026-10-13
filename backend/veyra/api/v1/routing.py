@@ -20,6 +20,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
 from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
 from veyra.core.db import get_db
@@ -27,7 +28,6 @@ from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
 from veyra.core.models import (
-    Extension,
     InboundRoute,
     Organization,
     OutboundRoute,
@@ -402,7 +402,7 @@ def delete_time_condition(
 # =============================================================== inbound routes
 
 
-DestinationType = Literal["extension"]
+DestinationType = Literal["extension", "voicemail", "ivr"]
 
 
 class InboundRouteIn(BaseModel):
@@ -410,10 +410,15 @@ class InboundRouteIn(BaseModel):
     did: str = Field(min_length=1, max_length=40)
     trunk_id: uuid.UUID | None = None
     description: str | None = Field(None, max_length=2000)
+    # The destination (docs/VOICEMAIL_IVR.md §6): an extension, the voicemail
+    # of an extension, or an IVR menu; the after-hours branch has the same shape.
     destination_type: DestinationType = "extension"
     destination_extension_id: uuid.UUID | None = None
+    destination_ivr_id: uuid.UUID | None = None
     time_condition_id: uuid.UUID | None = None
+    after_hours_type: DestinationType = "extension"
     after_hours_extension_id: uuid.UUID | None = None
+    after_hours_ivr_id: uuid.UUID | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
     is_enabled: bool = True
 
@@ -438,8 +443,11 @@ class InboundRoutePatch(BaseModel):
     description: str | None = Field(None, max_length=2000)
     destination_type: DestinationType | None = None
     destination_extension_id: uuid.UUID | None = None
+    destination_ivr_id: uuid.UUID | None = None
     time_condition_id: uuid.UUID | None = None
+    after_hours_type: DestinationType | None = None
     after_hours_extension_id: uuid.UUID | None = None
+    after_hours_ivr_id: uuid.UUID | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
     is_enabled: bool | None = None
 
@@ -456,14 +464,20 @@ class InboundRouteOut(BaseModel):
     description: str | None
     destination_type: str
     destination_extension_id: uuid.UUID | None
+    destination_ivr_id: uuid.UUID | None
+    # Extension number and name for extension and voicemail destinations.
     destination_number: str | None
     destination_name: str | None
+    destination: DestinationOut
     destination_missing: bool
     time_condition_id: uuid.UUID | None
     time_condition_name: str | None
+    after_hours_type: str
     after_hours_extension_id: uuid.UUID | None
+    after_hours_ivr_id: uuid.UUID | None
     after_hours_number: str | None
     after_hours_name: str | None
+    after_hours: DestinationOut | None
     caller_id_prefix: str | None
     is_enabled: bool
     created_at: datetime
@@ -472,15 +486,12 @@ class InboundRouteOut(BaseModel):
 
 def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
     orgs = _org_names(db, {r.organization_id for r in rows})
-    ext_ids = {r.destination_extension_id for r in rows} | {
-        r.after_hours_extension_id for r in rows
-    }
-    ext_ids.discard(None)
-    exts = (
-        {e.id: e for e in db.scalars(select(Extension).where(Extension.id.in_(ext_ids)))}
-        if ext_ids
-        else {}
+    resolver = Resolver(db)
+    resolver.load(
+        [(r.destination_type, r.destination_extension_id, r.destination_ivr_id) for r in rows]
+        + [(r.after_hours_type, r.after_hours_extension_id, r.after_hours_ivr_id) for r in rows]
     )
+    exts = resolver.extensions
     trunk_ids = {r.trunk_id for r in rows if r.trunk_id}
     trunks = (
         {t.id: t for t in db.scalars(select(SipTrunk).where(SipTrunk.id.in_(trunk_ids)))}
@@ -499,6 +510,14 @@ def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
         after = exts.get(r.after_hours_extension_id) if r.after_hours_extension_id else None
         trunk = trunks.get(r.trunk_id) if r.trunk_id else None
         tc = tcs.get(r.time_condition_id) if r.time_condition_id else None
+        dest_out = resolver.out(
+            r.destination_type, r.destination_extension_id, r.destination_ivr_id
+        )
+        after_out = (
+            resolver.out(r.after_hours_type, r.after_hours_extension_id, r.after_hours_ivr_id)
+            if r.time_condition_id is not None
+            else None
+        )
         out.append(
             InboundRouteOut(
                 id=r.id,
@@ -512,15 +531,20 @@ def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
                 description=r.description,
                 destination_type=r.destination_type,
                 destination_extension_id=r.destination_extension_id,
+                destination_ivr_id=r.destination_ivr_id,
                 destination_number=dest.number if dest else None,
                 destination_name=dest.display_name if dest else None,
-                destination_missing=dest is None
-                or (r.time_condition_id is not None and after is None),
+                destination=dest_out,
+                destination_missing=dest_out.missing
+                or (after_out is not None and after_out.missing),
                 time_condition_id=r.time_condition_id,
                 time_condition_name=tc.name if tc else None,
+                after_hours_type=r.after_hours_type,
                 after_hours_extension_id=r.after_hours_extension_id,
+                after_hours_ivr_id=r.after_hours_ivr_id,
                 after_hours_number=after.number if after else None,
                 after_hours_name=after.display_name if after else None,
+                after_hours=after_out,
                 caller_id_prefix=r.caller_id_prefix,
                 is_enabled=r.is_enabled,
                 created_at=r.created_at,
@@ -538,35 +562,50 @@ def _get_ir(db: Session, principal: Principal, route_id: uuid.UUID, perm: str) -
     return route
 
 
-def _check_destinations(
-    db: Session,
-    org_id: uuid.UUID,
-    destination_id: uuid.UUID | None,
-    time_condition_id: uuid.UUID | None,
-    after_hours_id: uuid.UUID | None,
-    trunk_id: uuid.UUID | None,
-) -> None:
-    if destination_id is None:
-        raise _validation("destination_extension_id", "choose the extension that answers")
-    dest = db.get(Extension, destination_id)
-    if dest is None or dest.organization_id != org_id:
-        raise _validation("destination_extension_id", "extension not found in this organization")
-    if time_condition_id is not None:
-        tc = db.get(TimeCondition, time_condition_id)
+def _dest_field(kind: str, prefix: str) -> str:
+    return f"{prefix}_ivr_id" if kind == "ivr" else f"{prefix}_extension_id"
+
+
+def _check_destinations(db: Session, org_id: uuid.UUID, route: InboundRoute) -> None:
+    dest = DestinationIn(
+        type=route.destination_type,
+        extension_id=route.destination_extension_id,
+        ivr_id=route.destination_ivr_id,
+    )
+    check_destination(
+        db,
+        org_id,
+        dest,
+        field=_dest_field(route.destination_type, "destination"),
+        allow_hangup=False,
+    )
+    if route.time_condition_id is not None:
+        tc = db.get(TimeCondition, route.time_condition_id)
         if tc is None or tc.organization_id != org_id:
             raise _validation("time_condition_id", "time condition not found in this organization")
-        if after_hours_id is None:
-            raise _validation("after_hours_extension_id", "choose where calls go outside the hours")
-        after = db.get(Extension, after_hours_id)
-        if after is None or after.organization_id != org_id:
-            raise _validation(
-                "after_hours_extension_id", "extension not found in this organization"
-            )
-    elif after_hours_id is not None:
-        raise _validation(
-            "after_hours_extension_id", "an after-hours destination needs a time condition"
+        after = DestinationIn(
+            type=route.after_hours_type,
+            extension_id=route.after_hours_extension_id,
+            ivr_id=route.after_hours_ivr_id,
         )
-    if trunk_id is not None and db.get(SipTrunk, trunk_id) is None:
+        if after.extension_id is None and after.ivr_id is None:
+            raise _validation(
+                _dest_field(route.after_hours_type, "after_hours"),
+                "choose where calls go outside the hours",
+            )
+        check_destination(
+            db,
+            org_id,
+            after,
+            field=_dest_field(route.after_hours_type, "after_hours"),
+            allow_hangup=False,
+        )
+    elif route.after_hours_extension_id is not None or route.after_hours_ivr_id is not None:
+        raise _validation(
+            _dest_field(route.after_hours_type, "after_hours"),
+            "an after-hours destination needs a time condition",
+        )
+    if route.trunk_id is not None and db.get(SipTrunk, route.trunk_id) is None:
         raise _validation("trunk_id", "trunk not found")
 
 
@@ -604,14 +643,6 @@ def create_inbound(
     ctx: RequestContext = Depends(request_context),
 ) -> InboundRouteOut:
     org = _org_for_write(db, principal, body.organization_id)
-    _check_destinations(
-        db,
-        org.id,
-        body.destination_extension_id,
-        body.time_condition_id,
-        body.after_hours_extension_id,
-        body.trunk_id,
-    )
     route = InboundRoute(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -621,11 +652,15 @@ def create_inbound(
         description=(body.description or "").strip() or None,
         destination_type=body.destination_type,
         destination_extension_id=body.destination_extension_id,
+        destination_ivr_id=body.destination_ivr_id,
         time_condition_id=body.time_condition_id,
+        after_hours_type=body.after_hours_type,
         after_hours_extension_id=body.after_hours_extension_id,
+        after_hours_ivr_id=body.after_hours_ivr_id,
         caller_id_prefix=body.caller_id_prefix,
         is_enabled=body.is_enabled,
     )
+    _check_destinations(db, org.id, route)
     db.add(route)
     try:
         db.flush()
@@ -644,7 +679,13 @@ def create_inbound(
         details={
             "did": route.did,
             "trunk_id": str(route.trunk_id) if route.trunk_id else None,
-            "destination_extension_id": str(route.destination_extension_id),
+            "destination_type": route.destination_type,
+            "destination_extension_id": (
+                str(route.destination_extension_id) if route.destination_extension_id else None
+            ),
+            "destination_ivr_id": (
+                str(route.destination_ivr_id) if route.destination_ivr_id else None
+            ),
         },
     )
     db.commit()
@@ -691,28 +732,35 @@ def update_inbound(
             details["caller_id_prefix"] = prefix
     for field in (
         "trunk_id",
-        "destination_extension_id",
-        "time_condition_id",
-        "after_hours_extension_id",
-        "is_enabled",
         "destination_type",
+        "destination_extension_id",
+        "destination_ivr_id",
+        "time_condition_id",
+        "after_hours_type",
+        "after_hours_extension_id",
+        "after_hours_ivr_id",
+        "is_enabled",
     ):
         if field in changes and changes[field] != getattr(route, field):
             setattr(route, field, changes[field])
             details[field] = str(changes[field]) if changes[field] is not None else None
+    # Only the target column of each destination type is meaningful.
+    if route.destination_type == "ivr":
+        route.destination_extension_id = None
+    else:
+        route.destination_ivr_id = None
+    if route.time_condition_id is None:
+        route.after_hours_extension_id = route.after_hours_ivr_id = None
+    elif route.after_hours_type == "ivr":
+        route.after_hours_extension_id = None
+    else:
+        route.after_hours_ivr_id = None
     if "description" in changes:
         desc = (changes["description"] or "").strip() or None
         if desc != route.description:
             route.description = desc
             details["description"] = True
-    _check_destinations(
-        db,
-        route.organization_id,
-        route.destination_extension_id,
-        route.time_condition_id,
-        route.after_hours_extension_id,
-        route.trunk_id,
-    )
+    _check_destinations(db, route.organization_id, route)
     if not details:
         return _ir_outs(db, [route])[0]
     try:

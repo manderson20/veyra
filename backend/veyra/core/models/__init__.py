@@ -38,6 +38,7 @@ from veyra.core.models.routing import (
 )
 from veyra.core.models.telephony import Device, Extension
 from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
+from veyra.core.models.voicemail import IvrEntry, IvrMenu, Prompt, VoicemailBox
 
 __all__ = [
     "ApiToken",
@@ -54,6 +55,8 @@ __all__ = [
     "InboundRoute",
     "Installation",
     "InstalledModule",
+    "IvrEntry",
+    "IvrMenu",
     "MfaMethod",
     "MfaRecoveryCode",
     "ModuleConfig",
@@ -62,6 +65,7 @@ __all__ = [
     "OutboundRouteTrunk",
     "PasswordResetToken",
     "Permission",
+    "Prompt",
     "ProvisioningTemplate",
     "Role",
     "RoleAssignment",
@@ -76,4 +80,5 @@ __all__ = [
     "User",
     "UserPreference",
     "UserSession",
+    "VoicemailBox",
 ]

@@ -742,8 +742,45 @@ def cmd_installation_key_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def process_mail_queue(db: Any, settings: Any, log: Any) -> None:
+    """One pass over the outgoing mail queue (docs/VOICEMAIL_IVR.md §2);
+    messages given up on are audited as ``mail.failed``."""
+    from veyra.core import audit, mail
+    from veyra.core.security.crypto import try_load_installation_key
+
+    smtp = mail.load_smtp_settings(db)
+    result = mail.process_queue(settings.mailqueue_dir, smtp, try_load_installation_key(settings))
+    for name, error in result.failed:
+        audit.record(
+            db,
+            action="mail.failed",
+            outcome="failure",
+            actor_type="system",
+            actor_label="worker",
+            target_type="mail",
+            target_id=name,
+            details={"error": error, "host": smtp.host},
+        )
+    if result.sent or result.failed:
+        log.info("Mail queue: %d sent, %d failed", len(result.sent), len(result.failed))
+
+
+def ensure_prompt_dirs(db: Any, settings: Any) -> None:
+    """Every active organization gets its prompt folder and ``incoming``
+    sub-folder, so ``*95`` recordings from phones have a place to land before
+    the first upload (docs/VOICEMAIL_IVR.md §4)."""
+    from sqlalchemy import select
+
+    from veyra.core.models import Organization
+    from veyra.telephony import audio
+
+    slugs = db.scalars(select(Organization.slug).where(Organization.is_active.is_(True))).all()
+    audio.ensure_org_dirs(settings.prompts_dir, slugs)
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
-    """Background worker: node heartbeat and scheduled update checks."""
+    """Background worker: node heartbeat, scheduled update checks, the
+    outgoing mail queue, prompt folders."""
     import logging
     from datetime import timedelta
 
@@ -793,6 +830,9 @@ def cmd_worker(args: argparse.Namespace) -> int:
                 if due and settings.update_metadata_url:
                     check = check_for_updates(db, settings, Keyring.load(settings.trust_dir))
                     log.info("Update check: %s %s", check.outcome, check.message)
+                process_mail_queue(db, settings, log)
+                if settings.telephony_engine != "none":
+                    ensure_prompt_dirs(db, settings)
         except Exception:
             log.exception("Worker iteration failed")
         if args.once:

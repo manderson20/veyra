@@ -15,5 +15,7 @@ def get_adapter(settings: Settings) -> TelephonyAdapter:
             settings.asterisk_ari_url,
             settings.asterisk_ari_username,
             settings.asterisk_ari_password_file,
+            prompts_dir=settings.prompts_dir,
+            mailqueue_command=settings.mailqueue_command,
         )
     return NullAdapter()

@@ -17,8 +17,17 @@ AUTH_MODES = ("registration", "ip")
 TRANSPORTS = ("udp", "tcp", "tls")
 CALLER_ID_HEADERS = ("pai", "rpid", "none")
 DTMF_MODES = ("rfc4733", "inband", "info", "auto")
-DESTINATION_TYPES = ("extension",)
+# Where a call can be sent (docs/VOICEMAIL_IVR.md §6): routes use the first
+# three; IVR keys and fallbacks may also hang up.
+DESTINATION_TYPES = ("extension", "voicemail", "ivr")
+IVR_DESTINATION_TYPES = (*DESTINATION_TYPES, "hangup")
+IVR_DIGITS = tuple("0123456789*#")
 MAX_HOPS = 3
+# IVR menus pointing at each other are cut off at this depth.
+MAX_IVR_DEPTH = 8
+
+_PIN_RE = re.compile(r"^[0-9]{4,10}$")
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 
 _DID_RE = re.compile(r"^\+?[0-9]{2,20}$")
 _PREFIX_RE = re.compile(r"^[0-9*#]{0,15}$")
@@ -36,6 +45,25 @@ def slugify(name: str) -> str:
     if not s or not s[0].isalnum():
         raise ValueError("the name must contain at least one letter or digit")
     return s
+
+
+# ----------------------------------------------------------------- voicemail
+
+
+def check_pin(value: str) -> str:
+    v = value.strip()
+    if not _PIN_RE.match(v):
+        raise ValueError("4 to 10 digits")
+    return v
+
+
+def check_email(value: str) -> str:
+    """One address, plain (no display name): it lands in voicemail.conf and
+    in message headers."""
+    v = value.strip()
+    if len(v) > 254 or not _EMAIL_RE.match(v):
+        raise ValueError("enter one email address such as name@example.org")
+    return v
 
 
 # ----------------------------------------------------------------- DIDs

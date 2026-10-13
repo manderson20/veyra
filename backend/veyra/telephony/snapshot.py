@@ -20,21 +20,26 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from veyra.core.mail import load_smtp_settings, sender
 from veyra.core.models import (
     Extension,
     InboundRoute,
     Installation,
+    IvrEntry,
+    IvrMenu,
     Organization,
     OutboundRoute,
     OutboundRouteTrunk,
+    Prompt,
     SipTrunk,
     TimeCondition,
+    VoicemailBox,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 3
+SNAPSHOT_VERSION = 4
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -45,6 +50,11 @@ def secret_purpose(extension_id: Any) -> str:
 def trunk_secret_purpose(trunk_id: Any) -> str:
     """Associated data that binds a trunk password ciphertext to its trunk."""
     return f"trunk.sip_secret:{trunk_id}"
+
+
+def pin_purpose(box_id: Any) -> str:
+    """Associated data that binds a voicemail PIN ciphertext to its box."""
+    return f"voicemail.pin:{box_id}"
 
 
 class SnapshotError(ValueError):
@@ -80,6 +90,18 @@ def _trunk_password(trunk: SipTrunk, key: InstallationKey | None) -> str | None:
         raise SnapshotError(f"the password of trunk {trunk.name} cannot be read: {e}") from e
 
 
+def _pin(box: VoicemailBox, number: str, key: InstallationKey | None) -> str:
+    if key is None:
+        raise SnapshotError(
+            f"the voicemail box of extension {number} has an encrypted PIN but the "
+            "installation key is not available (see 'veyra installation-key check')"
+        )
+    try:
+        return key.decrypt(box.pin_ciphertext, pin_purpose(box.id))
+    except DecryptionError as e:
+        raise SnapshotError(f"the voicemail PIN of extension {number} cannot be read: {e}") from e
+
+
 def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     inst = db.scalar(select(Installation))
     orgs = db.scalars(select(Organization).order_by(Organization.slug)).all()
@@ -94,6 +116,10 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         if e.organization_id in active
     ]
     org_slug = {o.id: o.slug for o in orgs}
+    org_tz = {o.id: o.timezone for o in orgs}
+    voicemail = _voicemail_ivr(db, key, active, extensions, org_slug, org_tz)
+    smtp = load_smtp_settings(db)
+    from_address, from_name = sender(smtp, inst.name if inst else "Veyra")
     return {
         "snapshot_version": SNAPSHOT_VERSION,
         "veyra_version": __version__,
@@ -103,6 +129,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
             "multi_tenancy_enabled": bool(inst.multi_tenancy_enabled) if inst else False,
         },
         "sip": load_sip_settings(db).model_dump(mode="json"),
+        "smtp": {"enabled": smtp.enabled, "from_address": from_address, "from_name": from_name},
         "organizations": [
             {"slug": o.slug, "name": o.name, "timezone": o.timezone, "is_active": o.is_active}
             for o in orgs
@@ -119,7 +146,116 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
             }
             for e in extensions
         ],
-        **_routing(db, key, active, extensions),
+        **voicemail,
+        **_routing(db, key, active, extensions, voicemail),
+    }
+
+
+def _destination(
+    kind: str | None,
+    extension_id: Any,
+    ivr_id: Any,
+    number_of: dict[Any, str],
+    box_numbers: set[str],
+    ivr_slug: dict[Any, str],
+) -> dict[str, Any]:
+    """An engine-neutral destination: the extension number, the number whose
+    voicemail answers, the menu slug, a hang-up, or ``missing`` when the
+    target is gone or not deployable (the generator renders congestion and
+    the interface flags it)."""
+    if kind == "hangup":
+        return {"type": "hangup"}
+    if kind == "ivr":
+        slug = ivr_slug.get(ivr_id) if ivr_id else None
+        return {"type": "ivr", "ivr": slug} if slug else {"type": "missing"}
+    number = number_of.get(extension_id) if extension_id else None
+    if kind == "voicemail":
+        if number and number in box_numbers:
+            return {"type": "voicemail", "number": number}
+        return {"type": "missing"}
+    return {"type": "extension", "number": number} if number else {"type": "missing"}
+
+
+def _voicemail_ivr(
+    db: Session,
+    key: InstallationKey | None,
+    active_orgs: set[Any],
+    extensions: list[Extension],
+    org_slug: dict[Any, str],
+    org_tz: dict[Any, str],
+) -> dict[str, Any]:
+    """Voicemail boxes and IVR menus of active organizations
+    (docs/VOICEMAIL_IVR.md §3, §5)."""
+    ext_by_id = {e.id: e for e in extensions}
+    number_of = {e.id: e.number for e in extensions}
+    boxes = [
+        b
+        for b in db.scalars(select(VoicemailBox).order_by(VoicemailBox.created_at)).all()
+        if b.is_enabled and b.extension_id in ext_by_id
+    ]
+    boxes.sort(key=lambda b: ext_by_id[b.extension_id].number)
+    box_numbers = {ext_by_id[b.extension_id].number for b in boxes}
+    menus = [
+        m
+        for m in db.scalars(select(IvrMenu).order_by(IvrMenu.slug)).all()
+        if m.is_enabled and m.organization_id in active_orgs
+    ]
+    ivr_slug = {m.id: m.slug for m in menus}
+    prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
+    entries: dict[Any, list[IvrEntry]] = {}
+    for e in db.scalars(select(IvrEntry).order_by(IvrEntry.digit)).all():
+        entries.setdefault(e.menu_id, []).append(e)
+    numbers_by_org: dict[Any, list[str]] = {}
+    for ext in extensions:
+        numbers_by_org.setdefault(ext.organization_id, []).append(ext.number)
+
+    def dest(kind: str | None, ext_id: Any, ivr_id: Any) -> dict[str, Any]:
+        return _destination(kind, ext_id, ivr_id, number_of, box_numbers, ivr_slug)
+
+    def prompt_slug(prompt_id: Any, org_id: Any) -> str | None:
+        p = prompts.get(prompt_id) if prompt_id else None
+        return p.slug if p is not None and p.organization_id == org_id else None
+
+    return {
+        "voicemail_boxes": [
+            {
+                "number": ext_by_id[b.extension_id].number,
+                "name": ext_by_id[b.extension_id].display_name,
+                "organization": org_slug.get(b.organization_id, ""),
+                "timezone": org_tz.get(b.organization_id) or "UTC",
+                "pin": _pin(b, ext_by_id[b.extension_id].number, key),
+                "email": b.email,
+                "attach_audio": b.attach_audio,
+                "delete_after_email": b.delete_after_email,
+                "ring_seconds": b.ring_seconds,
+            }
+            for b in boxes
+        ],
+        "ivr_menus": [
+            {
+                "slug": m.slug,
+                "name": m.name,
+                "organization": org_slug.get(m.organization_id, ""),
+                "prompt": prompt_slug(m.prompt_id, m.organization_id),
+                "invalid_prompt": prompt_slug(m.invalid_prompt_id, m.organization_id),
+                "timeout_seconds": m.timeout_seconds,
+                "max_retries": m.max_retries,
+                "allow_direct_dial": m.allow_direct_dial,
+                "direct_dial": sorted(numbers_by_org.get(m.organization_id, [])),
+                "timeout": dest(m.timeout_type, m.timeout_extension_id, m.timeout_ivr_id),
+                "invalid": dest(m.invalid_type, m.invalid_extension_id, m.invalid_ivr_id),
+                "entries": [
+                    {
+                        "digit": e.digit,
+                        **dest(
+                            e.destination_type, e.destination_extension_id, e.destination_ivr_id
+                        ),
+                    }
+                    for e in entries.get(m.id, [])
+                ],
+            }
+            for m in menus
+        ],
     }
 
 
@@ -128,12 +264,17 @@ def _routing(
     key: InstallationKey | None,
     active_orgs: set[Any],
     extensions: list[Extension],
+    voicemail: dict[str, Any],
 ) -> dict[str, Any]:
     """Trunks, routes and time conditions (docs/TRUNKS_ROUTING.md §8)."""
     trunks = db.scalars(select(SipTrunk).order_by(SipTrunk.slug)).all()
     enabled_trunks = {t.id: t for t in trunks if t.is_enabled}
     # Only enabled extensions of active organizations are deployable destinations.
     number_of = {e.id: e.number for e in extensions}
+    box_numbers = {str(b["number"]) for b in voicemail.get("voicemail_boxes", [])}
+    menus = db.scalars(select(IvrMenu)).all()
+    deployable_menus = {str(m["slug"]) for m in voicemail.get("ivr_menus", [])}
+    ivr_slug = {m.id: m.slug for m in menus if m.slug in deployable_menus}
     conditions = db.scalars(select(TimeCondition).order_by(TimeCondition.name)).all()
     condition_by_id = {c.id: c for c in conditions}
     inbound = db.scalars(
@@ -165,14 +306,24 @@ def _routing(
             {
                 "did": r.did,
                 "trunk": enabled_trunks[r.trunk_id].slug if r.trunk_id else None,
-                "destination": (
-                    number_of.get(r.destination_extension_id)
-                    if r.destination_extension_id
-                    else None
+                "destination": _destination(
+                    r.destination_type,
+                    r.destination_extension_id,
+                    r.destination_ivr_id,
+                    number_of,
+                    box_numbers,
+                    ivr_slug,
                 ),
                 "after_hours": (
-                    number_of.get(r.after_hours_extension_id)
-                    if r.after_hours_extension_id
+                    _destination(
+                        r.after_hours_type,
+                        r.after_hours_extension_id,
+                        r.after_hours_ivr_id,
+                        number_of,
+                        box_numbers,
+                        ivr_slug,
+                    )
+                    if r.time_condition_id is not None
                     else None
                 ),
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,

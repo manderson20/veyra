@@ -26,8 +26,16 @@ from veyra.telephony.asterisk import generator
 class FakeAdapter(TelephonyAdapter):
     name = "asterisk"  # revisions are recorded per engine name
 
-    def __init__(self, state: str = "running") -> None:
+    def __init__(
+        self,
+        state: str = "running",
+        *,
+        prompts_dir: Any = generator.DEFAULT_PROMPTS_DIR,
+        mailqueue_command: str = generator.DEFAULT_MAILQUEUE_COMMAND,
+    ) -> None:
         self.state = state
+        self.prompts_dir = str(prompts_dir)
+        self.mailqueue_command = mailqueue_command
         self.reloads: list[str] = []
         self.fail_verify: list[str] = []
         self.fail_reload: str | None = None
@@ -76,7 +84,9 @@ class FakeAdapter(TelephonyAdapter):
         return list(generator.MANAGED_FILES)
 
     def generate_config(self, snapshot: dict[str, Any]) -> list[GeneratedFile]:
-        return generator.generate(snapshot)
+        return generator.generate(
+            snapshot, prompts_dir=self.prompts_dir, mailqueue_command=self.mailqueue_command
+        )
 
     def validate_config(self, files: list[GeneratedFile]) -> list[str]:
         return generator.validate(files)

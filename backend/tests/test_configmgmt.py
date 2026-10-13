@@ -47,7 +47,12 @@ def test_generate_deploy_supersede_and_rollback(client, tmp_path):
         assert p.exists()
         assert stat.S_IMODE(os.stat(p).st_mode) == 0o640
     assert (cfg / "extensions.conf").read_text().startswith("; Managed by Veyra")
-    assert adapter.reloads == ["res_rtp_asterisk.so", "res_pjsip.so", "pbx_config.so"]
+    assert adapter.reloads == [
+        "res_rtp_asterisk.so",
+        "res_pjsip.so",
+        "pbx_config.so",
+        "app_voicemail.so",
+    ]
     assert not list(cfg.glob(".*tmp*"))
 
     # No change -> a revision that says so and deploys without reloading anything
