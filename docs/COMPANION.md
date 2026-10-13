@@ -179,7 +179,8 @@ pushed by browser policy. Veyra supports the policy route out of the box:
   kept in `/etc/veyra/secrets/companion-signing.key` (created on first
   packaging, never regenerated), so the **extension ID** stays the same
   across releases. The packaged copy declares the server
-  (`https://<server name>/*`) as a *required* host permission, which
+  (`https://<server name>/*`, the name from `VEYRA_PUBLIC_HOST` in
+  `/etc/veyra/installer.conf`, else `hostname -f`) as a *required* host permission, which
   policy-installed extensions receive without asking; the loose zip keeps it
   optional for hand installs.
 * NGINX serves `/downloads/veyra-companion.crx` and the API serves the
