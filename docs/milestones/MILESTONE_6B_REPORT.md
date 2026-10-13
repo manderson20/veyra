@@ -1,10 +1,10 @@
-# Milestone 6b: Completion Report (draft)
+# Milestone 6b: Completion Report
 
 **Milestone:** 6b — Veyra Companion browser extension (sign in with Veyra credentials including the second factor, click-to-dial, directory lookup, incoming caller-ID pop-up, personal speed dials) and the server pieces it needs
 **Date:** 2026-10-13
-**Branch:** `milestone-6b` (pushed to `manderson20/veyra`; not merged to `main`)
-**Version:** 0.8.0-dev
-**Status:** Software complete; server side verified live on veyra-dev1 with a Companion-style client (§3). Awaiting the owner's approval and the owner's own check of the extension in a browser (§4).
+**Branch:** `milestone-6b` (pushed to `manderson20/veyra`; merged to `main`)
+**Version:** 0.8.0
+**Status:** Software complete; server side verified live on veyra-dev1 with a Companion-style client (§3). Approved by the project owner on 2026-10-13 (merged to `main`); the owner's own check of the extension in a browser is still to come (§4).
 
 ## 1. Scope (approved 2026-10-13)
 
@@ -27,7 +27,7 @@ Design and reference: [COMPANION.md](../COMPANION.md); decision record:
 | Directory | Done. `GET /directory?q=` lists enabled extensions and their people in the caller's organizations; new permission `directory.read` for every role including standard users. | `api/v1/directory.py` |
 | Call events | Done. One ARI event WebSocket per API process (`websockets`), channel events normalised into `call.ringing`, `call.dialing`, `call.answered`, `call.ended` for phone endpoints; `POST /events/ticket` and `WS /events/calls` deliver a user's own events with pings, pong timeout and token/session re-checks; engine status reports the listener; NGINX proxies the path with the `Upgrade` headers. | `telephony/asterisk/events.py`, `core/callevents.py`, `api/v1/events.py`, `installer/templates/nginx/veyra.conf.in` |
 | Account page | Done. "Connected apps" card (own tokens, revoke one or all) on the account page; administrators see and revoke a user's tokens on the user page. | `frontend/src/components/account/ConnectedAppsCard.tsx` |
-| Browser extension | Done. Manifest V3, TypeScript, Vite build under `companion/` (26 unit tests): popup (sign-in with second factor, dial, speed dials, directory, recent calls), options (preferences synced to the server), service worker (token, event stream with reconnect, notifications with "Call back", context menu), optional `tel:` link handling. | `companion/` |
+| Browser extension | Done. Manifest V3, TypeScript, Vite build under `companion/` (26 unit tests); packaged by the installer and offered for download on the account page (`/downloads/veyra-companion.zip`): popup (sign-in with second factor, dial, speed dials, directory, recent calls), options (preferences synced to the server), service worker (token, event stream with reconnect, notifications with "Call back", context menu), optional `tel:` link handling. | `companion/` |
 | Documentation | `COMPANION.md`, ADR 0015, API, schema, networking and engine docs, changelog. | `docs/` |
 
 ## 3. Testing (veyra-dev1, 2026-10-13, final tree)
@@ -73,7 +73,7 @@ Design and reference: [COMPANION.md](../COMPANION.md); decision record:
 * Store publication (Chrome Web Store, Edge Add-ons) is a later step; the
   build produces a zip for sideloading and enterprise policy deployment.
 
-## 7. Proposed Milestone 7 (for approval)
+## 7. Proposed Milestone 7 (approved 2026-10-13)
 
 Voicemail and IVR (roadmap row 7, 0.9.0): voicemail boxes per extension
 with PIN, greeting and voicemail-to-email, message waiting indication,
@@ -82,3 +82,13 @@ recorded or synthesised prompts, key mapping to extensions, ring groups
 (later), other IVRs and voicemail, timeout and invalid handling, direct
 extension dialling; prompt recording from a phone and upload from the
 browser; generated dialplan contexts and `voicemail.conf`.
+
+## 8. Owner decisions (2026-10-13)
+
+* Milestone 6b approved; version 0.8.0; `main` fast-forwarded to this branch.
+* The owner asked where to find the extension in the interface: it was only
+  in the source tree. Added before the release: the installer packages the
+  build, NGINX serves `/downloads/veyra-companion.zip`, and the account page's
+  Connected apps card offers the download with the install steps.
+* Milestone 7 (voicemail and IVR) as proposed in §7 approved and started on
+  branch `milestone-7` (version 0.9.0-dev).
