@@ -58,8 +58,9 @@ extension), and the deploy-mode drop-down on the Deploy changes button.
 
 * Click-to-dial reaches internal numbers and feature codes only until SIP
   trunks exist (Milestone 6).
-* "When idle" deploys anyway after the timeout (decision to confirm with the
-  owner; the alternative is to keep waiting and show it).
+* "When idle" deploys anyway after the timeout. Owner decision (2026-10-13):
+  keep the 30-minute default; `VEYRA_DEPLOY_IDLE_TIMEOUT_MINUTES` stays
+  configurable.
 * Registration and call data are polled (15 s / 5 s), not pushed; ARI
   events over a WebSocket are a later refinement.
 * Active calls cannot be hung up from the interface yet.
