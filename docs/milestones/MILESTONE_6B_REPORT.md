@@ -1,10 +1,10 @@
 # Milestone 6b: Completion Report (draft)
 
 **Milestone:** 6b — Veyra Companion browser extension (sign in with Veyra credentials including the second factor, click-to-dial, directory lookup, incoming caller-ID pop-up, personal speed dials) and the server pieces it needs
-**Date:** 2026-10-13 (in progress)
+**Date:** 2026-10-13
 **Branch:** `milestone-6b` (pushed to `manderson20/veyra`; not merged to `main`)
 **Version:** 0.8.0-dev
-**Status:** Software in progress; see §3.
+**Status:** Software complete; server side verified live on veyra-dev1 with a Companion-style client (§3). Awaiting the owner's approval and the owner's own check of the extension in a browser (§4).
 
 ## 1. Scope (approved 2026-10-13)
 
@@ -27,7 +27,7 @@ Design and reference: [COMPANION.md](../COMPANION.md); decision record:
 | Directory | Done. `GET /directory?q=` lists enabled extensions and their people in the caller's organizations; new permission `directory.read` for every role including standard users. | `api/v1/directory.py` |
 | Call events | Done. One ARI event WebSocket per API process (`websockets`), channel events normalised into `call.ringing`, `call.dialing`, `call.answered`, `call.ended` for phone endpoints; `POST /events/ticket` and `WS /events/calls` deliver a user's own events with pings, pong timeout and token/session re-checks; engine status reports the listener; NGINX proxies the path with the `Upgrade` headers. | `telephony/asterisk/events.py`, `core/callevents.py`, `api/v1/events.py`, `installer/templates/nginx/veyra.conf.in` |
 | Account page | Done. "Connected apps" card (own tokens, revoke one or all) on the account page; administrators see and revoke a user's tokens on the user page. | `frontend/src/components/account/ConnectedAppsCard.tsx` |
-| Browser extension | *In progress.* Manifest V3, TypeScript, Vite build under `companion/`: popup (sign-in with second factor, dial, speed dials, directory, recent calls), options (preferences synced to the server), service worker (token, event stream with reconnect, notifications with "Call back", context menu), optional `tel:` link handling. | `companion/` |
+| Browser extension | Done. Manifest V3, TypeScript, Vite build under `companion/` (26 unit tests): popup (sign-in with second factor, dial, speed dials, directory, recent calls), options (preferences synced to the server), service worker (token, event stream with reconnect, notifications with "Call back", context menu), optional `tel:` link handling. | `companion/` |
 | Documentation | `COMPANION.md`, ADR 0015, API, schema, networking and engine docs, changelog. | `docs/` |
 
 ## 3. Testing (veyra-dev1, 2026-10-13, final tree)
@@ -39,15 +39,17 @@ Design and reference: [COMPANION.md](../COMPANION.md); decision record:
 | Backend pytest against PostgreSQL 18.6 | **237 passed** (8 new: Companion login and scoped token use incl. hostile fetch metadata, error parity with the web flow and temporary passwords, second factor by recovery code and TOTP with challenge expiry and lockout and enrolment-required, token expiry/revocation/admin view/disabled user, administrator tokens are scoped too, preferences validation and directory scoping, event ticket and WebSocket delivery and filtering, ARI event translation) |
 | `alembic check` | No drift (migration `0007`) |
 | Frontend lint / typecheck / vitest | Clean / clean / **28 passed** |
-| Frontend `npm run build` | *Pending* |
-| Extension typecheck / vitest / build | *Pending* |
-| **Owner's `upgrade.sh` to this milestone on dev1** | *Pending* |
-| **Live on dev1: Companion-style client signs in, opens the stream, sees `call.ringing`/`call.answered`/`call.ended` for an inbound call to its extension and `call.dialing` for click-to-dial** | *Pending* |
+| Frontend `npm run build` | Passed; `/account` exported with the Connected apps card |
+| Extension typecheck / vitest / build | Clean / **26 passed** / `dist/` built (background.js, content.js, popup, options, icons, manifest with version 0.8.0); the build guard that forbids shared chunks in the worker and content script was exercised |
+| **Owner's `upgrade.sh` to this milestone on dev1 (12:00 and 12:04 UTC)** | First run **failed at the NGINX step**: the new WebSocket location included the shared proxy snippet, giving a duplicate `proxy_read_timeout` and a failed `nginx -t`; NGINX kept serving the previous configuration and the API was already on the new release. Template fixed (`2b1ed29`), second run passed: migration 0007, `websockets` installed, NGINX reloaded, all verify checks OK. Cosmetic: the installer reported "Installed: 0.7.0-dev" on the retry because the version marker is written only after success. |
+| **Live on dev1: Companion-style client (12:05–12:09 UTC)** | Passed. A temporary standard user with extension 22215 (software phone registered from the LAN address): `POST /auth/companion/login` answered 200 with a `vyc_` token, the intersected permissions (`calls.originate`, `directory.read`) and the user's extension with `registered: true`; `POST /events/ticket` then the WebSocket through NGINX delivered `hello` with `listener: connected`. Click-to-dial to `*43` produced `call.ringing` (remote `*43`), `call.answered` and `call.ended` (Normal Clearing) for extension 22215 within the second; a call placed by the phone to `*43` (INVITE with digest authentication) produced `call.dialing`, `call.answered` and `call.ended`; pings were answered; `POST /auth/companion/logout` revoked the token (204). Found and fixed: a phone-placed call that fails instantly produced no event because the channel never changed state; `call.dialing` is now emitted when the channel appears (unit-tested; reaches dev1 with the next upgrade). |
+| **Clean-up** | Test user, its token and extension 22215 removed, revision 11 deployed; no endpoints, channels or processes left. |
 | **Owner loads the extension unpacked in Chrome or Edge on site: sign-in with the second factor, dial from the popup, caller-ID pop-up on an incoming call** | *Pending the owner* |
 
 ## 4. Not verified
 
-* The extension in a real browser by the owner (§3).
+* The extension in a real browser by the owner (§3); the server API it
+  calls was exercised live with an equivalent client.
 * Edge specifically (same engine as Chrome; the manifest targets both).
 
 ## 5. Known limitations

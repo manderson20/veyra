@@ -101,15 +101,17 @@ def sdp():
 call = {}  # the one outgoing call: Call-ID, tags, CSeq, remote target
 
 
-def invite(number):
-    """Send an INVITE for ``number`` to the server (carrier side of an inbound call)."""
+def invite(number, auth=None):
+    """Send an INVITE for ``number`` to the server (a phone or carrier placing a call).
+    With ``auth`` (a digest answer to a 401/407) the same dialog is retried."""
     global cseq
     cseq += 1
     user = args.from_user or args.user
+    if auth is None:
+        call["call_id"] = str(uuid.uuid4())
+        call["from_tag"] = uuid.uuid4().hex[:10]
     call.update(
         {
-            "call_id": str(uuid.uuid4()),
-            "from_tag": uuid.uuid4().hex[:10],
             "to": f"<sip:{number}@{args.server}>",
             "cseq": cseq,
             "number": number,
@@ -130,9 +132,11 @@ def invite(number):
     )
     for h in args.header:
         msg += h.strip() + "\r\n"
+    if auth:
+        msg += f"Authorization: {auth}\r\n"
     msg += f"Content-Type: application/sdp\r\nContent-Length: {len(body)}\r\n\r\n{body}"
     send(msg)
-    log(f"CALLING {number} (INVITE sent)")
+    log(f"CALLING {number} (INVITE sent{' with credentials' if auth else ''})")
 
 
 def ack_or_bye(method, to_header):
@@ -241,6 +245,21 @@ while True:
                     call["state"] = "up"
                     call["started"] = now
                     log("placed call ANSWERED (200 OK, ACK sent)")
+            elif code in (401, 407) and not call.get("authed"):
+                call["remote_to"] = hdr(msg, "To")
+                ack_or_bye("ACK", call["remote_to"])
+                call["authed"] = True
+                challenge = hdr(msg, "WWW-Authenticate") or hdr(
+                    msg, "Proxy-Authenticate"
+                )
+                invite(
+                    call["number"],
+                    digest(
+                        challenge,
+                        "INVITE",
+                        f"sip:{call['number']}@{args.server}:{args.port}",
+                    ),
+                )
             else:
                 call["remote_to"] = hdr(msg, "To")
                 ack_or_bye("ACK", call["remote_to"])
