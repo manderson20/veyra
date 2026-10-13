@@ -9,6 +9,7 @@
  * This file must stay a single bundle: it only imports modules that no
  * extension page imports at run time (the pages import types only). */
 
+import { readManaged } from "./lib/managed";
 import { ApiError, SignedOut, VeyraClient, describeError, normalizeServerUrl } from "./lib/api";
 import { isCallEvent, parseStreamEvent, type ListenerState } from "./lib/events";
 import type {
@@ -333,11 +334,13 @@ async function handleSavePreferences(
 
 async function handleState(): Promise<StateResult> {
   const stored = await getStored();
+  const managed = await readManaged();
   const signedIn = Boolean(stored.serverUrl && stored.token);
   return {
     status: "ok",
     signedIn,
-    serverUrl: stored.serverUrl ?? null,
+    serverUrl: stored.serverUrl ?? managed.serverUrl ?? null,
+    managedServerUrl: managed.serverUrl,
     user: signedIn ? (stored.user ?? null) : null,
     extensions: signedIn ? (stored.extensions ?? []) : [],
     preferences: preferencesOf(stored),
@@ -660,11 +663,35 @@ async function startup(): Promise<void> {
   await ensureConnected();
 }
 
+/** Policy-provided server address: stored once so the popup starts on it. */
+async function applyManagedConfig(): Promise<void> {
+  const managed = await readManaged();
+  if (managed.serverUrl) {
+    const stored = await getStoredKey("serverUrl");
+    if (!stored) {
+      try {
+        const origin = normalizeServerUrl(managed.serverUrl);
+        if (origin) {
+          await setStored({ serverUrl: origin });
+        }
+      } catch {
+        // an invalid policy value is ignored; the popup asks instead
+      }
+    }
+  }
+}
+
+chrome.storage.managed?.onChanged?.addListener(() => {
+  void applyManagedConfig();
+});
+
 chrome.runtime.onInstalled.addListener(() => {
+  void applyManagedConfig();
   void startup();
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  void applyManagedConfig();
   void startup();
 });
 

@@ -8,6 +8,12 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.8.1 — 2026-10-13
+
+### Added
+- **Managed deployment of the Companion** (`docs/COMPANION.md` §5.1): the installer signs the extension into `veyra-companion.crx` with a server-held key (stable extension ID), NGINX serves it at `/downloads/veyra-companion.crx`, and the API serves the update manifest at `/api/v1/companion/update.xml`; Settings → Companion extension deployment shows the ID, update URL, install-source pattern, policy JSON and the Google Admin Console steps; the account page gains an *Add to Chrome* button and clearer manual steps. `GET /companion/info`. Setting `VEYRA_COMPANION_DIR`; installer variable `VEYRA_PUBLIC_HOST` overrides the host name used for the packaged host permission.
+- The extension reads policy-provided settings (`chrome.storage.managed`: `serverUrl`, `dialPrefix`), preloading and locking the server address.
+
 ## 0.8.0 — 2026-10-13 (Milestone 6b)
 
 ### Added

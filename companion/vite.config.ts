@@ -63,6 +63,11 @@ function extensionPlugin(): Plugin {
         fileName: "manifest.json",
         source: `${JSON.stringify(manifest, null, 2)}\n`,
       });
+      this.emitFile({
+        type: "asset",
+        fileName: "managed-schema.json",
+        source: readFileSync(`${root}managed-schema.json`, "utf8"),
+      });
       for (const size of SIZES) {
         this.emitFile({ type: "asset", fileName: iconFileName(size), source: renderIcon(size) });
       }

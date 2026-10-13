@@ -33,6 +33,15 @@ An installed Veyra serves the packaged extension at
 `https://<server>/downloads/veyra-companion.zip`; the account page (Connected
 apps → Get the Veyra Companion extension) links to it with the steps below.
 
+## Managed deployment (Google Admin Console, Chrome/Edge policies)
+
+An installed Veyra also serves a signed package (`/downloads/veyra-companion.crx`)
+and an update manifest (`/api/v1/companion/update.xml`). Settings → Companion
+extension deployment in the web interface lists the extension ID, the update
+URL and the Admin Console steps (force-install from a custom URL, policy JSON
+`{"serverUrl": "https://<server>"}` to preload the server). See
+`docs/COMPANION.md` §5.1.
+
 ## Load unpacked
 
 1. Open `chrome://extensions` (Edge: `edge://extensions`).

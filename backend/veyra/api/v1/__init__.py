@@ -9,6 +9,7 @@ from veyra.api.v1 import (
     auth_companion,
     auth_mfa,
     calls,
+    companion,
     directory,
     events,
     extensions,
@@ -50,5 +51,6 @@ for r in (
     me,
     directory,
     events,
+    companion,
 ):
     api_router.include_router(r.router)

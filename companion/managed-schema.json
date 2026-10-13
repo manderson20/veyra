@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "serverUrl": {
+      "type": "string",
+      "description": "The Veyra server, e.g. https://pbx.example.org. Preloaded and locked when set by policy."
+    },
+    "dialPrefix": {
+      "type": "string",
+      "description": "Default outside-line prefix for new users (digits)."
+    }
+  }
+}

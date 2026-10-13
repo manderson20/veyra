@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import { CompanionDeploymentCard } from "@/components/account/CompanionDeploymentCard";
 import { MfaPolicyCard } from "@/components/account/MfaPolicyCard";
 import { useThemePreference } from "@/components/ThemeToggle";
 import { Badge, Card, ErrorState, LoadingState, PageHeader } from "@/components/ui";
@@ -54,6 +55,7 @@ export default function SettingsPage() {
         </Card>
       </div>
       {can("system.settings.read") ? <MfaPolicyCard editable={can("system.settings.write")} /> : null}
+      {can("system.settings.read") ? <CompanionDeploymentCard /> : null}
       <Card title="Coming later">
         <p className="muted">
           Email delivery, network, backup, single sign-on (Google Workspace, Microsoft Entra ID, OIDC, LDAP) and branding settings

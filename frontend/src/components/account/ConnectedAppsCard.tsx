@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Badge, Button, Card, ConfirmDialog, DataTable, EmptyState, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { ApiToken } from "@/lib/types";
+import type { ApiToken, CompanionInfo } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
 /**
@@ -29,6 +29,7 @@ export function ConnectedAppsCard({
 }) {
   const toast = useToast();
   const tokens = useApiData<ApiToken[]>(listPath);
+  const info = useApiData<CompanionInfo>(showDownload ? "/companion/info" : null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -133,17 +134,27 @@ export function ConnectedAppsCard({
         <details className="stack" style={{ marginTop: 16 }}>
           <summary className="row" style={{ gap: 8, cursor: "pointer" }}>
             <strong>Get the Veyra Companion extension</strong>
-            <span className="subtle">for Chrome and Edge</span>
+            <span className="subtle">for Chrome and Edge{info.data?.version ? ` · version ${info.data.version}` : ""}</span>
           </summary>
+          {info.data?.crx_url ? (
+            <p style={{ marginTop: 12 }}>
+              <a className="btn btn--primary" href={info.data.crx_url}>
+                Add to Chrome
+              </a>{" "}
+              <span className="subtle">
+                Works when your organization allows this server as an extension source or has already pushed the extension; otherwise follow the steps below.
+              </span>
+            </p>
+          ) : null}
           <ol className="stack" style={{ marginTop: 12, paddingLeft: 20, gap: 6 }}>
             <li>
               <a href="/downloads/veyra-companion.zip" download>
                 Download veyra-companion.zip
               </a>{" "}
-              and unzip it into a folder you keep (the browser loads the extension from there).
+              and unzip it into a folder you keep (the browser loads the extension from there). The folder must contain <span className="mono">manifest.json</span> directly.
             </li>
             <li>
-              Open <span className="mono">chrome://extensions</span> (or <span className="mono">edge://extensions</span>), turn on <em>Developer mode</em> and choose <em>Load unpacked</em>, then pick the unzipped folder.
+              Type <span className="mono">chrome://extensions</span> (or <span className="mono">edge://extensions</span>) in the address bar, turn on the <em>Developer mode</em> switch in the top right, click <em>Load unpacked</em> in the top left and pick the unzipped folder. Then pin the Veyra icon from the toolbar&apos;s puzzle-piece menu.
             </li>
             <li>
               Click the Veyra icon in the toolbar, enter this server&apos;s address (<span className="mono">{typeof window !== "undefined" ? window.location.origin : "https://…"}</span>), your email and password, then your authenticator code.
