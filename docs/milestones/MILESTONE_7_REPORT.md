@@ -42,7 +42,7 @@ Design and reference: [VOICEMAIL_IVR.md](../VOICEMAIL_IVR.md).
 | Installer `tests/test_lib.sh` | **38 passed** (7 new for `veyra-mailqueue`); `shellcheck` clean; `sudo installer/upgrade.sh --dry-run --yes` shows the stub, directory and script steps |
 | Frontend lint / typecheck / vitest | Clean / clean / **30 passed** (2 new: destination normalisation, prompt lengths) |
 | Frontend `npm run build` | Passed; `/voicemail`, `/ivr`, `/ivr/view` and `/prompts` exported |
-| **Owner's `upgrade.sh` on dev1** | Done 2026-10-13 16:56 UTC from `~/veyra` on `milestone-7` (9711cf2), again 17:47 UTC at 4f9132c; `verify.sh` clean after the second run (37 checks) |
+| **Owner's `upgrade.sh` on dev1** | Done 2026-10-13 16:56 UTC from `~/veyra` on `milestone-7` (9711cf2), again 17:47 UTC at 4f9132c (`verify.sh` clean), and 18:13 UTC to release **0.9.0** from `~/veyra-release` (`verify.sh` clean, 38 checks incl. `service-groups`) |
 
 ### Live checks on dev1 (2026-10-13 17:50–18:05 UTC, release 4f9132c)
 
@@ -61,7 +61,7 @@ test phone" with a box, prompt `m7-test-tone`, menu "M7 test menu" (1 →
 | `*95` recording as 22215 (`#` to stop, `1` to keep) | OK: `Record` → `Playback` → `Read` → `vm-msgsaved`; `rec-22215-<epoch>.wav` appears in `prompts/<org>/incoming/` (group `asterisk`, readable by the worker after the fix) |
 | IVR key `2` → voicemail of 22215 | OK |
 | IVR key `1` → extension 22214 (`Goto(veyra-internal,22214,1)` → `Dial`) | OK |
-| IVR no key → `t` handler | **Failed, fixed**: `WaitExten` continues with the next priority when one exists and only goes to `t` otherwise, so timeouts fell into the loop-guard branch (`pbx-invalid`, hang-up) → explicit `Goto(t,1)` after `WaitExten` (this commit); re-test after the next upgrade |
+| IVR no key → `t` handler | **Failed, fixed**: `WaitExten` continues with the next priority when one exists and only goes to `t` otherwise, so timeouts fell into the loop-guard branch (`pbx-invalid`, hang-up) → explicit `Goto(t,1)` after `WaitExten` (d16730f); re-tested on 0.9.0 at 18:14 UTC: timeout → `t` → replay → second timeout → `vm-goodbye` |
 | `*97` with PIN, MWI lamp, prompt adoption in the browser, menu behind an inbound route | *Owner, with a handset and the web pages* (PINs are not readable from the session; no trunk on dev1) |
 
 ## 4. Not verified
@@ -72,9 +72,6 @@ test phone" with a box, prompt `m7-test-tone`, menu "M7 test menu" (1 →
 * Email through a real SMTP server (the school's relay or Google Workspace
   SMTP): the path was verified end to end against a loopback sink, not a
   real relay.
-* The IVR timeout fix and the group membership are verified by the unit
-  tests and by hand on dev1 (`usermod` applied there directly); the next
-  upgrade runs them through the installer.
 
 ## 5. Known limitations
 
