@@ -113,4 +113,8 @@ sign-in for the web interface and the Companion) first.
 
 ## 8. Owner decisions
 
-*Pending.*
+* Milestone 7 approved 2026-10-13 after the dev1 upgrade and the live
+  checks of §3; version 0.9.0; `main` fast-forwarded to this branch.
+* Handset checks (`*97`, MWI, a recorded prompt adopted in the browser) and
+  the three open questions of §6 remain with the owner; the order of
+  Milestone 8 and 6c is not decided yet.
