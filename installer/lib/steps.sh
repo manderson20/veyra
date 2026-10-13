@@ -121,6 +121,15 @@ do_secrets() {
     # The installation key encrypts SIP secrets (and later MFA secrets) at
     # rest. It is never regenerated: a new key would make every stored secret
     # unreadable. Back it up with the rest of $VEYRA_ETC (docs/EXTENSIONS.md).
+    # The Companion signing key gives the browser extension its stable ID
+    # (docs/COMPANION.md §5); the release step creates it on first use and the
+    # file is kept with the other secrets (root-only: only the installer signs).
+    local c="$VEYRA_ETC/secrets/companion-signing.key"
+    if [[ -s "$c" ]]; then
+        ok "Companion signing key exists (kept)"
+    else
+        info "Companion signing key will be created when the extension is packaged"
+    fi
     local k="$VEYRA_ETC/secrets/installation.key"
     if [[ -s "$k" ]]; then
         ok "Installation key exists (kept)"
@@ -205,6 +214,22 @@ with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
             z.write(path, os.path.relpath(path, src))
 PY
         ok "Companion extension packaged (companion/veyra-companion.zip)"
+        # Signed CRX3 for managed browsers (Google Admin Console, policies), with
+        # the stable extension ID derived from the signing key.
+        if [[ "$DRY_RUN" == "1" ]]; then
+            info "[dry-run] would sign companion/veyra-companion.crx with $VEYRA_ETC/secrets/companion-signing.key"
+        else
+            local public_host; public_host="${VEYRA_PUBLIC_HOST:-$(hostname -f 2>/dev/null || hostname)}"
+            (umask 077; "$RELEASE_DIR/backend/.venv/bin/python" "$RELEASE_DIR/installer/bin/crx3-pack.py" \
+                --key "$VEYRA_ETC/secrets/companion-signing.key" \
+                --host-permission "https://$public_host/*" \
+                --src "$RELEASE_DIR/companion/dist" \
+                --out "$RELEASE_DIR/companion/veyra-companion.crx" \
+                --info "$RELEASE_DIR/companion/crx-info.json") >>"${INSTALL_LOG:-/dev/null}" 2>&1 \
+                || die "Signing the Companion extension failed (see ${INSTALL_LOG:-the console})"
+            chmod 0644 "$RELEASE_DIR/companion/veyra-companion.crx" "$RELEASE_DIR/companion/crx-info.json"
+            ok "Companion extension signed (id $(python3 -c "import json;print(json.load(open('$RELEASE_DIR/companion/crx-info.json'))['id'])"))"
+        fi
     else
         warn "Companion extension not built (no prebuilt dist/ and no npm); the download will be unavailable"
     fi

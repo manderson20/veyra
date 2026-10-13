@@ -103,6 +103,18 @@ export interface UserSession {
   is_current: boolean;
 }
 
+/** How the Companion extension can be installed on this server (docs/COMPANION.md §5). */
+export interface CompanionInfo {
+  available: boolean;
+  name: string | null;
+  version: string | null;
+  extension_id: string | null;
+  zip_url: string | null;
+  crx_url: string | null;
+  update_url: string | null;
+  install_sources_pattern: string | null;
+}
+
 /** A scoped bearer token (Companion extension), ADR 0015. */
 export interface ApiToken {
   id: string;

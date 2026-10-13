@@ -122,6 +122,11 @@ if [[ -n "$(find "$VEYRA_PREFIX/current/" -xdev ! -type l \( -user veyra -o -per
 else
     check code-ownership pass "Application code is read-only for the service account"
 fi
+if [[ -f "$VEYRA_PREFIX/current/companion/crx-info.json" ]]; then
+    check companion-package pass "signed, id $(python3 -c "import json;print(json.load(open('$VEYRA_PREFIX/current/companion/crx-info.json'))['id'])" 2>/dev/null)"
+else
+    check companion-package warn "Companion extension not packaged; the download is unavailable"
+fi
 
 if [[ $JSON == 1 ]]; then
     python3 - "${RESULTS[@]}" <<'PY'

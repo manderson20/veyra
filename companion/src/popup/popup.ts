@@ -36,7 +36,7 @@ function clear(): void {
 
 // ------------------------------------------------------------------ sign-in
 
-function renderSignIn(prefill: { serverUrl: string | null; error?: string }): void {
+function renderSignIn(prefill: { serverUrl: string | null; managed?: boolean; error?: string }): void {
   clear();
   const status = el("div");
   const server = el("input", {
@@ -47,6 +47,10 @@ function renderSignIn(prefill: { serverUrl: string | null; error?: string }): vo
     required: "",
     value: prefill.serverUrl ?? "",
   });
+  if (prefill.managed) {
+    server.setAttribute("readonly", "");
+    server.setAttribute("title", "Set by your organization");
+  }
   const email = el("input", { id: "email", type: "email", autocomplete: "username", required: "" });
   const password = el("input", {
     id: "password",
@@ -141,7 +145,7 @@ function renderMfa(): void {
   ]);
   back.addEventListener("click", () => {
     pendingChallenge = null;
-    renderSignIn({ serverUrl: state?.serverUrl ?? null });
+    renderSignIn({ serverUrl: state?.serverUrl ?? null, managed: Boolean(state?.managedServerUrl) });
   });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -168,7 +172,7 @@ function renderMfa(): void {
         setMessage(status, "error", result.detail);
         if (result.code === "challenge_expired") {
           pendingChallenge = null;
-          setTimeout(() => renderSignIn({ serverUrl: state?.serverUrl ?? null, error: result.detail }), 1200);
+          setTimeout(() => renderSignIn({ serverUrl: state?.serverUrl ?? null, managed: Boolean(state?.managedServerUrl), error: result.detail }), 1200);
         }
       }
     })();
@@ -404,7 +408,7 @@ function render(): void {
     return;
   }
   if (!state.signedIn) {
-    renderSignIn({ serverUrl: state.serverUrl });
+    renderSignIn({ serverUrl: state.serverUrl, managed: Boolean(state.managedServerUrl) });
     return;
   }
   renderSignedIn(state);

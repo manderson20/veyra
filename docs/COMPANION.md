@@ -169,6 +169,41 @@ with the installer's self-signed certificate need it imported, or a
 certificate from the organization's CA (Milestone 17 covers certificate
 management).
 
+### 5.1 Deployment to managed browsers
+
+Chrome and Edge install extensions with one click only from their stores;
+anything else is either *load unpacked* (developer mode) or an install
+pushed by browser policy. Veyra supports the policy route out of the box:
+
+* The installer signs the build into `veyra-companion.crx` with an RSA key
+  kept in `/etc/veyra/secrets/companion-signing.key` (created on first
+  packaging, never regenerated), so the **extension ID** stays the same
+  across releases. The packaged copy declares the server
+  (`https://<server name>/*`) as a *required* host permission, which
+  policy-installed extensions receive without asking; the loose zip keeps it
+  optional for hand installs.
+* NGINX serves `/downloads/veyra-companion.crx` and the API serves the
+  Omaha-style update manifest at `/api/v1/companion/update.xml`, built from
+  the request's host name, so managed browsers fetch new versions after
+  every Veyra upgrade.
+* Settings → *Companion extension deployment* (platform administrators)
+  shows the extension ID, the update URL, the install-source pattern and
+  the policy JSON, with the Google Admin Console steps: Devices → Chrome →
+  Apps & extensions → Users & browsers → add by ID *from a custom URL* →
+  **Force install**; under *Policy for extensions* the JSON
+  `{"serverUrl": "https://<server>"}` preloads and locks the server
+  address (the extension reads `chrome.storage.managed`, schema in
+  `managed-schema.json`; `dialPrefix` can be preset too). Users then only
+  sign in.
+* The account page's *Add to Chrome* button links to the signed package; it
+  works when the Admin Console lists the server under *Extension install
+  sources* (`ExtensionInstallSources`), otherwise the browser refuses
+  off-store installs and the zip steps apply.
+* `GET /api/v1/companion/info` (signed-in users) reports what is available.
+
+Publishing to the Chrome Web Store (unlisted) remains an option for a
+later milestone; it would make the button work without policy.
+
 ## 6. Security notes
 
 * Tokens are hashed at rest like session tokens; the clear value is shown

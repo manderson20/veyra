@@ -57,6 +57,8 @@ export interface StateResult {
   status: "ok";
   signedIn: boolean;
   serverUrl: string | null;
+  /** Set when an administrator preloaded the server through browser policy. */
+  managedServerUrl: string | null;
   user: CompanionUser | null;
   extensions: MyExtension[];
   preferences: CompanionPreferences;

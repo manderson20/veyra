@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     # "Deploy when no calls are active" waits at most this long, then deploys.
     deploy_idle_timeout_minutes: int = 30
 
+    # --- Companion extension ----------------------------------------------------
+    # Where the installer leaves the packaged extension (zip, signed crx and
+    # crx-info.json) for the download routes (docs/COMPANION.md §5).
+    companion_dir: Path = Path("/opt/veyra/current/companion")
+
     # --- Updates --------------------------------------------------------------
     update_metadata_url: str = ""
 

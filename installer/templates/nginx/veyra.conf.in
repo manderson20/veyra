@@ -79,6 +79,12 @@ server {
         add_header Content-Disposition 'attachment; filename="veyra-companion.zip"';
     }
 
+    location = /downloads/veyra-companion.crx {
+        alias @VEYRA_PREFIX@/current/companion/veyra-companion.crx;
+        types { }
+        default_type application/x-chrome-extension;
+    }
+
     # NGINX's mime.types has no entry for the web manifest.
     location = /manifest.webmanifest {
         types { }

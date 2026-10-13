@@ -4,9 +4,18 @@
   "description": "Dial from the browser, look people up and see who is calling, through your Veyra phone system.",
   "version": "0.0.0",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "notifications", "contextMenus", "alarms"],
-  "optional_permissions": ["scripting"],
-  "optional_host_permissions": ["https://*/*"],
+  "permissions": [
+    "storage",
+    "notifications",
+    "contextMenus",
+    "alarms"
+  ],
+  "optional_permissions": [
+    "scripting"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -30,5 +39,8 @@
     "32": "icons/icon-32.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
+  },
+  "storage": {
+    "managed_schema": "managed-schema.json"
   }
 }
