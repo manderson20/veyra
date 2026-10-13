@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## [Unreleased] — 0.6.0-dev (Milestone 5)
+## 0.6.0 — 2026-10-13 (Milestone 5)
 
 ### Added
 - Live registration state per extension (badge in the list and on the page, refreshed every 15 s) from the engine's endpoint status.
