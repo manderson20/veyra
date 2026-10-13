@@ -326,6 +326,15 @@ do_telephony() {
     # both and the setgid bit keeps new files in the asterisk group.
     run chgrp asterisk "$VEYRA_DATA"
     run chmod 0750 "$VEYRA_DATA"
+    # Files Asterisk creates there (queued notifications, *95 recordings) are
+    # group asterisk, so the service account must be a member of that group
+    # to read, rename and delete them.
+    if id -nG "$VEYRA_USER" | tr ' ' '\n' | grep -qx asterisk; then
+        ok "Service account '$VEYRA_USER' is in group asterisk"
+    else
+        run usermod -aG asterisk "$VEYRA_USER"
+        ok "Added service account '$VEYRA_USER' to group asterisk (effective when the services restart below)"
+    fi
     run install -d -m 2770 -o "$VEYRA_USER" -g asterisk "$VEYRA_DATA/prompts" \
         "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed"
     run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed"

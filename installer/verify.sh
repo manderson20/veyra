@@ -114,6 +114,9 @@ if [[ "$ENGINE" == "asterisk" ]]; then
             && check "data-dir:$d" pass "2770 veyra:asterisk" \
             || check "data-dir:$d" fail "$VEYRA_DATA/$d is $(perm "$VEYRA_DATA/$d") (expected 2770 veyra:asterisk)"
     done
+    id -nG "$VEYRA_USER" 2>/dev/null | tr ' ' '\n' | grep -qx asterisk \
+        && check service-groups pass "$VEYRA_USER is in group asterisk" \
+        || check service-groups fail "$VEYRA_USER is not in group asterisk (the worker cannot read queued voicemail notifications or *95 recordings)"
     [[ -x "$VEYRA_PREFIX/current/installer/bin/veyra-mailqueue" ]] \
         && check mailqueue-command pass "executable" \
         || check mailqueue-command fail "$VEYRA_PREFIX/current/installer/bin/veyra-mailqueue is missing or not executable"

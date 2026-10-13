@@ -165,7 +165,9 @@ def test_ivr_context_keys_direct_dial_and_fallbacks():
     body = dp.split("[veyra-ivr-main-menu]")[1].split("[veyra-ivr-after-hours]")[0]
     assert "GotoIf($[${VEYRA_IVR_DEPTH} > 8]?toodeep)" in body
     assert " same => n(menu),Background(/var/lib/veyra/prompts/brookfield/welcome)" in body
-    assert " same => n,WaitExten(6)" in body
+    # The timeout handler must be reached explicitly: WaitExten continues with
+    # the next priority when one exists instead of going to 't'.
+    assert " same => n,WaitExten(6)\n same => n,Goto(t,1)\n" in body
     assert (
         "exten => 1,1,NoOp(Veyra IVR Main menu key 1)\n same => n,Goto(veyra-internal,1001,1)"
         in body

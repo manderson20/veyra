@@ -42,21 +42,39 @@ Design and reference: [VOICEMAIL_IVR.md](../VOICEMAIL_IVR.md).
 | Installer `tests/test_lib.sh` | **38 passed** (7 new for `veyra-mailqueue`); `shellcheck` clean; `sudo installer/upgrade.sh --dry-run --yes` shows the stub, directory and script steps |
 | Frontend lint / typecheck / vitest | Clean / clean / **30 passed** (2 new: destination normalisation, prompt lengths) |
 | Frontend `npm run build` | Passed; `/voicemail`, `/ivr`, `/ivr/view` and `/prompts` exported |
-| **Owner's `upgrade.sh` to this milestone on dev1** | *Pending the owner* (`cd ~/veyra && sudo installer/upgrade.sh --yes` on branch `milestone-7`, then `sudo installer/verify.sh`) |
-| **Live on dev1 after the upgrade: create a box for 22214, deploy, call it from a second phone and leave a message, `*97` to listen, MWI lamp, record a prompt with `*95`, adopt it, build a menu, point an inbound route at it, SMTP test and a voicemail email** | *Pending the owner* |
+| **Owner's `upgrade.sh` on dev1** | Done 2026-10-13 16:56 UTC from `~/veyra` on `milestone-7` (9711cf2), again 17:47 UTC at 4f9132c; `verify.sh` clean after the second run (37 checks) |
+
+### Live checks on dev1 (2026-10-13 17:50–18:05 UTC, release 4f9132c)
+
+Driven from the server: calls originated on Local channels from the Asterisk
+CLI, DTMF sent through ARI, a loopback SMTP sink on 127.0.0.1:2525 as the
+mail server. Test objects from the previous session: extension 22215 "M7
+test phone" with a box, prompt `m7-test-tone`, menu "M7 test menu" (1 →
+22214, 2 → voicemail 22215).
+
+| Check | Result |
+|---|---|
+| First upgrade: VoiceMail application | **Failed, fixed**: Ubuntu's `app_voicemail_odbc.so` fails to load beside `app_voicemail.so` and unregisters the applications → installer-managed `modules.conf` (6801d7e), `verify.sh` check (4f9132c) |
+| Deposit a message (call to 22215, unanswered → box) | **OK**: three messages of 16 s in `INBOX`, `voicemail show users` counts them; a caller without audio leaves nothing (correct) |
+| Voicemail-to-email hand-over (`mailcmd` → `veyra-mailqueue` → queue → worker → SMTP) | **Failed, fixed**: the queued `.eml` is group `asterisk` and the worker could not read it ("Permission denied") → the service account joins group `asterisk` (this commit); after the change the worker sent the message with the WAV attached to the sink within a minute |
+| Email left out of `voicemail.conf` while delivery is off | OK (revision 14: "no change"; revision 15 with delivery on: `voicemail.conf` changed) |
+| `*95` recording as 22215 (`#` to stop, `1` to keep) | OK: `Record` → `Playback` → `Read` → `vm-msgsaved`; `rec-22215-<epoch>.wav` appears in `prompts/<org>/incoming/` (group `asterisk`, readable by the worker after the fix) |
+| IVR key `2` → voicemail of 22215 | OK |
+| IVR key `1` → extension 22214 (`Goto(veyra-internal,22214,1)` → `Dial`) | OK |
+| IVR no key → `t` handler | **Failed, fixed**: `WaitExten` continues with the next priority when one exists and only goes to `t` otherwise, so timeouts fell into the loop-guard branch (`pbx-invalid`, hang-up) → explicit `Goto(t,1)` after `WaitExten` (this commit); re-test after the next upgrade |
+| `*97` with PIN, MWI lamp, prompt adoption in the browser, menu behind an inbound route | *Owner, with a handset and the web pages* (PINs are not readable from the session; no trunk on dev1) |
 
 ## 4. Not verified
 
-* Nothing has run on dev1 yet: the release there is 0.8.1 and the upgrade
-  needs the owner (installer runs are the owner's). Live checks with a
-  handset (message deposit, MWI, `*95` recording, menu navigation) follow
-  the upgrade.
+* With a handset: `*97`/`*98` with the PIN, the message-waiting lamp, the
+  greeting; a real prompt recorded with `*95` and adopted on the Prompts
+  page; a menu behind an inbound route (no trunk on dev1).
 * Email through a real SMTP server (the school's relay or Google Workspace
-  SMTP) and the `mailcmd` hand-over from Asterisk were tested with a fake
-  `smtplib` and the queue script, not end to end.
-* `Record()` into the `incoming` folder relies on the folder existing; the
-  worker creates it every minute and the Prompts page on every listing,
-  which the live test will confirm.
+  SMTP): the path was verified end to end against a loopback sink, not a
+  real relay.
+* The IVR timeout fix and the group membership are verified by the unit
+  tests and by hand on dev1 (`usermod` applied there directly); the next
+  upgrade runs them through the installer.
 
 ## 5. Known limitations
 
