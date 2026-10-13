@@ -32,12 +32,6 @@ export interface PlannedFeature {
 export const PLANNED_FEATURES: PlannedFeature[] = [
   { key: "devices", label: "Devices", icon: "device", milestone: 9,
     summary: "Register desk phones by MAC address, assign provisioning templates and extensions." },
-  { key: "trunks", label: "SIP Trunks", icon: "trunk", milestone: 6,
-    summary: "Connect to carriers with registration or IP-authenticated SIP trunks and monitor their status." },
-  { key: "inbound-routing", label: "Inbound Routing", icon: "arrowIn", milestone: 6,
-    summary: "Route DIDs to extensions, IVRs, ring groups, queues and voicemail, with time conditions." },
-  { key: "outbound-routing", label: "Outbound Routing", icon: "arrowOut", milestone: 6,
-    summary: "Dial plans, trunk selection, failover and caller ID rules for outbound calls." },
   { key: "ivr", label: "IVR", icon: "ivr", milestone: 7,
     summary: "Auto attendant menus with recorded prompts, multi-level menus and direct extension dialing." },
   { key: "ring-groups", label: "Ring Groups", icon: "group", milestone: 8,
@@ -70,6 +64,10 @@ export const NAV: NavSection[] = [
   { id: "telephony", label: "Telephony", collapsible: true, items: [
     { label: "Extensions", href: "/extensions/", icon: "phone", permissions: ["extensions.read"] },
     { label: "Active Calls", href: "/calls/", icon: "activity", permissions: ["calls.read"] },
+    { label: "SIP Trunks", href: "/trunks/", icon: "trunk", permissions: ["trunks.read"] },
+    { label: "Inbound Routes", href: "/routing/inbound/", icon: "arrowIn", permissions: ["routing.read"] },
+    { label: "Outbound Routes", href: "/routing/outbound/", icon: "arrowOut", permissions: ["routing.read"] },
+    { label: "Time Conditions", href: "/routing/time-conditions/", icon: "clock", permissions: ["routing.read"] },
     ...PLANNED_FEATURES.map((f) => ({
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
     })),

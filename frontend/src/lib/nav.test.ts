@@ -34,6 +34,25 @@ describe("navigation filtering", () => {
     expect(withExt.find((s) => s.id === "telephony")?.items[0]?.href).toBe("/extensions/");
   });
 
+  it("shows trunks and routing pages with their permissions, in evaluation order after Active Calls", () => {
+    const all = buildNav({ permissions: [], isPlatformAdmin: true });
+    const telephony = all.find((s) => s.id === "telephony")!.items.map((i) => i.href);
+    expect(telephony.slice(0, 6)).toEqual(["/extensions/", "/calls/", "/trunks/", "/routing/inbound/", "/routing/outbound/", "/routing/time-conditions/"]);
+    expect(telephony.some((h) => h.includes("feature=trunks") || h.includes("feature=inbound-routing") || h.includes("feature=outbound-routing"))).toBe(false);
+
+    const routingOnly = buildNav({ permissions: ["routing.read"], isPlatformAdmin: false });
+    const hrefs = routingOnly.flatMap((s) => s.items.map((i) => i.href));
+    expect(hrefs).toContain("/routing/inbound/");
+    expect(hrefs).toContain("/routing/outbound/");
+    expect(hrefs).toContain("/routing/time-conditions/");
+    expect(hrefs).not.toContain("/trunks/");
+    const trunksOnly = buildNav({ permissions: ["trunks.read"], isPlatformAdmin: false });
+    const trunkHrefs = trunksOnly.flatMap((s) => s.items.map((i) => i.href));
+    expect(trunkHrefs).toContain("/trunks/");
+    expect(trunkHrefs).not.toContain("/routing/inbound/");
+    expect(trunksOnly.find((s) => s.id === "telephony")?.items.some((i) => i.planned)).toBe(true);
+  });
+
   it("adds module navigation only with the module permission", () => {
     expect(moduleNavItems([ext])[0]?.href).toBe("/modules/view/?module=veyra.example-notes&view=notes");
     const without = buildNav({ permissions: [], isPlatformAdmin: false, extensions: [ext] });
