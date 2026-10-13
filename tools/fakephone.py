@@ -27,6 +27,7 @@ ap.add_argument("--port", type=int, default=5060)
 ap.add_argument("--user", required=True)
 ap.add_argument("--password", required=True)
 ap.add_argument("--local-port", type=int, default=5080)
+ap.add_argument("--local-ip", default="127.0.0.1", help="address to bind and advertise")
 ap.add_argument("--answer-after", type=float, default=3.0)
 ap.add_argument("--expires", type=int, default=120)
 ap.add_argument(
@@ -49,7 +50,7 @@ ap.add_argument(
 )
 args = ap.parse_args()
 
-LOCAL_IP = "127.0.0.1"
+LOCAL_IP = args.local_ip
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((LOCAL_IP, args.local_port))
 sock.settimeout(0.5)
