@@ -100,7 +100,7 @@ if [[ "$ENGINE" == "asterisk" ]]; then
         || check engine-modules-conf fail "/etc/asterisk/modules.conf is not Veyra-managed (voicemail may not work)"
     # The VoiceMail application must be registered (Milestone 7): a competing
     # voicemail module that failed to load unregisters it.
-    if asterisk -rx "core show application VoiceMail" 2>/dev/null | grep -q "^\s*-= Info about application 'VoiceMail'"; then
+    if asterisk -rx "core show application VoiceMail" 2>/dev/null | grep -qi "Info about application 'VoiceMail'"; then
         check engine-voicemail-app pass "VoiceMail application registered"
     else
         check engine-voicemail-app fail "the VoiceMail application is not registered in Asterisk (restart Asterisk after the modules.conf change: sudo systemctl restart asterisk)"
