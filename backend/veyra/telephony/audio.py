@@ -135,15 +135,17 @@ def write_atomic(path: Path, data: bytes) -> None:
 def ensure_org_dirs(base: Path, slugs: Iterable[str]) -> None:
     """Create ``<base>/<slug>`` and ``<base>/<slug>/incoming`` so uploads and
     phone recordings have somewhere to land. The incoming folder is made
-    group-writable with the setgid bit: Asterisk (group ``asterisk`` on the
-    installation, through the parent's setgid) records into it and Veyra
-    adopts or deletes the files. Failures are logged, never raised: the
-    worker calls this every minute and the API before listing recordings."""
+    group-writable: Asterisk (group ``asterisk`` on the installation, which
+    the folder inherits from the setgid ``prompts`` directory) records into
+    it and Veyra adopts or deletes the files. No setgid bit is set here: the
+    service units run with ``RestrictSUIDSGID`` and would refuse it, and the
+    folder does not need it. Failures are logged, never raised: the worker
+    calls this every minute and the API before listing recordings."""
     for slug in slugs:
         incoming = base / slug / INCOMING
         try:
             incoming.mkdir(parents=True, exist_ok=True)
-            if (incoming.stat().st_mode & 0o7777) != 0o2770:
-                os.chmod(incoming, 0o2770)  # noqa: S103 - shared with Asterisk by design
+            if (incoming.stat().st_mode & 0o777) != 0o770:
+                os.chmod(incoming, 0o770)  # noqa: S103 - shared with Asterisk by design
         except OSError as e:
             log.warning("Prompt directory %s not ready: %s", incoming, e)

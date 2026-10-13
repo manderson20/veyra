@@ -178,7 +178,8 @@ and Asterisk writes recordings.
   named (adopted: converted and moved into place as a prompt with
   `source=recording`) or discarded. The worker creates every active
   organization's `incoming` folder each minute (and the recordings listing
-  does the same), so recording works before the first upload.
+  does the same; `0770`, group inherited from the setgid `prompts/`), so
+  recording works before the first upload.
 * **Listen** in the browser: `GET /prompts/{id}/audio` streams the WAV;
   `GET /prompts/recordings/{file}/audio?organization_id=` for recordings.
 * **Replace**: `PUT /prompts/{id}/audio` (multipart `file`) uploads a new
