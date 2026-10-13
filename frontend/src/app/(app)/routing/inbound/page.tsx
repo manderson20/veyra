@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { EMPTY_INBOUND_ROUTE, InboundRouteFields, inboundRouteBody, inboundRouteValid, type InboundRouteDraft } from "@/components/routing/InboundRouteFields";
-import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, PageHeader, Pagination, SearchInput, SelectField, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, Icon, PageHeader, Pagination, SearchInput, SelectField, useToast, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
+import { EMPTY_DESTINATION } from "@/lib/routing";
 import type { InboundRoute, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -17,11 +18,20 @@ import { useSession } from "@/hooks/useSession";
 const LIMIT = 25;
 
 function Destination({ r }: { r: InboundRoute }) {
-  if (r.destination_missing || !r.destination_number) return <Badge tone="danger" icon="alert">No destination</Badge>;
+  const d = r.destination;
+  if (d.missing || !d.label) return <Badge tone="danger" icon="alert">{d.label ?? "No destination"}</Badge>;
+  if (d.type === "extension") {
+    return (
+      <span>
+        <span className="table__primary mono" style={{ display: "block" }}>{r.destination_number}</span>
+        <span className="table__secondary">{r.destination_name}</span>
+      </span>
+    );
+  }
   return (
     <span>
-      <span className="table__primary mono" style={{ display: "block" }}>{r.destination_number}</span>
-      <span className="table__secondary">{r.destination_name}</span>
+      <span className="table__primary" style={{ display: "block" }}>{d.type === "ivr" ? <><Icon name="ivr" size={14} /> {d.label.replace(/^Menu: /, "")}</> : <><Icon name="voicemail" size={14} /> Voicemail of {r.destination_number}</>}</span>
+      {d.type === "voicemail" ? <span className="table__secondary">{r.destination_name}</span> : <span className="table__secondary">IVR menu</span>}
     </span>
   );
 }
@@ -63,7 +73,7 @@ export default function InboundRoutesPage() {
     {
       key: "tc",
       header: "Time condition",
-      render: (r) => r.time_condition_name ? <span>{r.time_condition_name}{r.after_hours_number ? <span className="table__secondary" style={{ display: "block" }}>Closed: {r.after_hours_number}</span> : null}</span> : <span className="subtle">Always</span>,
+      render: (r) => r.time_condition_name ? <span>{r.time_condition_name}{r.after_hours ? <span className="table__secondary" style={{ display: "block" }}>Closed: {r.after_hours.missing ? <Badge tone="danger">missing</Badge> : r.after_hours.label}</span> : null}</span> : <span className="subtle">Always</span>,
     },
     { key: "enabled", header: "Enabled", render: (r) => <Badge tone={r.is_enabled ? "ok" : "neutral"}>{r.is_enabled ? "Enabled" : "Disabled"}</Badge> },
   ];
@@ -72,7 +82,7 @@ export default function InboundRoutesPage() {
     <div className="stack">
       <PageHeader
         title="Inbound routes"
-        description="Which extension answers each number (DID) that carriers deliver, optionally only during a time condition's open hours."
+        description="Where each number (DID) that carriers deliver is answered: an extension, a voicemail box or an IVR menu, optionally only during a time condition's open hours."
         actions={can("routing.write") ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New inbound route</Button> : null}
       />
       <PendingChanges refreshKey={list.data?.total} />
@@ -145,14 +155,14 @@ function CreateInboundRouteDialog({ open, onClose, onCreated }: { open: boolean;
       busy={busy}
       size="lg"
       title="New inbound route"
-      description="Calls to the number go to the destination extension; with a time condition, closed-hours calls go to the after-hours extension."
+      description="Calls to the number go to the destination; with a time condition, closed-hours calls go to the after-hours destination instead."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="inbound-create" loading={busy} disabled={!effectiveOrg || !inboundRouteValid(draft)}>Create route</Button></>}
     >
       <form id="inbound-create" className="stack stack--sm" onSubmit={submit}>
         {organizations.length > 1 ? (
           <SelectField label="Organization" required value={effectiveOrg} error={errors.fields.organization_id} placeholder="Choose an organization"
             options={organizations.map((o) => ({ value: o.id, label: o.name }))}
-            onChange={(e) => { setOrg(e.target.value); setDraft((d) => ({ ...d, destination_extension_id: "", time_condition_id: "", after_hours_extension_id: "" })); }} />
+            onChange={(e) => { setOrg(e.target.value); setDraft((d) => ({ ...d, destination: EMPTY_DESTINATION, time_condition_id: "", after_hours: EMPTY_DESTINATION })); }} />
         ) : null}
         <InboundRouteFields draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} errors={errors.fields} organizationId={effectiveOrg} autoFocus />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}

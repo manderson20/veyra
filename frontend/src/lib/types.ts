@@ -701,6 +701,26 @@ export interface TrunkInput {
   register_expiry?: number;
 }
 
+export type DestinationType = "extension" | "voicemail" | "ivr" | "hangup";
+
+/** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6). */
+export interface Destination {
+  type: DestinationType | "missing";
+  extension_id: string | null;
+  ivr_id: string | null;
+  /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Menu: Main menu", "Hang up"; null when the target is gone. */
+  label: string | null;
+  missing: boolean;
+}
+
+export interface DestinationInput {
+  type: DestinationType;
+  extension_id?: string | null;
+  ivr_id?: string | null;
+}
+
+export type RouteDestinationType = "extension" | "voicemail" | "ivr";
+
 export interface InboundRoute {
   id: string;
   organization_id: string;
@@ -711,16 +731,21 @@ export interface InboundRoute {
   trunk_id: string | null;
   trunk_name: string | null;
   description: string | null;
-  destination_type: "extension";
+  destination_type: RouteDestinationType;
   destination_extension_id: string | null;
+  destination_ivr_id: string | null;
   destination_number: string | null;
   destination_name: string | null;
+  destination: Destination;
   destination_missing: boolean;
   time_condition_id: string | null;
   time_condition_name: string | null;
+  after_hours_type: RouteDestinationType;
   after_hours_extension_id: string | null;
+  after_hours_ivr_id: string | null;
   after_hours_number: string | null;
   after_hours_name: string | null;
+  after_hours: Destination | null;
   caller_id_prefix: string | null;
   is_enabled: boolean;
   created_at: string;
@@ -732,10 +757,13 @@ export interface InboundRouteInput {
   did?: string;
   trunk_id?: string | null;
   description?: string | null;
-  destination_type?: "extension";
+  destination_type?: RouteDestinationType;
   destination_extension_id?: string | null;
+  destination_ivr_id?: string | null;
   time_condition_id?: string | null;
+  after_hours_type?: RouteDestinationType;
   after_hours_extension_id?: string | null;
+  after_hours_ivr_id?: string | null;
   caller_id_prefix?: string | null;
   is_enabled?: boolean;
 }
@@ -819,4 +847,169 @@ export interface TimeConditionInput {
   timezone?: string | null;
   ranges?: TimeRange[];
   holidays?: string[];
+}
+
+// ---------------------------------------------------------------- voicemail, prompts, IVR (Milestone 7)
+
+export interface VoicemailBox {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  extension_id: string;
+  extension_number: string;
+  extension_name: string;
+  extension_enabled: boolean;
+  user_display_name: string | null;
+  email: string | null;
+  attach_audio: boolean;
+  delete_after_email: boolean;
+  ring_seconds: number;
+  is_enabled: boolean;
+  /** Settings → Email delivery is enabled; without it messages stay in the box. */
+  email_delivery_enabled: boolean;
+  /** Inbound routes and IVR keys that send calls to this box. */
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Returned once by POST /voicemail: the PIN is never shown again. */
+export interface VoicemailBoxCreated extends VoicemailBox {
+  pin: string;
+}
+
+export interface VoicemailBoxInput {
+  extension_id?: string;
+  /** Omitted on creation: a random PIN is generated. */
+  pin?: string;
+  /** Omitted on creation: the extension user's address. Null or empty: no email. */
+  email?: string | null;
+  attach_audio?: boolean;
+  delete_after_email?: boolean;
+  ring_seconds?: number;
+  is_enabled?: boolean;
+}
+
+export interface MyVoicemail {
+  id: string;
+  extension_id: string;
+  extension_number: string;
+  extension_name: string;
+  email: string | null;
+  ring_seconds: number;
+  is_enabled: boolean;
+}
+
+export interface Prompt {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  source: "upload" | "recording";
+  duration_seconds: number;
+  size_bytes: number;
+  file_present: boolean;
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A recording made from a phone with *95, waiting to be named (adopted) or discarded. */
+export interface Recording {
+  file: string;
+  organization_id: string;
+  organization_name: string;
+  extension_number: string;
+  recorded_at: string;
+  duration_seconds: number;
+  size_bytes: number;
+}
+
+export interface IvrEntry {
+  digit: string;
+  destination: Destination;
+}
+
+export interface IvrEntryInput {
+  digit: string;
+  destination: DestinationInput;
+}
+
+export interface IvrMenu {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  context: string;
+  description: string | null;
+  prompt_id: string | null;
+  prompt_name: string | null;
+  invalid_prompt_id: string | null;
+  invalid_prompt_name: string | null;
+  timeout_seconds: number;
+  max_retries: number;
+  allow_direct_dial: boolean;
+  timeout_destination: Destination;
+  invalid_destination: Destination;
+  entries: IvrEntry[];
+  is_enabled: boolean;
+  /** Why the menu will not work as configured. */
+  problems: string[];
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IvrMenuInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  prompt_id?: string | null;
+  invalid_prompt_id?: string | null;
+  timeout_seconds?: number;
+  max_retries?: number;
+  allow_direct_dial?: boolean;
+  timeout_destination?: DestinationInput;
+  invalid_destination?: DestinationInput;
+  entries?: IvrEntryInput[];
+  is_enabled?: boolean;
+}
+
+export type SmtpSecurity = "starttls" | "tls" | "none";
+
+export interface SmtpSettings {
+  enabled: boolean;
+  host: string;
+  port: number;
+  security: SmtpSecurity;
+  username: string | null;
+  has_password: boolean;
+  from_address: string | null;
+  from_name: string | null;
+  effective_from_address: string;
+  effective_from_name: string;
+  problems: string[];
+  queue: { waiting: number; failed: number };
+  updated_at: string | null;
+}
+
+export interface SmtpSettingsInput {
+  enabled: boolean;
+  host: string;
+  port: number;
+  security: SmtpSecurity;
+  username: string | null;
+  /** Omitted: unchanged. Null or empty: removed. */
+  password?: string | null;
+  from_address: string | null;
+  from_name: string | null;
+}
+
+export interface SmtpTestResult {
+  ok: boolean;
+  message: string;
+  recipient: string;
 }

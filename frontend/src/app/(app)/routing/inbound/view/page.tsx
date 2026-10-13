@@ -4,6 +4,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
+import { DestinationLabel } from "@/components/routing/DestinationPicker";
 import { EMPTY_INBOUND_ROUTE, InboundRouteFields, inboundRouteBody, inboundRouteDraft, inboundRouteValid, type InboundRouteDraft } from "@/components/routing/InboundRouteFields";
 import { Badge, Button, Callout, Card, ConfirmDialog, ErrorState, LoadingState, PageHeader, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -84,7 +85,7 @@ function InboundRouteView() {
         actions={editable ? <Button variant="danger" icon="trash" onClick={() => setDeleting(true)}>Delete</Button> : null}
       />
       <PendingChanges refreshKey={changed} />
-      {r.destination_missing ? <Callout tone="danger" title="This route has no working destination">The extension it pointed to no longer exists. Calls to {didLabel} are rejected until a new destination is chosen.</Callout> : null}
+      {r.destination_missing ? <Callout tone="danger" title="This route has no working destination">The destination it pointed to no longer exists or is disabled. Calls to {didLabel} are rejected until a new destination is chosen.</Callout> : null}
       <div className="grid grid--2" style={{ alignItems: "start", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)" }}>
         <Card title="Route" subtitle={editable ? undefined : "You can view but not change this route."}>
           <form className="stack stack--sm" onSubmit={save}>
@@ -96,8 +97,8 @@ function InboundRouteView() {
         <Card title="Information">
           <dl className="dl">
             <dt>Matches</dt><dd><span className="mono">{r.did_canonical}</span>{r.aliases.length ? <span className="subtle" style={{ display: "block" }}>also {r.aliases.join(", ")}</span> : null}</dd>
-            <dt>Destination</dt><dd>{r.destination_number ? <><span className="mono">{r.destination_number}</span> {r.destination_name}</> : <Badge tone="danger">None</Badge>}</dd>
-            {r.time_condition_name ? <><dt>Time condition</dt><dd>{r.time_condition_name}</dd><dt>After hours</dt><dd>{r.after_hours_number ? <><span className="mono">{r.after_hours_number}</span> {r.after_hours_name}</> : <span className="subtle">—</span>}</dd></> : null}
+            <dt>Destination</dt><dd><DestinationLabel d={r.destination} /></dd>
+            {r.time_condition_name ? <><dt>Time condition</dt><dd>{r.time_condition_name}</dd><dt>After hours</dt><dd><DestinationLabel d={r.after_hours} /></dd></> : null}
             <dt>Organization</dt><dd>{r.organization_name}</dd>
             <dt>Created</dt><dd>{formatDateTime(r.created_at)}</dd>
             <dt>Updated</dt><dd>{formatRelative(r.updated_at)}</dd>

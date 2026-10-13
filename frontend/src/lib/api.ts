@@ -73,6 +73,8 @@ const AUTH_FREE_PATHS = ["/login", "/setup", "/reset-password"];
 export interface ApiOptions {
   method?: string;
   body?: unknown;
+  /** Multipart form data (file uploads); sent as-is, no JSON encoding. */
+  form?: FormData;
   query?: Record<string, string | number | boolean | null | undefined>;
   /** Do not redirect to the sign-in page on 401 (used by the session probe). */
   noRedirect?: boolean;
@@ -128,7 +130,7 @@ export function createApi(deps: ApiDeps = defaultDeps) {
   async function request<T>(path: string, opts: ApiOptions = {}): Promise<T> {
     const method = (opts.method ?? (opts.body !== undefined ? "POST" : "GET")).toUpperCase();
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+    if (opts.body !== undefined && !opts.form) headers["Content-Type"] = "application/json";
     if (!SAFE_METHODS.has(method)) {
       const csrf = readCookie(CSRF_COOKIE, deps.cookie());
       if (csrf) headers[CSRF_HEADER] = csrf;
@@ -139,7 +141,7 @@ export function createApi(deps: ApiDeps = defaultDeps) {
         method,
         headers,
         credentials: "same-origin",
-        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+        body: opts.form ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
         signal: opts.signal,
       });
     } catch (err) {
@@ -174,7 +176,9 @@ export function createApi(deps: ApiDeps = defaultDeps) {
       request<T>(path, { ...opts, method: "POST", body: body ?? {} }),
     put: <T>(path: string, body: unknown) => request<T>(path, { method: "PUT", body }),
     patch: <T>(path: string, body: unknown) => request<T>(path, { method: "PATCH", body }),
-    del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+    del: <T>(path: string, query?: ApiOptions["query"]) => request<T>(path, { method: "DELETE", query }),
+    /** Multipart upload (POST by default). */
+    upload: <T>(path: string, form: FormData, method: "POST" | "PUT" = "POST") => request<T>(path, { method, form }),
   };
 }
 
