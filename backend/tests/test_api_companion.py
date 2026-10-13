@@ -405,11 +405,11 @@ def test_ari_event_translation():
         "connected": {"name": "", "number": ""},
         "dialplan": {"context": "veyra-internal", "exten": "95735550100"},
     }
-    assert t.translate({"type": "ChannelCreated", "channel": out}) == []
-    dialing = t.translate({"type": "ChannelStateChange", "channel": {**out, "state": "Ring"}})
-    assert [e.type for e in dialing] == ["call.dialing"] and dialing[
-        0
-    ].remote_number == "95735550100"
+    dialing = t.translate({"type": "ChannelCreated", "channel": out})
+    assert [e.type for e in dialing] == ["call.dialing"]
+    assert dialing[0].remote_number == "95735550100" and dialing[0].direction == "out"
+    # the state change that follows does not announce it twice
+    assert t.translate({"type": "ChannelStateChange", "channel": {**out, "state": "Ring"}}) == []
     # a missed call: destroyed before answer, still announced
     missed = t.translate(
         {"type": "ChannelDestroyed", "channel": out, "cause": 19, "cause_txt": "No Answer"}

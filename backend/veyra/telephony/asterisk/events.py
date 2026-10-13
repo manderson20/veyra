@@ -78,9 +78,12 @@ class AriEventTranslator:
             # "Down" with the far end in ``connected``; a call the phone places
             # starts "Ring" with the dialled digits in ``dialplan.exten``.
             if state in ("Ring", "Ringing") and not connected.get("number"):
-                self.channels[channel_id] = _Channel(
-                    endpoint, "out", dialplan.get("exten") or None, None
-                )
+                # The phone placed this call: it is already "dialing" when the
+                # channel appears (a call that fails at once never changes state).
+                out_ch = _Channel(endpoint, "out", dialplan.get("exten") or None, None)
+                out_ch.announced = True
+                self.channels[channel_id] = out_ch
+                return [self._event("call.dialing", channel_id, out_ch, _now_iso(event))]
             else:
                 self.channels[channel_id] = _Channel(
                     endpoint,

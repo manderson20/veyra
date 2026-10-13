@@ -16,6 +16,9 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 - `GET /me/extensions`, `GET/PUT /me/preferences`, `GET /directory` (new permission `directory.read` for every role).
 - **Call-event stream**: the API keeps one WebSocket to Asterisk's ARI events and serves `WS /events/calls` (ticket from `POST /events/ticket`) with `call.ringing`, `call.dialing`, `call.answered` and `call.ended` for the caller's own extensions; the engine page reports the listener state. NGINX proxies the WebSocket path. New dependency `websockets`.
 
+### Development
+- `tools/fakephone.py` answers digest challenges when it places a call, so it can dial as a registered phone.
+
 ## 0.7.0 — 2026-10-13 (Milestone 6)
 
 ### Added
