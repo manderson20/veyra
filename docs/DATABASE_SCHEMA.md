@@ -37,9 +37,14 @@ the two agree. Constraint names follow a fixed naming convention.
 | `cluster_events` | Switchover and role change history | |
 | `config_revisions` | Generated engine configuration revisions | `sequence` (identity), `state`, `content_hash`, `parent_id`; `artifacts` holds non-sensitive files in clear and sensitive files as `ciphertext` (installation key, M4); `deploy_mode` (`now`/`when_idle`) and `deploy_requested_at` (migration `0005`, M5) |
 | `provisioning_templates` | Local and community templates | unique (`template_key`, `version`), `source`, `manifest`, `files` |
+| `sip_trunks` | Carrier connections (migration `0006`, M6) | `name` and `slug` unique (`trunk-<slug>` in the engine); `auth_mode` (`registration`/`ip`), host, port, transport, `password_ciphertext` (installation key), `match_addresses` (JSONB), codecs, `max_channels`, caller-ID and DTMF options, qualify and registration intervals |
+| `time_conditions` | Opening hours per organization (migration `0006`) | unique (`organization_id`, `name`); `timezone`, `ranges` (JSONB weekly ranges), `holidays` (JSONB `MM-DD`) |
+| `inbound_routes` | DID → destination (migration `0006`) | `did` as the carrier sends it, `did_canonical` (ten digits for North American numbers); unique (`trunk_id`, `did_canonical`) with NULLs not distinct; `destination_extension_id` and `after_hours_extension_id` (`SET NULL`), `time_condition_id` and `trunk_id` (`RESTRICT`), `caller_id_prefix` |
+| `outbound_routes` | Dial patterns → trunks (migration `0006`) | `name` and `slug` unique (`veyra-out-<slug>`); `position` (evaluation order), `is_emergency`, `patterns` (JSONB `{prefix, match, prepend}`), `caller_id_number` |
+| `outbound_route_trunks` | Ordered trunks of a route | PK (`route_id`, `trunk_id`), unique (`route_id`, `position`); route `CASCADE`, trunk `RESTRICT` |
 
 Tenant-owned tables (`sites`, `buildings`, `departments`, `extensions`,
-`devices`) carry `organization_id` with `ON DELETE RESTRICT`, so deleting an
+`devices`, `inbound_routes`, `time_conditions`) carry `organization_id` with `ON DELETE RESTRICT`, so deleting an
 organization never silently removes telephony data.
 
 ## Module tables

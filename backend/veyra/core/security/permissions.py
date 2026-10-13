@@ -95,6 +95,24 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin", "technician", "standard_user", "read_only"),
     ),
     PermissionDef(
+        "trunks.read",
+        "View SIP trunks and their status",
+        default_roles=("org_admin", "technician"),
+    ),
+    PermissionDef(
+        "trunks.write", "Create and edit SIP trunks and outbound routes", platform_only=True
+    ),
+    PermissionDef(
+        "routing.read",
+        "View inbound routes, outbound routes and time conditions",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef(
+        "routing.write",
+        "Create and edit inbound routes and time conditions",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
         "devices.read",
         "View devices",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),

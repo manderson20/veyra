@@ -27,6 +27,13 @@ from veyra.core.models.platform import (
     UpdateHistory,
     UpdatePolicy,
 )
+from veyra.core.models.routing import (
+    InboundRoute,
+    OutboundRoute,
+    OutboundRouteTrunk,
+    SipTrunk,
+    TimeCondition,
+)
 from veyra.core.models.telephony import Device, Extension
 from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
 
@@ -41,20 +48,25 @@ __all__ = [
     "Department",
     "Device",
     "Extension",
+    "InboundRoute",
     "Installation",
     "InstalledModule",
     "MfaMethod",
     "MfaRecoveryCode",
     "ModuleConfig",
     "Organization",
+    "OutboundRoute",
+    "OutboundRouteTrunk",
     "PasswordResetToken",
     "Permission",
     "ProvisioningTemplate",
     "Role",
     "RoleAssignment",
     "RolePermission",
+    "SipTrunk",
     "Site",
     "SystemSetting",
+    "TimeCondition",
     "UpdateCheck",
     "UpdateHistory",
     "UpdatePolicy",
