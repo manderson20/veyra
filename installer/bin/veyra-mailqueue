@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Asterisk's voicemail "mailcmd": the composed notification (headers, body,
+# attachment) arrives on standard input and is written into Veyra's mail
+# queue, which the worker (veyra worker) delivers through the configured
+# SMTP server (docs/VOICEMAIL_IVR.md §2). No mail transport is needed on the
+# server and the message never passes through the API process.
+#
+# Usage: veyra-mailqueue [QUEUE_DIR]   (default /var/lib/veyra/mailqueue)
+# Runs as the asterisk user; the queue directory is 2770 veyra:asterisk.
+set -eu
+dir="${1:-${VEYRA_MAILQUEUE_DIR:-/var/lib/veyra/mailqueue}}"
+[ -d "$dir" ] || { echo "veyra-mailqueue: $dir does not exist" >&2; exit 1; }
+umask 007
+name="$(date -u +%Y%m%dT%H%M%S)-$$-$(od -An -N4 -tx4 /dev/urandom 2>/dev/null | tr -d ' \n')"
+tmp="$dir/.$name.tmp"
+cat >"$tmp"
+if [ ! -s "$tmp" ]; then
+    rm -f "$tmp"
+    echo "veyra-mailqueue: empty message, nothing queued" >&2
+    exit 1
+fi
+chmod 0660 "$tmp"
+mv -f "$tmp" "$dir/$name.eml"

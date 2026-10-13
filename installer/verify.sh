@@ -90,11 +90,23 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm /etc/asterisk/veyra)" == "2750 veyra:asterisk" ]] \
         && check engine-include-dir pass "2750 veyra:asterisk" \
         || check engine-include-dir fail "/etc/asterisk/veyra is $(perm /etc/asterisk/veyra) (expected 2750 veyra:asterisk)"
-    for f in pjsip.conf extensions.conf rtp.conf; do
+    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf; do
         grep -qs "Managed by Veyra" "/etc/asterisk/$f" \
             && check "engine-stub:$f" pass "Veyra-managed" \
             || check "engine-stub:$f" fail "/etc/asterisk/$f is not the Veyra-managed stub"
     done
+    # Directories shared with Asterisk (Milestone 7): prompts and the mail queue.
+    [[ "$(perm "$VEYRA_DATA")" == "750 veyra:asterisk" ]] \
+        && check data-dir pass "750 veyra:asterisk" \
+        || check data-dir fail "$VEYRA_DATA is $(perm "$VEYRA_DATA") (expected 750 veyra:asterisk)"
+    for d in prompts mailqueue mailqueue/failed; do
+        [[ "$(perm "$VEYRA_DATA/$d")" == "2770 veyra:asterisk" ]] \
+            && check "data-dir:$d" pass "2770 veyra:asterisk" \
+            || check "data-dir:$d" fail "$VEYRA_DATA/$d is $(perm "$VEYRA_DATA/$d") (expected 2770 veyra:asterisk)"
+    done
+    [[ -x "$VEYRA_PREFIX/current/installer/bin/veyra-mailqueue" ]] \
+        && check mailqueue-command pass "executable" \
+        || check mailqueue-command fail "$VEYRA_PREFIX/current/installer/bin/veyra-mailqueue is missing or not executable"
 fi
 
 # --- permissions

@@ -32,14 +32,10 @@ export interface PlannedFeature {
 export const PLANNED_FEATURES: PlannedFeature[] = [
   { key: "devices", label: "Devices", icon: "device", milestone: 9,
     summary: "Register desk phones by MAC address, assign provisioning templates and extensions." },
-  { key: "ivr", label: "IVR", icon: "ivr", milestone: 7,
-    summary: "Auto attendant menus with recorded prompts, multi-level menus and direct extension dialing." },
   { key: "ring-groups", label: "Ring Groups", icon: "group", milestone: 8,
     summary: "Ring several phones at once or in sequence, with failover destinations." },
   { key: "queues", label: "Call Queues", icon: "queue", milestone: 8,
     summary: "Queue callers for groups of agents with hold music, announcements and strategies." },
-  { key: "voicemail", label: "Voicemail", icon: "voicemail", milestone: 7,
-    summary: "Voicemail boxes, greetings, voicemail-to-email and message waiting indicators." },
   { key: "paging", label: "Paging", icon: "megaphone", milestone: null,
     summary: "Paging groups, SIP paging endpoints (such as Algo speakers), multicast paging and intercom. " +
       "SIP paging is not a life-safety notification system." },
@@ -68,6 +64,9 @@ export const NAV: NavSection[] = [
     { label: "Inbound Routes", href: "/routing/inbound/", icon: "arrowIn", permissions: ["routing.read"] },
     { label: "Outbound Routes", href: "/routing/outbound/", icon: "arrowOut", permissions: ["routing.read"] },
     { label: "Time Conditions", href: "/routing/time-conditions/", icon: "clock", permissions: ["routing.read"] },
+    { label: "Voicemail", href: "/voicemail/", icon: "voicemail", permissions: ["voicemail.read"] },
+    { label: "IVR Menus", href: "/ivr/", icon: "ivr", permissions: ["ivr.read"] },
+    { label: "Prompts", href: "/prompts/", icon: "audio", permissions: ["ivr.read"] },
     ...PLANNED_FEATURES.map((f) => ({
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
     })),

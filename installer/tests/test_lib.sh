@@ -37,6 +37,17 @@ printf 'a=@MISSING@\n' >"$TMP/in2"
 t "render_template rejects unrendered placeholders" not bash -c \
     ". '$HERE/../lib/common.sh'; render_template '$TMP/in2' '$TMP/out2'"
 
+# veyra-mailqueue (Milestone 7): queues standard input as one .eml file.
+mkdir -p "$TMP/mq"
+printf 'From: a@example.org\nTo: b@example.org\nSubject: t\n\nbody\n' | "$HERE/../bin/veyra-mailqueue" "$TMP/mq"
+t "mailqueue writes one .eml"       test "$(find "$TMP/mq" -name '*.eml' | wc -l)" -eq 1
+t "mailqueue leaves no temp file"   test -z "$(find "$TMP/mq" -name '.*.tmp')"
+t "mailqueue file is group rw"      test "$(stat -c %a "$TMP"/mq/*.eml)" = "660"
+t "mailqueue keeps the content"     grep -q '^body$' "$TMP"/mq/*.eml
+t "mailqueue refuses empty input"   not bash -c "printf '' | '$HERE/../bin/veyra-mailqueue' '$TMP/mq'"
+t "mailqueue refuses a missing dir" not bash -c "printf 'x' | '$HERE/../bin/veyra-mailqueue' '$TMP/nope'"
+t "mailqueue still has one file"    test "$(find "$TMP/mq" -name '*.eml' | wc -l)" -eq 1
+
 OS_RELEASE_FILE="$TMP/os-release"
 printf 'ID=ubuntu\nVERSION_ID="26.04"\n' >"$OS_RELEASE_FILE"
 t "os_release_value ID" test "$(os_release_value ID)" = ubuntu

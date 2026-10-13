@@ -67,6 +67,12 @@ const PATHS: Record<string, string> = {
   power: "M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10",
   pause: "M6 4h4v16H6zM14 4h4v16h-4z",
   file: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6",
+  audio: "M2 12h2M6 8v8M10 4v16M14 7v10M18 10v4M22 12h-2",
+  play: "M6 4l14 8-14 8z",
+  stop: "M6 6h12v12H6z",
+  mail: "M3 5h18v14H3zM3 7l9 6 9-6",
+  mic: "M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4zM19 11a7 7 0 0 1-14 0M12 18v3M8 21h8",
+  keypad: "M5 5h.01M12 5h.01M19 5h.01M5 12h.01M12 12h.01M19 12h.01M5 19h.01M12 19h.01M19 19h.01",
 };
 
 export type IconName = keyof typeof PATHS;

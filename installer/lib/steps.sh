@@ -309,7 +309,7 @@ do_telephony() {
     # files shipped by the package are backed up beside them.
     MANAGED_FILE_CHANGED=0
     local stub
-    for stub in pjsip.conf extensions.conf rtp.conf; do
+    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf; do
         install_managed_file "$SCRIPT_DIR/templates/asterisk/$stub" "/etc/asterisk/$stub" 0640 root:asterisk
     done
     stub_changed=$MANAGED_FILE_CHANGED
@@ -318,6 +318,15 @@ do_telephony() {
     run install -d -m 2750 -o "$VEYRA_USER" -g asterisk /etc/asterisk/veyra
     run chown "$VEYRA_USER:asterisk" /etc/asterisk/veyra
     run chmod 2750 /etc/asterisk/veyra
+    # Data shared with Asterisk (docs/VOICEMAIL_IVR.md §7): it traverses the
+    # data directory, writes prompt recordings (*95) under prompts/<org>/incoming
+    # and hands voicemail notifications to the mail queue; Veyra's services own
+    # both and the setgid bit keeps new files in the asterisk group.
+    run chgrp asterisk "$VEYRA_DATA"
+    run chmod 0750 "$VEYRA_DATA"
+    run install -d -m 2770 -o "$VEYRA_USER" -g asterisk "$VEYRA_DATA/prompts" \
+        "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed"
+    run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed"
     run systemctl enable asterisk
     if (( core_changed )) || ! systemctl is-active --quiet asterisk; then
         run systemctl restart asterisk

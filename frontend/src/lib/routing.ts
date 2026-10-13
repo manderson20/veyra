@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /** Pure helpers for trunks, routes and time conditions (unit tested). */
 
-import type { CallerIdHeader, DtmfMode, TimeRange, Trunk, TrunkAuthMode, TrunkTransport, Weekday } from "./types";
+import type { CallerIdHeader, Destination, DestinationInput, DestinationType, DtmfMode, TimeRange, Trunk, TrunkAuthMode, TrunkTransport, Weekday } from "./types";
 
 export const WEEKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 export const WEEKDAY_LABELS: Record<Weekday, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
@@ -81,4 +81,51 @@ export function moveItem<T>(items: T[], from: number, to: number): T[] {
   const [moved] = next.splice(from, 1);
   next.splice(to, 0, moved as T);
   return next;
+}
+
+// ---------------------------------------------------------------- destinations (docs/VOICEMAIL_IVR.md §6)
+
+export const DESTINATION_LABELS: Record<DestinationType, string> = {
+  extension: "Extension",
+  voicemail: "Voicemail of an extension",
+  ivr: "IVR menu",
+  hangup: "Hang up",
+};
+
+/** The editable form of a destination: one target field per kind. */
+export interface DestinationDraft {
+  type: DestinationType;
+  extension_id: string;
+  ivr_id: string;
+}
+
+export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", extension_id: "", ivr_id: "" };
+export const HANGUP: DestinationDraft = { type: "hangup", extension_id: "", ivr_id: "" };
+
+export function destinationDraft(d: Destination | null | undefined, fallback: DestinationDraft = EMPTY_DESTINATION): DestinationDraft {
+  if (!d || d.type === "missing") return fallback;
+  return { type: d.type, extension_id: d.extension_id ?? "", ivr_id: d.ivr_id ?? "" };
+}
+
+/** Normalize a draft for the API: only the target of its kind is sent. */
+export function destinationBody(d: DestinationDraft): DestinationInput {
+  if (d.type === "hangup") return { type: "hangup", extension_id: null, ivr_id: null };
+  if (d.type === "ivr") return { type: "ivr", extension_id: null, ivr_id: d.ivr_id || null };
+  return { type: d.type, extension_id: d.extension_id || null, ivr_id: null };
+}
+
+/** A draft is complete when its kind has the target it needs. */
+export function destinationComplete(d: DestinationDraft): boolean {
+  if (d.type === "hangup") return true;
+  if (d.type === "ivr") return d.ivr_id.length > 0;
+  return d.extension_id.length > 0;
+}
+
+/** Keys an IVR menu can map, in keypad order. */
+export const IVR_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"] as const;
+
+/** "0:12", "2:05" for prompt lengths. */
+export function formatSeconds(seconds: number | null | undefined): string {
+  const s = Math.max(0, Math.round(seconds ?? 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }

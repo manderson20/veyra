@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { ClickToDialDialog } from "@/components/extensions/ClickToDial";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
+import { VoicemailCard } from "@/components/extensions/VoicemailCard";
 import { CopyButton } from "@/components/common/CopyButton";
 import {
   Badge,
@@ -155,6 +156,7 @@ function ExtensionView() {
           </form>
         </Card>
         <div className="stack">
+          {can("voicemail.read") ? <VoicemailCard extension={x} editable={can("voicemail.write")} onChanged={() => setChanged((n) => n + 1)} /> : null}
           {editable ? <SipCredentialsCard extension={x} onRotated={() => { ext.reload(); setChanged((n) => n + 1); }} /> : null}
           <Card title="Information">
             <dl className="dl">
