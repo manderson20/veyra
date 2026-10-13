@@ -1,10 +1,10 @@
-# Milestone 5: Completion Report (draft)
+# Milestone 5: Completion Report
 
 **Milestone:** 5 — SIP registration and internal calling (live registrations, active calls, click-to-dial API, deploy mode)
-**Date:** 2026-10-12 (in progress)
-**Branch:** `milestone-5` (pushed to `manderson20/veyra`; not merged to `main`)
-**Version:** 0.6.0-dev
-**Status:** Software complete and tested. The live part needs the owner: a phone registered against dev1, an internal call between two extensions, a click-to-dial call, and a "deploy when idle" while a call is up (§3, §4).
+**Date:** 2026-10-12 to 2026-10-13
+**Branch:** `milestone-5` (pushed to `manderson20/veyra`; merged to `main`)
+**Version:** 0.6.0
+**Status:** Complete. Installed on veyra-dev1 (release `af1d3443a9`, revision 5) and verified from the server with a software phone (§3). Approved by the project owner on 2026-10-13 (merged to `main`). The owner's checks with a real desk phone on dev1 are still to come and will be appended to §3 as an addendum.
 
 ## 1. Scope (approved 2026-10-12)
 
@@ -78,10 +78,20 @@ extension), and the deploy-mode drop-down on the Deploy changes button.
   the dialplan fix (revision 5 deployed).
 * veyra-dev2 is not provisioned (deferred).
 
-## 7. Proposed Milestone 6 (for approval)
+## 7. Proposed Milestone 6 (approved 2026-10-13)
 
 SIP trunks and routing: trunk objects (registration and IP-authenticated),
 trunk status, DIDs and inbound routing to extensions, outbound routing
 with dial patterns and trunk selection, time conditions, loop detection,
 and emergency-number handling notes; generated `pjsip` trunk sections and
 the `veyra-from-trunk` and outbound contexts.
+
+## 8. Owner decisions (2026-10-13)
+
+* Milestone 5 approved; version 0.6.0; `main` fast-forwarded to this branch.
+* The "when idle" deployment keeps the 30-minute default timeout (§5).
+* Milestone 6 as proposed in §7 approved and started on branch `milestone-6`
+  (version 0.7.0-dev).
+* Owner request: **call pickup groups** (pick up a call ringing on another
+  phone from your own) added to the roadmap under Milestone 8 with ring
+  groups and queues.
