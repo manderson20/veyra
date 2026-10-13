@@ -1,10 +1,10 @@
-# Milestone 6: Completion Report (draft)
+# Milestone 6: Completion Report
 
 **Milestone:** 6 — SIP trunks and routing (trunks, DIDs and inbound routing, outbound routing with dial patterns and trunk selection, time conditions, loop detection, emergency-number handling notes)
 **Date:** 2026-10-13
-**Branch:** `milestone-6` (pushed to `manderson20/veyra`; not merged to `main`)
-**Version:** 0.7.0-dev
-**Status:** Software complete and verified on veyra-dev1 with a software carrier (§3). Awaiting the owner's approval; a real carrier trunk has not been tested yet (§4).
+**Branch:** `milestone-6` (pushed to `manderson20/veyra`; merged to `main`)
+**Version:** 0.7.0
+**Status:** Software complete and verified on veyra-dev1 with a software carrier (§3). Approved by the project owner on 2026-10-13 (merged to `main`); a real carrier trunk has not been tested yet (§4).
 
 ## 1. Scope (approved 2026-10-13)
 
@@ -82,7 +82,7 @@ reference: [TRUNKS_ROUTING.md](../TRUNKS_ROUTING.md).
   look at the four new pages in a browser.
 * veyra-dev2 is not provisioned (deferred).
 
-## 7. Proposed Milestone 6b (for approval)
+## 7. Proposed Milestone 6b (approved 2026-10-13)
 
 **Veyra Companion** browser extension (owner request, roadmap row 6b):
 Chrome/Edge first; sign in with Veyra credentials including the second
@@ -94,3 +94,12 @@ user's extensions); personal speed dials and quick buttons stored in the
 user's Veyra profile. Backend additions: a per-user API token or session
 flow usable from an extension, the event stream, and a `user_preferences`
 store. Alternative order if preferred: Milestone 7 (voicemail and IVR) first.
+
+## 8. Owner decisions (2026-10-13)
+
+* Milestone 6 approved; version 0.7.0; `main` fast-forwarded to this branch.
+* Milestone 6b (Veyra Companion) as proposed in §7 approved and started on
+  branch `milestone-6b` (version 0.8.0-dev).
+* The owner asked which carrier the test used: none; the live test used the
+  project's software carrier (`tools/fakephone.py` in carrier mode), so the
+  first real carrier remains an open verification item.
