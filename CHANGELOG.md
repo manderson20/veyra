@@ -8,6 +8,21 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.9.0 — 2026-10-13 (Milestone 7)
+
+### Added
+- **Voicemail boxes** (`/voicemail`, Telephony → Voicemail, Voicemail card on the extension page): one box per extension with a PIN encrypted at rest (shown once on creation or reset), ring time before voicemail answers, email delivery with the recording attached and optional deletion after sending; unanswered and busy calls land in the box; `*97` (own box) and `*98` (any box) from the phone; message waiting indication on the phone (`mailboxes=` on the endpoint and AOR). Users change their own PIN on the account page (`/me/voicemail`). Permissions `voicemail.read`, `voicemail.write`.
+- **Email delivery** (`/system/smtp`, Settings → Email delivery): the SMTP server Veyra sends through (STARTTLS, TLS or unencrypted to a loopback relay; password encrypted with the installation key, write-only), a test message to yourself, queue counts. Asterisk hands voicemail notifications to `installer/bin/veyra-mailqueue`, which writes them into `/var/lib/veyra/mailqueue`; the worker sends them with retries (1, 5, 15, 60 minutes) and gives up after a day (`mail.failed` in the audit log). No mail transport is needed on the server.
+- **Prompts** (`/prompts`, Telephony → Prompts): WAV uploads converted to 8 kHz 16-bit mono in pure Python (stereo mixed down, resampled), playback in the browser, replace and rename; **recordings from phones** with `*95` (record, `#` to stop, `1` keep / `2` listen / `3` re-record) appear on the page to be named or discarded. Files live under `/var/lib/veyra/prompts/<organization>/`.
+- **IVR menus** (`/ivr`, Telephony → IVR Menus): prompt, keys `0`–`9`, `*`, `#` mapped to an extension, a voicemail box, another menu or hang-up, direct extension dialling, timeout and retry limits with separate fallbacks for timeouts and invalid keys, an optional custom invalid-key prompt; the page lists why a menu will not work (`problems`). Generated `veyra-ivr-<slug>` contexts with a loop guard. Permissions `ivr.read`, `ivr.write` (also cover prompts).
+- **Typed destinations**: inbound routes (destination and after-hours branch) and IVR keys point at an extension, the voicemail of an extension or an IVR menu; the API returns a label and a `missing` flag, the generator renders missing targets as congestion, and boxes or menus in use cannot be deleted (`409 voicemail_in_use`, `409 ivr_in_use`, `409 prompt_in_use`).
+- New managed file `voicemail.conf` (sensitive; reload `app_voicemail.so`), installer stub `/etc/asterisk/voicemail.conf`; `/var/lib/veyra` becomes `veyra:asterisk` with `prompts/` and `mailqueue/` shared with Asterisk; `verify.sh` checks them. Migration `0008`. Design and reference: `docs/VOICEMAIL_IVR.md`.
+
+### Changed
+- Audit details redact keys containing `pin` as well as passwords, secrets, tokens and keys.
+- The worker drains the mail queue and keeps the per-organization prompt folders on every iteration.
+- `python-multipart` added for multipart uploads (pure Python).
+
 ## 0.8.1 — 2026-10-13
 
 ### Added

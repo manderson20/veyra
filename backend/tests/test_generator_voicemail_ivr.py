@@ -190,6 +190,12 @@ def test_ivr_context_keys_direct_dial_and_fallbacks():
     assert "exten => i,1,Set(VEYRA_IVR_TRIES=$[${VEYRA_IVR_TRIES} + 1])" in body
     assert "GotoIf($[${VEYRA_IVR_TRIES} >= 2]?giveup)" in body
     assert " same => n,Playback(pbx-invalid)\n same => n,Goto(s,menu)" in body
+    # a timeout replays the menu without the invalid prompt
+    t_handler = body.split("exten => t,1,")[1]
+    assert (
+        t_handler.startswith("Set(VEYRA_IVR_TRIES=")
+        and "Playback(pbx-invalid)\n same => n,Goto(s,menu)" not in t_handler
+    )
     assert "no key pressed 2 times)\n same => n,Goto(veyra-internal,1001,1)" in body
     assert "invalid key 2 times)\n same => n,Playback(vm-goodbye)\n same => n,Hangup()" in body
     assert generator.validate(list(files.values())) == []

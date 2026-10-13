@@ -804,6 +804,8 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
                 if number in digits:
                     continue  # the key wins
                 lines.append(f"exten => {number},1,Goto({CONTEXT_INTERNAL},{number},1)")
+        # An invalid key is answered with the invalid prompt and the menu is
+        # replayed; a timeout replays the menu without a prompt.
         for exten, label, dest in (
             ("i", "invalid key", m.get("invalid")),
             ("t", "no key pressed", m.get("timeout")),
@@ -811,7 +813,7 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
             lines += [
                 f"exten => {exten},1,Set(VEYRA_IVR_TRIES=$[${{VEYRA_IVR_TRIES}} + 1])",
                 f" same => n,GotoIf($[${{VEYRA_IVR_TRIES}} >= {retries}]?giveup)",
-                f" same => n,Playback({invalid_path if exten == 'i' else 'pbx-invalid'})",
+                *([f" same => n,Playback({invalid_path})"] if exten == "i" else []),
                 " same => n,Goto(s,menu)",
                 f" same => n(giveup),NoOp(Veyra IVR {name}: {label} {retries} times)",
             ]

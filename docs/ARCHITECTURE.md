@@ -192,7 +192,7 @@ Local overrides never modify official templates.
 
 ## 14. Backups and recovery (design)
 
-* **Content:** the database (`pg_dump -Fc`), `/etc/veyra` (including secrets), generated telephony configuration, and later voicemail and recordings under `/var/lib/veyra`.
+* **Content:** the database (`pg_dump -Fc`), `/etc/veyra` (including secrets), generated telephony configuration, IVR prompts under `/var/lib/veyra/prompts`, Asterisk's voicemail spool, and later call recordings.
 * **Portability:** dumps are standard PostgreSQL custom format. Configuration is a tarball, so restoring onto a fresh node is install.sh followed by restore.
 * **Encryption:** planned with age or OpenSSL, using a key the administrator holds (M17). Plaintext backups stay root-only (0600) under `/var/backups/veyra`.
 * **Retention and scheduling:** planned in a Backup module (M17). `upgrade.sh` already takes a backup before every upgrade.
