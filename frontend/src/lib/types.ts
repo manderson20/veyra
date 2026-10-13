@@ -603,3 +603,194 @@ export interface RenderedFile {
   format: string;
   content: string;
 }
+
+/* ---------------------------------------------------------------- Milestone 6: trunks and routing */
+
+export type TrunkAuthMode = "registration" | "ip";
+export type TrunkTransport = "udp" | "tcp" | "tls";
+export type CallerIdHeader = "pai" | "rpid" | "none";
+export type DtmfMode = "rfc4733" | "inband" | "info" | "auto";
+
+export interface TrunkStatus {
+  state: "online" | "offline" | "unknown";
+  reachable: boolean | null;
+}
+
+export interface Trunk {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  is_enabled: boolean;
+  auth_mode: TrunkAuthMode;
+  host: string;
+  port: number;
+  transport: TrunkTransport;
+  username: string | null;
+  auth_username: string | null;
+  has_password: boolean;
+  from_user: string | null;
+  from_domain: string | null;
+  outbound_proxy: string | null;
+  match_addresses: string[];
+  codecs: string[] | null;
+  max_channels: number | null;
+  default_caller_id: string | null;
+  caller_id_header: CallerIdHeader;
+  dtmf_mode: DtmfMode;
+  qualify_frequency: number;
+  register_expiry: number;
+  status: TrunkStatus | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrunkPage {
+  items: Trunk[];
+  total: number;
+}
+
+/** Create/patch body for a trunk; `password` is write-only (null clears it on PATCH). */
+export interface TrunkInput {
+  name?: string;
+  description?: string | null;
+  is_enabled?: boolean;
+  auth_mode?: TrunkAuthMode;
+  host?: string;
+  port?: number;
+  transport?: TrunkTransport;
+  username?: string | null;
+  auth_username?: string | null;
+  password?: string | null;
+  from_user?: string | null;
+  from_domain?: string | null;
+  outbound_proxy?: string | null;
+  match_addresses?: string[];
+  codecs?: string[] | null;
+  max_channels?: number | null;
+  default_caller_id?: string | null;
+  caller_id_header?: CallerIdHeader;
+  dtmf_mode?: DtmfMode;
+  qualify_frequency?: number;
+  register_expiry?: number;
+}
+
+export interface InboundRoute {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  did: string;
+  did_canonical: string;
+  aliases: string[];
+  trunk_id: string | null;
+  trunk_name: string | null;
+  description: string | null;
+  destination_type: "extension";
+  destination_extension_id: string | null;
+  destination_number: string | null;
+  destination_name: string | null;
+  destination_missing: boolean;
+  time_condition_id: string | null;
+  time_condition_name: string | null;
+  after_hours_extension_id: string | null;
+  after_hours_number: string | null;
+  after_hours_name: string | null;
+  caller_id_prefix: string | null;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InboundRouteInput {
+  organization_id?: string;
+  did?: string;
+  trunk_id?: string | null;
+  description?: string | null;
+  destination_type?: "extension";
+  destination_extension_id?: string | null;
+  time_condition_id?: string | null;
+  after_hours_extension_id?: string | null;
+  caller_id_prefix?: string | null;
+  is_enabled?: boolean;
+}
+
+export interface OutboundPattern {
+  prefix: string;
+  match: string;
+  prepend: string;
+}
+
+export interface RouteTrunk {
+  id: string;
+  name: string;
+  slug: string;
+  is_enabled: boolean;
+}
+
+export interface OutboundRoute {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  position: number;
+  is_emergency: boolean;
+  is_enabled: boolean;
+  patterns: OutboundPattern[];
+  /** Rendered Asterisk extensions, e.g. `_9NXXNXXXXXX`. */
+  examples: string[];
+  /** Failover order. */
+  trunks: RouteTrunk[];
+  caller_id_number: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OutboundRoutes {
+  items: OutboundRoute[];
+  warnings: string[];
+}
+
+export interface OutboundRouteInput {
+  name?: string;
+  description?: string | null;
+  is_emergency?: boolean;
+  is_enabled?: boolean;
+  patterns?: OutboundPattern[];
+  trunk_ids?: string[];
+  caller_id_number?: string | null;
+}
+
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+export interface TimeRange {
+  days: Weekday[];
+  /** HH:MM, 24-hour. */
+  start: string;
+  end: string;
+}
+
+export interface TimeCondition {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  description: string | null;
+  timezone: string;
+  ranges: TimeRange[];
+  /** MM-DD dates on which the condition is closed. */
+  holidays: string[];
+  open_now: boolean;
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TimeConditionInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  /** IANA name; null or empty = the organization default. */
+  timezone?: string | null;
+  ranges?: TimeRange[];
+  holidays?: string[];
+}
