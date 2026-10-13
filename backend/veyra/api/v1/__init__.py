@@ -6,10 +6,14 @@ from fastapi import APIRouter
 from veyra.api.v1 import (
     audit,
     auth,
+    auth_companion,
     auth_mfa,
     calls,
+    directory,
+    events,
     extensions,
     ha,
+    me,
     modules,
     organizations,
     provisioning,
@@ -27,6 +31,7 @@ api_router = APIRouter(prefix="/api/v1")
 for r in (
     auth,
     auth_mfa,
+    auth_companion,
     setup,
     system,
     organizations,
@@ -42,5 +47,8 @@ for r in (
     calls,
     trunks,
     routing,
+    me,
+    directory,
+    events,
 ):
     api_router.include_router(r.router)

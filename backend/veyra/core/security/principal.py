@@ -24,6 +24,12 @@ class Principal:
     display_name: str
     grants: list[Grant] = field(default_factory=list)
     session_id: uuid.UUID | None = None
+    # Set for bearer-token callers (ADR 0015): the permission keys the token may
+    # exercise. ``None`` means an unrestricted (session) caller. The effective
+    # permissions are the intersection of the grants and this set; the marker
+    # scope ``me`` covers the caller's own account routes, which check it directly.
+    token_scopes: frozenset[str] | None = None
+    token_id: uuid.UUID | None = None
 
     @property
     def label(self) -> str:
@@ -31,7 +37,21 @@ class Principal:
 
     @property
     def is_platform_admin(self) -> bool:
+        if self.token_scopes is not None:
+            return False  # a scoped token never acts as the whole administrator
         return any(g.scope_type == "platform" and ALL in g.permissions for g in self.grants)
+
+    @property
+    def is_token(self) -> bool:
+        return self.token_scopes is not None
+
+    def _in_scope(self, permission: str) -> bool:
+        return self.token_scopes is None or permission in self.token_scopes
+
+    def has_scope(self, scope: str) -> bool:
+        """For the marker scopes (``me``) that are not permission keys; sessions
+        always have them."""
+        return self.token_scopes is None or scope in self.token_scopes
 
     def has(
         self,
@@ -49,6 +69,8 @@ class Principal:
           ``organization_id`` is irrelevant for the permission, in which case
           callers should use :meth:`has_any_scope`.
         """
+        if not self._in_scope(permission):
+            return False
         definition = registry.get(permission)
         platform_only = definition.platform_only if definition else True
         for g in self.grants:
@@ -69,6 +91,8 @@ class Principal:
     def has_any_scope(self, permission: str) -> bool:
         """True when the permission is granted in at least one scope (used for
         navigation and for list endpoints that then filter by scope)."""
+        if not self._in_scope(permission):
+            return False
         definition = registry.get(permission)
         platform_only = definition.platform_only if definition else True
         for g in self.grants:
@@ -84,6 +108,8 @@ class Principal:
         (meaning: every organization).
         """
         result: set[uuid.UUID] = set()
+        if not self._in_scope(permission):
+            return result
         for g in self.grants:
             if permission in g.permissions or ALL in g.permissions:
                 if g.scope_type == "platform":
@@ -100,4 +126,8 @@ class Principal:
         keys: set[str] = set()
         for g in self.grants:
             keys |= set(g.permissions)
+        if ALL in keys:
+            keys = {p.key for p in registry.all()}
+        if self.token_scopes is not None:
+            keys &= set(self.token_scopes)
         return sorted(keys)

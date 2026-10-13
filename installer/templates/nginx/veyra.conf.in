@@ -50,6 +50,16 @@ server {
         include @VEYRA_ETC@/nginx-proxy.conf;
     }
 
+    # Call-event stream for the Companion extension (WebSocket, docs/COMPANION.md).
+    location /api/v1/events/calls {
+        proxy_pass http://veyra_api;
+        include @VEYRA_ETC@/nginx-proxy.conf;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
     location /api/ {
         proxy_pass http://veyra_api;
         include @VEYRA_ETC@/nginx-proxy.conf;

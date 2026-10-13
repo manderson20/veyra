@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     session_retention_days: int = 30
     # Validity of administrator- and CLI-issued password reset links.
     password_reset_ttl_hours: int = 24
+    # Bearer tokens for the Companion extension (ADR 0015): idle expiry after
+    # the last use, and a hard maximum age from creation.
+    companion_token_idle_days: int = 30
+    companion_token_max_days: int = 180
 
     # --- Modules --------------------------------------------------------------
     # Unsigned modules may only be loaded in development. Never enable this

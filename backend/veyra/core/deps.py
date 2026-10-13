@@ -14,7 +14,7 @@ from veyra.core import audit
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
 from veyra.core.errors import ProblemError, forbidden
-from veyra.core.security import tokens
+from veyra.core.security import api_tokens, tokens
 from veyra.core.security.principal import Principal
 from veyra.core.security.sessions import load_principal, resolve_session
 
@@ -69,11 +69,46 @@ def unauthorized(detail: str = "Sign in to continue.") -> ProblemError:
     return ProblemError(401, "Unauthorized", detail, code="unauthorized")
 
 
+def bearer_token(request: Request) -> str | None:
+    """The bearer token of the request, if it carries one (ADR 0015)."""
+    header = request.headers.get("authorization", "")
+    scheme, _, value = header.partition(" ")
+    if scheme.lower() != "bearer" or not value.strip():
+        return None
+    return value.strip()
+
+
+def _token_principal(request: Request, db: Session, settings: Settings, raw: str) -> Principal:
+    """A bearer caller: no cookie, no CSRF, no pre-authentication state. The
+    token's scopes cap the permissions; the user's grants still decide."""
+    if not api_tokens.looks_like_token(raw):
+        raise unauthorized("The token is not valid.")
+    resolved = api_tokens.resolve(db, raw, settings, ip=client_ip(request, settings))
+    if resolved is None:
+        raise unauthorized("The token has expired or was revoked. Sign in again.")
+    token, user = resolved
+    if user.must_change_password:
+        raise ProblemError(
+            403,
+            "Password change required",
+            "Choose a new password in the web interface before continuing.",
+            code="password_change_required",
+        )
+    principal = load_principal(db, user, None)
+    principal.token_scopes = frozenset(token.scopes or [])
+    principal.token_id = token.id
+    request.state.principal = principal
+    return principal
+
+
 def current_principal(
     request: Request,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> Principal:
+    bearer = bearer_token(request)
+    if bearer is not None:
+        return _token_principal(request, db, settings, bearer)
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         raise unauthorized()

@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## [Unreleased] — 0.8.0-dev (Milestone 6b)
+
+### Added
+- **Veyra Companion** browser extension (Chrome/Edge, Manifest V3) under `companion/`: sign in with Veyra credentials and the second factor, click-to-dial from a popup, the context menu or `tel:` links (the desk phone rings first), directory search, incoming and missed-call notifications, speed dials and settings stored in the user's profile (`docs/COMPANION.md`).
+- **Scoped bearer tokens** (ADR 0015): `POST /auth/companion/login` and `/verify` reuse the web sign-in checks and issue a `vyc_…` token limited to `calls.originate`, `calls.read`, `directory.read` and own-account routes; tokens expire 30 days after last use (180 days at most), are listed and revoked on the account page ("Connected apps"), by administrators (`/users/{id}/tokens`) and by `veyra sessions revoke`. Migration `0007`.
+- `GET /me/extensions`, `GET/PUT /me/preferences`, `GET /directory` (new permission `directory.read` for every role).
+- **Call-event stream**: the API keeps one WebSocket to Asterisk's ARI events and serves `WS /events/calls` (ticket from `POST /events/ticket`) with `call.ringing`, `call.dialing`, `call.answered` and `call.ended` for the caller's own extensions; the engine page reports the listener state. NGINX proxies the WebSocket path. New dependency `websockets`.
+
 ## 0.7.0 — 2026-10-13 (Milestone 6)
 
 ### Added

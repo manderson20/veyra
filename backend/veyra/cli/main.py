@@ -460,11 +460,13 @@ def cmd_users_unlock(args: argparse.Namespace) -> int:
 def cmd_sessions_revoke(args: argparse.Namespace) -> int:
     from veyra.core import audit
     from veyra.core.db import session_scope
+    from veyra.core.security.api_tokens import revoke_user_tokens
     from veyra.core.security.sessions import revoke_user_sessions
 
     with session_scope() as db:
         user = _find_user(db, args.email)
         revoked = revoke_user_sessions(db, user.id)
+        tokens_revoked = revoke_user_tokens(db, user.id)
         audit.record(
             db,
             action="user.sessions_revoke",
@@ -473,7 +475,7 @@ def cmd_sessions_revoke(args: argparse.Namespace) -> int:
             organization_id=user.home_organization_id,
             target_type="user",
             target_id=user.id,
-            details={"sessions_revoked": revoked},
+            details={"sessions_revoked": revoked, "tokens_revoked": tokens_revoked},
         )
         email = user.email
     print(f"{email}: {revoked} session(s) signed out")
@@ -493,9 +495,12 @@ def cmd_sessions_purge(args: argparse.Namespace) -> int:
 def purge_expired(db: Any, settings: Any) -> tuple[int, int]:
     """Delete sessions and reset tokens past their retention. Used by the
     worker (hourly) and ``veyra sessions purge``."""
+    from veyra.core.security.api_tokens import purge_tokens
     from veyra.core.security.password_reset import purge_reset_tokens
     from veyra.core.security.sessions import purge_sessions
 
+    # Expired bearer tokens follow the session retention (ADR 0015).
+    purge_tokens(db, settings)
     return purge_sessions(db, settings), purge_reset_tokens(db, settings)
 
 

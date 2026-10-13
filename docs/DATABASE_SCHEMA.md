@@ -42,6 +42,8 @@ the two agree. Constraint names follow a fixed naming convention.
 | `inbound_routes` | DID → destination (migration `0006`) | `did` as the carrier sends it, `did_canonical` (ten digits for North American numbers); unique (`trunk_id`, `did_canonical`) with NULLs not distinct; `destination_extension_id` and `after_hours_extension_id` (`SET NULL`), `time_condition_id` and `trunk_id` (`RESTRICT`), `caller_id_prefix` |
 | `outbound_routes` | Dial patterns → trunks (migration `0006`) | `name` and `slug` unique (`veyra-out-<slug>`); `position` (evaluation order), `is_emergency`, `patterns` (JSONB `{prefix, match, prepend}`), `caller_id_number` |
 | `outbound_route_trunks` | Ordered trunks of a route | PK (`route_id`, `trunk_id`), unique (`route_id`, `position`); route `CASCADE`, trunk `RESTRICT` |
+| `api_tokens` | Scoped bearer tokens (migration `0007`, M6b, ADR 0015) | `token_hash` unique (SHA-256), `kind` (`companion`), `label` (device), `scopes` (JSONB permission keys), `created_at`/`created_ip`, `expires_at` (idle expiry, extended on use), `last_used_at`/`last_used_ip`, `revoked_at`; user `CASCADE` |
+| `user_preferences` | Per-user settings document (migration `0007`) | `user_id` PK, `data` (JSONB; `companion` section: speed dials, dial prefix, default extension, notification toggles), `updated_at` |
 
 Tenant-owned tables (`sites`, `buildings`, `departments`, `extensions`,
 `devices`, `inbound_routes`, `time_conditions`) carry `organization_id` with `ON DELETE RESTRICT`, so deleting an

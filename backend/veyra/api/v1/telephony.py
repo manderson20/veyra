@@ -68,6 +68,9 @@ class EngineOut(BaseModel):
     pending_since: str | None = None
     pending_by: str | None = None
     installation_key_present: bool = True
+    # Call-event listener for the Companion (docs/COMPANION.md §4):
+    # disabled | connecting | connected | reconnecting, connected clients.
+    events: dict[str, Any] | None = None
     # The queued deployment's mode and, for when_idle, what it waits for.
     pending_mode: str | None = None
     pending_requested_at: str | None = None
@@ -100,6 +103,8 @@ def engine_status(
     out.pending_revision = queued.sequence if queued else None
     key = _key(request)
     out.installation_key_present = key is not None
+    hub = getattr(request.app.state, "callevents", None)
+    out.events = hub.status() if hub is not None else None
     out.changes_pending = service.changes_pending(db, adapter, key)
     flag = service.pending_change(db)
     if flag:

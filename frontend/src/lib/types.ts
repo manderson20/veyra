@@ -103,6 +103,20 @@ export interface UserSession {
   is_current: boolean;
 }
 
+/** A scoped bearer token (Companion extension), ADR 0015. */
+export interface ApiToken {
+  id: string;
+  kind: string;
+  label: string;
+  scopes: string[];
+  created_at: string;
+  created_ip: string | null;
+  expires_at: string;
+  last_used_at: string | null;
+  last_used_ip: string | null;
+  is_current: boolean;
+}
+
 export interface PasswordResetLink {
   token: string;
   path: string;

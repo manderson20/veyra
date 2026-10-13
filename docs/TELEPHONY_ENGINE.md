@@ -145,6 +145,13 @@ dialled number in `veyra-internal`, so the call is placed without typing on
 the handset. Standard users may dial from their own extensions
 (`calls.originate`); administrators from any extension they manage.
 
+Since Milestone 6b the API process also holds one WebSocket to ARI's event
+stream (`/ari/events?app=veyra&subscribeAll=true`, never putting channels
+into Stasis) and turns channel events for phone endpoints into call events
+for the Companion ([COMPANION.md](COMPANION.md) §4). `GET /telephony/engine`
+reports the listener under `events` (`disabled`, `connecting`, `connected`,
+`reconnecting`, connected clients, events seen).
+
 ## 6. Security notes
 
 * ARI stays on loopback with a generated credential; the adapter refuses

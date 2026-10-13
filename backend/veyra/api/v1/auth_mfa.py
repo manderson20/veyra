@@ -189,32 +189,23 @@ def challenge(
     return out
 
 
-@router.post(
-    "/verify",
-    response_model=SessionOut,
-    summary="Complete sign-in with an authenticator code or a recovery code",
-)
-def verify(
-    body: VerifyIn,
+def attempt_second_factor(
+    db: Session,
     request: Request,
-    response: Response,
-    principal: Principal = Depends(current_principal),
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-    ctx: RequestContext = Depends(request_context),
-) -> SessionOut:
-    session, user = _session_and_user(db, principal)
-    if session.mfa_verified_at is not None:
-        raise conflict("This session has already completed two-factor sign-in.", "already_verified")
-    # Codes share the sign-in budget per address (NGINX enforces the same).
-    if not auth_api._limiter(settings).hit(ctx.ip or "unknown"):
-        raise _too_many("Too many attempts. Wait a minute and try again.")
-    now = utcnow()
+    user: User,
+    session: UserSession,
+    code: str,
+    ctx: RequestContext,
+    now: datetime,
+) -> str:
+    """Check an authenticator or recovery code against the pre-authentication
+    session (shared by the web and Companion flows). Failures are counted,
+    audited and raised; the return value names what matched."""
     methods = mfa.confirmed_methods(db, user.id)
     if not methods:
         raise conflict("No second factor is set up for this account.", "mfa_not_enrolled")
     used: str | None = None
-    code = body.code.strip()
+    code = code.strip()
     if len(totp.normalize_code(code)) == totp.DIGITS and totp.normalize_code(code).isdigit():
         key = _key(request)
         for m in methods:
@@ -268,6 +259,31 @@ def verify(
         raise ProblemError(
             401, "Code not accepted", "The code is incorrect or has expired.", code="invalid_code"
         )
+    return used
+
+
+@router.post(
+    "/verify",
+    response_model=SessionOut,
+    summary="Complete sign-in with an authenticator code or a recovery code",
+)
+def verify(
+    body: VerifyIn,
+    request: Request,
+    response: Response,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> SessionOut:
+    session, user = _session_and_user(db, principal)
+    if session.mfa_verified_at is not None:
+        raise conflict("This session has already completed two-factor sign-in.", "already_verified")
+    # Codes share the sign-in budget per address (NGINX enforces the same).
+    if not auth_api._limiter(settings).hit(ctx.ip or "unknown"):
+        raise _too_many("Too many attempts. Wait a minute and try again.")
+    now = utcnow()
+    used = attempt_second_factor(db, request, user, session, body.code, ctx, now)
     csrf = complete_mfa(session, settings)
     user.last_login_at = now
     remaining = mfa.recovery_codes_remaining(db, user.id)

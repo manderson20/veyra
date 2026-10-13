@@ -249,22 +249,12 @@ def session_summary(s: UserSession, current_id: uuid.UUID | None) -> UserSession
 # ----------------------------------------------------------------- sign in / out
 
 
-@router.post(
-    "/login",
-    response_model=SessionOut,
-    responses={202: {"model": MfaChallengeOut, "description": "Second factor required"}},
-    summary="Sign in with email and password",
-)
-def login(
-    body: LoginIn,
-    response: Response,
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-    ctx: RequestContext = Depends(request_context),
-) -> SessionOut | JSONResponse:
-    if not _limiter(settings).hit(ctx.ip or "unknown"):
-        raise _too_many("Too many sign-in attempts. Wait a minute and try again.")
-    user = db.scalar(select(User).where(User.email == body.email))
+def check_credentials(
+    db: Session, settings: Settings, ctx: RequestContext, email: str, password: str
+) -> User:
+    """Password sign-in shared by the web and Companion flows (same errors, audit
+    and lockout behaviour); returns the user once the password is accepted."""
+    user = db.scalar(select(User).where(User.email == email))
     now = utcnow()
     failure = ProblemError(
         401,
@@ -274,12 +264,12 @@ def login(
     )
 
     if user is None:
-        passwords.verify_dummy(body.password)
+        passwords.verify_dummy(password)
         audit.record(
             db,
             action="auth.login",
             outcome="failure",
-            actor_label=body.email,
+            actor_label=email,
             ip_address=ctx.ip,
             request_id=ctx.request_id,
             details={"reason": "unknown_user"},
@@ -287,7 +277,7 @@ def login(
         db.commit()
         raise failure
     if user.locked_until and user.locked_until > now:
-        passwords.verify_dummy(body.password)
+        passwords.verify_dummy(password)
         audit.record(
             db,
             action="auth.login",
@@ -300,7 +290,7 @@ def login(
         )
         db.commit()
         raise failure
-    if not passwords.verify_password(user.password_hash, body.password) or not user.is_active:
+    if not passwords.verify_password(user.password_hash, password) or not user.is_active:
         if user.is_active:
             user.failed_login_count += 1
             if user.failed_login_count >= settings.account_lockout_threshold:
@@ -320,9 +310,14 @@ def login(
         raise failure
 
     if user.password_hash and passwords.needs_rehash(user.password_hash):
-        user.password_hash = passwords.hash_password(body.password)
+        user.password_hash = passwords.hash_password(password)
     user.failed_login_count = 0
     user.locked_until = None
+    return user
+
+
+def mfa_decision(db: Session, user: User, now: datetime) -> tuple[bool, bool, str]:
+    """(second factor pending, enrolled, state label) for a signed-in user."""
     # Second factor (docs/MFA_DESIGN.md §4): enrolled users verify before the
     # session becomes usable; users whom policy requires to enrol get a grace
     # window first, then must enrol inside the pre-authentication session.
@@ -332,6 +327,27 @@ def login(
     enrolled = bool(mfa.confirmed_methods(db, user.id))
     pending = enrolled or (required and not mfa.in_grace(user, now))
     mfa_state = "pending" if enrolled else "enrol" if pending else "grace" if required else "none"
+    return pending, enrolled, mfa_state
+
+
+@router.post(
+    "/login",
+    response_model=SessionOut,
+    responses={202: {"model": MfaChallengeOut, "description": "Second factor required"}},
+    summary="Sign in with email and password",
+)
+def login(
+    body: LoginIn,
+    response: Response,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> SessionOut | JSONResponse:
+    if not _limiter(settings).hit(ctx.ip or "unknown"):
+        raise _too_many("Too many sign-in attempts. Wait a minute and try again.")
+    user = check_credentials(db, settings, ctx, body.email, body.password)
+    now = utcnow()
+    pending, _enrolled, mfa_state = mfa_decision(db, user, now)
     if not pending:
         user.last_login_at = now
     token, csrf, session = create_session(
