@@ -16,10 +16,12 @@ Conventions:
 * **Forced password change:** while `must_change_password` is true in the session document, every route outside `/auth/` answers `403 password_change_required`.
 * **Second factor pending:** after `POST /auth/login` answers 202, every route except the MFA challenge, verify, TOTP enrolment and logout answers `403 mfa_required` until `POST /auth/mfa/verify` (or enrolment) succeeds; the pre-authentication session expires after five minutes.
 * **Fetch metadata:** a mutation whose `Sec-Fetch-Site` header says `cross-site` or `same-site` is refused with `403 cross_site_request` before any handler runs; requests without the header fall through to the CSRF token check.
+* **Bearer tokens:** a request with `Authorization: Bearer vyc_…` is authenticated by the token alone ([ADR 0015](adr/0015-bearer-tokens.md)): cookies are ignored, the CSRF and fetch-metadata checks do not apply, and permissions are the intersection of the user's roles and the token's scopes (Companion tokens: `calls.originate`, `calls.read`, `directory.read`, own-account routes).
 
 | Area | Paths |
 |---|---|
 | Auth | `/auth/login` (200 session, or 202 second factor pending), `/auth/logout`, `/auth/session`, `/auth/password`, `/auth/sessions[/{id}]`, `/auth/sessions/revoke-others`, `/auth/password-reset/check`, `/auth/password-reset` (the last two are public and rate limited) |
+| Companion | `/auth/companion/login` (200 token, or 202 challenge), `/auth/companion/verify`, `/auth/companion/logout`, `/auth/tokens[/{id}]`, `/auth/tokens/revoke-all`; `/users/{id}/tokens` (administrators); bearer tokens per [ADR 0015](adr/0015-bearer-tokens.md) and [COMPANION.md](COMPANION.md) |
 | Two-factor | `/auth/mfa/challenge`, `/auth/mfa/verify` (rate limited), `/auth/mfa/totp/{begin,confirm}`, `/auth/mfa/methods[/{id}/remove]`, `/auth/mfa/recovery-codes/regenerate`, `/auth/mfa/policy`; `/users/{id}/mfa/reset` (see [MFA_DESIGN.md](MFA_DESIGN.md)) |
 | Setup | `/setup/status`, `/setup/initialize` |
 | Directory | `/organizations[/{id}]`, `/users[/{id}]`, `/users/{id}/roles[/{assignment}]`, `/users/{id}/unlock`, `/users/{id}/password-reset-link`, `/users/{id}/sessions`, `/roles`, `/search` (organizations, users, extensions) |
@@ -30,6 +32,9 @@ Conventions:
 | Telephony | `/telephony/engine`, `/telephony/settings`, `/telephony/numbering`, `/telephony/apply` and `/telephony/revisions/{id}/deploy` (both take `{"mode": "now"\|"when_idle"}`), `/telephony/revisions[/{id}]`, `/telephony/revisions/{id}/discard` (see [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md)) |
 | Extensions | `/extensions[/{id}]`, `/extensions/next-number`, `/extensions/{id}/sip-credentials[/rotate]` (see [EXTENSIONS.md](EXTENSIONS.md)) |
 | Calls | `/calls` (active channels), `/calls/originate` (click-to-dial) |
+| Me | `/me/extensions` (own extensions with registration), `/me/preferences` (Companion speed dials and settings) |
+| Directory | `/directory?q=` (extensions and people in the caller's organizations; permission `directory.read`, every role) |
+| Events | `/events/ticket` (one-time ticket), WebSocket `/events/calls?ticket=` (call events for the caller's own extensions) |
 | Trunks | `/trunks[/{id}]` (SIP trunks with live status; see [TRUNKS_ROUTING.md](TRUNKS_ROUTING.md)) |
 | Routing | `/routing/inbound[/{id}]` (DIDs), `/routing/outbound[/{id}]`, `/routing/outbound/order`, `/routing/time-conditions[/{id}]` |
 

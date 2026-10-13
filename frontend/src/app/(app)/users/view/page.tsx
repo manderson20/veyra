@@ -3,6 +3,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
+import { ConnectedAppsCard } from "@/components/account/ConnectedAppsCard";
 import { SessionsTable } from "@/components/account/SessionsTable";
 import {
   Badge,
@@ -218,6 +219,9 @@ function UserView() {
         </Card>
       ) : null}
       {editable && !isSelf ? <UserSessionsCard user={u} /> : null}
+      {editable && !isSelf ? (
+        <ConnectedAppsCard listPath={`/users/${u.id}/tokens`} revokeAllPath={`/users/${u.id}/tokens`} revokeOne={false} title="Connected apps (Companion)" />
+      ) : null}
       <ResetPasswordDialog open={resetOpen} onClose={() => setResetOpen(false)} user={u} onChanged={user.reload} />
       <ConfirmDialog
         open={mfaReset}

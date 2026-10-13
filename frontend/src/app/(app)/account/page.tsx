@@ -4,6 +4,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { NewPasswordFields, passwordsMatch } from "@/components/account/PasswordFields";
+import { ConnectedAppsCard } from "@/components/account/ConnectedAppsCard";
 import { SessionsTable } from "@/components/account/SessionsTable";
 import { TwoFactorCard } from "@/components/account/TwoFactorCard";
 import { Badge, Button, Callout, Card, ConfirmDialog, LoadingState, PageHeader, TextField, useToast } from "@/components/ui";
@@ -23,7 +24,7 @@ function AccountPage() {
   const u = session.user;
   return (
     <div className="stack">
-      <PageHeader title="Your account" description="Your sign-in details, password and active sessions." />
+      <PageHeader title="Your account" description="Your sign-in details, password, active sessions and connected apps." />
       {forced ? (
         <Callout tone="warn" title="Choose a new password to continue">
           {reason === "signin" ? "You signed in with a temporary password set by an administrator. " : "An administrator set a temporary password for this account. "}
@@ -53,6 +54,7 @@ function AccountPage() {
       </div>
       <TwoFactorCard />
       <SessionsCard />
+      <ConnectedAppsCard />
     </div>
   );
 }

@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from veyra.api.v1 import api_router
 from veyra.core import bootstrap
+from veyra.core.callevents import CallEventHub
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import dispose_engine, init_engine, session_scope
 from veyra.core.deps import SAFE_METHODS
@@ -27,6 +28,8 @@ from veyra.core.signing import Keyring
 from veyra.modules.manager import ModuleManager
 from veyra.provisioning.renderer import TemplateCatalog
 from veyra.telephony import get_adapter
+from veyra.telephony.asterisk.ari import AriClient
+from veyra.telephony.asterisk.events import AriEventListener
 from veyra.version import __version__
 
 log = logging.getLogger("veyra")
@@ -47,6 +50,20 @@ SECURITY_HEADERS = {
 _REJECTED_FETCH_SITES = frozenset({"cross-site", "same-site"})
 
 
+def _start_event_listener(app: FastAPI) -> AriEventListener | None:
+    """Call events for the Companion (docs/COMPANION.md §4): one ARI event
+    socket per API process, only when the engine is Asterisk."""
+    adapter = app.state.telephony
+    ari = getattr(adapter, "ari", None)
+    if ari is None or not isinstance(ari, AriClient):
+        app.state.callevents.state = "disabled"
+        return None
+    listener = AriEventListener(ari, app.state.callevents)
+    listener.start()
+    app.state.callevents_listener = listener
+    return listener
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
@@ -63,8 +80,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             log.info("Installation key loaded (fingerprint %s)", key.fingerprint)
         except InstallationKeyError as e:
             log.warning("No usable installation key: %s. SIP secrets cannot be stored.", e)
+        listener = _start_event_listener(app)
         log.info("Veyra %s started (%s)", __version__, settings.environment.value)
         yield
+        if listener is not None:
+            await listener.stop()
         dispose_engine()
 
     app = FastAPI(
@@ -83,6 +103,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.modules = ModuleManager(settings, bus, app.state.keyring)
     app.state.telephony = get_adapter(settings)
     app.state.templates = TemplateCatalog.from_paths(settings.template_paths)
+    app.state.callevents = CallEventHub()
     app.state.modules.app = app
 
     @app.middleware("http")
@@ -98,6 +119,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             request.method not in SAFE_METHODS
             and request.url.path.startswith("/api/")
             and request.headers.get("sec-fetch-site", "").lower() in _REJECTED_FETCH_SITES
+            # A bearer token is never attached by the browser on its own, so the
+            # fetch-metadata check (which protects cookie sessions) does not apply.
+            and not request.headers.get("authorization", "").lower().startswith("bearer ")
         ):
             response = JSONResponse(
                 problem_body(

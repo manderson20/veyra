@@ -3,6 +3,7 @@
 
 from veyra.core.models.base import Base
 from veyra.core.models.identity import (
+    ApiToken,
     MfaMethod,
     MfaRecoveryCode,
     PasswordResetToken,
@@ -11,6 +12,7 @@ from veyra.core.models.identity import (
     RoleAssignment,
     RolePermission,
     User,
+    UserPreference,
     UserSession,
 )
 from veyra.core.models.platform import (
@@ -38,6 +40,7 @@ from veyra.core.models.telephony import Device, Extension
 from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
 
 __all__ = [
+    "ApiToken",
     "AuditEvent",
     "AvailableUpdate",
     "Base",
@@ -71,5 +74,6 @@ __all__ = [
     "UpdateHistory",
     "UpdatePolicy",
     "User",
+    "UserPreference",
     "UserSession",
 ]

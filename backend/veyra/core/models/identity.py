@@ -17,11 +17,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from veyra.core.models.base import Base, Timestamps, UUIDPrimaryKey
+from veyra.core.models.base import Base, Timestamps, UUIDPrimaryKey, utcnow
 
 
 class User(UUIDPrimaryKey, Timestamps, Base):
@@ -190,3 +191,39 @@ class PasswordResetToken(UUIDPrimaryKey, Base):
     # Who issued the link: an administrator's email or "cli".
     issued_by: Mapped[str] = mapped_column(String(320))
     issued_from_ip: Mapped[str | None] = mapped_column(String(64))
+
+
+class ApiToken(UUIDPrimaryKey, Base):
+    """A scoped bearer token for a client without cookies (ADR 0015). Only the
+    SHA-256 digest is stored; ``scopes`` lists the permission keys the token
+    may exercise (intersected with the user's grants at request time)."""
+
+    __tablename__ = "api_tokens"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(32))  # companion
+    label: Mapped[str] = mapped_column(String(120))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    scopes: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_ip: Mapped[str | None] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_ip: Mapped[str | None] = mapped_column(String(64))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class UserPreference(Base):
+    """Per-user settings document (companion speed dials and the like)."""
+
+    __tablename__ = "user_preferences"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), default=utcnow, onupdate=utcnow
+    )

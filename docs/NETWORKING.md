@@ -25,6 +25,11 @@ Always confirm with `ss -ltnup` on the server.
 | Phone provisioning | HTTPS 443 (dedicated path or port) | M9 | HTTP only if explicitly enabled for phones that need it |
 | HA replication and control | 5432/TCP between nodes, VRRP (IP proto 112) | M16 | Peer addresses only |
 
+The Companion browser extension uses the same HTTPS port: REST with bearer
+tokens and one WebSocket per signed-in browser at `/api/v1/events/calls`
+(NGINX passes the `Upgrade` headers for that path only). The browser must
+trust the server certificate; an extension cannot click through a warning.
+
 ## NAT
 
 When phones or trunks are on the other side of NAT, PJSIP needs

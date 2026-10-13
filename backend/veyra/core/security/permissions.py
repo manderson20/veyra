@@ -113,6 +113,11 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin"),
     ),
     PermissionDef(
+        "directory.read",
+        "Look up extensions and people in your organizations (directory)",
+        default_roles=("org_admin", "site_admin", "technician", "standard_user", "read_only"),
+    ),
+    PermissionDef(
         "devices.read",
         "View devices",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),

@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from veyra.api.v1.auth import session_summary
+from veyra.api.v1.auth_companion import ApiTokenOut, token_summary
 from veyra.api.v1.schemas import (
     MessageOut,
     PasswordResetLinkOut,
@@ -30,7 +31,7 @@ from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.models import Organization, Role, RoleAssignment, Site, User
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
-from veyra.core.security import mfa, password_reset, passwords
+from veyra.core.security import api_tokens, mfa, password_reset, passwords
 from veyra.core.security.principal import Principal
 from veyra.core.security.sessions import active_sessions, revoke_user_sessions
 
@@ -390,6 +391,51 @@ def list_user_sessions(
     _guard_platform_admin_target(db, principal, user)
     current = principal.session_id if user.id == principal.user_id else None
     return [session_summary(s, current) for s in active_sessions(db, user.id, settings)]
+
+
+@router.get(
+    "/users/{user_id}/tokens",
+    response_model=list[ApiTokenOut],
+    summary="A user's connected apps (bearer tokens)",
+)
+def list_user_tokens(
+    user_id: uuid.UUID,
+    principal: Principal = Depends(require("users.write")),
+    db: Session = Depends(get_db),
+) -> list[ApiTokenOut]:
+    user = _get_visible_user(db, principal, user_id, "users.write")
+    _guard_platform_admin_target(db, principal, user)
+    return [token_summary(t, None) for t in api_tokens.active_tokens(db, user.id)]
+
+
+@router.delete(
+    "/users/{user_id}/tokens",
+    response_model=MessageOut,
+    summary="Revoke every bearer token of a user",
+)
+def revoke_user_tokens_endpoint(
+    user_id: uuid.UUID,
+    principal: Principal = Depends(require("users.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    user = _get_visible_user(db, principal, user_id, "users.write")
+    _guard_platform_admin_target(db, principal, user)
+    count = api_tokens.revoke_user_tokens(db, user.id)
+    audit.record(
+        db,
+        action="user.tokens_revoke",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=user.home_organization_id,
+        target_type="user",
+        target_id=user.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"revoked": count},
+    )
+    db.commit()
+    return MessageOut(message=f"{count} token(s) revoked.")
 
 
 @router.delete(

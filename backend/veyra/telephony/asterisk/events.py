@@ -1,0 +1,221 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""ARI event listener: one WebSocket to Asterisk, normalised into call events.
+
+Subscribes to every event (``subscribeAll=true``) under the application name
+``veyra`` without ever putting a channel into Stasis, so the dialplan is not
+affected. Channel events for ``PJSIP/<endpoint>-…`` channels become
+:class:`CallEvent` objects for the hub (docs/COMPANION.md §4). Reconnects with
+backoff when Asterisk is unavailable.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import json
+import logging
+import urllib.parse
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
+
+from veyra.core.callevents import CallEvent, CallEventHub
+from veyra.telephony.asterisk.ari import AriClient
+
+log = logging.getLogger("veyra.events")
+
+APP_NAME = "veyra"
+_BACKOFF = (2, 5, 10, 30)
+
+
+@dataclass
+class _Channel:
+    endpoint: str
+    direction: str  # "in" (the phone is being called) or "out" (the phone dials)
+    remote_number: str | None
+    remote_name: str | None
+    answered: bool = False
+    announced: bool = False  # ringing/dialing already published
+
+
+def endpoint_of(channel_name: str) -> str | None:
+    if not channel_name.startswith("PJSIP/"):
+        return None
+    rest = channel_name[len("PJSIP/") :]
+    name, sep, _ = rest.rpartition("-")
+    return name if sep else None
+
+
+def _now_iso(event: dict[str, Any]) -> str:
+    ts = event.get("timestamp")
+    if isinstance(ts, str) and ts:
+        return ts
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+class AriEventTranslator:
+    """Pure state machine from ARI JSON events to call events (testable
+    without a socket)."""
+
+    def __init__(self) -> None:
+        self.channels: dict[str, _Channel] = {}
+
+    def translate(self, event: dict[str, Any]) -> list[CallEvent]:
+        kind = event.get("type")
+        ch = event.get("channel") or {}
+        channel_id = str(ch.get("id") or "")
+        if not channel_id:
+            return []
+        endpoint = endpoint_of(str(ch.get("name") or ""))
+        if kind == "ChannelCreated":
+            if endpoint is None:
+                return []
+            state = str(ch.get("state") or "")
+            caller = ch.get("caller") or {}
+            connected = ch.get("connected") or {}
+            dialplan = ch.get("dialplan") or {}
+            # A channel Asterisk creates towards a phone (Dial/originate) starts
+            # "Down" with the far end in ``connected``; a call the phone places
+            # starts "Ring" with the dialled digits in ``dialplan.exten``.
+            if state in ("Ring", "Ringing") and not connected.get("number"):
+                self.channels[channel_id] = _Channel(
+                    endpoint, "out", dialplan.get("exten") or None, None
+                )
+            else:
+                self.channels[channel_id] = _Channel(
+                    endpoint,
+                    "in",
+                    connected.get("number") or caller.get("number") or None,
+                    connected.get("name") or caller.get("name") or None,
+                )
+            return []
+        known = self.channels.get(channel_id)
+        if known is None:
+            return []
+        at = _now_iso(event)
+        if kind == "ChannelCallerId":
+            connected = ch.get("connected") or {}
+            if connected.get("number"):
+                known.remote_number = connected.get("number")
+            if connected.get("name"):
+                known.remote_name = connected.get("name")
+            return []
+        if kind == "ChannelStateChange":
+            state = str(ch.get("state") or "")
+            out: list[CallEvent] = []
+            if state in ("Ringing", "Ring") and not known.announced:
+                known.announced = True
+                if known.direction == "in":
+                    connected = ch.get("connected") or {}
+                    known.remote_number = connected.get("number") or known.remote_number
+                    known.remote_name = connected.get("name") or known.remote_name
+                out.append(
+                    self._event(
+                        "call.ringing" if known.direction == "in" else "call.dialing",
+                        channel_id,
+                        known,
+                        at,
+                    )
+                )
+            elif state == "Up" and not known.answered:
+                known.answered = True
+                if not known.announced:
+                    known.announced = True
+                    out.append(
+                        self._event(
+                            "call.ringing" if known.direction == "in" else "call.dialing",
+                            channel_id,
+                            known,
+                            at,
+                        )
+                    )
+                out.append(self._event("call.answered", channel_id, known, at))
+            return out
+        if kind == "ChannelDestroyed":
+            self.channels.pop(channel_id, None)
+            cause = event.get("cause_txt") or (str(event["cause"]) if "cause" in event else None)
+            if not known.announced:
+                return []
+            return [self._event("call.ended", channel_id, known, at, cause=cause)]
+        return []
+
+    @staticmethod
+    def _event(
+        kind: str, channel_id: str, ch: _Channel, at: str, *, cause: str | None = None
+    ) -> CallEvent:
+        return CallEvent(
+            type=kind,  # type: ignore[arg-type]
+            channel_id=channel_id,
+            endpoint=ch.endpoint,
+            direction=ch.direction,  # type: ignore[arg-type]
+            remote_number=ch.remote_number,
+            remote_name=ch.remote_name,
+            at=at,
+            answered=ch.answered,
+            cause=cause,
+        )
+
+
+class AriEventListener:
+    def __init__(self, ari: AriClient, hub: CallEventHub) -> None:
+        self.ari = ari
+        self.hub = hub
+        self.translator = AriEventTranslator()
+        self._task: asyncio.Task[None] | None = None
+
+    def websocket_url(self) -> str | None:
+        password = self.ari.password()
+        if password is None or not self.ari.is_loopback:
+            return None
+        base = self.ari.url.replace("http://", "ws://", 1)
+        query = urllib.parse.urlencode(
+            {"app": APP_NAME, "subscribeAll": "true", "api_key": f"{self.ari.username}:{password}"}
+        )
+        return f"{base}/events?{query}"
+
+    def start(self) -> None:
+        if self._task is None:
+            self.hub.state = "connecting"
+            self._task = asyncio.create_task(self.run(), name="ari-events")
+
+    async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
+        self.hub.state = "disabled"
+
+    async def run(self) -> None:
+        import websockets
+
+        attempt = 0
+        while True:
+            url = self.websocket_url()
+            if url is None:
+                self.hub.state = "disabled"
+                self.hub.last_error = "ARI credentials are not configured"
+                await asyncio.sleep(30)
+                continue
+            try:
+                async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
+                    self.hub.state = "connected"
+                    self.hub.last_error = None
+                    attempt = 0
+                    log.info("ARI event stream connected")
+                    async for raw in ws:
+                        try:
+                            event = json.loads(raw)
+                        except ValueError:
+                            continue
+                        for ce in self.translator.translate(event):
+                            self.hub.publish(ce)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self.hub.last_error = str(e)[:200]
+                log.warning("ARI event stream lost (%s); reconnecting", e)
+            self.hub.state = "reconnecting"
+            self.translator.channels.clear()
+            await asyncio.sleep(_BACKOFF[min(attempt, len(_BACKOFF) - 1)])
+            attempt += 1

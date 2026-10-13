@@ -16,6 +16,7 @@
 | [0012](0012-mfa-approach.md) | MFA: TOTP with recovery codes first, passkeys second, pre-auth session at sign-in | Accepted; TOTP implemented in Milestone 4b |
 | [0013](0013-license-agpl.md) | AGPL-3.0-or-later for Veyra | Accepted |
 | [0014](0014-installation-key.md) | One installation key (AES-256-GCM, purpose-bound) encrypts server-readable secrets at rest | Accepted |
+| [0015](0015-bearer-tokens.md) | Scoped bearer tokens for companion clients (cookie-less login, permission intersection) | Accepted |
 
 Format: Context, Decision, Consequences. Records are not edited once they
 are accepted; a later ADR supersedes them instead.
