@@ -37,7 +37,7 @@ extension), and the deploy-mode drop-down on the Deploy changes button.
 | **Registration (software phone, `tools/fakephone.py`, on dev1, 09:27 UTC)** | Passed: REGISTER with digest auth accepted; after the first qualify ping the contact is `Avail`, ARI reports the endpoint `online` and the adapter returns `registered=True`. Until that ping (up to 60 s) the badge reads unregistered (§5). |
 | **Click-to-dial through the production adapter (09:28 UTC)** | Passed: `adapter.originate(<endpoint>, "*43", context=veyra-internal)` rang the phone (INVITE with caller ID `*43`), the phone answered after 3 s, then the dialplan ran. Active calls showed the channel as `Ringing` (1 s, 3 s) then `Up` (6 s) with the owning endpoint, and empty after hangup. |
 | **Deploy when idle during a call (09:29–09:30 UTC)** | Passed: with a call held `Up`, `veyra config deploy 4 --when-idle` left revision 4 `deploying`; the deployer logged "waits for 1 active call(s) to end (0:29:58 left)"; hanging up over ARI made it deploy within seconds (audit `telephony.config_deploy` by deployer, revision 4 `deployed`). |
-| **Dialplan: feature codes from a phone** | **Failed, fixed.** The `*43` call hit `veyra-internal`'s catch-all ("no such extension", `pbx-invalid`, hangup after 4 s) because Asterisk matches a context's own patterns before its includes. The catch-all moved to `veyra-invalid`, included after `veyra-features`; regression test added. Needs a new generated revision on dev1 (§6). |
+| **Dialplan: feature codes from a phone** | **Failed, fixed.** The `*43` call hit `veyra-internal`'s catch-all ("no such extension", `pbx-invalid`, hangup after 4 s) because Asterisk matches a context's own patterns before its includes. The catch-all moved to `veyra-invalid`, included after `veyra-features`; regression test added. **Verified live on dev1** after the owner's second upgrade (09:40 UTC, release `af1d3443a9`) and `veyra config generate --deploy` (revision 5, `extensions.conf` changed): a `*43` click-to-dial call now runs `Playback(demo-echotest)` in `*43@veyra-internal` and stays Up until hung up. |
 | **A real desk phone registered against dev1, shown as Registered** | *Pending the owner (on site later on 2026-10-13)* |
 | **Internal call between two extensions under Active Calls** | *Pending the owner (needs a second extension and phone)* |
 | **"Call from this phone" in the browser: desk phone rings, then dials** | *Pending the owner* |
@@ -73,8 +73,8 @@ extension), and the deploy-mode drop-down on the Deploy changes button.
 
 ## 6. Open items
 
-* Dev1 verification with a real phone (§3), after upgrading to the tree with
-  the dialplan fix and running `sudo veyra config generate --deploy`.
+* Dev1 verification with a real phone (§3). Dev1 already runs the tree with
+  the dialplan fix (revision 5 deployed).
 * veyra-dev2 is not provisioned (deferred).
 
 ## 7. Proposed Milestone 6 (for approval)
