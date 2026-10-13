@@ -784,6 +784,9 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
             " same => n,Set(VEYRA_IVR_TRIES=0)",
             f" same => n(menu),Background({prompt_path})",
             f" same => n,WaitExten({timeout})",
+            # WaitExten only jumps to 't' by itself when no priority follows it;
+            # make the timeout path explicit so it never falls through.
+            " same => n,Goto(t,1)",
             " same => n(toodeep),NoOp(Veyra: IVR menus point at each other in a loop)",
             " same => n,Playback(pbx-invalid)",
             " same => n,Hangup()",

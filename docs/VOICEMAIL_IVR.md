@@ -214,6 +214,7 @@ exten => s,1,NoOp(Veyra IVR <name>)
  same => n,Set(VEYRA_IVR_TRIES=0)
  same => n(menu),Background(/var/lib/veyra/prompts/<org>/<slug>)
  same => n,WaitExten(<timeout>)
+ same => n,Goto(t,1)                        ; WaitExten only goes to t by itself when nothing follows it
  same => n(toodeep),Playback(pbx-invalid)  ; menus pointing at each other in a loop
  same => n,Hangup()
 exten => 1,1,<destination lines>
@@ -287,6 +288,11 @@ broken; deleting a box or a menu that something points at is refused.
   veyra:asterisk`, created by `do_telephony` on install and upgrade;
   `verify.sh` checks them. The `veyra-api` and `veyra-worker` units already
   allow writing under the data directory.
+* The service account is a member of group `asterisk` (`usermod -aG`, done
+  by `do_telephony`; `verify.sh` checks it): the files Asterisk creates in
+  those folders (queued notifications, `*95` recordings) belong to group
+  `asterisk`, and without the membership the worker cannot read them
+  (found on dev1: "Mail queue: cannot read ...: Permission denied").
 * `installer/bin/veyra-mailqueue` (the `mailcmd` target) ships in the
   release, root-owned and executable; it writes `<timestamp>-<pid>-<random>.eml`
   with mode `0660` so the worker can read and remove it.

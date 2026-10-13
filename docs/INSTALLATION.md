@@ -65,7 +65,7 @@ The installer then:
    | `/etc/veyra/secrets/` | root:veyra 0750 | Generated credentials: `ari_password`, `installation.key` (encrypts SIP secrets at rest; **back it up**, see [EXTENSIONS.md](EXTENSIONS.md) §5) |
    | `/etc/veyra/trust/{official,community,third_party}/` | root 0755 | Trusted signing keys |
    | `/etc/veyra/tls/` | root 0700 | HTTPS certificate and key |
-   | `/var/lib/veyra/` | veyra:asterisk 0750 | Data; `prompts/` (IVR prompts, recordings from phones) and `mailqueue/` (outgoing email handed over by Asterisk) are `2770 veyra:asterisk` so Asterisk can write there |
+   | `/var/lib/veyra/` | veyra:asterisk 0750 | Data; `prompts/` (IVR prompts, recordings from phones) and `mailqueue/` (outgoing email handed over by Asterisk) are `2770 veyra:asterisk` so Asterisk can write there; the `veyra` account is in group `asterisk` to read those files |
    | `/var/log/veyra/` | veyra 0750 | Installer and upgrade logs |
    | `/var/backups/veyra/` | root 0700 | Backups |
 
