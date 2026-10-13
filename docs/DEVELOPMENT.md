@@ -116,6 +116,40 @@ sed -i 's/^__version__ = .*/__version__ = "0.5.0-dev"/' backend/veyra/version.py
 (cd frontend && npm version 0.5.0-dev --no-git-tag-version)
 ```
 
+## 3b. Testing telephony without a phone
+
+`tools/fakephone.py` is a standard-library SIP user agent that registers an
+extension against the local engine, answers qualify pings and incoming
+calls (after a configurable delay), and honours BYE. It sends no audio. It
+exercises registration badges, Active Calls, click-to-dial and deploy-when-
+idle from the server alone:
+
+```bash
+python3 -I tools/fakephone.py --user <endpoint-name> --password <sip-secret> \
+    --local-port 5080 --answer-after 3 &
+sudo asterisk -rx "pjsip qualify <endpoint-name>"          # registered within ~1 s
+sudo asterisk -rx "channel originate PJSIP/<endpoint-name> application Wait 600"
+sudo veyra config generate --deploy                         # or: config deploy N --when-idle
+curl -s -u veyra:$(sudo cat /etc/veyra/secrets/ari_password) \
+    -X DELETE http://127.0.0.1:8088/ari/channels/<channel-id>  # hang up
+```
+
+Click-to-dial through the production adapter:
+
+```bash
+sudo -u veyra /opt/veyra/current/backend/.venv/bin/python -c "
+from veyra.core.config import Settings
+from veyra.telephony import get_adapter
+from veyra.telephony.asterisk.generator import CONTEXT_INTERNAL
+a = get_adapter(Settings())
+print(a.originate('<endpoint-name>', '*43', caller_id='*43 <*43>', context=CONTEXT_INTERNAL, timeout=30))
+print(a.active_calls())"
+```
+
+A freshly registered phone shows as registered only after the engine's
+first qualify ping (`qualify_frequency`, 60 s), because ARI's endpoint
+state is derived from contact reachability, not from the REGISTER itself.
+
 ## 4. Frontend
 
 ```

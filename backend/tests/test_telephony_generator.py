@@ -75,6 +75,32 @@ def test_extensions_render_endpoints_and_dialplan_and_mark_sensitive():
     assert "Dial(PJSIP/example-1001,30)" in files["extensions.conf"].content
 
 
+def test_feature_codes_are_not_shadowed_by_the_catch_all():
+    """Asterisk matches patterns in the current context before it searches
+    includes, so the invalid-number catch-all must not live in veyra-internal
+    itself or *43/*60 would never be reached (found on dev1, 2026-10-13)."""
+    ext = {"endpoint_name": "example-1001", "number": "1001", "display_name": "A", "secret": "x"}
+    files = {f.path: f for f in generator.generate(_snapshot(extensions=[ext]))}
+    dialplan = files["extensions.conf"].content
+    sections = {}
+    current = None
+    for line in dialplan.splitlines():
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+            sections[current] = []
+        elif current:
+            sections[current].append(line.strip())
+    internal = sections[generator.CONTEXT_INTERNAL]
+    assert not any(ln.startswith("exten => _") for ln in internal)
+    includes = [ln for ln in internal if ln.startswith("include =>")]
+    assert includes == [
+        f"include => {generator.CONTEXT_FEATURES}",
+        f"include => {generator.CONTEXT_INVALID}",
+    ]
+    assert any(ln.startswith("exten => _[0-9*#+].") for ln in sections[generator.CONTEXT_INVALID])
+    assert any(ln.startswith("exten => *43") for ln in sections[generator.CONTEXT_FEATURES])
+
+
 @pytest.mark.parametrize(
     "bad",
     [

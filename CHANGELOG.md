@@ -19,6 +19,12 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ### Changed
 - Active call durations are computed from the channel creation time (they were reported as 0).
 
+### Fixed
+- Feature codes `*43` (echo test) and `*60` (speaking clock) were unreachable from phones: the invalid-number catch-all lived in `veyra-internal` itself and Asterisk matches a context's own patterns before its includes. The catch-all now lives in `veyra-invalid`, included after `veyra-features`. Takes effect on the next generated and deployed revision.
+
+### Development
+- `tools/fakephone.py`: a standard-library SIP phone for exercising registration, calls, click-to-dial and deploy-when-idle on a server without a handset (`docs/DEVELOPMENT.md` §3b).
+
 ## 0.5.0 — 2026-10-12 (Milestone 4b)
 
 ### Added

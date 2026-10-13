@@ -43,6 +43,10 @@ SCOPE_ORDER = ["res_rtp_asterisk.so", "res_pjsip.so", "pbx_config.so"]
 CONTEXT_INTERNAL = "veyra-internal"
 CONTEXT_FEATURES = "veyra-features"
 CONTEXT_FROM_TRUNK = "veyra-from-trunk"
+# Catch-all for unknown numbers. It lives in its own context, included after the
+# feature codes: Asterisk matches patterns in the current context before it looks
+# at included ones, so a catch-all in veyra-internal itself would shadow *43/*60.
+CONTEXT_INVALID = "veyra-invalid"
 
 _SECTION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 _NUMBER_RE = re.compile(r"^[0-9*#+]{1,32}$")
@@ -226,7 +230,10 @@ def _dialplan(snapshot: dict[str, Any], extensions: list[dict[str, Any]]) -> Gen
         " same => n,Hangup()",
         "",
         f"[{CONTEXT_INTERNAL}]",
+        "; Extensions first; then feature codes; then the catch-all (includes are",
+        "; searched in order, after this context's own entries).",
         f"include => {CONTEXT_FEATURES}",
+        f"include => {CONTEXT_INVALID}",
     ]
     for ext in extensions:
         number = str(ext["number"])
@@ -237,6 +244,8 @@ def _dialplan(snapshot: dict[str, Any], extensions: list[dict[str, Any]]) -> Gen
             " same => n,Hangup()",
         ]
     lines += [
+        "",
+        f"[{CONTEXT_INVALID}]",
         "exten => _[0-9*#+].,1,NoOp(Veyra: no such extension ${EXTEN})",
         " same => n,Playback(pbx-invalid)",
         " same => n,Hangup()",
