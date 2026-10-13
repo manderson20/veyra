@@ -18,7 +18,7 @@ from veyra.core.models import AuditEvent
 
 log = logging.getLogger("veyra.audit")
 
-_SENSITIVE_MARKERS = ("password", "secret", "token", "key", "credential")
+_SENSITIVE_MARKERS = ("password", "secret", "token", "key", "credential", "pin")
 REDACTED = "[REDACTED]"
 
 

@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     asterisk_config_dir: Path = Path("/etc/asterisk/veyra")
     # "Deploy when no calls are active" waits at most this long, then deploys.
     deploy_idle_timeout_minutes: int = 30
+    # The script Asterisk hands voicemail notifications to (``mailcmd`` in the
+    # generated voicemail.conf); it writes them into the mail queue
+    # (docs/VOICEMAIL_IVR.md §2). Shipped with the release.
+    mailqueue_command: str = "/opt/veyra/current/installer/bin/veyra-mailqueue"
 
     # --- Companion extension ----------------------------------------------------
     # Where the installer leaves the packaged extension (zip, signed crx and
@@ -137,6 +141,18 @@ class Settings(BaseSettings):
     @property
     def trust_dir(self) -> Path:
         return self.config_dir / "trust"
+
+    @property
+    def prompts_dir(self) -> Path:
+        """IVR prompts, one directory per organization slug; written by the API
+        (uploads) and by Asterisk (recordings from phones)."""
+        return self.data_dir / "prompts"
+
+    @property
+    def mailqueue_dir(self) -> Path:
+        """Outgoing messages waiting for the worker (voicemail notifications
+        from Asterisk and, later, other notifications)."""
+        return self.data_dir / "mailqueue"
 
     @property
     def node_identity_file(self) -> Path:

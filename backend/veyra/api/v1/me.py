@@ -11,18 +11,21 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from veyra.api.v1.extensions import RegistrationOut, _registrations
+from veyra.api.v1.extensions import RegistrationOut, _registrations, installation_key
+from veyra.api.v1.voicemail import set_pin
+from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, current_principal, request_context
-from veyra.core.errors import forbidden
-from veyra.core.models import Extension, Organization, UserPreference
+from veyra.core.errors import forbidden, not_found
+from veyra.core.models import Extension, Organization, UserPreference, VoicemailBox
 from veyra.core.security.principal import Principal
+from veyra.telephony import routing
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -175,3 +178,88 @@ def put_preferences(
     db.commit()
     db.refresh(row)
     return _out(row)
+
+
+# ----------------------------------------------------------------- voicemail
+
+
+class MyVoicemailOut(BaseModel):
+    id: uuid.UUID
+    extension_id: uuid.UUID
+    extension_number: str
+    extension_name: str
+    email: str | None
+    ring_seconds: int
+    is_enabled: bool
+
+
+class PinIn(BaseModel):
+    pin: str = Field(min_length=4, max_length=10)
+
+    @field_validator("pin")
+    @classmethod
+    def _pin(cls, v: str) -> str:
+        return routing.check_pin(v)
+
+
+@router.get("/voicemail", response_model=list[MyVoicemailOut], summary="Your voicemail boxes")
+def my_voicemail(
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> list[MyVoicemailOut]:
+    rows = db.execute(
+        select(VoicemailBox, Extension)
+        .join(Extension, Extension.id == VoicemailBox.extension_id)
+        .where(Extension.user_id == principal.user_id)
+        .order_by(Extension.number)
+    ).all()
+    return [
+        MyVoicemailOut(
+            id=box.id,
+            extension_id=ext.id,
+            extension_number=ext.number,
+            extension_name=ext.display_name,
+            email=box.email,
+            ring_seconds=box.ring_seconds,
+            is_enabled=box.is_enabled,
+        )
+        for box, ext in rows
+    ]
+
+
+@router.post("/voicemail/{box_id}/pin", status_code=204, summary="Change your voicemail PIN")
+def my_voicemail_pin(
+    box_id: uuid.UUID,
+    body: PinIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    row = db.execute(
+        select(VoicemailBox, Extension)
+        .join(Extension, Extension.id == VoicemailBox.extension_id)
+        .where(VoicemailBox.id == box_id, Extension.user_id == principal.user_id)
+    ).first()
+    if row is None:
+        raise not_found("Voicemail box")
+    box, ext = row
+    set_pin(box, body.pin, installation_key(request))
+    db.flush()
+    audit.record(
+        db,
+        action="voicemail.pin_change",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=box.organization_id,
+        target_type="voicemail_box",
+        target_id=box.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"extension": ext.number},
+    )
+    # The PIN lives in voicemail.conf: the change reaches the phone system at
+    # the next deployment.
+    configmgmt.mark_changed(db, by=principal.label, what=f"voicemail.pin_change {ext.number}")
+    db.commit()
+    return Response(status_code=204)

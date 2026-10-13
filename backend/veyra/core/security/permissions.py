@@ -113,6 +113,26 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin"),
     ),
     PermissionDef(
+        "voicemail.read",
+        "View voicemail boxes",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef(
+        "voicemail.write",
+        "Create and edit voicemail boxes and reset PINs",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
+        "ivr.read",
+        "View IVR menus and prompts",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef(
+        "ivr.write",
+        "Create and edit IVR menus and prompts",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
         "directory.read",
         "Look up extensions and people in your organizations (directory)",
         default_roles=("org_admin", "site_admin", "technician", "standard_user", "read_only"),

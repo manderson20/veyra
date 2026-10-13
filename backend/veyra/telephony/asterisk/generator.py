@@ -30,7 +30,15 @@ FILE_ENDPOINTS = "pjsip.endpoints.conf"
 FILE_TRUNKS = "pjsip.trunks.conf"
 FILE_DIALPLAN = "extensions.conf"
 FILE_RTP = "rtp.conf"
-MANAGED_FILES = [FILE_TRANSPORTS, FILE_ENDPOINTS, FILE_TRUNKS, FILE_DIALPLAN, FILE_RTP]
+FILE_VOICEMAIL = "voicemail.conf"
+MANAGED_FILES = [
+    FILE_TRANSPORTS,
+    FILE_ENDPOINTS,
+    FILE_TRUNKS,
+    FILE_DIALPLAN,
+    FILE_RTP,
+    FILE_VOICEMAIL,
+]
 
 # Module reload per file. Order matters: transports before endpoints is the
 # same module, so it collapses; the dialplan is independent.
@@ -40,8 +48,9 @@ RELOAD_SCOPES: dict[str, str] = {
     FILE_TRUNKS: "res_pjsip.so",
     FILE_DIALPLAN: "pbx_config.so",
     FILE_RTP: "res_rtp_asterisk.so",
+    FILE_VOICEMAIL: "app_voicemail.so",
 }
-SCOPE_ORDER = ["res_rtp_asterisk.so", "res_pjsip.so", "pbx_config.so"]
+SCOPE_ORDER = ["res_rtp_asterisk.so", "res_pjsip.so", "pbx_config.so", "app_voicemail.so"]
 
 CONTEXT_INTERNAL = "veyra-internal"
 CONTEXT_FEATURES = "veyra-features"
@@ -57,12 +66,26 @@ CONTEXT_OUT_PREFIX = "veyra-out-"
 # and then the trunk's fallback (its catch-all route or a rejection).
 CONTEXT_FROM_TRUNK_PREFIX = "veyra-from-trunk-"
 TRUNK_PREFIX = "trunk-"
+# IVR menus: one context per menu (docs/VOICEMAIL_IVR.md §5).
+CONTEXT_IVR_PREFIX = "veyra-ivr-"
+# Voicemail context in voicemail.conf; mailbox number = extension number.
+VOICEMAIL_CONTEXT = "veyra"
 OUTBOUND_DIAL_TIMEOUT = 60
 EMERGENCY_DIAL_TIMEOUT = 120
+DEFAULT_RING_SECONDS = 30
+# Where the prompts live and the script Asterisk hands notifications to;
+# the adapter passes the installation's paths (veyra.core.config).
+DEFAULT_PROMPTS_DIR = "/var/lib/veyra/prompts"
+DEFAULT_MAILQUEUE_COMMAND = "/opt/veyra/current/installer/bin/veyra-mailqueue"
+PROMPT_RECORD_MAX_SECONDS = 300
+PROMPT_RECORD_SILENCE = 5
 
 _SECTION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 _NUMBER_RE = re.compile(r"^[0-9*#+]{1,32}$")
 _SAFE_VALUE_RE = re.compile(r"^[^\r\n\[\];]*$")
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+_PIN_RE = re.compile(r"^[0-9]{4,10}$")
+_PATH_RE = re.compile(r"^/[A-Za-z0-9_./-]+$")
 
 
 class GenerationError(ValueError):
@@ -92,19 +115,40 @@ def _display(value: str | None) -> str:
     return v
 
 
-def generate(snapshot: dict[str, Any]) -> list[GeneratedFile]:
+def _slug(value: Any, what: str) -> str:
+    v = str(value)
+    if not _SLUG_RE.match(v):
+        raise GenerationError(f"{what} {v!r} is not a valid slug")
+    return v
+
+
+def _path(value: str, what: str) -> str:
+    if not _PATH_RE.match(value):
+        raise GenerationError(f"{what} {value!r} is not an acceptable path")
+    return value.rstrip("/")
+
+
+def generate(
+    snapshot: dict[str, Any],
+    *,
+    prompts_dir: str = DEFAULT_PROMPTS_DIR,
+    mailqueue_command: str = DEFAULT_MAILQUEUE_COMMAND,
+) -> list[GeneratedFile]:
     sip = SipSettings.model_validate(snapshot.get("sip") or {})
     problems = sip.problems()
     if problems:
         raise GenerationError("; ".join(problems))
     extensions = list(snapshot.get("extensions") or [])
     trunks = list(snapshot.get("trunks") or [])
+    boxes = _check_boxes(list(snapshot.get("voicemail_boxes") or []), extensions)
+    prompts = _path(prompts_dir, "prompts directory")
     return [
         _transports(sip),
-        _endpoints(sip, extensions),
+        _endpoints(sip, extensions, set(boxes)),
         _trunks(sip, trunks),
-        _dialplan(snapshot, extensions, trunks),
+        _dialplan(snapshot, extensions, trunks, boxes, prompts),
         _rtp(sip),
+        _voicemail(snapshot, boxes, _path(mailqueue_command, "mail queue command")),
     ]
 
 
@@ -151,8 +195,11 @@ def _bind(address: str, port: int) -> str:
     return f"[{address}]:{port}" if ":" in address else f"{address}:{port}"
 
 
-def _endpoints(sip: SipSettings, extensions: list[dict[str, Any]]) -> GeneratedFile:
+def _endpoints(
+    sip: SipSettings, extensions: list[dict[str, Any]], mailboxes: set[str] | None = None
+) -> GeneratedFile:
     allow = ",".join(sip.codecs)
+    mailboxes = mailboxes or set()
     lines = [
         HEADER,
         "; Templates shared by every Veyra endpoint.",
@@ -206,6 +253,9 @@ def _endpoints(sip: SipSettings, extensions: list[dict[str, Any]]) -> GeneratedF
         if not _NUMBER_RE.match(cid_num):
             raise GenerationError(f"caller ID number {cid_num!r} is not valid")
         org = _check_value(str(ext.get("organization") or ""), "organization")
+        # Message waiting indication: the phone subscribes to, or is notified
+        # about, its own mailbox (docs/VOICEMAIL_IVR.md §3.2).
+        mwi = [f"mailboxes={number}@{VOICEMAIL_CONTEXT}"] if number in mailboxes else []
         lines += [
             f"; {org} {number}",
             f"[{name}](veyra-endpoint)",
@@ -213,12 +263,15 @@ def _endpoints(sip: SipSettings, extensions: list[dict[str, Any]]) -> GeneratedF
             f"aors={name}",
             f'callerid="{cid_name}" <{cid_num}>',
             f"set_var=VEYRA_ORG={org}",
+            *mwi,
+            *(["mwi_subscribe_replaces_unsolicited=yes"] if mwi else []),
             "",
             f"[{name}](veyra-auth)",
             f"username={name}",
             f"password={_check_value(str(secret), 'SIP secret')}",
             "",
             f"[{name}](veyra-aor)",
+            *mwi,
             "",
         ]
     return GeneratedFile(FILE_ENDPOINTS, "\n".join(lines).rstrip("\n") + "\n", sensitive=sensitive)
@@ -361,11 +414,17 @@ def _trunks(sip: SipSettings, trunks: list[dict[str, Any]]) -> GeneratedFile:
 
 
 def _dialplan(
-    snapshot: dict[str, Any], extensions: list[dict[str, Any]], trunks: list[dict[str, Any]]
+    snapshot: dict[str, Any],
+    extensions: list[dict[str, Any]],
+    trunks: list[dict[str, Any]],
+    boxes: dict[str, dict[str, Any]] | None = None,
+    prompts_dir: str = DEFAULT_PROMPTS_DIR,
 ) -> GeneratedFile:
     name = _check_value(str(snapshot.get("installation", {}).get("name") or "Veyra"), "name")
     outbound = list(snapshot.get("outbound_routes") or [])
     inbound = list(snapshot.get("inbound_routes") or [])
+    menus = list(snapshot.get("ivr_menus") or [])
+    boxes = boxes if boxes is not None else {}
     conditions = {str(c["key"]): c for c in (snapshot.get("time_conditions") or [])}
     trunk_slugs = [_check_section(str(t["slug"]), "trunk slug") for t in trunks]
     trunk_info = {str(t["slug"]): t for t in trunks}
@@ -392,6 +451,32 @@ def _dialplan(
         " same => n,Answer()",
         " same => n,SayUnixTime()",
         " same => n,Hangup()",
+        "; *97 own voicemail box, *98 any box (mailbox and PIN asked).",
+        "exten => *97,1,NoOp(Veyra voicemail for ${CALLERID(num)})",
+        " same => n,Answer()",
+        f" same => n,VoiceMailMain(${{CALLERID(num)}}@{VOICEMAIL_CONTEXT})",
+        " same => n,Hangup()",
+        "exten => *98,1,NoOp(Veyra voicemail, any box)",
+        " same => n,Answer()",
+        f" same => n,VoiceMailMain(@{VOICEMAIL_CONTEXT})",
+        " same => n,Hangup()",
+        "; *95 records a prompt from the phone into the organization's incoming",
+        "; folder; it is named and adopted on the Prompts page (VOICEMAIL_IVR.md §4).",
+        "exten => *95,1,NoOp(Veyra prompt recording from ${CALLERID(num)})",
+        " same => n,Answer()",
+        " same => n,Wait(1)",
+        f" same => n,Set(VEYRA_REC={prompts_dir}/${{VEYRA_ORG}}/incoming/"
+        "rec-${CALLERID(num)}-${EPOCH})",
+        f" same => n(record),Record(${{VEYRA_REC}}.wav,{PROMPT_RECORD_SILENCE},"
+        f"{PROMPT_RECORD_MAX_SECONDS},k)",
+        " same => n(review),Wait(1)",
+        " same => n,Playback(${VEYRA_REC})",
+        " same => n,Read(VEYRA_CHOICE,vm-review,1,,1,5)",
+        ' same => n,GotoIf($["${VEYRA_CHOICE}"="2"]?review)',
+        ' same => n,GotoIf($["${VEYRA_CHOICE}"="3"]?record)',
+        " same => n,Playback(vm-msgsaved)",
+        " same => n,Playback(vm-goodbye)",
+        " same => n,Hangup()",
         "",
         f"[{CONTEXT_INTERNAL}]",
         "; Extensions first; then feature codes, outbound routes and the catch-all",
@@ -403,11 +488,25 @@ def _dialplan(
     for ext in extensions:
         number = str(ext["number"])
         endpoint = str(ext["endpoint_name"])
-        lines += [
-            f"exten => {number},1,NoOp(Veyra extension {number})",
-            f" same => n,Dial(PJSIP/{endpoint},30)",
-            " same => n,Hangup()",
-        ]
+        box = boxes.get(number)
+        if box is None:
+            lines += [
+                f"exten => {number},1,NoOp(Veyra extension {number})",
+                f" same => n,Dial(PJSIP/{endpoint},{DEFAULT_RING_SECONDS})",
+                " same => n,Hangup()",
+            ]
+        else:
+            # Unanswered and unavailable go to the unavailable greeting, busy
+            # to the busy greeting (docs/VOICEMAIL_IVR.md §3.2).
+            lines += [
+                f"exten => {number},1,NoOp(Veyra extension {number})",
+                f" same => n,Dial(PJSIP/{endpoint},{int(box['ring_seconds'])})",
+                ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
+                f" same => n,VoiceMail({number}@{VOICEMAIL_CONTEXT},u)",
+                " same => n,Hangup()",
+                f" same => n(busy),VoiceMail({number}@{VOICEMAIL_CONTEXT},b)",
+                " same => n,Hangup()",
+            ]
     lines += [
         "",
         f"[{CONTEXT_INVALID}]",
@@ -418,6 +517,7 @@ def _dialplan(
     ]
     lines += _outbound_contexts(outbound, trunk_info)
     lines += _inbound_contexts(inbound, conditions, trunk_slugs)
+    lines += _ivr_contexts(menus, prompts_dir)
     return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
 
 
@@ -591,11 +691,7 @@ def _destination_lines(r: dict[str, Any], conditions: dict[str, dict[str, Any]])
     if prefix:
         out.append(f" same => n,Set(CALLERID(name)={_prefix(str(prefix))}${{CALLERID(name)}})")
     dest = r.get("destination")
-    if dest is not None and not _NUMBER_RE.match(str(dest)):
-        raise GenerationError(f"inbound route {r.get('did')}: destination {dest!r} is not valid")
     after = r.get("after_hours")
-    if after is not None and not _NUMBER_RE.match(str(after)):
-        raise GenerationError(f"inbound route {r.get('did')}: destination {after!r} is not valid")
     cond_key = r.get("time_condition")
     cond = conditions.get(str(cond_key)) if cond_key else None
     if cond is not None:
@@ -616,14 +712,200 @@ def _destination_lines(r: dict[str, Any], conditions: dict[str, dict[str, Any]])
     return out
 
 
-def _goto(number: Any) -> list[str]:
-    if number is None:
+def _goto(dest: Any) -> list[str]:
+    """Dialplan lines that send the call to a destination: an extension
+    number (string, Milestone 6 form), or a typed destination
+    (docs/VOICEMAIL_IVR.md §6). Missing targets answer with congestion."""
+    if dest is None:
         return [
             " same => n,NoOp(Veyra: this route has no destination)",
             " same => n,Congestion(5)",
             " same => n,Hangup()",
         ]
-    return [f" same => n,Goto({CONTEXT_INTERNAL},{number},1)", " same => n,Hangup()"]
+    if not isinstance(dest, dict):
+        dest = {"type": "extension", "number": dest}
+    kind = str(dest.get("type") or "extension")
+    if kind == "hangup":
+        return [" same => n,Playback(vm-goodbye)", " same => n,Hangup()"]
+    if kind == "ivr":
+        slug = _slug(dest.get("ivr"), "IVR menu slug")
+        return [f" same => n,Goto({CONTEXT_IVR_PREFIX}{slug},s,1)", " same => n,Hangup()"]
+    if kind in ("extension", "voicemail"):
+        number = str(dest.get("number") or "")
+        if not _NUMBER_RE.match(number):
+            raise GenerationError(f"destination number {number!r} is not valid")
+        if kind == "voicemail":
+            return [
+                f" same => n,VoiceMail({number}@{VOICEMAIL_CONTEXT},u)",
+                " same => n,Hangup()",
+            ]
+        return [f" same => n,Goto({CONTEXT_INTERNAL},{number},1)", " same => n,Hangup()"]
+    return [
+        " same => n,NoOp(Veyra: the destination no longer exists)",
+        " same => n,Congestion(5)",
+        " same => n,Hangup()",
+    ]
+
+
+def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
+    """One ``veyra-ivr-<slug>`` per enabled menu (docs/VOICEMAIL_IVR.md §5)."""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for m in menus:
+        slug = _slug(m["slug"], "IVR menu slug")
+        if slug in seen:
+            raise GenerationError(f"duplicate IVR menu slug {slug!r}")
+        seen.add(slug)
+        name = _check_value(str(m.get("name") or slug), "IVR menu name")
+        org = _slug(m.get("organization") or "", f"organization of IVR menu {slug}")
+        ctx = f"{CONTEXT_IVR_PREFIX}{slug}"
+        timeout = min(max(int(m.get("timeout_seconds") or 5), 1), 30)
+        retries = min(max(int(m.get("max_retries") or 3), 1), 9)
+        prompt = m.get("prompt")
+        lines += [f"[{ctx}]", f"; {name} ({org})"]
+        if not prompt:
+            lines += [
+                f"exten => s,1,NoOp(Veyra IVR {name}: no prompt, menu not deployable)",
+                " same => n,Congestion(5)",
+                " same => n,Hangup()",
+                "",
+            ]
+            continue
+        prompt_path = f"{prompts_dir}/{org}/{_slug(prompt, 'prompt slug')}"
+        invalid = m.get("invalid_prompt")
+        invalid_path = (
+            f"{prompts_dir}/{org}/{_slug(invalid, 'prompt slug')}" if invalid else "pbx-invalid"
+        )
+        lines += [
+            f"exten => s,1,NoOp(Veyra IVR {name})",
+            " same => n,Set(__VEYRA_IVR_DEPTH=$[0${VEYRA_IVR_DEPTH} + 1])",
+            f" same => n,GotoIf($[${{VEYRA_IVR_DEPTH}} > {routing.MAX_IVR_DEPTH}]?toodeep)",
+            " same => n,Answer()",
+            " same => n,Set(VEYRA_IVR_TRIES=0)",
+            f" same => n(menu),Background({prompt_path})",
+            f" same => n,WaitExten({timeout})",
+            " same => n(toodeep),NoOp(Veyra: IVR menus point at each other in a loop)",
+            " same => n,Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
+        digits: set[str] = set()
+        for e in m.get("entries") or []:
+            digit = str(e.get("digit") or "")
+            if digit not in routing.IVR_DIGITS or digit in digits:
+                raise GenerationError(f"IVR menu {slug}: key {digit!r} is not valid or repeated")
+            digits.add(digit)
+            lines.append(f"exten => {digit},1,NoOp(Veyra IVR {name} key {digit})")
+            lines += _goto(e)
+        if m.get("allow_direct_dial"):
+            for number in m.get("direct_dial") or []:
+                number = str(number)
+                if not _NUMBER_RE.match(number):
+                    raise GenerationError(f"IVR menu {slug}: extension {number!r} is not valid")
+                if number in digits:
+                    continue  # the key wins
+                lines.append(f"exten => {number},1,Goto({CONTEXT_INTERNAL},{number},1)")
+        for exten, label, dest in (
+            ("i", "invalid key", m.get("invalid")),
+            ("t", "no key pressed", m.get("timeout")),
+        ):
+            lines += [
+                f"exten => {exten},1,Set(VEYRA_IVR_TRIES=$[${{VEYRA_IVR_TRIES}} + 1])",
+                f" same => n,GotoIf($[${{VEYRA_IVR_TRIES}} >= {retries}]?giveup)",
+                f" same => n,Playback({invalid_path if exten == 'i' else 'pbx-invalid'})",
+                " same => n,Goto(s,menu)",
+                f" same => n(giveup),NoOp(Veyra IVR {name}: {label} {retries} times)",
+            ]
+            lines += _goto(dest if dest is not None else {"type": "hangup"})
+        lines.append("")
+    return lines
+
+
+def _check_boxes(
+    boxes: list[dict[str, Any]], extensions: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Voicemail boxes by extension number; only boxes of listed extensions."""
+    numbers = {str(e["number"]) for e in extensions}
+    out: dict[str, dict[str, Any]] = {}
+    for b in boxes:
+        number = str(b.get("number") or "")
+        if not _NUMBER_RE.match(number):
+            raise GenerationError(f"voicemail box number {number!r} is not valid")
+        if number not in numbers:
+            continue
+        if number in out:
+            raise GenerationError(f"extension {number} has more than one voicemail box")
+        ring = int(b.get("ring_seconds") or 20)
+        if not 5 <= ring <= 120:
+            raise GenerationError(f"voicemail box {number}: ring time {ring} is out of range")
+        out[number] = b
+    return out
+
+
+def _voicemail(
+    snapshot: dict[str, Any], boxes: dict[str, dict[str, Any]], mailqueue_command: str
+) -> GeneratedFile:
+    """``voicemail.conf`` (docs/VOICEMAIL_IVR.md §3.2). Sensitive: it carries
+    PINs in clear. Email addresses are only rendered when delivery is enabled,
+    so messages are never deleted after an email that cannot be sent."""
+    smtp = snapshot.get("smtp") or {}
+    from_address = _check_value(str(smtp.get("from_address") or "veyra@localhost"), "sender")
+    from_name = _display(str(smtp.get("from_name") or "Veyra")) or "Veyra"
+    delivery = bool(smtp.get("enabled"))
+    lines = [
+        HEADER,
+        "[general]",
+        "format=wav49|gsm|wav",
+        f"serveremail={from_address}",
+        f"fromstring={from_name}",
+        "attach=yes",
+        "maxmsg=100",
+        "maxsecs=180",
+        "minsecs=2",
+        "maxgreet=60",
+        "maxsilence=10",
+        "silencethreshold=128",
+        "maxlogins=3",
+        "pbxskip=yes",
+        "emailsubject=New voicemail ${VM_MSGNUM} in mailbox ${VM_MAILBOX} (${VM_NAME})",
+        "emailbody=${VM_NAME},\\n\\nYou have a new voicemail in mailbox ${VM_MAILBOX}: "
+        "message ${VM_MSGNUM} from ${VM_CALLERID}, received ${VM_DATE}, "
+        "${VM_DUR} long.\\n\\nThis message was sent by Veyra.",
+        f"mailcmd={mailqueue_command}",
+        "",
+        "[zonemessages]",
+    ]
+    zones: dict[str, str] = {}
+    for b in boxes.values():
+        org = _slug(b.get("organization") or "", "organization")
+        tz = routing.check_timezone(str(b.get("timezone") or "UTC"))
+        zones.setdefault(org, tz)
+    for org in sorted(zones):
+        lines.append(f"{org}={zones[org]}|'vm-received' Q 'digits/at' IMp")
+    lines += ["", f"[{VOICEMAIL_CONTEXT}]"]
+    sensitive = False
+    for number in sorted(boxes, key=lambda n: (len(n), n)):
+        b = boxes[number]
+        pin = str(b.get("pin") or "")
+        if not _PIN_RE.match(pin):
+            raise GenerationError(f"voicemail box {number}: the PIN must be 4 to 10 digits")
+        sensitive = True
+        name = _display(b.get("name")) or f"Extension {number}"
+        email = ""
+        delete = "no"
+        if delivery and b.get("email"):
+            try:
+                email = routing.check_email(str(b["email"]))
+            except ValueError as e:
+                raise GenerationError(f"voicemail box {number}: {e}") from e
+            delete = "yes" if b.get("delete_after_email") else "no"
+        attach = "yes" if b.get("attach_audio", True) else "no"
+        org = _slug(b.get("organization") or "", "organization")
+        lines.append(
+            f"{number} => {pin},{name},{email},,"
+            f"attach={attach}|delete={delete}|tz={org}|saycid=yes|envelope=yes"
+        )
+    lines.append("")
+    return GeneratedFile(FILE_VOICEMAIL, "\n".join(lines).rstrip("\n") + "\n", sensitive=sensitive)
 
 
 def _rtp(sip: SipSettings) -> GeneratedFile:

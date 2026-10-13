@@ -68,8 +68,18 @@ def _age_seconds(creation: Any, now: datetime) -> int:
 class AsteriskAdapter(TelephonyAdapter):
     name = "asterisk"
 
-    def __init__(self, ari_url: str, username: str, password_file: Path) -> None:
+    def __init__(
+        self,
+        ari_url: str,
+        username: str,
+        password_file: Path,
+        *,
+        prompts_dir: Path | str = generator.DEFAULT_PROMPTS_DIR,
+        mailqueue_command: str = generator.DEFAULT_MAILQUEUE_COMMAND,
+    ) -> None:
         self.ari = AriClient(ari_url, username, password_file)
+        self.prompts_dir = str(prompts_dir)
+        self.mailqueue_command = mailqueue_command
 
     def capabilities(self) -> set[Capability]:
         return {
@@ -79,6 +89,8 @@ class AsteriskAdapter(TelephonyAdapter):
             Capability.CONFIG_GENERATION,
             Capability.CONFIG_RELOAD,
             Capability.CLICK_TO_DIAL,
+            Capability.VOICEMAIL,
+            Capability.IVR,
         }
 
     # --- status -------------------------------------------------------------
@@ -175,7 +187,9 @@ class AsteriskAdapter(TelephonyAdapter):
         return list(generator.MANAGED_FILES)
 
     def generate_config(self, snapshot: dict[str, Any]) -> list[GeneratedFile]:
-        return generator.generate(snapshot)
+        return generator.generate(
+            snapshot, prompts_dir=self.prompts_dir, mailqueue_command=self.mailqueue_command
+        )
 
     def validate_config(self, files: list[GeneratedFile]) -> list[str]:
         return generator.validate(files)
