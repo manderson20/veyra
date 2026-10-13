@@ -188,6 +188,21 @@ sudo installer/preflight.sh
 sudo installer/install.sh --dry-run --yes
 ```
 
+## 5a. Installing from a release checkout
+
+On veyra-dev1 the development tree (`~/veyra`) is usually on a milestone
+branch, so upgrades are run from a separate git worktree that tracks `main`:
+
+```bash
+git -C ~/veyra worktree add ~/veyra-release main   # once
+cd ~/veyra-release && git pull --ff-only            # before an upgrade
+sudo installer/upgrade.sh --yes
+```
+
+The installer reuses `frontend/out` and `companion/dist` when they exist in
+the checkout (build them with `npm ci && npm run build` in each directory),
+otherwise it builds them itself, which takes a few minutes.
+
 ## 6. Dependency policy
 
 * Pin exact versions (`requirements.txt`, `package-lock.json`, action SHAs in workflows).
