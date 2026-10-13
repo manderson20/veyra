@@ -220,7 +220,7 @@ function UserView() {
       ) : null}
       {editable && !isSelf ? <UserSessionsCard user={u} /> : null}
       {editable && !isSelf ? (
-        <ConnectedAppsCard listPath={`/users/${u.id}/tokens`} revokeAllPath={`/users/${u.id}/tokens`} revokeOne={false} title="Connected apps (Companion)" />
+        <ConnectedAppsCard listPath={`/users/${u.id}/tokens`} revokeAllPath={`/users/${u.id}/tokens`} revokeOne={false} title="Connected apps (Companion)" showDownload={false} />
       ) : null}
       <ResetPasswordDialog open={resetOpen} onClose={() => setResetOpen(false)} user={u} onChanged={user.reload} />
       <ConfirmDialog

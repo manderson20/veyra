@@ -167,7 +167,8 @@ do_release() {
     run rsync -a --delete --exclude '.git' --exclude 'node_modules' --exclude '.venv' \
         --exclude '__pycache__' --exclude '.next' --exclude '*.pyc' \
         "$SOURCE_DIR/backend" "$SOURCE_DIR/frontend" "$SOURCE_DIR/modules" \
-        "$SOURCE_DIR/provisioning" "$SOURCE_DIR/docs" "$SOURCE_DIR/installer" "$RELEASE_DIR/"
+        "$SOURCE_DIR/provisioning" "$SOURCE_DIR/docs" "$SOURCE_DIR/installer" \
+        "$SOURCE_DIR/companion" "$RELEASE_DIR/"
 
     info "Creating the Python environment"
     run python3 -m venv "$RELEASE_DIR/backend/.venv"
@@ -184,6 +185,28 @@ do_release() {
         run bash -c "cd '$RELEASE_DIR/frontend' && npm ci --no-audit --no-fund && npm run build"
         run rm -rf "$RELEASE_DIR/frontend/node_modules" "$RELEASE_DIR/frontend/.next"
         ok "Web interface built"
+    fi
+    # The Companion browser extension (docs/COMPANION.md): a prebuilt dist/ in
+    # the tree is packaged as a zip that the web interface offers for download;
+    # without one it is built here when Node.js is available.
+    if [[ ! -f "$RELEASE_DIR/companion/dist/manifest.json" ]] && command -v npm >/dev/null 2>&1; then
+        info "Building the Companion browser extension"
+        run bash -c "cd '$RELEASE_DIR/companion' && npm ci --no-audit --no-fund && npm run build"
+        run rm -rf "$RELEASE_DIR/companion/node_modules"
+    fi
+    if [[ -f "$RELEASE_DIR/companion/dist/manifest.json" ]]; then
+        run python3 - "$RELEASE_DIR/companion/dist" "$RELEASE_DIR/companion/veyra-companion.zip" <<'PY'
+import os, sys, zipfile
+src, dest = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _dirs, files in os.walk(src):
+        for name in sorted(files):
+            path = os.path.join(root, name)
+            z.write(path, os.path.relpath(path, src))
+PY
+        ok "Companion extension packaged (companion/veyra-companion.zip)"
+    else
+        warn "Companion extension not built (no prebuilt dist/ and no npm); the download will be unavailable"
     fi
     run chown -R root:root "$RELEASE_DIR"
     run chmod -R go-w "$RELEASE_DIR"

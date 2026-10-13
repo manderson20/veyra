@@ -18,11 +18,14 @@ export function ConnectedAppsCard({
   revokeAllPath = "/auth/tokens/revoke-all",
   revokeOne = true,
   title = "Connected apps",
+  showDownload = true,
 }: {
   listPath?: string;
   revokeAllPath?: string;
   revokeOne?: boolean;
   title?: string;
+  /** The download and install steps (own account page only). */
+  showDownload?: boolean;
 }) {
   const toast = useToast();
   const tokens = useApiData<ApiToken[]>(listPath);
@@ -126,6 +129,31 @@ export function ConnectedAppsCard({
         onRetry={tokens.reload}
         empty={<EmptyState title="No connected apps">Install the Veyra Companion browser extension and sign in to see it here.</EmptyState>}
       />
+      {showDownload ? (
+        <details className="stack" style={{ marginTop: 16 }}>
+          <summary className="row" style={{ gap: 8, cursor: "pointer" }}>
+            <strong>Get the Veyra Companion extension</strong>
+            <span className="subtle">for Chrome and Edge</span>
+          </summary>
+          <ol className="stack" style={{ marginTop: 12, paddingLeft: 20, gap: 6 }}>
+            <li>
+              <a href="/downloads/veyra-companion.zip" download>
+                Download veyra-companion.zip
+              </a>{" "}
+              and unzip it into a folder you keep (the browser loads the extension from there).
+            </li>
+            <li>
+              Open <span className="mono">chrome://extensions</span> (or <span className="mono">edge://extensions</span>), turn on <em>Developer mode</em> and choose <em>Load unpacked</em>, then pick the unzipped folder.
+            </li>
+            <li>
+              Click the Veyra icon in the toolbar, enter this server&apos;s address (<span className="mono">{typeof window !== "undefined" ? window.location.origin : "https://…"}</span>), your email and password, then your authenticator code.
+            </li>
+          </ol>
+          <p className="subtle">
+            The browser must trust this server&apos;s certificate; with the installer&apos;s self-signed certificate, import it into the computer&apos;s trust store first. Each sign-in appears above as a connected app and can be revoked here.
+          </p>
+        </details>
+      ) : null}
       <ConfirmDialog
         open={confirmAll}
         title="Revoke all connected apps?"

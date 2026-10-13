@@ -71,6 +71,14 @@ server {
         include @VEYRA_ETC@/nginx-proxy.conf;
     }
 
+    # The Companion browser extension, packaged by the installer (docs/COMPANION.md).
+    location = /downloads/veyra-companion.zip {
+        alias @VEYRA_PREFIX@/current/companion/veyra-companion.zip;
+        types { }
+        default_type application/zip;
+        add_header Content-Disposition 'attachment; filename="veyra-companion.zip"';
+    }
+
     # NGINX's mime.types has no entry for the web manifest.
     location = /manifest.webmanifest {
         types { }

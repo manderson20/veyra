@@ -27,6 +27,12 @@ no binary assets in the repository: `scripts/icons.mjs` renders the PNG icons
 at build time (`npm run icons` writes them to `icons/` if you want to look at
 them).
 
+## Getting the extension from a Veyra server
+
+An installed Veyra serves the packaged extension at
+`https://<server>/downloads/veyra-companion.zip`; the account page (Connected
+apps → Get the Veyra Companion extension) links to it with the steps below.
+
 ## Load unpacked
 
 1. Open `chrome://extensions` (Edge: `edge://extensions`).
