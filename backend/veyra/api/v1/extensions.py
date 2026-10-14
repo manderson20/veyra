@@ -14,20 +14,32 @@ import secrets
 import string
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Select, func, or_, select, text
+from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.group_helpers import MembershipOut
 from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import Extension, Organization, User
+from veyra.core.models import (
+    CallQueue,
+    Extension,
+    Organization,
+    PickupGroup,
+    PickupGroupMember,
+    QueueMember,
+    RingGroup,
+    RingGroupMember,
+    User,
+)
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.crypto import (
@@ -37,7 +49,12 @@ from veyra.core.security.crypto import (
 )
 from veyra.core.security.principal import Principal
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
-from veyra.telephony.numbering import NumberingPlan, load_numbering_plan
+from veyra.telephony.numbering import (
+    NumberingPlan,
+    load_numbering_plan,
+    number_owner,
+    used_numbers,
+)
 from veyra.telephony.settings import load_sip_settings
 from veyra.telephony.snapshot import secret_purpose
 
@@ -186,6 +203,10 @@ class ExtensionOut(BaseModel):
     updated_at: datetime
     # Live state from the engine; None when the engine cannot report it.
     registration: RegistrationOut | None = None
+    # Groups the extension belongs to (docs/RING_GROUPS_QUEUES.md).
+    ring_groups: list[MembershipOut] = []
+    queues: list[MembershipOut] = []
+    pickup_groups: list[MembershipOut] = []
 
 
 class SipCredentialsOut(BaseModel):
@@ -244,8 +265,37 @@ def _registrations(request: Request | None) -> dict[str, RegistrationOut] | None
         return None
 
 
+def _memberships(
+    db: Session, extension_ids: set[uuid.UUID]
+) -> dict[str, dict[uuid.UUID, list[MembershipOut]]]:
+    """Ring groups, queues and pickup groups per extension."""
+    out: dict[str, dict[uuid.UUID, list[MembershipOut]]] = {
+        "ring_groups": {},
+        "queues": {},
+        "pickup_groups": {},
+    }
+    if not extension_ids:
+        return out
+    for key, link, group, key_col in (
+        ("ring_groups", RingGroupMember, RingGroup, RingGroupMember.group_id),
+        ("queues", QueueMember, CallQueue, QueueMember.queue_id),
+        ("pickup_groups", PickupGroupMember, PickupGroup, PickupGroupMember.group_id),
+    ):
+        number: Any = getattr(group, "number", literal(None))
+        stmt = (
+            select(link.extension_id, group.id, group.name, number)
+            .join(group, group.id == key_col)
+            .where(link.extension_id.in_(extension_ids))
+            .order_by(group.name)
+        )
+        for ext_id, gid, name, num in db.execute(stmt):
+            out[key].setdefault(ext_id, []).append(MembershipOut(id=gid, name=name, number=num))
+    return out
+
+
 def _outs(db: Session, rows: list[Extension], request: Request | None = None) -> list[ExtensionOut]:
     live = _registrations(request)
+    groups = _memberships(db, {r.id for r in rows})
     org_ids = {r.organization_id for r in rows}
     user_ids = {r.user_id for r in rows if r.user_id}
     orgs = (
@@ -284,6 +334,9 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                     if live is not None
                     else None
                 ),
+                ring_groups=groups["ring_groups"].get(r.id, []),
+                queues=groups["queues"].get(r.id, []),
+                pickup_groups=groups["pickup_groups"].get(r.id, []),
             )
         )
     return out
@@ -307,22 +360,18 @@ def _check_number(db: Session, plan: NumberingPlan, number: str, exclude: uuid.U
     problems = plan.check_number(number)
     if problems:
         raise _validation("number", " ".join(problems), code="number_not_in_plan")
-    # Numbers are unique across the installation while every extension shares
-    # one dialplan context (docs/EXTENSIONS.md §2). The advisory lock
+    # Numbers are unique across extensions, ring groups and queues of the
+    # installation while everything shares one dialplan context
+    # (docs/EXTENSIONS.md §2); number_owner takes the advisory lock that
     # serialises concurrent creations of the same number.
-    db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"veyra.extension:{number}"}
-    )
-    stmt = select(Extension.id).where(Extension.number == number)
-    if exclude is not None:
-        stmt = stmt.where(Extension.id != exclude)
-    if db.scalar(stmt) is not None:
+    owner = number_owner(db, number, exclude=("extension", exclude) if exclude else None)
+    if owner is not None:
         raise ProblemError(
             409,
             "Number in use",
-            f"Extension {number} already exists.",
+            f"{owner.capitalize()} {number} already exists.",
             code="number_in_use",
-            errors=[{"field": "number", "message": "already in use"}],
+            errors=[{"field": "number", "message": f"already used by a {owner}"}],
         )
 
 
@@ -439,8 +488,7 @@ def next_number(
     problems = plan.problems()
     if problems:
         return NextNumberOut(number=None, plan=plan.describe(), message=" ".join(problems))
-    used = set(db.scalars(select(Extension.number)).all())
-    number = plan.next_available(used, after=after or None)
+    number = plan.next_available(used_numbers(db), after=after or None)
     return NextNumberOut(
         number=number,
         plan=plan.describe(),

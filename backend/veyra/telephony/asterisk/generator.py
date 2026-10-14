@@ -31,6 +31,7 @@ FILE_TRUNKS = "pjsip.trunks.conf"
 FILE_DIALPLAN = "extensions.conf"
 FILE_RTP = "rtp.conf"
 FILE_VOICEMAIL = "voicemail.conf"
+FILE_QUEUES = "queues.conf"
 MANAGED_FILES = [
     FILE_TRANSPORTS,
     FILE_ENDPOINTS,
@@ -38,6 +39,7 @@ MANAGED_FILES = [
     FILE_DIALPLAN,
     FILE_RTP,
     FILE_VOICEMAIL,
+    FILE_QUEUES,
 ]
 
 # Module reload per file. Order matters: transports before endpoints is the
@@ -49,8 +51,15 @@ RELOAD_SCOPES: dict[str, str] = {
     FILE_DIALPLAN: "pbx_config.so",
     FILE_RTP: "res_rtp_asterisk.so",
     FILE_VOICEMAIL: "app_voicemail.so",
+    FILE_QUEUES: "app_queue.so",
 }
-SCOPE_ORDER = ["res_rtp_asterisk.so", "res_pjsip.so", "pbx_config.so", "app_voicemail.so"]
+SCOPE_ORDER = [
+    "res_rtp_asterisk.so",
+    "res_pjsip.so",
+    "pbx_config.so",
+    "app_voicemail.so",
+    "app_queue.so",
+]
 
 CONTEXT_INTERNAL = "veyra-internal"
 CONTEXT_FEATURES = "veyra-features"
@@ -68,6 +77,19 @@ CONTEXT_FROM_TRUNK_PREFIX = "veyra-from-trunk-"
 TRUNK_PREFIX = "trunk-"
 # IVR menus: one context per menu (docs/VOICEMAIL_IVR.md §5).
 CONTEXT_IVR_PREFIX = "veyra-ivr-"
+# Ring groups and queues: one context each (docs/RING_GROUPS_QUEUES.md §2, §3);
+# the queue name in queues.conf carries the same prefix as the pickup groups
+# so nothing of Veyra's collides with hand-written Asterisk configuration.
+CONTEXT_RING_GROUP_PREFIX = "veyra-rg-"
+CONTEXT_QUEUE_PREFIX = "veyra-queue-"
+QUEUE_NAME_PREFIX = "veyra-"
+MAX_GROUP_DEPTH = 6
+RING_GROUP_STRATEGIES = ("ringall", "sequential")
+QUEUE_STRATEGIES = ("ringall", "rrmemory", "leastrecent", "fewestcalls", "random", "linear")
+QUEUE_MUSIC = ("default", "ring")
+# Device states of a member that is already on a call (skipped unless the
+# group rings busy members).
+BUSY_STATES = "(INUSE|BUSY|RINGINUSE)"
 # Voicemail context in voicemail.conf; mailbox number = extension number.
 VOICEMAIL_CONTEXT = "veyra"
 OUTBOUND_DIAL_TIMEOUT = 60
@@ -142,6 +164,9 @@ def generate(
     trunks = list(snapshot.get("trunks") or [])
     boxes = _check_boxes(list(snapshot.get("voicemail_boxes") or []), extensions)
     prompts = _path(prompts_dir, "prompts directory")
+    ring_groups = list(snapshot.get("ring_groups") or [])
+    queues = list(snapshot.get("queues") or [])
+    _check_group_numbers(extensions, ring_groups, queues)
     return [
         _transports(sip),
         _endpoints(sip, extensions, set(boxes)),
@@ -149,6 +174,7 @@ def generate(
         _dialplan(snapshot, extensions, trunks, boxes, prompts),
         _rtp(sip),
         _voicemail(snapshot, boxes, _path(mailqueue_command, "mail queue command")),
+        _queues(queues, extensions, prompts),
     ]
 
 
@@ -256,6 +282,12 @@ def _endpoints(
         # Message waiting indication: the phone subscribes to, or is notified
         # about, its own mailbox (docs/VOICEMAIL_IVR.md §3.2).
         mwi = [f"mailboxes={number}@{VOICEMAIL_CONTEXT}"] if number in mailboxes else []
+        # Pickup groups (docs/RING_GROUPS_QUEUES.md §4): the phone can be
+        # picked up by, and can pick up, every member of its groups.
+        groups = ",".join(
+            _slug(g, f"pickup group of {number}") for g in (ext.get("pickup_groups") or [])
+        )
+        pickup = [f"named_call_group={groups}", f"named_pickup_group={groups}"] if groups else []
         lines += [
             f"; {org} {number}",
             f"[{name}](veyra-endpoint)",
@@ -265,6 +297,7 @@ def _endpoints(
             f"set_var=VEYRA_ORG={org}",
             *mwi,
             *(["mwi_subscribe_replaces_unsolicited=yes"] if mwi else []),
+            *pickup,
             "",
             f"[{name}](veyra-auth)",
             f"username={name}",
@@ -424,6 +457,8 @@ def _dialplan(
     outbound = list(snapshot.get("outbound_routes") or [])
     inbound = list(snapshot.get("inbound_routes") or [])
     menus = list(snapshot.get("ivr_menus") or [])
+    ring_groups = list(snapshot.get("ring_groups") or [])
+    queues = list(snapshot.get("queues") or [])
     boxes = boxes if boxes is not None else {}
     conditions = {str(c["key"]): c for c in (snapshot.get("time_conditions") or [])}
     trunk_slugs = [_check_section(str(t["slug"]), "trunk slug") for t in trunks]
@@ -477,6 +512,26 @@ def _dialplan(
         " same => n,Playback(vm-msgsaved)",
         " same => n,Playback(vm-goodbye)",
         " same => n,Hangup()",
+        "; *8 answers a call ringing on another phone of the caller's pickup groups;",
+        "; **<extension> answers the call ringing on that phone of the caller's",
+        "; organization (docs/RING_GROUPS_QUEUES.md §4).",
+        "exten => *8,1,NoOp(Veyra group pickup by ${CALLERID(num)})",
+        " same => n,Pickup()",
+        " same => n,Hangup()",
+    ]
+    for ext in extensions:
+        number = str(ext["number"])
+        endpoint = str(ext["endpoint_name"])
+        org = _check_value(str(ext.get("organization") or ""), "organization")
+        lines += [
+            f"exten => **{number},1,NoOp(Veyra directed pickup of {number} by ${{CALLERID(num)}})",
+            f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?denied)',
+            f" same => n,PickupChan(PJSIP/{endpoint},,p)",
+            " same => n,Hangup()",
+            " same => n(denied),Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
+    lines += [
         "",
         f"[{CONTEXT_INTERNAL}]",
         "; Extensions first; then feature codes, outbound routes and the catch-all",
@@ -489,6 +544,8 @@ def _dialplan(
         number = str(ext["number"])
         endpoint = str(ext["endpoint_name"])
         box = boxes.get(number)
+        # The hint lets busy lamp fields follow the phone (RING_GROUPS_QUEUES.md §4.2).
+        lines.append(f"exten => {number},hint,PJSIP/{endpoint}")
         if box is None:
             lines += [
                 f"exten => {number},1,NoOp(Veyra extension {number})",
@@ -507,6 +564,25 @@ def _dialplan(
                 f" same => n(busy),VoiceMail({number}@{VOICEMAIL_CONTEXT},b)",
                 " same => n,Hangup()",
             ]
+    for g in ring_groups:
+        slug = _slug(g["slug"], "ring group slug")
+        number = str(g["number"])
+        name = _check_value(str(g.get("name") or slug), "ring group name")
+        members = [str(m["endpoint_name"]) for m in (g.get("members") or [])]
+        if members:
+            lines.append(f"exten => {number},hint," + "&".join(f"PJSIP/{m}" for m in members))
+        lines += [
+            f"exten => {number},1,NoOp(Veyra ring group {name})",
+            f" same => n,Goto({CONTEXT_RING_GROUP_PREFIX}{slug},s,1)",
+        ]
+    for q in queues:
+        slug = _slug(q["slug"], "queue slug")
+        number = str(q["number"])
+        name = _check_value(str(q.get("name") or slug), "queue name")
+        lines += [
+            f"exten => {number},1,NoOp(Veyra queue {name})",
+            f" same => n,Goto({CONTEXT_QUEUE_PREFIX}{slug},s,1)",
+        ]
     lines += [
         "",
         f"[{CONTEXT_INVALID}]",
@@ -518,6 +594,8 @@ def _dialplan(
     lines += _outbound_contexts(outbound, trunk_info)
     lines += _inbound_contexts(inbound, conditions, trunk_slugs)
     lines += _ivr_contexts(menus, prompts_dir)
+    lines += _ring_group_contexts(ring_groups)
+    lines += _queue_contexts(queues, prompts_dir)
     return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
 
 
@@ -730,6 +808,12 @@ def _goto(dest: Any) -> list[str]:
     if kind == "ivr":
         slug = _slug(dest.get("ivr"), "IVR menu slug")
         return [f" same => n,Goto({CONTEXT_IVR_PREFIX}{slug},s,1)", " same => n,Hangup()"]
+    if kind == "ring_group":
+        slug = _slug(dest.get("ring_group"), "ring group slug")
+        return [f" same => n,Goto({CONTEXT_RING_GROUP_PREFIX}{slug},s,1)", " same => n,Hangup()"]
+    if kind == "queue":
+        slug = _slug(dest.get("queue"), "queue slug")
+        return [f" same => n,Goto({CONTEXT_QUEUE_PREFIX}{slug},s,1)", " same => n,Hangup()"]
     if kind in ("extension", "voicemail"):
         number = str(dest.get("number") or "")
         if not _NUMBER_RE.match(number):
@@ -823,6 +907,226 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
             lines += _goto(dest if dest is not None else {"type": "hangup"})
         lines.append("")
     return lines
+
+
+def _check_group_numbers(
+    extensions: list[dict[str, Any]],
+    ring_groups: list[dict[str, Any]],
+    queues: list[dict[str, Any]],
+) -> None:
+    """Ring group and queue numbers share the extension number space."""
+    taken = {str(e["number"]): "extension" for e in extensions}
+    for what, items in (("ring group", ring_groups), ("queue", queues)):
+        for item in items:
+            number = str(item.get("number") or "")
+            if not _NUMBER_RE.match(number):
+                raise GenerationError(f"{what} number {number!r} is not valid")
+            if number in taken:
+                raise GenerationError(f"number {number} is used by a {taken[number]} and a {what}")
+            taken[number] = what
+
+
+def _group_prologue(ctx: str, what: str, name: str, org: str) -> list[str]:
+    return [
+        f"[{ctx}]",
+        f"exten => s,1,NoOp(Veyra {what} {name} ({org}))",
+        " same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])",
+        f" same => n,GotoIf($[${{VEYRA_GROUP_DEPTH}} > {MAX_GROUP_DEPTH}]?toodeep)",
+    ]
+
+
+def _group_epilogue(what: str, name: str, failover: Any) -> list[str]:
+    return [
+        f" same => n(failover),NoOp(Veyra {what} {name}: not answered)",
+        *_goto(failover if failover is not None else {"type": "hangup"}),
+        " same => n(toodeep),NoOp(Veyra: groups and queues point at each other in a loop)",
+        " same => n,Playback(pbx-invalid)",
+        " same => n,Hangup()",
+    ]
+
+
+def _ring_group_contexts(groups: list[dict[str, Any]]) -> list[str]:
+    """One ``veyra-rg-<slug>`` per enabled ring group (docs/RING_GROUPS_QUEUES.md §2)."""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for g in groups:
+        slug = _slug(g["slug"], "ring group slug")
+        if slug in seen:
+            raise GenerationError(f"duplicate ring group slug {slug!r}")
+        seen.add(slug)
+        name = _check_value(str(g.get("name") or slug), "ring group name")
+        org = _slug(g.get("organization") or "", f"organization of ring group {slug}")
+        strategy = str(g.get("strategy") or "ringall")
+        if strategy not in RING_GROUP_STRATEGIES:
+            raise GenerationError(f"ring group {slug}: unknown strategy {strategy!r}")
+        ring = int(g.get("ring_seconds") or 20)
+        if not 5 <= ring <= 120:
+            raise GenerationError(f"ring group {slug}: ring time {ring} is out of range")
+        members = [
+            _check_section(str(m["endpoint_name"]), "endpoint name")
+            for m in (g.get("members") or [])
+        ]
+        ring_busy = bool(g.get("ring_busy_members"))
+        lines += _group_prologue(f"{CONTEXT_RING_GROUP_PREFIX}{slug}", "ring group", name, org)
+        prefix = g.get("caller_id_prefix")
+        if prefix:
+            lines.append(
+                f" same => n,Set(CALLERID(name)={_prefix(str(prefix))}${{CALLERID(name)}})"
+            )
+        if not members:
+            lines.append(" same => n,Goto(failover)")
+        elif strategy == "ringall":
+            lines.append(" same => n,Set(VEYRA_DIAL=)")
+            for i, m in enumerate(members):
+                nxt = f"m{i + 2}" if i + 1 < len(members) else "dial"
+                label = f"(m{i + 1})" if i else ""
+                if not ring_busy:
+                    lines.append(
+                        f' same => n{label},GotoIf($["${{DEVICE_STATE(PJSIP/{m})}}"'
+                        f' : "{BUSY_STATES}"]?{nxt})'
+                    )
+                    label = ""
+                lines.append(f" same => n{label},Set(VEYRA_DIAL=${{VEYRA_DIAL}}&PJSIP/{m})")
+            lines += [
+                ' same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)',
+                f" same => n,Dial(${{VEYRA_DIAL:1}},{ring})",
+                ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
+                " same => n,Goto(failover)",
+            ]
+        else:
+            for i, m in enumerate(members):
+                nxt = f"m{i + 2}" if i + 1 < len(members) else "failover"
+                label = f"(m{i + 1})" if i else ""
+                if not ring_busy:
+                    lines.append(
+                        f' same => n{label},GotoIf($["${{DEVICE_STATE(PJSIP/{m})}}"'
+                        f' : "{BUSY_STATES}"]?{nxt})'
+                    )
+                    label = ""
+                lines += [
+                    f" same => n{label},Dial(PJSIP/{m},{ring})",
+                    ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
+                ]
+            lines.append(" same => n,Goto(failover)")
+        lines += [" same => n(done),Hangup()"]
+        lines += _group_epilogue("ring group", name, g.get("failover"))
+        lines.append("")
+    return lines
+
+
+def _queue_contexts(queues: list[dict[str, Any]], prompts_dir: str) -> list[str]:
+    """One ``veyra-queue-<slug>`` per enabled queue (docs/RING_GROUPS_QUEUES.md §3)."""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for q in queues:
+        slug = _slug(q["slug"], "queue slug")
+        if slug in seen:
+            raise GenerationError(f"duplicate queue slug {slug!r}")
+        seen.add(slug)
+        name = _check_value(str(q.get("name") or slug), "queue name")
+        org = _slug(q.get("organization") or "", f"organization of queue {slug}")
+        music = str(q.get("music") or "default")
+        if music not in QUEUE_MUSIC:
+            raise GenerationError(f"queue {slug}: unknown hold music {music!r}")
+        wait = int(q.get("max_wait_seconds") or 0)
+        if wait and not 30 <= wait <= 3600:
+            raise GenerationError(f"queue {slug}: maximum wait {wait} is out of range")
+        lines += _group_prologue(f"{CONTEXT_QUEUE_PREFIX}{slug}", "queue", name, org)
+        lines.append(" same => n,Answer()")
+        announcement = q.get("announcement_prompt")
+        if announcement:
+            lines.append(
+                f" same => n,Playback({prompts_dir}/{org}/{_slug(announcement, 'prompt slug')})"
+            )
+        options = "tr" if music == "ring" else "t"
+        timeout = str(wait) if wait else ""
+        lines += [
+            f" same => n,Queue({QUEUE_NAME_PREFIX}{slug},{options},,,{timeout})",
+            f" same => n,NoOp(Veyra queue {name} left with ${{QUEUESTATUS}})",
+            " same => n,Goto(failover)",
+        ]
+        lines += _group_epilogue("queue", name, q.get("failover"))
+        lines.append("")
+    return lines
+
+
+def _queues(
+    queues: list[dict[str, Any]], extensions: list[dict[str, Any]], prompts_dir: str
+) -> GeneratedFile:
+    """``queues.conf`` (docs/RING_GROUPS_QUEUES.md §3): one section per
+    enabled queue with static members; reloaded with ``app_queue.so``."""
+    endpoints = {str(e["endpoint_name"]) for e in extensions}
+    lines = [
+        HEADER,
+        "[general]",
+        "persistentmembers=no",
+        "autofill=yes",
+        "shared_lastcall=yes",
+        "monitor-type=",
+        "",
+    ]
+    seen: set[str] = set()
+    for q in queues:
+        slug = _slug(q["slug"], "queue slug")
+        if slug in seen:
+            raise GenerationError(f"duplicate queue slug {slug!r}")
+        seen.add(slug)
+        name = _check_value(str(q.get("name") or slug), "queue name")
+        org = _slug(q.get("organization") or "", f"organization of queue {slug}")
+        strategy = str(q.get("strategy") or "ringall")
+        if strategy not in QUEUE_STRATEGIES:
+            raise GenerationError(f"queue {slug}: unknown strategy {strategy!r}")
+        timeout = int(q.get("member_timeout") or 15)
+        retry = int(q.get("retry_seconds") or 5)
+        wrapup = int(q.get("wrapup_seconds") or 0)
+        maxlen = int(q.get("max_callers") or 0)
+        freq = int(q.get("announce_frequency") or 60)
+        periodic = int(q.get("periodic_seconds") or 60)
+        for what, value, lo, hi in (
+            ("agent ring time", timeout, 5, 60),
+            ("retry", retry, 1, 30),
+            ("wrap-up", wrapup, 0, 600),
+            ("maximum callers", maxlen, 0, 100),
+            ("announcement frequency", freq, 15, 600),
+            ("periodic announcement frequency", periodic, 15, 600),
+        ):
+            if not lo <= value <= hi:
+                raise GenerationError(f"queue {slug}: {what} {value} is out of range")
+        empty = "yes" if q.get("join_when_empty") else "strict"
+        position = "yes" if q.get("announce_position") else "no"
+        lines += [
+            f"[{QUEUE_NAME_PREFIX}{slug}]",
+            f"; {name} ({org})",
+            f"strategy={strategy}",
+            f"timeout={timeout}",
+            f"retry={retry}",
+            f"wrapuptime={wrapup}",
+            f"maxlen={maxlen}",
+            "ringinuse=no",
+            f"joinempty={empty}",
+            f"leavewhenempty={'no' if q.get('join_when_empty') else 'strict'}",
+            "musicclass=default",
+            f"announce-position={position}",
+            f"announce-frequency={freq if q.get('announce_position') else 0}",
+            "announce-holdtime=no",
+        ]
+        prompt = q.get("periodic_prompt")
+        if prompt:
+            lines += [
+                f"periodic-announce={prompts_dir}/{org}/{_slug(prompt, 'prompt slug')}",
+                f"periodic-announce-frequency={periodic}",
+            ]
+        for m in q.get("members") or []:
+            endpoint = _check_section(str(m["endpoint_name"]), "endpoint name")
+            if endpoint not in endpoints:
+                continue
+            penalty = int(m.get("penalty") or 0)
+            if not 0 <= penalty <= 9:
+                raise GenerationError(f"queue {slug}: penalty {penalty} is out of range")
+            member_name = _display(m.get("name")) or str(m.get("number") or endpoint)
+            lines.append(f"member => PJSIP/{endpoint},{penalty},{member_name},PJSIP/{endpoint}")
+        lines.append("")
+    return GeneratedFile(FILE_QUEUES, "\n".join(lines).rstrip("\n") + "\n")
 
 
 def _check_boxes(

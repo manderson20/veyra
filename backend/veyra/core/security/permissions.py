@@ -133,6 +133,16 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin"),
     ),
     PermissionDef(
+        "groups.read",
+        "View ring groups, call queues and pickup groups",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef(
+        "groups.write",
+        "Create and edit ring groups, call queues and pickup groups",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
         "directory.read",
         "Look up extensions and people in your organizations (directory)",
         default_roles=("org_admin", "site_admin", "technician", "standard_user", "read_only"),

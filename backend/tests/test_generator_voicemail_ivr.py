@@ -90,7 +90,7 @@ def test_voicemail_conf_is_rendered_sensitive_and_valid():
         "attach=yes|delete=no|tz=example|saycid=yes|envelope=yes" in vm.content
     )
     assert generator.validate(list(files.values())) == []
-    assert generator.MANAGED_FILES[-1] == "voicemail.conf"
+    assert "voicemail.conf" in generator.MANAGED_FILES
     assert generator.reload_scopes(["voicemail.conf"]) == ["app_voicemail.so"]
     # without any box the file still exists, carries no PIN and is not sensitive
     empty = _files(_snapshot(voicemail_boxes=[]))["voicemail.conf"]
