@@ -37,6 +37,13 @@ from veyra.core.models.platform import (
     UpdateHistory,
     UpdatePolicy,
 )
+from veyra.core.models.provisioning import (
+    DeviceProfile,
+    DeviceProfilePaging,
+    FirmwareImage,
+    PagingZone,
+    ProvisioningRequest,
+)
 from veyra.core.models.routing import (
     InboundRoute,
     OutboundRoute,
@@ -60,7 +67,10 @@ __all__ = [
     "ConfigRevision",
     "Department",
     "Device",
+    "DeviceProfile",
+    "DeviceProfilePaging",
     "Extension",
+    "FirmwareImage",
     "InboundRoute",
     "Installation",
     "InstalledModule",
@@ -72,11 +82,13 @@ __all__ = [
     "Organization",
     "OutboundRoute",
     "OutboundRouteTrunk",
+    "PagingZone",
     "PasswordResetToken",
     "Permission",
     "PickupGroup",
     "PickupGroupMember",
     "Prompt",
+    "ProvisioningRequest",
     "ProvisioningTemplate",
     "QueueMember",
     "RingGroup",

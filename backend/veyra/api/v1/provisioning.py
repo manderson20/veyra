@@ -65,6 +65,11 @@ def _catalog(request: Request, db: Session) -> TemplateCatalog:
     return catalog
 
 
+def catalog_for(request: Request, db: Session) -> TemplateCatalog:
+    """The catalog with local templates merged in (used by profiles and devices)."""
+    return _catalog(request, db)
+
+
 def _template_error(e: TemplateError) -> ProblemError:
     return ProblemError(
         422,
@@ -97,6 +102,20 @@ def _summary(rec: TemplateRecord) -> dict[str, Any]:
 @router.get("/variables", summary="Approved template variables")
 def variables(principal: Principal = Depends(require("provisioning.read"))) -> list[dict[str, Any]]:
     return [v.model_dump() for v in CORE_VARIABLES]
+
+
+@router.get("/models", summary="Manufacturers and models known to the template catalog")
+def models(
+    request: Request,
+    principal: Principal = Depends(require("provisioning.read")),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    out: dict[str, set[str]] = {}
+    for rec in _catalog(request, db).records.values():
+        t = rec.manifest.template
+        if not t.abstract:
+            out.setdefault(t.manufacturer, set()).update(t.models)
+    return {"manufacturers": [{"name": m, "models": sorted(v)} for m, v in sorted(out.items())]}
 
 
 @router.get("/templates", summary="List provisioning templates")

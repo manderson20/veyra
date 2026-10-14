@@ -143,6 +143,11 @@ class Settings(BaseSettings):
         return self.config_dir / "trust"
 
     @property
+    def firmware_dir(self) -> Path:
+        """Uploaded firmware images (docs/DEVICE_PROVISIONING.md §3.4), served by NGINX."""
+        return self.data_dir / "firmware"
+
+    @property
     def prompts_dir(self) -> Path:
         """IVR prompts, one directory per organization slug; written by the API
         (uploads) and by Asterisk (recordings from phones)."""
