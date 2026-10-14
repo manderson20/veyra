@@ -55,7 +55,7 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
   exclude?: string;
   idBase?: string;
 }) {
-  const kinds: DestinationType[] = ["extension", "voicemail", "ivr", "ring_group", "queue", ...(allowHangup ? ["hangup" as const] : [])];
+  const kinds: DestinationType[] = ["extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", ...(allowHangup ? ["hangup" as const] : [])];
   const withCurrent = (opts: { value: string; label: string }[], value: string, fallback: string) =>
     value && !opts.some((o) => o.value === value) ? [...opts, { value, label: current?.label ?? fallback }] : opts;
   const targetId = idBase ? `${idBase}-target` : undefined;
@@ -69,13 +69,22 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
         onChange={(e) => onChange({ ...draft, extension_id: e.target.value })} />
     );
   } else if (draft.type === "voicemail") {
-    const opts = options.boxes.map((b) => ({ value: b.extension_id, label: `${b.extension_number} — ${b.extension_name}${b.is_enabled ? "" : " (box disabled)"}` }));
+    const opts = options.boxes.filter((b) => !b.shared && b.extension_id).map((b) => ({ value: b.extension_id ?? "", label: `${b.extension_number} — ${b.extension_name}${b.is_enabled ? "" : " (box disabled)"}` }));
     targetField = (
       <SelectField id={targetId} label={srLabel("voicemail box")} required={required} disabled={disabled} value={draft.extension_id} error={error}
         placeholder={options.loading ? "Loading…" : opts.length ? "Choose a voicemail box" : "No voicemail boxes in this organization"}
         options={withCurrent(opts, draft.extension_id, "Extension without a box")}
         help={opts.length === 0 && !options.loading ? "Create a voicemail box on an extension first (Telephony → Voicemail)." : undefined}
         onChange={(e) => onChange({ ...draft, extension_id: e.target.value })} />
+    );
+  } else if (draft.type === "voicemail_box") {
+    const opts = options.boxes.filter((b) => b.shared).map((b) => ({ value: b.id, label: `${b.number} — ${b.name}${b.is_enabled ? "" : " (disabled)"}` }));
+    targetField = (
+      <SelectField id={targetId} label={srLabel("shared inbox")} required={required} disabled={disabled} value={draft.voicemail_box_id} error={error}
+        placeholder={options.loading ? "Loading…" : opts.length ? "Choose a shared inbox" : "No shared inboxes in this organization"}
+        options={withCurrent(opts, draft.voicemail_box_id, "Deleted shared inbox")}
+        help={opts.length === 0 && !options.loading ? "Create one under Telephony → Voicemail (New shared inbox)." : undefined}
+        onChange={(e) => onChange({ ...draft, voicemail_box_id: e.target.value })} />
     );
   } else if (draft.type === "ivr") {
     const opts = options.menus.filter((m) => m.id !== exclude).map((m) => ({ value: m.id, label: m.is_enabled ? m.name : `${m.name} (disabled)` }));
@@ -109,7 +118,7 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
       <SelectField id={idBase ? `${idBase}-type` : undefined} label={label} required={required} disabled={disabled} value={draft.type}
         options={kinds.map((k) => ({ value: k, label: DESTINATION_LABELS[k] }))}
         help={current?.missing ? "The saved target no longer exists or is disabled; choose a new one." : undefined}
-        onChange={(e) => onChange({ type: e.target.value as DestinationType, extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "" })} />
+        onChange={(e) => onChange({ type: e.target.value as DestinationType, extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "" })} />
       {targetField}
     </div>
   );

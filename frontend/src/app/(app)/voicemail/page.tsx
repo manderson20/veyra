@@ -20,6 +20,7 @@ export default function VoicemailPage() {
   const [org, setOrg] = useState("");
   const [offset, setOffset] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createShared, setCreateShared] = useState(false);
   const [editing, setEditing] = useState<VoicemailBox | null>(null);
   const [changed, setChanged] = useState(0);
 
@@ -40,13 +41,20 @@ export default function VoicemailPage() {
   const columns: Column<VoicemailBox>[] = [
     {
       key: "ext",
-      header: "Extension",
+      header: "Number",
       render: (b) => (
         <span>
-          <span className="table__primary mono" style={{ display: "block" }}>{b.extension_number}</span>
-          <span className="table__secondary">{b.extension_name}{b.user_display_name ? ` · ${b.user_display_name}` : ""}</span>
+          <span className="table__primary mono" style={{ display: "block" }}>{b.number}</span>
+          <span className="table__secondary">{b.name}{b.user_display_name ? ` · ${b.user_display_name}` : ""}</span>
         </span>
       ),
+    },
+    {
+      key: "kind",
+      header: "Kind",
+      render: (b) => b.shared
+        ? <span><Badge tone="info">Shared</Badge>{b.members.length ? <span className="table__secondary" style={{ display: "block" }}>{b.members.length} member phone{b.members.length === 1 ? "" : "s"}</span> : null}</span>
+        : <span className="subtle">Extension</span>,
     },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (b: VoicemailBox) => <span>{b.organization_name}</span> }] : []),
     { key: "email", header: "Email", render: (b) => b.email ? <span>{b.email}{b.delete_after_email ? <span className="table__secondary" style={{ display: "block" }}>deleted after sending</span> : null}</span> : <span className="subtle">No email</span> },
@@ -59,14 +67,19 @@ export default function VoicemailPage() {
     <div className="stack">
       <PageHeader
         title="Voicemail"
-        description="One box per extension: a PIN, the ring time before voicemail answers, and email delivery of new messages. Users record their greeting and listen to messages with *97 from the phone."
-        actions={editable ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New voicemail box</Button> : null}
+        description="One box per extension, plus shared inboxes with their own number that several phones watch: a PIN, the ring time before voicemail answers, and email delivery of new messages. Users record their greeting and listen to messages with *97 from the phone."
+        actions={editable ? (
+          <>
+            <Button icon="plus" onClick={() => setCreateShared(true)}>New shared inbox</Button>
+            <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New voicemail box</Button>
+          </>
+        ) : null}
       />
       <PendingChanges refreshKey={changed + (list.data?.total ?? 0)} />
       {deliveryOff && can("system.settings.read") ? <Callout tone="warn" title="Email delivery is not configured">Messages stay in the boxes and no email is sent until an SMTP server is set up under Settings → Email delivery.</Callout> : null}
       <Card flush>
         <div className="table-toolbar">
-          <SearchInput value={q} onChange={setQ} placeholder="Search by extension, name or email" label="Search voicemail boxes" />
+          <SearchInput value={q} onChange={setQ} placeholder="Search by number, name or email" label="Search voicemail boxes" />
           {manyOrgs ? (
             <SelectField label={<span className="sr-only">Organization</span>} value={org} placeholder="All organizations"
               options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setOffset(0); }} />
@@ -81,12 +94,13 @@ export default function VoicemailPage() {
           onRetry={list.reload}
           caption="Voicemail boxes"
           onRowClick={editable ? (b) => setEditing(b) : undefined}
-          rowLabel={(b) => `Edit the voicemail box of ${b.extension_number}`}
+          rowLabel={(b) => b.shared ? `Edit the shared inbox ${b.name}` : `Edit the voicemail box of ${b.extension_number}`}
           empty={<EmptyState icon="voicemail" title={debounced || org ? "No matching voicemail boxes" : "No voicemail boxes yet"}>{!debounced && !org && editable ? "Create a box for an extension, give the user the PIN, then deploy the configuration." : null}</EmptyState>}
           pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null}
         />
       </Card>
       <VoicemailBoxDialog open={createOpen} onClose={() => setCreateOpen(false)} organizationId={createOrg} onSaved={() => { list.reload(); setChanged((n) => n + 1); }} />
+      <VoicemailBoxDialog open={createShared} shared onClose={() => setCreateShared(false)} organizationId={createOrg} onSaved={() => { list.reload(); setChanged((n) => n + 1); }} />
       <VoicemailBoxDialog open={editing !== null} onClose={() => setEditing(null)} box={editing ?? undefined} onSaved={() => { list.reload(); setChanged((n) => n + 1); }} />
     </div>
   );

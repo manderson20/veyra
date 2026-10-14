@@ -48,12 +48,13 @@ from veyra.core.models import (
     Site,
     TimeCondition,
     VoicemailBox,
+    VoicemailBoxMember,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 7
+SNAPSHOT_VERSION = 8
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -305,9 +306,12 @@ class Targets:
         ivr_slug: dict[Any, str],
         ring_group_slug: dict[Any, str],
         queue_slug: dict[Any, str],
+        shared_box_number: dict[Any, str] | None = None,
     ) -> None:
         self.number_of = number_of
         self.box_numbers = box_numbers
+        # Shared inboxes by id → their own number (docs/PAGING_RECORDINGS.md §5).
+        self.shared_box_number = shared_box_number if shared_box_number is not None else {}
         self.ivr_slug = ivr_slug
         self.ring_group_slug = ring_group_slug
         self.queue_slug = queue_slug
@@ -331,6 +335,9 @@ class Targets:
         if kind == "queue":
             slug = self.queue_slug.get(getattr(obj, f"{prefix}_queue_id"))
             return {"type": "queue", "queue": slug} if slug else {"type": "missing"}
+        if kind == "voicemail_box":
+            shared = self.shared_box_number.get(getattr(obj, f"{prefix}_voicemail_box_id", None))
+            return {"type": "voicemail", "number": shared} if shared else {"type": "missing"}
         number = self.number_of.get(getattr(obj, f"{prefix}_extension_id"))
         if kind == "voicemail":
             if number and number in self.box_numbers:
@@ -357,10 +364,28 @@ def _voicemail_ivr(
     boxes = [
         b
         for b in db.scalars(select(VoicemailBox).order_by(VoicemailBox.created_at)).all()
-        if b.is_enabled and b.extension_id in ext_by_id
+        if b.is_enabled
+        and (
+            b.extension_id in ext_by_id
+            or (b.extension_id is None and b.number and b.organization_id in active_orgs)
+        )
     ]
-    boxes.sort(key=lambda b: ext_by_id[b.extension_id].number)
-    targets.box_numbers.update(ext_by_id[b.extension_id].number for b in boxes)
+
+    def box_number(b: VoicemailBox) -> str:
+        return ext_by_id[b.extension_id].number if b.extension_id else str(b.number)
+
+    boxes.sort(key=box_number)
+    targets.box_numbers.update(box_number(b) for b in boxes)
+    targets.shared_box_number.update({b.id: box_number(b) for b in boxes if not b.extension_id})
+    # Member lamps of shared inboxes (docs/PAGING_RECORDINGS.md §5).
+    shared_by_ext: dict[Any, list[str]] = {}
+    shared_ids = {b.id: box_number(b) for b in boxes if not b.extension_id}
+    if shared_ids:
+        for m in db.scalars(
+            select(VoicemailBoxMember).where(VoicemailBoxMember.box_id.in_(shared_ids))
+        ):
+            if m.extension_id in ext_by_id:
+                shared_by_ext.setdefault(m.extension_id, []).append(shared_ids[m.box_id])
     menus = [
         m
         for m in db.scalars(select(IvrMenu).order_by(IvrMenu.slug)).all()
@@ -385,13 +410,17 @@ def _voicemail_ivr(
         return p.slug if p is not None and p.organization_id == org_id else None
 
     return {
+        "shared_mailboxes": {
+            ext_by_id[e].number: sorted(numbers) for e, numbers in shared_by_ext.items()
+        },
         "voicemail_boxes": [
             {
-                "number": ext_by_id[b.extension_id].number,
-                "name": ext_by_id[b.extension_id].display_name,
+                "number": box_number(b),
+                "name": ext_by_id[b.extension_id].display_name if b.extension_id else b.name,
+                "shared": b.extension_id is None,
                 "organization": org_slug.get(b.organization_id, ""),
                 "timezone": org_tz.get(b.organization_id) or "UTC",
-                "pin": _pin(b, ext_by_id[b.extension_id].number, key),
+                "pin": _pin(b, box_number(b), key),
                 "email": b.email,
                 "attach_audio": b.attach_audio,
                 "delete_after_email": b.delete_after_email,

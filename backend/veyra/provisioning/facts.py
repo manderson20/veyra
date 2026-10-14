@@ -340,13 +340,15 @@ def build_facts(
         else {}
     )
     boxes = (
-        set(
-            db.scalars(
+        {
+            i
+            for i in db.scalars(
                 select(VoicemailBox.extension_id).where(
                     VoicemailBox.extension_id.in_(ext_ids), VoicemailBox.is_enabled.is_(True)
                 )
             )
-        )
+            if i is not None
+        }
         if ext_ids
         else set()
     )

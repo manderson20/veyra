@@ -43,7 +43,7 @@ Conventions:
 | Events | `/events/ticket` (one-time ticket), WebSocket `/events/calls?ticket=` (call events for the caller's own extensions) |
 | Trunks | `/trunks[/{id}]` (SIP trunks with live status; see [TRUNKS_ROUTING.md](TRUNKS_ROUTING.md)) |
 | Routing | `/routing/inbound[/{id}]` (DIDs; destinations are an extension, a voicemail box, an IVR menu, a ring group or a queue), `/routing/outbound[/{id}]`, `/routing/outbound/order`, `/routing/time-conditions[/{id}]` |
-| Voicemail | `/voicemail[/{id}]` (one box per extension; the PIN is returned once on creation), `/voicemail/{id}/reset-pin` (see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §3) |
+| Voicemail | `/voicemail[/{id}]` (one box per extension, or a shared inbox with its own number, name and member phones; the PIN is returned once on creation), `/voicemail/{id}/reset-pin` (see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §3) |
 | Prompts | `/prompts[/{id}]` (multipart WAV upload, converted to 8 kHz mono), `/prompts/{id}/audio` (GET streams, PUT replaces), `/prompts/recordings[/{file}/audio\|/adopt]` (recordings made from phones with `*95`; see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §4) |
 | IVR | `/ivr[/{id}]` (menus with key map, fallbacks and `problems`; see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §5) |
 | Ring groups | `/ring-groups[/{id}]` (number, ordered members, strategy, failover destination, `problems`, `in_use_by`; `409 ring_group_in_use`; see [RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md) §2) |

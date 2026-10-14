@@ -331,3 +331,90 @@ def test_voicemail_reaches_the_generated_configuration(admin, app, tmp_path):
         deployer.run_once(db)
     assert "1001 =>" not in (cfg / "voicemail.conf").read_text()
     assert "mailboxes=" not in (cfg / "pjsip.endpoints.conf").read_text()
+
+
+def test_shared_inbox_lifecycle_and_generated_configuration(admin, app, tmp_path):
+    """A shared inbox (docs/PAGING_RECORDINGS.md §5): its own number and name,
+    member lamps, a destination of its own kind, and the engine files."""
+    _adapter, deployer, cfg = _fake(app, tmp_path)
+    org = _org(admin)
+    ext = _ext(admin, org["id"], "1001", "Front Office")
+    ext2 = _ext(admin, org["id"], "1002", "Counselor")
+    # needs an organization, a name and a free number
+    r = admin.post(VM, json={"name": "Attendance", "number": "1900"})
+    assert r.status_code == 422 and "organization" in r.text
+    r = admin.post(VM, json={"organization_id": org["id"], "number": "1900"})
+    assert r.status_code == 422 and "name" in r.text
+    r = admin.post(VM, json={"organization_id": org["id"], "name": "Attendance", "number": "1001"})
+    assert r.status_code == 409 and r.json()["code"] == "number_in_use"
+    r = admin.post(
+        VM,
+        json={
+            "organization_id": org["id"],
+            "name": "Attendance",
+            "number": "1900",
+            "pin": "4321",
+            "email": "attendance@example.org",
+            "members": [ext["id"], ext2["id"]],
+        },
+    )
+    assert r.status_code == 201, r.text
+    box = r.json()
+    assert box["shared"] is True and box["extension_id"] is None
+    assert box["number"] == "1900" and box["name"] == "Attendance" and box["pin"] == "4321"
+    assert [m["number"] for m in box["members"]] == ["1001", "1002"]
+    # listing: the shared filter and search by name
+    items = admin.get(VM, params={"shared": "true"}).json()["items"]
+    assert [b["number"] for b in items] == ["1900"]
+    assert admin.get(VM, params={"q": "attend"}).json()["total"] == 1
+    # an extension cannot take the inbox's number, nor a ring group
+    r = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1900", "display_name": "Clash"},
+    )
+    assert r.status_code == 409, r.text
+    # a destination of its own kind
+    r = admin.post(
+        "/api/v1/ivr",
+        json={
+            "organization_id": org["id"],
+            "name": "Main menu",
+            "entries": [
+                {
+                    "digit": "3",
+                    "destination": {"type": "voicemail_box", "voicemail_box_id": box["id"]},
+                }
+            ],
+        },
+    )
+    assert r.status_code == 201, r.text
+    menu = r.json()
+    assert menu["entries"][0]["destination"]["label"] == "Shared inbox: Attendance (1900)"
+    assert admin.get(f"{VM}/{box['id']}").json()["in_use_by"] == 1
+    assert admin.delete(f"{VM}/{box['id']}").status_code == 409
+    # members and number can change
+    r = admin.patch(f"{VM}/{box['id']}", json={"members": [ext2["id"]], "number": "1901"})
+    assert r.status_code == 200, r.text
+    assert [m["number"] for m in r.json()["members"]] == ["1002"] and r.json()["number"] == "1901"
+    admin.put(
+        SMTP,
+        json={"enabled": True, "host": "smtp.example.org", "from_address": "pbx@example.org"},
+    )
+    r = admin.post("/api/v1/telephony/apply", json={})
+    assert r.status_code in (200, 202), r.text
+    with session_scope() as db:
+        deployer.run_once(db)
+    vm = (cfg / "voicemail.conf").read_text()
+    assert "1901 => 4321,Attendance,attendance@example.org,,attach=yes|delete=no|tz=example" in vm
+    ep = (cfg / "pjsip.endpoints.conf").read_text()
+    assert "mailboxes=1901@veyra" in ep.split("[example-1002]")[1].split("[", 1)[0]
+    assert "mailboxes=" not in ep.split("[example-1001]")[1].split("[", 1)[0]
+    dp = (cfg / "extensions.conf").read_text()
+    assert "exten => 1901,1,NoOp(Veyra shared inbox 1901)" in dp
+    assert " same => n,VoiceMail(1901@veyra,u)" in dp
+    # deleting a member extension drops it from the inbox; the inbox stays
+    admin.delete("/api/v1/ivr/" + menu["id"])
+    r = admin.delete(f"/api/v1/extensions/{ext2['id']}")
+    assert r.status_code in (200, 204), r.text
+    assert admin.get(f"{VM}/{box['id']}").json()["members"] == []
+    assert admin.delete(f"{VM}/{box['id']}").status_code == 204

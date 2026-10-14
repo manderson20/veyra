@@ -56,7 +56,7 @@ from veyra.core.models.routing import (
 )
 from veyra.core.models.telephony import Device, Extension
 from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
-from veyra.core.models.voicemail import IvrEntry, IvrMenu, Prompt, VoicemailBox
+from veyra.core.models.voicemail import IvrEntry, IvrMenu, Prompt, VoicemailBox, VoicemailBoxMember
 
 __all__ = [
     "ApiToken",
@@ -120,4 +120,5 @@ __all__ = [
     "UserPreference",
     "UserSession",
     "VoicemailBox",
+    "VoicemailBoxMember",
 ]

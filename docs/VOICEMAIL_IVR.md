@@ -58,7 +58,7 @@ where Asterisk hands over voicemail notifications (§3).
 
 | Field | Notes |
 |---|---|
-| `extension_id` | Unique: one box per extension; mailbox number = extension number, context `veyra` |
+| `extension_id` | Unique: one box per extension; mailbox number = extension number, context `veyra`. **Null for a shared inbox** (Milestone 9c, [PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §5): the box then has its own `number` (shared number space) and `name`, and `voicemail_box_members` lists the extensions whose message lamp follows it |
 | PIN (`pin_ciphertext`) | 4–10 digits, encrypted (purpose `voicemail.pin:<box id>`); Asterisk needs it in clear in `voicemail.conf`, so that file is sensitive. Set at creation (random 6 digits unless given) and **returned once**; resettable (`reset-pin`, returned once); changeable by the user; never returned otherwise |
 | `email` | Where messages are delivered; defaults to the extension user's email at creation; empty = no email |
 | `attach_audio` | Attach the recording (default on) |
@@ -73,6 +73,15 @@ inbound route or IVR key points at *voicemail of extension N*, and when a
 user dials `*97` (own box, PIN asked) or `*98` (any box, mailbox and PIN
 asked). The API reports `email_delivery_enabled` (the installation switch
 of §2) and `in_use_by` (routes and keys pointing at the box).
+
+**Shared inboxes** (9c) belong to no phone. Callers reach one by dialling
+its number (`exten => <number>` in `veyra-internal` goes straight to
+`VoiceMail(<number>@veyra,u)`), from routes, menus and group failovers of
+kind `voicemail_box`, and members open it with `*98` (its number and PIN).
+Member phones get the inbox appended to their endpoint's `mailboxes=` so
+their lamp lights for the shared inbox as well as their own box. A shared
+inbox cannot take an extension's number and an extension cannot take an
+inbox's (the numbering plan of [EXTENSIONS.md](EXTENSIONS.md) §2).
 
 ### 3.2 Generated configuration
 
@@ -130,10 +139,11 @@ stub, so no sample boxes exist.
 | `voicemail.write` | Organization and site administrators |
 
 ```
-GET    /voicemail?organization_id=&extension_id=&q=   boxes with extension, user and in_use_by
+GET    /voicemail?organization_id=&extension_id=&shared=&q=   boxes with extension, user, members and in_use_by
 POST   /voicemail                            {extension_id, pin?, email?, attach_audio?, delete_after_email?, ring_seconds?, is_enabled?} → 201 with pin (once)
+POST   /voicemail                            shared inbox: {organization_id, number, name, members?: [extension ids], pin?, email?, …} → 201 with pin (once)
 GET    /voicemail/{id}
-PATCH  /voicemail/{id}                       pin: a new PIN; omitted = unchanged
+PATCH  /voicemail/{id}                       pin: a new PIN; omitted = unchanged; shared inboxes also number, name, members
 DELETE /voicemail/{id}                       409 voicemail_in_use when a route or IVR points at it
 POST   /voicemail/{id}/reset-pin             new random PIN, returned once (audited)
 GET    /me/voicemail                         the caller's own boxes (number, email, ring_seconds)
@@ -254,19 +264,22 @@ recordings from phones, playback).
 
 ## 6. Destinations
 
-Inbound routes gain `destination_type` ∈ `extension | voicemail | ivr` with
-`destination_extension_id` (extension and voicemail) or
-`destination_ivr_id`; the after-hours branch gets the same three fields
-(`after_hours_type`, `after_hours_extension_id`, `after_hours_ivr_id`). IVR
-entries and fallbacks use the same shape (`{type, extension_id, ivr_id}`)
-plus `hangup`. The API returns every destination as
-`{type, extension_id, ivr_id, label, missing}` (`api/v1/destinations.py`).
-Rendering:
+Inbound routes gain `destination_type` ∈ `extension | voicemail |
+voicemail_box | ivr | ring_group | queue` with `destination_extension_id`
+(extension and voicemail), `destination_voicemail_box_id` (a shared inbox,
+9c), `destination_ivr_id`, `destination_ring_group_id` or
+`destination_queue_id`; the after-hours branch gets the same fields
+(`after_hours_type`, `after_hours_extension_id`, …). IVR entries and
+fallbacks use the same shape (`{type, extension_id, voicemail_box_id,
+ivr_id, ring_group_id, queue_id}`) plus `hangup`. The API returns every
+destination as `{type, extension_id, ivr_id, ring_group_id, queue_id,
+voicemail_box_id, label, missing}` (`api/v1/destinations.py`). Rendering:
 
 | Type | Dialplan |
 |---|---|
 | extension | `Goto(veyra-internal,<number>,1)` |
 | voicemail | `VoiceMail(<number>@veyra,u)` then `Hangup()`; requires an enabled box |
+| voicemail_box | the same with the shared inbox's number; requires an enabled inbox |
 | ivr | `Goto(veyra-ivr-<slug>,s,1)`; requires an enabled menu |
 | hangup | `Playback(vm-goodbye)`, `Hangup()` |
 | missing | `Congestion(5)`, `Hangup()` |

@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import wave
 from array import array
 from collections.abc import Iterable
@@ -136,46 +137,62 @@ def convert_wav(data: bytes) -> tuple[bytes, float]:
 
 
 def _decode_with_ffmpeg(data: bytes) -> bytes:
-    """Decode a compressed upload to 16-bit PCM WAV at the target rate, mono."""
+    """Decode a compressed upload to 16-bit PCM WAV at the target rate, mono.
+
+    ffmpeg writes to a temporary file rather than a pipe: a WAV written to a
+    pipe carries placeholder sizes in its header (ffmpeg cannot seek back to
+    fill them in), which the WAV reader would take as a huge recording."""
     binary = shutil.which("ffmpeg")
     if binary is None:
         raise AudioError("compressed audio needs ffmpeg on the server; upload a WAV file instead")
-    try:
-        proc = subprocess.run(  # noqa: S603 — fixed binary, data on stdin only
-            [
-                binary,
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-nostdin",
-                "-i",
-                "pipe:0",
-                "-vn",
-                "-ac",
-                "1",
-                "-ar",
-                str(TARGET_RATE),
-                "-acodec",
-                "pcm_s16le",
-                "-t",
-                str(MAX_SECONDS + 1),
-                "-f",
-                "wav",
-                "pipe:1",
-            ],
-            input=data,
-            capture_output=True,
-            timeout=FFMPEG_TIMEOUT,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as e:
-        raise AudioError("decoding the file took too long") from e
-    except OSError as e:
-        raise AudioError(f"ffmpeg could not run: {e}") from e
-    if proc.returncode != 0 or not proc.stdout:
-        reason = (proc.stderr or b"").decode(errors="replace").strip().splitlines()
-        raise AudioError("the file could not be decoded" + (f" ({reason[-1]})" if reason else ""))
-    return proc.stdout
+    with tempfile.TemporaryDirectory(prefix="veyra-audio-") as tmp:
+        out = os.path.join(tmp, "decoded.wav")
+        try:
+            proc = subprocess.run(  # noqa: S603 — fixed binary, data on stdin only
+                [
+                    binary,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-nostdin",
+                    "-i",
+                    "pipe:0",
+                    "-vn",
+                    "-ac",
+                    "1",
+                    "-ar",
+                    str(TARGET_RATE),
+                    "-acodec",
+                    "pcm_s16le",
+                    "-t",
+                    str(MAX_SECONDS + 1),
+                    "-f",
+                    "wav",
+                    "-y",
+                    out,
+                ],
+                input=data,
+                capture_output=True,
+                timeout=FFMPEG_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise AudioError("decoding the file took too long") from e
+        except OSError as e:
+            raise AudioError(f"ffmpeg could not run: {e}") from e
+        decoded = b""
+        if proc.returncode == 0:
+            try:
+                with open(out, "rb") as f:
+                    decoded = f.read()
+            except OSError:
+                decoded = b""
+        if proc.returncode != 0 or not decoded:
+            reason = (proc.stderr or b"").decode(errors="replace").strip().splitlines()
+            raise AudioError(
+                "the file could not be decoded" + (f" ({reason[-1]})" if reason else "")
+            )
+        return decoded
 
 
 def convert_any(data: bytes, filename: str | None = None) -> tuple[bytes, float]:

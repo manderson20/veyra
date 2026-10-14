@@ -18,17 +18,20 @@ from sqlalchemy.orm import Session
 from veyra.core.errors import ProblemError
 from veyra.core.models import CallQueue, Extension, IvrMenu, RingGroup, VoicemailBox
 
-DestinationType = Literal["extension", "voicemail", "ivr", "ring_group", "queue", "hangup"]
+DestinationType = Literal[
+    "extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", "hangup"
+]
 # The column suffix that holds each kind's target.
 TARGET_FIELDS: dict[str, str] = {
     "extension": "extension_id",
     "voicemail": "extension_id",
+    "voicemail_box": "voicemail_box_id",
     "ivr": "ivr_id",
     "ring_group": "ring_group_id",
     "queue": "queue_id",
 }
-# A reference as stored: (type, extension_id, ivr_id, ring_group_id, queue_id).
-Ref = tuple[str | None, Any, Any, Any, Any]
+# A reference as stored: (type, extension_id, ivr_id, ring_group_id, queue_id, voicemail_box_id).
+Ref = tuple[str | None, Any, Any, Any, Any, Any]
 
 
 def validation(field: str, message: str) -> ProblemError:
@@ -47,17 +50,25 @@ class DestinationIn(BaseModel):
     ivr_id: uuid.UUID | None = None
     ring_group_id: uuid.UUID | None = None
     queue_id: uuid.UUID | None = None
+    voicemail_box_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> DestinationIn:
         keep = TARGET_FIELDS.get(self.type)
-        for field in ("extension_id", "ivr_id", "ring_group_id", "queue_id"):
+        for field in ("extension_id", "ivr_id", "ring_group_id", "queue_id", "voicemail_box_id"):
             if field != keep:
                 setattr(self, field, None)
         return self
 
     def as_ref(self) -> Ref:
-        return (self.type, self.extension_id, self.ivr_id, self.ring_group_id, self.queue_id)
+        return (
+            self.type,
+            self.extension_id,
+            self.ivr_id,
+            self.ring_group_id,
+            self.queue_id,
+            self.voicemail_box_id,
+        )
 
 
 class DestinationOut(BaseModel):
@@ -66,6 +77,7 @@ class DestinationOut(BaseModel):
     ivr_id: uuid.UUID | None
     ring_group_id: uuid.UUID | None = None
     queue_id: uuid.UUID | None = None
+    voicemail_box_id: uuid.UUID | None = None
     # Human form: "2214 — Front Office", "Voicemail of 2214 (Front Office)",
     # "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)",
     # "Hang up"; None when the target is gone.
@@ -81,6 +93,7 @@ def ref_of(obj: Any, prefix: str) -> Ref:
         getattr(obj, f"{prefix}_ivr_id"),
         getattr(obj, f"{prefix}_ring_group_id", None),
         getattr(obj, f"{prefix}_queue_id", None),
+        getattr(obj, f"{prefix}_voicemail_box_id", None),
     )
 
 
@@ -91,16 +104,18 @@ def apply(obj: Any, prefix: str, d: DestinationIn) -> None:
     setattr(obj, f"{prefix}_ivr_id", d.ivr_id)
     setattr(obj, f"{prefix}_ring_group_id", d.ring_group_id)
     setattr(obj, f"{prefix}_queue_id", d.queue_id)
+    setattr(obj, f"{prefix}_voicemail_box_id", d.voicemail_box_id)
 
 
 def as_input(ref: Ref) -> dict[str, Any]:
-    kind, ext, ivr, rg, q = ref
+    kind, ext, ivr, rg, q, box = ref
     return {
         "type": kind or "extension",
         "extension_id": ext,
         "ivr_id": ivr,
         "ring_group_id": rg,
         "queue_id": q,
+        "voicemail_box_id": box,
     }
 
 
@@ -131,6 +146,15 @@ def check_destination(
             raise validation(field, "IVR menu not found in this organization")
         if not menu.is_enabled:
             raise validation(field, f"the menu {menu.name} is disabled")
+        return
+    if dest.type == "voicemail_box":
+        if dest.voicemail_box_id is None:
+            raise validation(field, "choose the shared inbox")
+        shared = db.get(VoicemailBox, dest.voicemail_box_id)
+        if shared is None or shared.organization_id != organization_id or shared.extension_id:
+            raise validation(field, "shared inbox not found in this organization")
+        if not shared.is_enabled:
+            raise validation(field, f"the inbox {shared.name} is disabled")
         return
     if dest.type == "ring_group":
         if dest.ring_group_id is None:
@@ -177,25 +201,32 @@ class Resolver:
         self.boxes: dict[uuid.UUID, VoicemailBox] = {}
         self.ring_groups: dict[uuid.UUID, RingGroup] = {}
         self.queues: dict[uuid.UUID, CallQueue] = {}
+        self.shared: dict[uuid.UUID, VoicemailBox] = {}
         self._loaded: set[uuid.UUID] = set()
 
     def load(self, refs: list[Ref]) -> None:
         full = refs
-        ext_ids = {e for t, e, _, _, _ in full if e and t in ("extension", "voicemail")}
-        ivr_ids = {i for t, _, i, _, _ in full if i and t == "ivr"}
-        rg_ids = {g for t, _, _, g, _ in full if g and t == "ring_group"}
-        q_ids = {q for t, _, _, _, q in full if q and t == "queue"}
+        ext_ids = {e for t, e, _, _, _, _ in full if e and t in ("extension", "voicemail")}
+        ivr_ids = {i for t, _, i, _, _, _ in full if i and t == "ivr"}
+        rg_ids = {g for t, _, _, g, _, _ in full if g and t == "ring_group"}
+        q_ids = {q for t, _, _, _, q, _ in full if q and t == "queue"}
+        box_ids = {b for t, _, _, _, _, b in full if b and t == "voicemail_box"}
         ext_ids -= self._loaded
         ivr_ids -= self._loaded
         rg_ids -= self._loaded
         q_ids -= self._loaded
+        box_ids -= self._loaded
+        if box_ids:
+            for b in self.db.scalars(select(VoicemailBox).where(VoicemailBox.id.in_(box_ids))):
+                self.shared[b.id] = b
         if ext_ids:
             for e in self.db.scalars(select(Extension).where(Extension.id.in_(ext_ids))):
                 self.extensions[e.id] = e
             for b in self.db.scalars(
                 select(VoicemailBox).where(VoicemailBox.extension_id.in_(ext_ids))
             ):
-                self.boxes[b.extension_id] = b
+                if b.extension_id is not None:
+                    self.boxes[b.extension_id] = b
         if ivr_ids:
             for m in self.db.scalars(select(IvrMenu).where(IvrMenu.id.in_(ivr_ids))):
                 self.menus[m.id] = m
@@ -205,7 +236,7 @@ class Resolver:
         if q_ids:
             for q in self.db.scalars(select(CallQueue).where(CallQueue.id.in_(q_ids))):
                 self.queues[q.id] = q
-        self._loaded |= ext_ids | ivr_ids | rg_ids | q_ids
+        self._loaded |= ext_ids | ivr_ids | rg_ids | q_ids | box_ids
 
     def out(
         self,
@@ -214,8 +245,25 @@ class Resolver:
         ivr_id: Any,
         ring_group_id: Any = None,
         queue_id: Any = None,
+        voicemail_box_id: Any = None,
     ) -> DestinationOut:
         kind = kind or "extension"
+        if kind == "voicemail_box":
+            shared = self.shared.get(voicemail_box_id) if voicemail_box_id else None
+            ok = shared is not None and shared.is_enabled
+            return DestinationOut(
+                type="voicemail_box",
+                extension_id=None,
+                ivr_id=None,
+                voicemail_box_id=voicemail_box_id,
+                label=(
+                    f"Shared inbox: {shared.name} ({shared.number})"
+                    + ("" if shared.is_enabled else " (disabled)")
+                    if shared
+                    else None
+                ),
+                missing=not ok,
+            )
         if kind == "hangup":
             return DestinationOut(
                 type="hangup", extension_id=None, ivr_id=None, label="Hang up", missing=False

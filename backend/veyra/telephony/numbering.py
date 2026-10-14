@@ -152,7 +152,14 @@ def used_numbers(db: Session) -> set[str]:
     """Every number taken by an extension, a ring group or a queue."""
     from sqlalchemy import select
 
-    from veyra.core.models import CallQueue, Extension, Page, PagingZone, RingGroup
+    from veyra.core.models import (
+        CallQueue,
+        Extension,
+        Page,
+        PagingZone,
+        RingGroup,
+        VoicemailBox,
+    )
 
     used: set[str] = set()
     for column in (
@@ -161,6 +168,7 @@ def used_numbers(db: Session) -> set[str]:
         CallQueue.number,
         PagingZone.number,
         Page.number,
+        VoicemailBox.number,
     ):
         used |= {n for n in db.scalars(select(column)).all() if n}
     return used
@@ -174,7 +182,14 @@ def number_owner(db: Session, number: str, *, exclude: tuple[str, Any] | None = 
     ``exclude`` is ``(kind, id)`` of the object being edited."""
     from sqlalchemy import select, text
 
-    from veyra.core.models import CallQueue, Extension, Page, PagingZone, RingGroup
+    from veyra.core.models import (
+        CallQueue,
+        Extension,
+        Page,
+        PagingZone,
+        RingGroup,
+        VoicemailBox,
+    )
 
     db.execute(
         text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"veyra.extension:{number}"}
@@ -185,6 +200,7 @@ def number_owner(db: Session, number: str, *, exclude: tuple[str, Any] | None = 
         ("queue", CallQueue),
         ("paging zone", PagingZone),
         ("page", Page),
+        ("shared inbox", VoicemailBox),
     ):
         stmt = select(model.id).where(model.number == number)
         if exclude is not None and exclude[0] == kind:

@@ -714,7 +714,7 @@ export interface TrunkInput {
   register_expiry?: number;
 }
 
-export type DestinationType = "extension" | "voicemail" | "ivr" | "ring_group" | "queue" | "hangup";
+export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "hangup";
 
 /** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6, RING_GROUPS_QUEUES.md §5). */
 export interface Destination {
@@ -723,7 +723,8 @@ export interface Destination {
   ivr_id: string | null;
   ring_group_id?: string | null;
   queue_id?: string | null;
-  /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)", "Hang up"; null when the target is gone. */
+  voicemail_box_id?: string | null;
+  /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Shared inbox: Attendance (2900)", "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)", "Hang up"; null when the target is gone. */
   label: string | null;
   missing: boolean;
 }
@@ -734,9 +735,10 @@ export interface DestinationInput {
   ivr_id?: string | null;
   ring_group_id?: string | null;
   queue_id?: string | null;
+  voicemail_box_id?: string | null;
 }
 
-export type RouteDestinationType = "extension" | "voicemail" | "ivr" | "ring_group" | "queue";
+export type RouteDestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue";
 
 export interface InboundRoute {
   id: string;
@@ -753,6 +755,7 @@ export interface InboundRoute {
   destination_ivr_id: string | null;
   destination_ring_group_id: string | null;
   destination_queue_id: string | null;
+  destination_voicemail_box_id: string | null;
   destination_number: string | null;
   destination_name: string | null;
   destination: Destination;
@@ -764,6 +767,7 @@ export interface InboundRoute {
   after_hours_ivr_id: string | null;
   after_hours_ring_group_id: string | null;
   after_hours_queue_id: string | null;
+  after_hours_voicemail_box_id: string | null;
   after_hours_number: string | null;
   after_hours_name: string | null;
   after_hours: Destination | null;
@@ -880,10 +884,16 @@ export interface VoicemailBox {
   id: string;
   organization_id: string;
   organization_name: string;
-  extension_id: string;
+  /** A shared inbox has no extension: `number` and `name` are its own and `members` follow it on their lamps (docs/PAGING_RECORDINGS.md §5). */
+  shared: boolean;
+  extension_id: string | null;
   extension_number: string;
   extension_name: string;
   extension_enabled: boolean;
+  /** The extension's number and name, or the shared inbox's own. */
+  number: string;
+  name: string;
+  members: GroupMember[];
   user_display_name: string | null;
   email: string | null;
   attach_audio: boolean;
@@ -905,6 +915,11 @@ export interface VoicemailBoxCreated extends VoicemailBox {
 
 export interface VoicemailBoxInput {
   extension_id?: string;
+  /** Shared inbox (no extension): the organization, its number, name and member extensions. */
+  organization_id?: string;
+  number?: string;
+  name?: string;
+  members?: string[];
   /** Omitted on creation: a random PIN is generated. */
   pin?: string;
   /** Omitted on creation: the extension user's address. Null or empty: no email. */

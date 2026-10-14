@@ -58,6 +58,9 @@ class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     failover_queue_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_queues.id", ondelete="SET NULL", use_alter=True)
     )
+    failover_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -112,6 +115,9 @@ class CallQueue(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     )
     failover_queue_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_queues.id", ondelete="SET NULL")
+    )
+    failover_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 

@@ -36,13 +36,14 @@ describe("routing helpers", () => {
   });
 
   it("normalizes destinations for the API", () => {
-    const none = { ring_group_id: null, queue_id: null };
+    const none = { ring_group_id: null, queue_id: null, voicemail_box_id: null };
     const d = (over: Partial<DestinationDraft>): DestinationDraft => ({ ...EMPTY_DESTINATION, ...over });
     expect(destinationBody(d({ type: "extension", extension_id: "e1", ivr_id: "m1" }))).toEqual({ type: "extension", extension_id: "e1", ivr_id: null, ...none });
     expect(destinationBody(d({ type: "voicemail", extension_id: "e1" }))).toEqual({ type: "voicemail", extension_id: "e1", ivr_id: null, ...none });
     expect(destinationBody(d({ type: "ivr", extension_id: "e1", ivr_id: "m1" }))).toEqual({ type: "ivr", extension_id: null, ivr_id: "m1", ...none });
-    expect(destinationBody(d({ type: "ring_group", extension_id: "e1", ring_group_id: "g1" }))).toEqual({ type: "ring_group", extension_id: null, ivr_id: null, ring_group_id: "g1", queue_id: null });
-    expect(destinationBody(d({ type: "queue", queue_id: "q1", ring_group_id: "g1" }))).toEqual({ type: "queue", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: "q1" });
+    expect(destinationBody(d({ type: "ring_group", extension_id: "e1", ring_group_id: "g1" }))).toEqual({ type: "ring_group", extension_id: null, ivr_id: null, ring_group_id: "g1", queue_id: null, voicemail_box_id: null });
+    expect(destinationBody(d({ type: "queue", queue_id: "q1", ring_group_id: "g1" }))).toEqual({ type: "queue", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: "q1", voicemail_box_id: null });
+    expect(destinationBody(d({ type: "voicemail_box", voicemail_box_id: "b1", extension_id: "e1" }))).toEqual({ type: "voicemail_box", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: null, voicemail_box_id: "b1" });
     expect(destinationBody(d({ type: "hangup", extension_id: "e1", ivr_id: "m1" }))).toEqual({ type: "hangup", extension_id: null, ivr_id: null, ...none });
     expect(destinationComplete(d({ type: "ivr", extension_id: "e1" }))).toBe(false);
     expect(destinationComplete(d({ type: "hangup" }))).toBe(true);
