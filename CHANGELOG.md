@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.10.0-dev — unreleased (Milestone 8)
+## 0.10.0 — 2026-10-14 (Milestone 8)
 
 ### Added
 - **Ring groups** (`/ring-groups`, Telephony → Ring Groups): a number from the numbering plan that rings an ordered list of extensions all at once or one after the other, with a ring time, an optional caller-ID prefix shown on the phones, skipping of members already on a call (or call waiting), and a failover destination when nobody answers. Generated `veyra-rg-<slug>` contexts with a loop guard; a `hint` per group so BLF keys follow it. Permissions `groups.read`, `groups.write`.
