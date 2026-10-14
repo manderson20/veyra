@@ -1,8 +1,8 @@
 # Milestone 9 Report — Device Provisioning
 
 Branch `milestone-9` (from `main` at 0.10.0). Reference:
-[DEVICE_PROVISIONING.md](../DEVICE_PROVISIONING.md). Status: **delivered,
-awaiting the owner's upgrade of dev1, hardware checks and approval.**
+[DEVICE_PROVISIONING.md](../DEVICE_PROVISIONING.md). Status: **approved 2026-10-14, released as 0.11.0**; hardware checks
+with the VVX phones pending (§4).
 
 ## 1. Scope (owner requirements of 2026-10-14)
 
@@ -179,4 +179,12 @@ The owner may take 9b before 9c or the other way round.
   with optional CrowdSec integration for community blocklists; fail2ban
   remains the known fallback. Scheduled with production hardening
   (roadmap row 17) unless the owner pulls it forward.
-* Approval: *pending*.
+* 2026-10-14: approved ("1. approved"); released as 0.11.0. Next
+  milestones in roadmap order (9b, then 9c). Phone trust: the owner left
+  the choice to us and asked for user instructions and whether it can be
+  done through provisioning: yes (a Veyra CA installed by the first HTTP
+  provisioning run, then HTTPS), scheduled in the new row 9d together with
+  the firewall the owner requested (block and allow from the interface, a
+  permanent local allow list). Until then the hardware checks use the
+  opt-in HTTP provisioning on the voice VLAN (instructions in the 0.11.0
+  release message and INSTALLATION.md §4a).

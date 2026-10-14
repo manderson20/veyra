@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.11.0-dev — unreleased (Milestone 9)
+## 0.11.0 — 2026-10-14 (Milestone 9)
 
 ### Added
 - **Device provisioning** ([DEVICE_PROVISIONING.md](docs/DEVICE_PROVISIONING.md)): phones registered by MAC address (`/devices`, Provisioning → Devices) fetch their configuration from `https://<host>/provisioning/` with HTTP Basic authentication: an enrollment credential per organization for the first fetch (Organization page), then a credential per phone set by its own configuration. Files are rendered on request from the profile's template; every request is logged, unregistered phones that asked for configuration are listed for one-click registration, and the device page shows status, last request, configuration preview, Reprovision and Reboot (SIP NOTIFY).
