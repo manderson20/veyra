@@ -168,3 +168,36 @@ class IvrEntry(Base):
     destination_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
     )
+
+
+class MohClass(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """A hold music set (docs/PAGING_RECORDINGS.md §3.2): an ordered list of
+    library recordings played to held and queued callers as the engine's
+    class ``veyra-<slug>`` from ``<moh dir>/<slug>/``."""
+
+    __tablename__ = "moh_classes"
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    # Engine class name part; unique across the installation like IVR slugs.
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    # Play the tracks in a random order instead of the listed one.
+    random: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class MohClassTrack(Base):
+    """A recording of a hold music set, in playing order."""
+
+    __tablename__ = "moh_class_tracks"
+
+    class_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("moh_classes.id", ondelete="CASCADE"), primary_key=True
+    )
+    prompt_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("prompts.id", ondelete="RESTRICT"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer)

@@ -161,6 +161,12 @@ class Settings(BaseSettings):
         return self.data_dir / "prompts"
 
     @property
+    def moh_dir(self) -> Path:
+        """Hold music sets (docs/PAGING_RECORDINGS.md §3.2): one directory per
+        set with copies of its recordings, read by the engine."""
+        return self.data_dir / "moh"
+
+    @property
     def mailqueue_dir(self) -> Path:
         """Outgoing messages waiting for the worker (voicemail notifications
         from Asterisk and, later, other notifications)."""

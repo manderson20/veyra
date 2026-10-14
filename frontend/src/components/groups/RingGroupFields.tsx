@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import { HoldMusicSelect } from "@/components/holdmusic/HoldMusicSelect";
 import { MemberListEditor, membersFromIds, membersValid, type MemberDraft } from "@/components/groups/MemberListEditor";
 import { DestinationPicker, useDestinationOptions } from "@/components/routing/DestinationPicker";
 import { Checkbox, SelectField, Switch, TextArea, TextField } from "@/components/ui";
 import { destinationBody, destinationComplete, destinationDraft, HANGUP, type DestinationDraft } from "@/lib/routing";
-import type { RingGroup, RingGroupInput, RingGroupStrategy } from "@/lib/types";
+import type { QueueMusic, RingGroup, RingGroupInput, RingGroupStrategy } from "@/lib/types";
 
 export interface RingGroupDraft {
   name: string;
@@ -15,6 +16,8 @@ export interface RingGroupDraft {
   ring_seconds: string;
   ring_busy_members: boolean;
   caller_id_prefix: string;
+  music: QueueMusic;
+  moh_class_id: string;
   failover: DestinationDraft;
   members: MemberDraft[];
   is_enabled: boolean;
@@ -28,6 +31,8 @@ export const EMPTY_RING_GROUP: RingGroupDraft = {
   ring_seconds: "20",
   ring_busy_members: false,
   caller_id_prefix: "",
+  music: "ring",
+  moh_class_id: "",
   failover: HANGUP,
   members: [],
   is_enabled: true,
@@ -47,6 +52,8 @@ export function ringGroupDraft(g: RingGroup): RingGroupDraft {
     ring_seconds: String(g.ring_seconds),
     ring_busy_members: g.ring_busy_members,
     caller_id_prefix: g.caller_id_prefix ?? "",
+    music: g.music ?? "ring",
+    moh_class_id: g.moh_class_id ?? "",
     failover: destinationDraft(g.failover, HANGUP),
     members: membersFromIds(g.members),
     is_enabled: g.is_enabled,
@@ -62,6 +69,8 @@ export function ringGroupBody(d: RingGroupDraft): RingGroupInput {
     ring_seconds: Number(d.ring_seconds),
     ring_busy_members: d.ring_busy_members,
     caller_id_prefix: d.caller_id_prefix.trim() || null,
+    music: d.music,
+    moh_class_id: d.music === "default" ? d.moh_class_id || null : null,
     failover: destinationBody(d.failover),
     members: d.members.map((m) => m.extension_id),
     is_enabled: d.is_enabled,
@@ -106,6 +115,15 @@ export function RingGroupFields({ draft, onChange, errors, organizationId, curre
       </div>
       <TextField label="Caller ID prefix" disabled={disabled} value={draft.caller_id_prefix} error={errors.caller_id_prefix} placeholder="e.g. Front: "
         help="Shown on the ringing phones before the caller's name, so users see which group the call came in on." onChange={(e) => onChange({ caller_id_prefix: e.target.value })} />
+      <div className="form-grid">
+        <SelectField label="Callers hear" required disabled={disabled} value={draft.music} error={errors.music}
+          options={[{ value: "ring", label: "Ringing tone" }, { value: "default", label: "Music on hold" }]}
+          onChange={(e) => onChange({ music: e.target.value as QueueMusic })} />
+        {draft.music === "default" ? (
+          <HoldMusicSelect organizationId={organizationId} value={draft.moh_class_id} disabled={disabled} error={errors.moh_class_id}
+            onChange={(moh_class_id) => onChange({ moh_class_id })} />
+        ) : null}
+      </div>
       <Checkbox label="Ring members who are already on a call" description="Off: a member on a call is skipped. On: the phone gets a second call (call waiting)." checked={draft.ring_busy_members} disabled={disabled}
         onChange={(e) => onChange({ ring_busy_members: e.target.checked })} />
       <DestinationPicker label="When nobody answers" idBase="rg-failover" draft={draft.failover} onChange={(failover) => onChange({ failover })} options={options} allowHangup

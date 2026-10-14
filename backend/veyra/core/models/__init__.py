@@ -56,7 +56,15 @@ from veyra.core.models.routing import (
 )
 from veyra.core.models.telephony import Device, Extension
 from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
-from veyra.core.models.voicemail import IvrEntry, IvrMenu, Prompt, VoicemailBox, VoicemailBoxMember
+from veyra.core.models.voicemail import (
+    IvrEntry,
+    IvrMenu,
+    MohClass,
+    MohClassTrack,
+    Prompt,
+    VoicemailBox,
+    VoicemailBoxMember,
+)
 
 __all__ = [
     "ApiToken",
@@ -87,6 +95,8 @@ __all__ = [
     "MfaMethod",
     "MfaRecoveryCode",
     "ModuleConfig",
+    "MohClass",
+    "MohClassTrack",
     "Organization",
     "OutboundRoute",
     "OutboundRouteTrunk",

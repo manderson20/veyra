@@ -14,7 +14,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from veyra.api.v1 import destinations
+from veyra.api.v1 import destinations, hold_music
 from veyra.api.v1 import group_helpers as helpers
 from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
 from veyra.api.v1.group_helpers import READ, WRITE, MemberOut
@@ -60,6 +60,8 @@ class QueueIn(BaseModel):
     periodic_prompt_id: uuid.UUID | None = None
     periodic_seconds: int = Field(60, ge=15, le=600)
     music: Music = "default"
+    # Hold music set for music=default; none = the built-in set.
+    moh_class_id: uuid.UUID | None = None
     failover: DestinationIn = Field(default_factory=lambda: DestinationIn(type="hangup"))
     members: list[AgentIn] = Field(default_factory=list, max_length=MAX_MEMBERS)
     is_enabled: bool = True
@@ -106,6 +108,7 @@ class QueuePatch(BaseModel):
     periodic_prompt_id: uuid.UUID | None = None
     periodic_seconds: int | None = Field(None, ge=15, le=600)
     music: Music | None = None
+    moh_class_id: uuid.UUID | None = None
     failover: DestinationIn | None = None
     members: list[AgentIn] | None = Field(None, max_length=MAX_MEMBERS)
     is_enabled: bool | None = None
@@ -136,6 +139,8 @@ class QueueOut(BaseModel):
     periodic_prompt_name: str | None
     periodic_seconds: int
     music: str
+    moh_class_id: uuid.UUID | None
+    moh_class_name: str | None
     failover: DestinationOut
     members: list[MemberOut]
     is_enabled: bool
@@ -160,6 +165,7 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
     if not rows:
         return []
     orgs = helpers.org_names(db, {r.organization_id for r in rows})
+    moh_names = hold_music.set_names(db, {r.moh_class_id for r in rows})
     members = _members(db, {r.id for r in rows})
     exts = helpers.extensions_by_id(
         db, {m.extension_id for rows_ in members.values() for m in rows_}
@@ -228,6 +234,8 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
                 periodic_prompt_name=per.name if per else None,
                 periodic_seconds=r.periodic_seconds,
                 music=r.music,
+                moh_class_id=r.moh_class_id,
+                moh_class_name=moh_names.get(r.moh_class_id) if r.moh_class_id else None,
                 failover=failover,
                 members=member_outs,
                 is_enabled=r.is_enabled,
@@ -270,6 +278,7 @@ def _check(db: Session, org_id: uuid.UUID, body: QueueIn, self_id: uuid.UUID | N
     helpers.load_members(db, org_id, [a.extension_id for a in body.members], "members")
     _check_prompt(db, org_id, body.announcement_prompt_id, "announcement_prompt_id")
     _check_prompt(db, org_id, body.periodic_prompt_id, "periodic_prompt_id")
+    hold_music.check_set(db, org_id, body.moh_class_id, "moh_class_id")
     check_destination(
         db, org_id, body.failover, field="failover", allow_hangup=True, exclude_queue=self_id
     )
@@ -295,6 +304,7 @@ _FIELDS = (
     "periodic_prompt_id",
     "periodic_seconds",
     "music",
+    "moh_class_id",
     "is_enabled",
 )
 

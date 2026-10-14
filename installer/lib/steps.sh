@@ -346,7 +346,7 @@ do_telephony() {
     # files shipped by the package are backed up beside them.
     MANAGED_FILE_CHANGED=0
     local stub
-    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf; do
+    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf; do
         install_managed_file "$SCRIPT_DIR/templates/asterisk/$stub" "/etc/asterisk/$stub" 0640 root:asterisk
     done
     stub_changed=$MANAGED_FILE_CHANGED
@@ -371,8 +371,9 @@ do_telephony() {
         ok "Added service account '$VEYRA_USER' to group asterisk (effective when the services restart below)"
     fi
     run install -d -m 2770 -o "$VEYRA_USER" -g asterisk "$VEYRA_DATA/prompts" \
-        "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed"
-    run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed"
+        "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" "$VEYRA_DATA/moh"
+    run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" \
+        "$VEYRA_DATA/moh"
     # Firmware images uploaded through the API, served by NGINX (www-data reads).
     run install -d -m 0755 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firmware"
     run systemctl enable asterisk

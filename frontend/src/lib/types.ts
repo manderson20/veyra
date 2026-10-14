@@ -147,6 +147,8 @@ export interface Organization {
   slug: string;
   timezone: string;
   is_active: boolean;
+  /** Default hold music set of the organization's phones; null = the built-in set. */
+  moh_class_id?: string | null;
   created_at: string;
 }
 
@@ -1086,6 +1088,10 @@ export interface RingGroup {
   ring_seconds: number;
   ring_busy_members: boolean;
   caller_id_prefix: string | null;
+  /** What callers hear while members ring. */
+  music: QueueMusic;
+  moh_class_id: string | null;
+  moh_class_name: string | null;
   failover: Destination;
   members: GroupMember[];
   is_enabled: boolean;
@@ -1104,6 +1110,8 @@ export interface RingGroupInput {
   ring_seconds?: number;
   ring_busy_members?: boolean;
   caller_id_prefix?: string | null;
+  music?: QueueMusic;
+  moh_class_id?: string | null;
   failover?: DestinationInput;
   members?: string[];
   is_enabled?: boolean;
@@ -1137,6 +1145,8 @@ export interface CallQueue {
   periodic_prompt_name: string | null;
   periodic_seconds: number;
   music: QueueMusic;
+  moh_class_id: string | null;
+  moh_class_name: string | null;
   failover: Destination;
   members: GroupMember[];
   is_enabled: boolean;
@@ -1169,6 +1179,7 @@ export interface QueueInput {
   periodic_prompt_id?: string | null;
   periodic_seconds?: number;
   music?: QueueMusic;
+  moh_class_id?: string | null;
   failover?: DestinationInput;
   members?: QueueAgentInput[];
   is_enabled?: boolean;
@@ -1628,4 +1639,41 @@ export interface BellRing {
   rang_at: string;
   outcome: "started" | "failed" | "skipped";
   detail: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------- hold music (docs/PAGING_RECORDINGS.md §3.2)
+
+export interface HoldMusicTrack {
+  prompt_id: string;
+  name: string;
+  kind: AudioKind;
+  license: string | null;
+  duration_seconds: number;
+  file_present: boolean;
+}
+
+export interface HoldMusicSet {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  /** The engine's music class, `veyra-<slug>`. */
+  class_name: string;
+  description: string | null;
+  random: boolean;
+  tracks: HoldMusicTrack[];
+  /** Organizations (as default), queues and ring groups playing the set. */
+  in_use_by: number;
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HoldMusicInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  tracks?: string[];
+  random?: boolean;
 }

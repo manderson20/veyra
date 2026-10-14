@@ -35,6 +35,7 @@ FILE_VOICEMAIL = "voicemail.conf"
 FILE_QUEUES = "queues.conf"
 FILE_NOTIFY = "pjsip_notify.conf"
 FILE_PAGING = "paging.json"
+FILE_MOH = "musiconhold.conf"
 MANAGED_FILES = [
     FILE_TRANSPORTS,
     FILE_ENDPOINTS,
@@ -45,6 +46,7 @@ MANAGED_FILES = [
     FILE_QUEUES,
     FILE_NOTIFY,
     FILE_PAGING,
+    FILE_MOH,
 ]
 
 # Module reload per file. Order matters: transports before endpoints is the
@@ -58,6 +60,7 @@ RELOAD_SCOPES: dict[str, str] = {
     FILE_VOICEMAIL: "app_voicemail.so",
     FILE_QUEUES: "app_queue.so",
     FILE_NOTIFY: "res_pjsip_notify.so",
+    FILE_MOH: "res_musiconhold.so",
 }
 SCOPE_ORDER = [
     "res_rtp_asterisk.so",
@@ -66,6 +69,7 @@ SCOPE_ORDER = [
     "app_voicemail.so",
     "app_queue.so",
     "res_pjsip_notify.so",
+    "res_musiconhold.so",
 ]
 
 CONTEXT_INTERNAL = "veyra-internal"
@@ -108,6 +112,10 @@ DEFAULT_RING_SECONDS = 30
 # Where the prompts live and the script Asterisk hands notifications to;
 # the adapter passes the installation's paths (veyra.core.config).
 DEFAULT_PROMPTS_DIR = "/var/lib/veyra/prompts"
+DEFAULT_MOH_DIR = "/var/lib/veyra/moh"
+# Engine class of a hold music set (docs/PAGING_RECORDINGS.md §3.2).
+MOH_CLASS_PREFIX = "veyra-"
+MOH_BUILTIN = "default"
 DEFAULT_MAILQUEUE_COMMAND = "/opt/veyra/current/installer/bin/veyra-mailqueue"
 PROMPT_RECORD_MAX_SECONDS = 300
 PROMPT_RECORD_SILENCE = 5
@@ -118,6 +126,7 @@ _SAFE_VALUE_RE = re.compile(r"^[^\r\n\[\];]*$")
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 _PIN_RE = re.compile(r"^[0-9]{4,10}$")
 _PATH_RE = re.compile(r"^/[A-Za-z0-9_./-]+$")
+_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class GenerationError(ValueError):
@@ -335,6 +344,7 @@ def generate(
     *,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
     mailqueue_command: str = DEFAULT_MAILQUEUE_COMMAND,
+    moh_dir: str = DEFAULT_MOH_DIR,
 ) -> list[GeneratedFile]:
     sip = SipSettings.model_validate(snapshot.get("sip") or {})
     problems = sip.problems()
@@ -347,17 +357,75 @@ def generate(
     ring_groups = list(snapshot.get("ring_groups") or [])
     queues = list(snapshot.get("queues") or [])
     _check_group_numbers(extensions, ring_groups, queues)
+    moh = _check_moh(list(snapshot.get("hold_music") or []))
+    org_moh = {
+        str(o["slug"]): _moh_class(o.get("hold_music"), moh, f"organization {o['slug']}")
+        for o in (snapshot.get("organizations") or [])
+        if o.get("hold_music")
+    }
     return [
         _transports(sip),
-        _endpoints(sip, extensions, set(boxes), dict(snapshot.get("shared_mailboxes") or {})),
+        _endpoints(
+            sip,
+            extensions,
+            set(boxes),
+            dict(snapshot.get("shared_mailboxes") or {}),
+            org_moh,
+        ),
         _trunks(sip, trunks),
         _dialplan(snapshot, extensions, trunks, boxes, prompts),
         _rtp(sip),
         _voicemail(snapshot, boxes, _path(mailqueue_command, "mail queue command")),
-        _queues(queues, extensions, prompts),
+        _queues(queues, extensions, prompts, moh),
         _notify_conf(),
         _paging_json(snapshot.get("paging") or {}),
+        _moh_conf(moh, _path(moh_dir, "hold music directory")),
     ]
+
+
+def _check_moh(sets: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Hold music sets by slug (docs/PAGING_RECORDINGS.md §3.2)."""
+    out: dict[str, dict[str, Any]] = {}
+    for m in sets:
+        slug = _slug(str(m.get("slug") or ""), "hold music slug")
+        if slug in out:
+            raise GenerationError(f"duplicate hold music slug {slug!r}")
+        for f in m.get("files") or []:
+            if not _FILE_RE.match(str(f)):
+                raise GenerationError(f"hold music set {slug}: file name {f!r} is not valid")
+        out[slug] = m
+    return out
+
+
+def _moh_class(slug: Any, moh: dict[str, dict[str, Any]], what: str) -> str:
+    """The engine class for a set slug; the built-in class when none."""
+    if not slug:
+        return MOH_BUILTIN
+    slug = _slug(str(slug), f"hold music of {what}")
+    if slug not in moh:
+        raise GenerationError(f"{what}: hold music set {slug!r} is not in the snapshot")
+    return f"{MOH_CLASS_PREFIX}{slug}"
+
+
+def _moh_conf(moh: dict[str, dict[str, Any]], moh_dir: str) -> GeneratedFile:
+    """``musiconhold.conf``: one ``[veyra-<slug>]`` files class per set. The
+    track list is written as a comment so a changed set changes the file and
+    the deployer reloads ``res_musiconhold.so`` (which rescans the
+    directories); the installer's stub keeps the built-in ``default``."""
+    lines = [HEADER, "; Hold music sets (docs/PAGING_RECORDINGS.md §3.2).", ""]
+    for slug, m in sorted(moh.items()):
+        name = _check_value(str(m.get("name") or slug), "hold music name")
+        org = _slug(str(m.get("organization") or ""), f"organization of hold music {slug}")
+        files = [str(f) for f in (m.get("files") or [])]
+        lines += [
+            f"[{MOH_CLASS_PREFIX}{slug}]",
+            f"; {name} ({org}); tracks: {', '.join(files) or 'none'}",
+            "mode=files",
+            f"directory={moh_dir}/{slug}",
+            f"sort={'random' if m.get('random') else 'alpha'}",
+            "",
+        ]
+    return GeneratedFile(FILE_MOH, "\n".join(lines).rstrip("\n") + "\n")
 
 
 def _transports(sip: SipSettings) -> GeneratedFile:
@@ -408,6 +476,7 @@ def _endpoints(
     extensions: list[dict[str, Any]],
     mailboxes: set[str] | None = None,
     shared_mailboxes: dict[str, list[str]] | None = None,
+    org_moh: dict[str, str] | None = None,
 ) -> GeneratedFile:
     allow = ",".join(sip.codecs)
     mailboxes = mailboxes or set()
@@ -494,6 +563,10 @@ def _endpoints(
         if not 1 <= max_contacts <= 16:
             raise GenerationError(f"endpoint {name!r}: max_contacts {max_contacts} out of range")
         contacts = [f"max_contacts={max_contacts}"] if max_contacts > 1 else []
+        # The organization's hold music set, heard by callers this phone
+        # puts on hold (docs/PAGING_RECORDINGS.md §3.2).
+        moh_class = (org_moh or {}).get(org)
+        moh = [f"moh_suggest={_check_section(moh_class, 'hold music class')}"] if moh_class else []
         lines += [
             f"; {org} {number}",
             f"[{name}](veyra-endpoint)",
@@ -502,6 +575,7 @@ def _endpoints(
             f'callerid="{cid_name}" <{cid_num}>',
             f"set_var=VEYRA_ORG={org}",
             *emergency_cid,
+            *moh,
             *mwi,
             *(["mwi_subscribe_replaces_unsolicited=yes"] if mwi else []),
             *pickup,
@@ -812,7 +886,7 @@ def _dialplan(
     lines += _outbound_contexts(outbound, trunk_info)
     lines += _inbound_contexts(inbound, conditions, trunk_slugs)
     lines += _ivr_contexts(menus, prompts_dir)
-    lines += _ring_group_contexts(ring_groups)
+    lines += _ring_group_contexts(ring_groups, _check_moh(list(snapshot.get("hold_music") or [])))
     lines += _queue_contexts(queues, prompts_dir)
     return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
 
@@ -1174,7 +1248,9 @@ def _group_epilogue(what: str, name: str, failover: Any) -> list[str]:
     ]
 
 
-def _ring_group_contexts(groups: list[dict[str, Any]]) -> list[str]:
+def _ring_group_contexts(
+    groups: list[dict[str, Any]], moh: dict[str, dict[str, Any]] | None = None
+) -> list[str]:
     """One ``veyra-rg-<slug>`` per enabled ring group (docs/RING_GROUPS_QUEUES.md §2)."""
     lines: list[str] = []
     seen: set[str] = set()
@@ -1196,6 +1272,14 @@ def _ring_group_contexts(groups: list[dict[str, Any]]) -> list[str]:
             for m in (g.get("members") or [])
         ]
         ring_busy = bool(g.get("ring_busy_members"))
+        music = str(g.get("music") or "ring")
+        if music not in QUEUE_MUSIC:
+            raise GenerationError(f"ring group {slug}: unknown hold music {music!r}")
+        # Callers hear ringing, or the group's (or built-in) hold music set.
+        dial_opts = ""
+        if music == "default":
+            moh_class = _moh_class(g.get("hold_music"), moh or {}, f"ring group {slug}")
+            dial_opts = f",m({moh_class})"
         lines += _group_prologue(f"{CONTEXT_RING_GROUP_PREFIX}{slug}", "ring group", name, org)
         prefix = g.get("caller_id_prefix")
         if prefix:
@@ -1218,7 +1302,7 @@ def _ring_group_contexts(groups: list[dict[str, Any]]) -> list[str]:
                 lines.append(f" same => n{label},Set(VEYRA_DIAL=${{VEYRA_DIAL}}&PJSIP/{m})")
             lines += [
                 ' same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)',
-                f" same => n,Dial(${{VEYRA_DIAL:1}},{ring})",
+                f" same => n,Dial(${{VEYRA_DIAL:1}},{ring}{dial_opts})",
                 ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
                 " same => n,Goto(failover)",
             ]
@@ -1233,7 +1317,7 @@ def _ring_group_contexts(groups: list[dict[str, Any]]) -> list[str]:
                     )
                     label = ""
                 lines += [
-                    f" same => n{label},Dial(PJSIP/{m},{ring})",
+                    f" same => n{label},Dial(PJSIP/{m},{ring}{dial_opts})",
                     ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
                 ]
             lines.append(" same => n,Goto(failover)")
@@ -1280,7 +1364,10 @@ def _queue_contexts(queues: list[dict[str, Any]], prompts_dir: str) -> list[str]
 
 
 def _queues(
-    queues: list[dict[str, Any]], extensions: list[dict[str, Any]], prompts_dir: str
+    queues: list[dict[str, Any]],
+    extensions: list[dict[str, Any]],
+    prompts_dir: str,
+    moh: dict[str, dict[str, Any]] | None = None,
 ) -> GeneratedFile:
     """``queues.conf`` (docs/RING_GROUPS_QUEUES.md §3): one section per
     enabled queue with static members; reloaded with ``app_queue.so``."""
@@ -1334,7 +1421,7 @@ def _queues(
             "ringinuse=no",
             f"joinempty={empty}",
             f"leavewhenempty={'no' if q.get('join_when_empty') else 'strict'}",
-            "musicclass=default",
+            f"musicclass={_moh_class(q.get('hold_music'), moh or {}, f'queue {slug}')}",
             f"announce-position={position}",
             f"announce-frequency={freq if q.get('announce_position') else 0}",
             "announce-holdtime=no",

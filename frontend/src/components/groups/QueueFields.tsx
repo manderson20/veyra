@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import { HoldMusicSelect } from "@/components/holdmusic/HoldMusicSelect";
 import { MemberListEditor, membersFromIds, membersValid, type MemberDraft } from "@/components/groups/MemberListEditor";
 import { DestinationPicker, useDestinationOptions } from "@/components/routing/DestinationPicker";
 import { Checkbox, SelectField, Switch, TextArea, TextField } from "@/components/ui";
@@ -25,6 +26,7 @@ export interface QueueDraft {
   periodic_prompt_id: string;
   periodic_seconds: string;
   music: QueueMusic;
+  moh_class_id: string;
   failover: DestinationDraft;
   members: MemberDraft[];
   is_enabled: boolean;
@@ -47,6 +49,7 @@ export const EMPTY_QUEUE: QueueDraft = {
   periodic_prompt_id: "",
   periodic_seconds: "60",
   music: "default",
+  moh_class_id: "",
   failover: HANGUP,
   members: [],
   is_enabled: true,
@@ -84,6 +87,7 @@ export function queueDraft(q: CallQueue): QueueDraft {
     periodic_prompt_id: q.periodic_prompt_id ?? "",
     periodic_seconds: String(q.periodic_seconds),
     music: q.music,
+    moh_class_id: q.moh_class_id ?? "",
     failover: destinationDraft(q.failover, HANGUP),
     members: membersFromIds(q.members),
     is_enabled: q.is_enabled,
@@ -108,6 +112,7 @@ export function queueBody(d: QueueDraft): QueueInput {
     periodic_prompt_id: d.periodic_prompt_id || null,
     periodic_seconds: Number(d.periodic_seconds),
     music: d.music,
+    moh_class_id: d.music === "default" ? d.moh_class_id || null : null,
     failover: destinationBody(d.failover),
     members: d.members.map((m) => ({ extension_id: m.extension_id, penalty: Number(m.penalty) })),
     is_enabled: d.is_enabled,
@@ -163,6 +168,10 @@ export function QueueFields({ draft, onChange, errors, organizationId, current, 
           options={(Object.keys(QUEUE_MUSIC_LABELS) as QueueMusic[]).map((k) => ({ value: k, label: QUEUE_MUSIC_LABELS[k] }))}
           onChange={(e) => onChange({ music: e.target.value as QueueMusic })} />
       </div>
+      {draft.music === "default" ? (
+        <HoldMusicSelect organizationId={organizationId} value={draft.moh_class_id} disabled={disabled} error={errors.moh_class_id}
+          help="Sets are managed under Telephony → Hold Music." onChange={(moh_class_id) => onChange({ moh_class_id })} />
+      ) : null}
       <div className="form-grid">
         <TextField label="Agent ring time (seconds)" type="number" min={5} max={60} required disabled={disabled} value={draft.member_timeout} error={errors.member_timeout}
           help="Each attempt to reach an agent." onChange={(e) => onChange({ member_timeout: e.target.value })} />

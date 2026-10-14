@@ -18,6 +18,7 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { HoldMusicSelect } from "@/components/holdmusic/HoldMusicSelect";
 import { timeZones } from "@/lib/timezones";
 import type { Organization } from "@/lib/types";
 import { ProvisioningCredentialCard } from "@/components/organizations/ProvisioningCredentialCard";
@@ -36,6 +37,7 @@ function OrganizationView() {
   const [name, setName] = useState("");
   const [tz, setTz] = useState("UTC");
   const [active, setActive] = useState(true);
+  const [moh, setMoh] = useState("");
   const [busy, setBusy] = useState(false);
 
   useOnChange(org.data, (o) => {
@@ -43,6 +45,7 @@ function OrganizationView() {
       setName(o.name);
       setTz(o.timezone);
       setActive(o.is_active);
+      setMoh(o.moh_class_id ?? "");
     }
   });
 
@@ -51,16 +54,16 @@ function OrganizationView() {
   if (!org.data) return <LoadingState />;
   const o = org.data;
   const editable = can("organizations.write");
-  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active;
+  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "");
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active });
+      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}) });
       org.setData(updated);
-      toast.success("Organization saved");
+      toast.success("Organization saved", moh !== (o.moh_class_id ?? "") ? "Deploy changes to apply the hold music." : undefined);
     } catch (err) {
       errors.set(err);
     } finally {
@@ -81,6 +84,8 @@ function OrganizationView() {
             <TextField label="Name" required value={name} disabled={!editable} error={errors.fields.name} onChange={(e) => setName(e.target.value)} />
             <TextField label="Short name" value={o.slug} disabled help="The short name cannot be changed." />
             <SelectField label="Time zone" value={tz} disabled={!editable} options={zones.map((z) => ({ value: z, label: z.replace(/_/g, " ") }))} onChange={(e) => setTz(e.target.value)} />
+            <HoldMusicSelect organizationId={o.id} label="Hold music" value={moh} disabled={!editable} error={errors.fields.moh_class_id}
+              help="What callers hear when a phone of this organization puts them on hold. Sets are managed under Telephony → Hold Music." onChange={setMoh} />
             <Switch label="Active" description="Inactive organizations are kept but cannot be used for new configuration." checked={active} disabled={!editable} onChange={(e) => setActive(e.target.checked)} />
             {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
             {editable ? (

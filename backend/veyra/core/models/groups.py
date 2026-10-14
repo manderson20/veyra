@@ -50,6 +50,12 @@ class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     ring_seconds: Mapped[int] = mapped_column(Integer, default=20)
     ring_busy_members: Mapped[bool] = mapped_column(Boolean, default=False)
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
+    # What callers hear while the members ring: ``ring`` (ringing) or
+    # ``default`` (hold music: the set below, or the built-in one).
+    music: Mapped[str] = mapped_column(String(16), default="ring")
+    moh_class_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("moh_classes.id", ondelete="SET NULL")
+    )
     failover_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ring_groups.id", ondelete="SET NULL")
     )
@@ -110,6 +116,10 @@ class CallQueue(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     periodic_seconds: Mapped[int] = mapped_column(Integer, default=60)
     # ``default`` (music on hold) or ``ring``.
     music: Mapped[str] = mapped_column(String(16), default="default")
+    # The hold music set for ``music=default``; none = the built-in class.
+    moh_class_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("moh_classes.id", ondelete="SET NULL")
+    )
     failover_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ring_groups.id", ondelete="SET NULL")
     )
