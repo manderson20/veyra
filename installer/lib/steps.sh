@@ -334,6 +334,11 @@ do_telephony() {
         info "Asterisk control socket opened to group asterisk (asterisk.conf; restart needed)"
         core_changed=1
     fi
+    # The CLI reads asterisk.conf; let group asterisk (the service account) read it.
+    if [[ -f /etc/asterisk/asterisk.conf && "$(stat -c '%G' /etc/asterisk/asterisk.conf)" != "asterisk" ]]; then
+        run chgrp asterisk /etc/asterisk/asterisk.conf
+        run chmod 0640 /etc/asterisk/asterisk.conf
+    fi
     # Stub files that #tryinclude Veyra's generated configuration. The sample
     # files shipped by the package are backed up beside them.
     MANAGED_FILE_CHANGED=0
