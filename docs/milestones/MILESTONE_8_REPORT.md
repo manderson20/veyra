@@ -100,7 +100,7 @@ pickup group, no paging, one dialplan context until Milestone 14.
   `m7-test-tone`, menu "M7 test menu") are still there for the owner's
   browser checks.
 
-## 7. Proposed Milestone 9 (awaiting approval)
+## 7. Proposed Milestone 9 (approved 2026-10-14, with the owner's requirements in §8)
 
 Device provisioning and custom templates (roadmap row 9, 0.11.0): HTTPS
 delivery of phone configuration from the provisioning templates, device
@@ -117,4 +117,10 @@ login/logout codes and a live queue view).
   domain name are ready.
 * Upgrade of dev1 run by the owner on 2026-10-14; the one failed verify
   check (`engine-moh`) was fixed in place and in the installer.
-* Approval: *pending*.
+* Approved 2026-10-14 ("You have my approval to proceed!"); released as
+  0.10.0. With the approval the owner set requirements for Milestone 9:
+  group device brands and models (most share settings), yet separate
+  templates by use, e.g. one per building differing only in multicast
+  paging; multicast paging zones for the phones so they page in sync with
+  the multicast speakers (today a relay pages the phones and they lag the
+  speakers); Poly paging groups as an option.
