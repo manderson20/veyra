@@ -284,6 +284,17 @@ export interface Extension {
   created_at: string;
   updated_at: string;
   registration: Registration | null;
+  /** Groups the extension belongs to (docs/RING_GROUPS_QUEUES.md). */
+  ring_groups: Membership[];
+  queues: Membership[];
+  pickup_groups: Membership[];
+}
+
+/** A ring group, queue or pickup group an extension belongs to. */
+export interface Membership {
+  id: string;
+  name: string;
+  number: string | null;
 }
 
 export interface SipCredentials {
@@ -701,14 +712,16 @@ export interface TrunkInput {
   register_expiry?: number;
 }
 
-export type DestinationType = "extension" | "voicemail" | "ivr" | "hangup";
+export type DestinationType = "extension" | "voicemail" | "ivr" | "ring_group" | "queue" | "hangup";
 
-/** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6). */
+/** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6, RING_GROUPS_QUEUES.md §5). */
 export interface Destination {
   type: DestinationType | "missing";
   extension_id: string | null;
   ivr_id: string | null;
-  /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Menu: Main menu", "Hang up"; null when the target is gone. */
+  ring_group_id?: string | null;
+  queue_id?: string | null;
+  /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)", "Hang up"; null when the target is gone. */
   label: string | null;
   missing: boolean;
 }
@@ -717,9 +730,11 @@ export interface DestinationInput {
   type: DestinationType;
   extension_id?: string | null;
   ivr_id?: string | null;
+  ring_group_id?: string | null;
+  queue_id?: string | null;
 }
 
-export type RouteDestinationType = "extension" | "voicemail" | "ivr";
+export type RouteDestinationType = "extension" | "voicemail" | "ivr" | "ring_group" | "queue";
 
 export interface InboundRoute {
   id: string;
@@ -734,6 +749,8 @@ export interface InboundRoute {
   destination_type: RouteDestinationType;
   destination_extension_id: string | null;
   destination_ivr_id: string | null;
+  destination_ring_group_id: string | null;
+  destination_queue_id: string | null;
   destination_number: string | null;
   destination_name: string | null;
   destination: Destination;
@@ -743,6 +760,8 @@ export interface InboundRoute {
   after_hours_type: RouteDestinationType;
   after_hours_extension_id: string | null;
   after_hours_ivr_id: string | null;
+  after_hours_ring_group_id: string | null;
+  after_hours_queue_id: string | null;
   after_hours_number: string | null;
   after_hours_name: string | null;
   after_hours: Destination | null;
@@ -760,10 +779,14 @@ export interface InboundRouteInput {
   destination_type?: RouteDestinationType;
   destination_extension_id?: string | null;
   destination_ivr_id?: string | null;
+  destination_ring_group_id?: string | null;
+  destination_queue_id?: string | null;
   time_condition_id?: string | null;
   after_hours_type?: RouteDestinationType;
   after_hours_extension_id?: string | null;
   after_hours_ivr_id?: string | null;
+  after_hours_ring_group_id?: string | null;
+  after_hours_queue_id?: string | null;
   caller_id_prefix?: string | null;
   is_enabled?: boolean;
 }
@@ -1012,4 +1035,138 @@ export interface SmtpTestResult {
   ok: boolean;
   message: string;
   recipient: string;
+}
+
+// ---------------------------------------------------------------- ring groups, queues, pickup groups (docs/RING_GROUPS_QUEUES.md)
+
+export interface GroupMember {
+  extension_id: string;
+  number: string;
+  display_name: string;
+  is_enabled: boolean;
+  position: number | null;
+  penalty: number | null;
+}
+
+export type RingGroupStrategy = "ringall" | "sequential";
+
+export interface RingGroup {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  context: string;
+  number: string;
+  description: string | null;
+  strategy: RingGroupStrategy;
+  ring_seconds: number;
+  ring_busy_members: boolean;
+  caller_id_prefix: string | null;
+  failover: Destination;
+  members: GroupMember[];
+  is_enabled: boolean;
+  problems: string[];
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RingGroupInput {
+  organization_id?: string;
+  name?: string;
+  number?: string;
+  description?: string | null;
+  strategy?: RingGroupStrategy;
+  ring_seconds?: number;
+  ring_busy_members?: boolean;
+  caller_id_prefix?: string | null;
+  failover?: DestinationInput;
+  members?: string[];
+  is_enabled?: boolean;
+}
+
+export type QueueStrategy = "ringall" | "rrmemory" | "leastrecent" | "fewestcalls" | "random" | "linear";
+export type QueueMusic = "default" | "ring";
+
+export interface CallQueue {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  queue_name: string;
+  context: string;
+  number: string;
+  description: string | null;
+  strategy: QueueStrategy;
+  member_timeout: number;
+  retry_seconds: number;
+  wrapup_seconds: number;
+  max_wait_seconds: number;
+  max_callers: number;
+  join_when_empty: boolean;
+  announce_position: boolean;
+  announce_frequency: number;
+  announcement_prompt_id: string | null;
+  announcement_prompt_name: string | null;
+  periodic_prompt_id: string | null;
+  periodic_prompt_name: string | null;
+  periodic_seconds: number;
+  music: QueueMusic;
+  failover: Destination;
+  members: GroupMember[];
+  is_enabled: boolean;
+  problems: string[];
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QueueAgentInput {
+  extension_id: string;
+  penalty: number;
+}
+
+export interface QueueInput {
+  organization_id?: string;
+  name?: string;
+  number?: string;
+  description?: string | null;
+  strategy?: QueueStrategy;
+  member_timeout?: number;
+  retry_seconds?: number;
+  wrapup_seconds?: number;
+  max_wait_seconds?: number;
+  max_callers?: number;
+  join_when_empty?: boolean;
+  announce_position?: boolean;
+  announce_frequency?: number;
+  announcement_prompt_id?: string | null;
+  periodic_prompt_id?: string | null;
+  periodic_seconds?: number;
+  music?: QueueMusic;
+  failover?: DestinationInput;
+  members?: QueueAgentInput[];
+  is_enabled?: boolean;
+}
+
+export interface PickupGroup {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  members: GroupMember[];
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PickupGroupInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  members?: string[];
 }

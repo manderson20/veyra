@@ -149,7 +149,7 @@ def test_ring_group_crud_number_space_and_in_use(admin, app):
     # the audit trail names the group and the Deploy flag is raised
     actions = [e["action"] for e in admin.get("/api/v1/audit?limit=50").json()["items"]]
     assert "ring_group.create" in actions and "ring_group.delete" in actions
-    assert admin.get("/api/v1/telephony/status").json()["changes_pending"]
+    assert admin.get("/api/v1/telephony/engine").json()["pending_since"]
 
 
 def test_queue_crud_prompts_and_in_use(admin, app):

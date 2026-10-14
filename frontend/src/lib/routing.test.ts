@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
-import { destinationBody, destinationComplete, destinationDraft, formatSeconds, moveItem, parseList, summarizeDays, summarizeRanges, trunkStatus } from "./routing";
+import { destinationBody, destinationComplete, destinationDraft, EMPTY_DESTINATION, formatSeconds, HANGUP, moveItem, parseList, summarizeDays, summarizeRanges, trunkStatus, type DestinationDraft } from "./routing";
 
 describe("routing helpers", () => {
   it("parses comma and newline separated lists", () => {
@@ -36,17 +36,24 @@ describe("routing helpers", () => {
   });
 
   it("normalizes destinations for the API", () => {
-    expect(destinationBody({ type: "extension", extension_id: "e1", ivr_id: "m1" })).toEqual({ type: "extension", extension_id: "e1", ivr_id: null });
-    expect(destinationBody({ type: "voicemail", extension_id: "e1", ivr_id: "" })).toEqual({ type: "voicemail", extension_id: "e1", ivr_id: null });
-    expect(destinationBody({ type: "ivr", extension_id: "e1", ivr_id: "m1" })).toEqual({ type: "ivr", extension_id: null, ivr_id: "m1" });
-    expect(destinationBody({ type: "hangup", extension_id: "e1", ivr_id: "m1" })).toEqual({ type: "hangup", extension_id: null, ivr_id: null });
-    expect(destinationComplete({ type: "ivr", extension_id: "e1", ivr_id: "" })).toBe(false);
-    expect(destinationComplete({ type: "hangup", extension_id: "", ivr_id: "" })).toBe(true);
-    expect(destinationComplete({ type: "voicemail", extension_id: "e1", ivr_id: "" })).toBe(true);
+    const none = { ring_group_id: null, queue_id: null };
+    const d = (over: Partial<DestinationDraft>): DestinationDraft => ({ ...EMPTY_DESTINATION, ...over });
+    expect(destinationBody(d({ type: "extension", extension_id: "e1", ivr_id: "m1" }))).toEqual({ type: "extension", extension_id: "e1", ivr_id: null, ...none });
+    expect(destinationBody(d({ type: "voicemail", extension_id: "e1" }))).toEqual({ type: "voicemail", extension_id: "e1", ivr_id: null, ...none });
+    expect(destinationBody(d({ type: "ivr", extension_id: "e1", ivr_id: "m1" }))).toEqual({ type: "ivr", extension_id: null, ivr_id: "m1", ...none });
+    expect(destinationBody(d({ type: "ring_group", extension_id: "e1", ring_group_id: "g1" }))).toEqual({ type: "ring_group", extension_id: null, ivr_id: null, ring_group_id: "g1", queue_id: null });
+    expect(destinationBody(d({ type: "queue", queue_id: "q1", ring_group_id: "g1" }))).toEqual({ type: "queue", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: "q1" });
+    expect(destinationBody(d({ type: "hangup", extension_id: "e1", ivr_id: "m1" }))).toEqual({ type: "hangup", extension_id: null, ivr_id: null, ...none });
+    expect(destinationComplete(d({ type: "ivr", extension_id: "e1" }))).toBe(false);
+    expect(destinationComplete(d({ type: "hangup" }))).toBe(true);
+    expect(destinationComplete(d({ type: "voicemail", extension_id: "e1" }))).toBe(true);
+    expect(destinationComplete(d({ type: "queue" }))).toBe(false);
+    expect(destinationComplete(d({ type: "ring_group", ring_group_id: "g1" }))).toBe(true);
     const missing = { type: "missing" as const, extension_id: "e9", ivr_id: null, label: null, missing: true };
-    expect(destinationDraft(missing)).toEqual({ type: "extension", extension_id: "", ivr_id: "" });
-    expect(destinationDraft({ type: "ivr", extension_id: null, ivr_id: "m1", label: "Menu: Main", missing: false })).toEqual({ type: "ivr", extension_id: "", ivr_id: "m1" });
-    expect(destinationDraft(null, { type: "hangup", extension_id: "", ivr_id: "" }).type).toBe("hangup");
+    expect(destinationDraft(missing)).toEqual(EMPTY_DESTINATION);
+    expect(destinationDraft({ type: "ivr", extension_id: null, ivr_id: "m1", label: "Menu: Main", missing: false })).toEqual(d({ type: "ivr", ivr_id: "m1" }));
+    expect(destinationDraft({ type: "queue", extension_id: null, ivr_id: null, queue_id: "q1", label: "Queue: Support (2400)", missing: false })).toEqual(d({ type: "queue", queue_id: "q1" }));
+    expect(destinationDraft(null, HANGUP).type).toBe("hangup");
   });
 
   it("formats prompt lengths", () => {
