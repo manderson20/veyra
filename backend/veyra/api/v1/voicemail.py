@@ -13,10 +13,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.destinations import count_uses
 from veyra.api.v1.extensions import installation_key
 from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
@@ -27,9 +28,6 @@ from veyra.core.events import Event, bus
 from veyra.core.mail import load_smtp_settings
 from veyra.core.models import (
     Extension,
-    InboundRoute,
-    IvrEntry,
-    IvrMenu,
     Organization,
     User,
     VoicemailBox,
@@ -165,48 +163,9 @@ def _org_filter(stmt: Select[Any], column: Any, principal: Principal, perm: str)
 
 
 def _uses(db: Session, extension_ids: set[uuid.UUID]) -> dict[Any, int]:
-    """Routes and IVR targets pointing at the voicemail of these extensions."""
-    counts: dict[Any, int] = {}
-    if not extension_ids:
-        return counts
-    for ext_id, n in db.execute(
-        select(InboundRoute.destination_extension_id, func.count())
-        .where(
-            InboundRoute.destination_type == "voicemail",
-            InboundRoute.destination_extension_id.in_(extension_ids),
-        )
-        .group_by(InboundRoute.destination_extension_id)
-    ):
-        counts[ext_id] = counts.get(ext_id, 0) + n
-    for ext_id, n in db.execute(
-        select(InboundRoute.after_hours_extension_id, func.count())
-        .where(
-            InboundRoute.after_hours_type == "voicemail",
-            InboundRoute.after_hours_extension_id.in_(extension_ids),
-        )
-        .group_by(InboundRoute.after_hours_extension_id)
-    ):
-        counts[ext_id] = counts.get(ext_id, 0) + n
-    for ext_id, n in db.execute(
-        select(IvrEntry.destination_extension_id, func.count())
-        .where(
-            IvrEntry.destination_type == "voicemail",
-            IvrEntry.destination_extension_id.in_(extension_ids),
-        )
-        .group_by(IvrEntry.destination_extension_id)
-    ):
-        counts[ext_id] = counts.get(ext_id, 0) + n
-    for col_type, col_id in (
-        (IvrMenu.timeout_type, IvrMenu.timeout_extension_id),
-        (IvrMenu.invalid_type, IvrMenu.invalid_extension_id),
-    ):
-        for ext_id, n in db.execute(
-            select(col_id, func.count())
-            .where(col_type == "voicemail", col_id.in_(extension_ids))
-            .group_by(col_id)
-        ):
-            counts[ext_id] = counts.get(ext_id, 0) + n
-    return counts
+    """Routes, IVR targets, ring groups and queues pointing at the voicemail
+    of these extensions."""
+    return count_uses(db, "voicemail", extension_ids)
 
 
 def _outs(db: Session, rows: list[VoicemailBox]) -> list[VoicemailBoxOut]:
@@ -456,7 +415,8 @@ def delete_box(
         raise ProblemError(
             409,
             "Voicemail box in use",
-            f"{uses} inbound route(s) or IVR key(s) send calls to the voicemail of {number}. "
+            f"{uses} inbound route(s), IVR key(s), ring group(s) or queue(s) send calls to the "
+            f"voicemail of {number}. "
             "Change them first.",
             code="voicemail_in_use",
         )

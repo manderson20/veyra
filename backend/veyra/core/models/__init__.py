@@ -2,6 +2,14 @@
 """All core ORM models. Import this package so metadata is complete."""
 
 from veyra.core.models.base import Base
+from veyra.core.models.groups import (
+    CallQueue,
+    PickupGroup,
+    PickupGroupMember,
+    QueueMember,
+    RingGroup,
+    RingGroupMember,
+)
 from veyra.core.models.identity import (
     ApiToken,
     MfaMethod,
@@ -46,6 +54,7 @@ __all__ = [
     "AvailableUpdate",
     "Base",
     "Building",
+    "CallQueue",
     "ClusterEvent",
     "ClusterNode",
     "ConfigRevision",
@@ -65,8 +74,13 @@ __all__ = [
     "OutboundRouteTrunk",
     "PasswordResetToken",
     "Permission",
+    "PickupGroup",
+    "PickupGroupMember",
     "Prompt",
     "ProvisioningTemplate",
+    "QueueMember",
+    "RingGroup",
+    "RingGroupMember",
     "Role",
     "RoleAssignment",
     "RolePermission",

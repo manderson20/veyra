@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from veyra.core.mail import load_smtp_settings, sender
 from veyra.core.models import (
+    CallQueue,
     Extension,
     InboundRoute,
     Installation,
@@ -30,7 +31,12 @@ from veyra.core.models import (
     Organization,
     OutboundRoute,
     OutboundRouteTrunk,
+    PickupGroup,
+    PickupGroupMember,
     Prompt,
+    QueueMember,
+    RingGroup,
+    RingGroupMember,
     SipTrunk,
     TimeCondition,
     VoicemailBox,
@@ -39,7 +45,7 @@ from veyra.core.security.crypto import DecryptionError, InstallationKey
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 4
+SNAPSHOT_VERSION = 5
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -117,7 +123,29 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     ]
     org_slug = {o.id: o.slug for o in orgs}
     org_tz = {o.id: o.timezone for o in orgs}
-    voicemail = _voicemail_ivr(db, key, active, extensions, org_slug, org_tz)
+    ext_by_id = {e.id: e for e in extensions}
+    ring_groups = [
+        g
+        for g in db.scalars(select(RingGroup).order_by(RingGroup.number)).all()
+        if g.is_enabled and g.organization_id in active
+    ]
+    queues = [
+        q
+        for q in db.scalars(select(CallQueue).order_by(CallQueue.number)).all()
+        if q.is_enabled and q.organization_id in active
+    ]
+    targets = Targets(
+        number_of={e.id: e.number for e in extensions},
+        box_numbers=set(),
+        ivr_slug={},
+        ring_group_slug={g.id: g.slug for g in ring_groups},
+        queue_slug={q.id: q.slug for q in queues},
+    )
+    voicemail = _voicemail_ivr(
+        db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues
+    )
+    groups = _groups(db, extensions, org_slug, targets, ring_groups, queues)
+    pickup = _pickup_groups(db, active, ext_by_id)
     smtp = load_smtp_settings(db)
     from_address, from_name = sender(smtp, inst.name if inst else "Veyra")
     return {
@@ -143,37 +171,61 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "caller_id_name": e.caller_id_name,
                 "caller_id_number": e.caller_id_number,
                 "secret": _secret(e, key),
+                "pickup_groups": pickup.get(e.id, []),
             }
             for e in extensions
         ],
         **voicemail,
-        **_routing(db, key, active, extensions, voicemail),
+        **groups,
+        **_routing(db, key, active, extensions, targets),
     }
 
 
-def _destination(
-    kind: str | None,
-    extension_id: Any,
-    ivr_id: Any,
-    number_of: dict[Any, str],
-    box_numbers: set[str],
-    ivr_slug: dict[Any, str],
-) -> dict[str, Any]:
-    """An engine-neutral destination: the extension number, the number whose
-    voicemail answers, the menu slug, a hang-up, or ``missing`` when the
-    target is gone or not deployable (the generator renders congestion and
-    the interface flags it)."""
-    if kind == "hangup":
-        return {"type": "hangup"}
-    if kind == "ivr":
-        slug = ivr_slug.get(ivr_id) if ivr_id else None
-        return {"type": "ivr", "ivr": slug} if slug else {"type": "missing"}
-    number = number_of.get(extension_id) if extension_id else None
-    if kind == "voicemail":
-        if number and number in box_numbers:
-            return {"type": "voicemail", "number": number}
-        return {"type": "missing"}
-    return {"type": "extension", "number": number} if number else {"type": "missing"}
+class Targets:
+    """What the deployable destinations of this snapshot may point at: the
+    numbers of enabled extensions, the numbers that have an enabled box,
+    the slugs of enabled menus, ring groups and queues."""
+
+    def __init__(
+        self,
+        *,
+        number_of: dict[Any, str],
+        box_numbers: set[str],
+        ivr_slug: dict[Any, str],
+        ring_group_slug: dict[Any, str],
+        queue_slug: dict[Any, str],
+    ) -> None:
+        self.number_of = number_of
+        self.box_numbers = box_numbers
+        self.ivr_slug = ivr_slug
+        self.ring_group_slug = ring_group_slug
+        self.queue_slug = queue_slug
+
+    def dest(self, obj: Any, prefix: str) -> dict[str, Any]:
+        """The engine-neutral form of the destination stored in
+        ``<prefix>_type`` + target columns of ``obj``: the extension number,
+        the number whose voicemail answers, the menu, ring group or queue
+        slug, a hang-up, or ``missing`` when the target is gone or not
+        deployable (the generator renders congestion and the interface flags
+        it)."""
+        kind = getattr(obj, f"{prefix}_type")
+        if kind == "hangup":
+            return {"type": "hangup"}
+        if kind == "ivr":
+            slug = self.ivr_slug.get(getattr(obj, f"{prefix}_ivr_id"))
+            return {"type": "ivr", "ivr": slug} if slug else {"type": "missing"}
+        if kind == "ring_group":
+            slug = self.ring_group_slug.get(getattr(obj, f"{prefix}_ring_group_id"))
+            return {"type": "ring_group", "ring_group": slug} if slug else {"type": "missing"}
+        if kind == "queue":
+            slug = self.queue_slug.get(getattr(obj, f"{prefix}_queue_id"))
+            return {"type": "queue", "queue": slug} if slug else {"type": "missing"}
+        number = self.number_of.get(getattr(obj, f"{prefix}_extension_id"))
+        if kind == "voicemail":
+            if number and number in self.box_numbers:
+                return {"type": "voicemail", "number": number}
+            return {"type": "missing"}
+        return {"type": "extension", "number": number} if number else {"type": "missing"}
 
 
 def _voicemail_ivr(
@@ -183,34 +235,39 @@ def _voicemail_ivr(
     extensions: list[Extension],
     org_slug: dict[Any, str],
     org_tz: dict[Any, str],
+    targets: Targets,
+    ring_groups: list[RingGroup],
+    queues: list[CallQueue],
 ) -> dict[str, Any]:
     """Voicemail boxes and IVR menus of active organizations
-    (docs/VOICEMAIL_IVR.md §3, §5)."""
+    (docs/VOICEMAIL_IVR.md §3, §5). Fills ``targets`` with the deployable
+    boxes and menus."""
     ext_by_id = {e.id: e for e in extensions}
-    number_of = {e.id: e.number for e in extensions}
     boxes = [
         b
         for b in db.scalars(select(VoicemailBox).order_by(VoicemailBox.created_at)).all()
         if b.is_enabled and b.extension_id in ext_by_id
     ]
     boxes.sort(key=lambda b: ext_by_id[b.extension_id].number)
-    box_numbers = {ext_by_id[b.extension_id].number for b in boxes}
+    targets.box_numbers.update(ext_by_id[b.extension_id].number for b in boxes)
     menus = [
         m
         for m in db.scalars(select(IvrMenu).order_by(IvrMenu.slug)).all()
         if m.is_enabled and m.organization_id in active_orgs
     ]
-    ivr_slug = {m.id: m.slug for m in menus}
+    targets.ivr_slug.update({m.id: m.slug for m in menus})
     prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
     entries: dict[Any, list[IvrEntry]] = {}
     for e in db.scalars(select(IvrEntry).order_by(IvrEntry.digit)).all():
         entries.setdefault(e.menu_id, []).append(e)
+    # Direct dialling from a menu reaches extensions, ring groups and queues.
     numbers_by_org: dict[Any, list[str]] = {}
     for ext in extensions:
         numbers_by_org.setdefault(ext.organization_id, []).append(ext.number)
-
-    def dest(kind: str | None, ext_id: Any, ivr_id: Any) -> dict[str, Any]:
-        return _destination(kind, ext_id, ivr_id, number_of, box_numbers, ivr_slug)
+    for g in ring_groups:
+        numbers_by_org.setdefault(g.organization_id, []).append(g.number)
+    for q in queues:
+        numbers_by_org.setdefault(q.organization_id, []).append(q.number)
 
     def prompt_slug(prompt_id: Any, org_id: Any) -> str | None:
         p = prompts.get(prompt_id) if prompt_id else None
@@ -242,15 +299,10 @@ def _voicemail_ivr(
                 "max_retries": m.max_retries,
                 "allow_direct_dial": m.allow_direct_dial,
                 "direct_dial": sorted(numbers_by_org.get(m.organization_id, [])),
-                "timeout": dest(m.timeout_type, m.timeout_extension_id, m.timeout_ivr_id),
-                "invalid": dest(m.invalid_type, m.invalid_extension_id, m.invalid_ivr_id),
+                "timeout": targets.dest(m, "timeout"),
+                "invalid": targets.dest(m, "invalid"),
                 "entries": [
-                    {
-                        "digit": e.digit,
-                        **dest(
-                            e.destination_type, e.destination_extension_id, e.destination_ivr_id
-                        ),
-                    }
+                    {"digit": e.digit, **targets.dest(e, "destination")}
                     for e in entries.get(m.id, [])
                 ],
             }
@@ -259,22 +311,110 @@ def _voicemail_ivr(
     }
 
 
+def _groups(
+    db: Session,
+    extensions: list[Extension],
+    org_slug: dict[Any, str],
+    targets: Targets,
+    ring_groups: list[RingGroup],
+    queues: list[CallQueue],
+) -> dict[str, Any]:
+    """Enabled ring groups and queues of active organizations with their
+    enabled members (docs/RING_GROUPS_QUEUES.md §2, §3)."""
+    ext_by_id = {e.id: e for e in extensions}
+    rg_members: dict[Any, list[RingGroupMember]] = {}
+    for m in db.scalars(select(RingGroupMember).order_by(RingGroupMember.position)).all():
+        if m.extension_id in ext_by_id:
+            rg_members.setdefault(m.group_id, []).append(m)
+    q_members: dict[Any, list[QueueMember]] = {}
+    for qm in db.scalars(select(QueueMember).order_by(QueueMember.penalty)).all():
+        if qm.extension_id in ext_by_id:
+            q_members.setdefault(qm.queue_id, []).append(qm)
+    prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
+
+    def prompt_slug(prompt_id: Any, org_id: Any) -> str | None:
+        p = prompts.get(prompt_id) if prompt_id else None
+        return p.slug if p is not None and p.organization_id == org_id else None
+
+    def member(ext: Extension) -> dict[str, Any]:
+        return {"endpoint_name": ext.endpoint_name, "number": ext.number, "name": ext.display_name}
+
+    return {
+        "ring_groups": [
+            {
+                "slug": g.slug,
+                "name": g.name,
+                "number": g.number,
+                "organization": org_slug.get(g.organization_id, ""),
+                "strategy": g.strategy,
+                "ring_seconds": g.ring_seconds,
+                "ring_busy_members": g.ring_busy_members,
+                "caller_id_prefix": g.caller_id_prefix,
+                "members": [member(ext_by_id[m.extension_id]) for m in rg_members.get(g.id, [])],
+                "failover": targets.dest(g, "failover"),
+            }
+            for g in ring_groups
+        ],
+        "queues": [
+            {
+                "slug": q.slug,
+                "name": q.name,
+                "number": q.number,
+                "organization": org_slug.get(q.organization_id, ""),
+                "strategy": q.strategy,
+                "member_timeout": q.member_timeout,
+                "retry_seconds": q.retry_seconds,
+                "wrapup_seconds": q.wrapup_seconds,
+                "max_wait_seconds": q.max_wait_seconds,
+                "max_callers": q.max_callers,
+                "join_when_empty": q.join_when_empty,
+                "announce_position": q.announce_position,
+                "announce_frequency": q.announce_frequency,
+                "announcement_prompt": prompt_slug(q.announcement_prompt_id, q.organization_id),
+                "periodic_prompt": prompt_slug(q.periodic_prompt_id, q.organization_id),
+                "periodic_seconds": q.periodic_seconds,
+                "music": q.music,
+                "members": [
+                    {**member(ext_by_id[m.extension_id]), "penalty": m.penalty}
+                    for m in sorted(
+                        q_members.get(q.id, []),
+                        key=lambda m: (m.penalty, ext_by_id[m.extension_id].number),
+                    )
+                ],
+                "failover": targets.dest(q, "failover"),
+            }
+            for q in queues
+        ],
+    }
+
+
+def _pickup_groups(
+    db: Session, active_orgs: set[Any], ext_by_id: dict[Any, Extension]
+) -> dict[Any, list[str]]:
+    """Pickup group slugs per extension id (docs/RING_GROUPS_QUEUES.md §4)."""
+    groups = {
+        g.id: g for g in db.scalars(select(PickupGroup)).all() if g.organization_id in active_orgs
+    }
+    out: dict[Any, list[str]] = {}
+    for m in db.scalars(select(PickupGroupMember)).all():
+        g = groups.get(m.group_id)
+        if g is not None and m.extension_id in ext_by_id:
+            out.setdefault(m.extension_id, []).append(g.slug)
+    for slugs in out.values():
+        slugs.sort()
+    return out
+
+
 def _routing(
     db: Session,
     key: InstallationKey | None,
     active_orgs: set[Any],
     extensions: list[Extension],
-    voicemail: dict[str, Any],
+    targets: Targets,
 ) -> dict[str, Any]:
     """Trunks, routes and time conditions (docs/TRUNKS_ROUTING.md §8)."""
     trunks = db.scalars(select(SipTrunk).order_by(SipTrunk.slug)).all()
     enabled_trunks = {t.id: t for t in trunks if t.is_enabled}
-    # Only enabled extensions of active organizations are deployable destinations.
-    number_of = {e.id: e.number for e in extensions}
-    box_numbers = {str(b["number"]) for b in voicemail.get("voicemail_boxes", [])}
-    menus = db.scalars(select(IvrMenu)).all()
-    deployable_menus = {str(m["slug"]) for m in voicemail.get("ivr_menus", [])}
-    ivr_slug = {m.id: m.slug for m in menus if m.slug in deployable_menus}
     conditions = db.scalars(select(TimeCondition).order_by(TimeCondition.name)).all()
     condition_by_id = {c.id: c for c in conditions}
     inbound = db.scalars(
@@ -306,25 +446,9 @@ def _routing(
             {
                 "did": r.did,
                 "trunk": enabled_trunks[r.trunk_id].slug if r.trunk_id else None,
-                "destination": _destination(
-                    r.destination_type,
-                    r.destination_extension_id,
-                    r.destination_ivr_id,
-                    number_of,
-                    box_numbers,
-                    ivr_slug,
-                ),
+                "destination": targets.dest(r, "destination"),
                 "after_hours": (
-                    _destination(
-                        r.after_hours_type,
-                        r.after_hours_extension_id,
-                        r.after_hours_ivr_id,
-                        number_of,
-                        box_numbers,
-                        ivr_slug,
-                    )
-                    if r.time_condition_id is not None
-                    else None
+                    targets.dest(r, "after_hours") if r.time_condition_id is not None else None
                 ),
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
                 "caller_id_prefix": r.caller_id_prefix,

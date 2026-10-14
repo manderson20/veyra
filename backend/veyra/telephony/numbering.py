@@ -143,3 +143,43 @@ def save_numbering_plan(db: Session, plan: NumberingPlan, updated_by: Any = None
         row.value = value
         row.updated_by = updated_by
     db.flush()
+
+
+# --- the shared number space --------------------------------------------------
+
+
+def used_numbers(db: Session) -> set[str]:
+    """Every number taken by an extension, a ring group or a queue."""
+    from sqlalchemy import select
+
+    from veyra.core.models import CallQueue, Extension, RingGroup
+
+    used: set[str] = set()
+    for column in (Extension.number, RingGroup.number, CallQueue.number):
+        used |= set(db.scalars(select(column)).all())
+    return used
+
+
+def number_owner(db: Session, number: str, *, exclude: tuple[str, Any] | None = None) -> str | None:
+    """What already uses ``number``: ``"extension"``, ``"ring group"`` or
+    ``"queue"``; None when it is free. Takes the advisory lock that serialises
+    concurrent creations of the same number across the three tables.
+    ``exclude`` is ``(kind, id)`` of the object being edited."""
+    from sqlalchemy import select, text
+
+    from veyra.core.models import CallQueue, Extension, RingGroup
+
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"veyra.extension:{number}"}
+    )
+    for kind, model in (
+        ("extension", Extension),
+        ("ring group", RingGroup),
+        ("queue", CallQueue),
+    ):
+        stmt = select(model.id).where(model.number == number)
+        if exclude is not None and exclude[0] == kind:
+            stmt = stmt.where(model.id != exclude[1])
+        if db.scalar(stmt) is not None:
+            return kind
+    return None

@@ -82,7 +82,8 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     max_retries: Mapped[int] = mapped_column(Integer, default=3)
     allow_direct_dial: Mapped[bool] = mapped_column(Boolean, default=True)
     # Where callers go after max_retries timeouts / invalid keys:
-    # extension | voicemail | ivr | hangup, with the matching target column.
+    # extension | voicemail | ivr | ring_group | queue | hangup, with the matching
+    # target column.
     timeout_type: Mapped[str] = mapped_column(String(16), default="hangup")
     timeout_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
@@ -90,12 +91,26 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     timeout_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ivr_menus.id", ondelete="SET NULL")
     )
+    # Menus and groups point at each other; these constraints are added after
+    # both tables exist (use_alter) so the schema can be created in one pass.
+    timeout_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL", use_alter=True)
+    )
+    timeout_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL", use_alter=True)
+    )
     invalid_type: Mapped[str] = mapped_column(String(16), default="hangup")
     invalid_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
     )
     invalid_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ivr_menus.id", ondelete="SET NULL")
+    )
+    invalid_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL", use_alter=True)
+    )
+    invalid_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL", use_alter=True)
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -115,4 +130,10 @@ class IvrEntry(Base):
     )
     destination_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ivr_menus.id", ondelete="SET NULL")
+    )
+    destination_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL")
+    )
+    destination_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL")
     )

@@ -11,10 +11,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1 import destinations
 from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
 from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
@@ -22,7 +23,7 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import InboundRoute, IvrEntry, IvrMenu, Organization, Prompt
+from veyra.core.models import IvrEntry, IvrMenu, Organization, Prompt
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
@@ -167,24 +168,7 @@ def _entries(db: Session, menu_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[IvrE
 
 
 def _uses(db: Session, menu_ids: set[uuid.UUID]) -> dict[Any, int]:
-    counts: dict[Any, int] = {}
-    if not menu_ids:
-        return counts
-    checks = (
-        (InboundRoute.destination_type, InboundRoute.destination_ivr_id),
-        (InboundRoute.after_hours_type, InboundRoute.after_hours_ivr_id),
-        (IvrEntry.destination_type, IvrEntry.destination_ivr_id),
-        (IvrMenu.timeout_type, IvrMenu.timeout_ivr_id),
-        (IvrMenu.invalid_type, IvrMenu.invalid_ivr_id),
-    )
-    for col_type, col_id in checks:
-        for mid, n in db.execute(
-            select(col_id, func.count())
-            .where(col_type == "ivr", col_id.in_(menu_ids))
-            .group_by(col_id)
-        ):
-            counts[mid] = counts.get(mid, 0) + n
-    return counts
+    return destinations.count_uses(db, "ivr", menu_ids)
 
 
 def _outs(db: Session, rows: list[IvrMenu]) -> list[IvrMenuOut]:
@@ -202,28 +186,22 @@ def _outs(db: Session, rows: list[IvrMenu]) -> list[IvrMenuOut]:
     entries = _entries(db, {r.id for r in rows})
     uses = _uses(db, {r.id for r in rows})
     resolver = Resolver(db)
-    refs: list[tuple[str, Any, Any]] = []
+    refs: list[destinations.Ref] = []
     for r in rows:
-        refs.append((r.timeout_type, r.timeout_extension_id, r.timeout_ivr_id))
-        refs.append((r.invalid_type, r.invalid_extension_id, r.invalid_ivr_id))
-        refs += [
-            (e.destination_type, e.destination_extension_id, e.destination_ivr_id)
-            for e in entries[r.id]
-        ]
+        refs.append(destinations.ref_of(r, "timeout"))
+        refs.append(destinations.ref_of(r, "invalid"))
+        refs += [destinations.ref_of(e, "destination") for e in entries[r.id]]
     resolver.load(refs)
     out = []
     for r in rows:
         org = orgs.get(r.organization_id)
         prompt = prompts.get(r.prompt_id) if r.prompt_id else None
         invalid_prompt = prompts.get(r.invalid_prompt_id) if r.invalid_prompt_id else None
-        timeout = resolver.out(r.timeout_type, r.timeout_extension_id, r.timeout_ivr_id)
-        invalid = resolver.out(r.invalid_type, r.invalid_extension_id, r.invalid_ivr_id)
+        timeout = resolver.out_ref(destinations.ref_of(r, "timeout"))
+        invalid = resolver.out_ref(destinations.ref_of(r, "invalid"))
         outs = [
             EntryOut(
-                digit=e.digit,
-                destination=resolver.out(
-                    e.destination_type, e.destination_extension_id, e.destination_ivr_id
-                ),
+                digit=e.digit, destination=resolver.out_ref(destinations.ref_of(e, "destination"))
             )
             for e in entries[r.id]
         ]
@@ -294,32 +272,24 @@ def _unique_slug(db: Session, name: str) -> str:
     return slug
 
 
-def _apply_destination(menu: IvrMenu, prefix: str, d: DestinationIn) -> None:
-    setattr(menu, f"{prefix}_type", d.type)
-    setattr(menu, f"{prefix}_extension_id", d.extension_id)
-    setattr(menu, f"{prefix}_ivr_id", d.ivr_id)
-
-
 def _set_entries(db: Session, menu: IvrMenu, entries: list[EntryIn]) -> None:
     for old in db.scalars(select(IvrEntry).where(IvrEntry.menu_id == menu.id)).all():
         db.delete(old)
     db.flush()
     for e in entries:
-        db.add(
-            IvrEntry(
-                menu_id=menu.id,
-                digit=e.digit,
-                destination_type=e.destination.type,
-                destination_extension_id=e.destination.extension_id,
-                destination_ivr_id=e.destination.ivr_id,
-            )
-        )
+        row = IvrEntry(menu_id=menu.id, digit=e.digit)
+        destinations.apply(row, "destination", e.destination)
+        db.add(row)
     db.flush()
 
 
-def _check_all(db: Session, org_id: uuid.UUID, body: IvrMenuIn) -> None:
+def _check_all(
+    db: Session, org_id: uuid.UUID, body: IvrMenuIn, self_id: uuid.UUID | None = None
+) -> None:
     _check_prompt(db, org_id, body.prompt_id, "prompt_id")
     _check_prompt(db, org_id, body.invalid_prompt_id, "invalid_prompt_id")
+    # A menu may replay itself from a key or a fallback (that is how "press 9
+    # to hear this again" works), so self references are not excluded here.
     check_destination(
         db, org_id, body.timeout_destination, field="timeout_destination", allow_hangup=True
     )
@@ -398,8 +368,8 @@ def create_menu(
         allow_direct_dial=body.allow_direct_dial,
         is_enabled=body.is_enabled,
     )
-    _apply_destination(menu, "timeout", body.timeout_destination)
-    _apply_destination(menu, "invalid", body.invalid_destination)
+    destinations.apply(menu, "timeout", body.timeout_destination)
+    destinations.apply(menu, "invalid", body.invalid_destination)
     db.add(menu)
     try:
         db.flush()
@@ -451,24 +421,12 @@ def update_menu(
         "timeout_seconds": menu.timeout_seconds,
         "max_retries": menu.max_retries,
         "allow_direct_dial": menu.allow_direct_dial,
-        "timeout_destination": {
-            "type": menu.timeout_type,
-            "extension_id": menu.timeout_extension_id,
-            "ivr_id": menu.timeout_ivr_id,
-        },
-        "invalid_destination": {
-            "type": menu.invalid_type,
-            "extension_id": menu.invalid_extension_id,
-            "ivr_id": menu.invalid_ivr_id,
-        },
+        "timeout_destination": destinations.as_input(destinations.ref_of(menu, "timeout")),
+        "invalid_destination": destinations.as_input(destinations.ref_of(menu, "invalid")),
         "entries": [
             {
                 "digit": e.digit,
-                "destination": {
-                    "type": e.destination_type,
-                    "extension_id": e.destination_extension_id,
-                    "ivr_id": e.destination_ivr_id,
-                },
+                "destination": destinations.as_input(destinations.ref_of(e, "destination")),
             }
             for e in current_entries
         ],
@@ -502,23 +460,12 @@ def update_menu(
             details[field] = str(value) if value is not None else None
     for prefix in ("timeout", "invalid"):
         d = getattr(validated, f"{prefix}_destination")
-        before = (
-            getattr(menu, f"{prefix}_type"),
-            getattr(menu, f"{prefix}_extension_id"),
-            getattr(menu, f"{prefix}_ivr_id"),
-        )
-        if before != (d.type, d.extension_id, d.ivr_id):
-            _apply_destination(menu, prefix, d)
+        if destinations.ref_of(menu, prefix) != d.as_ref():
+            destinations.apply(menu, prefix, d)
             details[f"{prefix}_destination"] = d.model_dump(mode="json")
     if "entries" in changes:
-        wanted = [
-            (e.digit, e.destination.type, e.destination.extension_id, e.destination.ivr_id)
-            for e in validated.entries
-        ]
-        have = [
-            (e.digit, e.destination_type, e.destination_extension_id, e.destination_ivr_id)
-            for e in current_entries
-        ]
+        wanted = [(e.digit, *e.destination.as_ref()) for e in validated.entries]
+        have = [(e.digit, *destinations.ref_of(e, "destination")) for e in current_entries]
         if wanted != have:
             _set_entries(db, menu, validated.entries)
             details["keys"] = [e.digit for e in validated.entries]
@@ -546,43 +493,9 @@ def delete_menu(
 ) -> Response:
     menu = _get(db, principal, menu_id, "ivr.write")
     # References from the menu to itself do not keep it alive.
-    routes = db.scalars(
-        select(InboundRoute.did)
-        .where(
-            or_(
-                (InboundRoute.destination_type == "ivr")
-                & (InboundRoute.destination_ivr_id == menu.id),
-                (InboundRoute.after_hours_type == "ivr")
-                & (InboundRoute.after_hours_ivr_id == menu.id),
-            )
-        )
-        .order_by(InboundRoute.did)
-    ).all()
-    menus = db.scalars(
-        select(IvrMenu.name)
-        .where(
-            IvrMenu.id != menu.id,
-            or_(
-                (IvrMenu.timeout_type == "ivr") & (IvrMenu.timeout_ivr_id == menu.id),
-                (IvrMenu.invalid_type == "ivr") & (IvrMenu.invalid_ivr_id == menu.id),
-                IvrMenu.id.in_(
-                    select(IvrEntry.menu_id).where(
-                        IvrEntry.destination_type == "ivr", IvrEntry.destination_ivr_id == menu.id
-                    )
-                ),
-            ),
-        )
-        .order_by(IvrMenu.name)
-    ).all()
-    if routes or menus:
-        what = [f"inbound route {d}" for d in routes] + [f"menu {n}" for n in menus]
-        raise ProblemError(
-            409,
-            "IVR menu in use",
-            f"These point at it: {', '.join(what)}.",
-            code="ivr_in_use",
-            errors=[{"field": "references", "message": w} for w in what],
-        )
+    what = destinations.describe_uses(db, "ivr", menu.id, exclude_self=menu.id)
+    if what:
+        raise destinations.in_use_error("IVR menu in use", "ivr_in_use", what)
     _audit(db, ctx, principal, "ivr.delete", menu, {"slug": menu.slug})
     for e in db.scalars(select(IvrEntry).where(IvrEntry.menu_id == menu.id)).all():
         db.delete(e)
