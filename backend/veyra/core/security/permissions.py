@@ -148,6 +148,16 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin", "technician", "standard_user", "read_only"),
     ),
     PermissionDef(
+        "paging.read",
+        "View paging zones",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef(
+        "paging.write",
+        "Create and edit paging zones",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
         "devices.read",
         "View devices",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),

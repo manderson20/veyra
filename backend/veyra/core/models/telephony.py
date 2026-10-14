@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -42,6 +44,8 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
 
 
 class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """A physical phone registered by MAC address (docs/DEVICE_PROVISIONING.md §2)."""
+
     __tablename__ = "devices"
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -53,7 +57,28 @@ class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     manufacturer: Mapped[str] = mapped_column(String(64))
     model: Mapped[str] = mapped_column(String(64))
     label: Mapped[str | None] = mapped_column(String(200))
-    template_key: Mapped[str | None] = mapped_column(String(128))
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("device_profiles.id", ondelete="SET NULL")
+    )
     primary_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
     )
+    # Extra registrations [{"extension_id": ...}] (line 2 onwards).
+    lines: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    # Line keys replacing the profile's when not null (§4.2).
+    keys: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    # Per-device variable values overriding the profile's.
+    values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    firmware_image_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("firmware_images.id", ondelete="SET NULL")
+    )
+    # Per-device HTTP credential for the provisioning server (§3.2), encrypted
+    # with the installation key. Purpose string: ``device.provisioning_secret:<id>``.
+    provisioning_secret_ciphertext: Mapped[str | None] = mapped_column(Text)
+    provisioning_secret_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_seen_ip: Mapped[str | None] = mapped_column(String(45))
+    last_user_agent: Mapped[str | None] = mapped_column(String(200))
+    last_result: Mapped[str | None] = mapped_column(String(32))
+    firmware_reported: Mapped[str | None] = mapped_column(String(64))
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

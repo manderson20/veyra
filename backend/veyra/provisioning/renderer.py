@@ -224,6 +224,23 @@ def output_filename(pattern: str, mac: str, model: str) -> str:
     return name
 
 
+def coerce_one(var: VariableDef, raw: Any) -> Any:
+    """One value checked against its definition; ``ValueError`` with a short
+    reason ("longer than 80 characters") when it does not fit."""
+    if var.type == "integer":
+        return int(raw)
+    if var.type == "boolean":
+        return raw if isinstance(raw, bool) else str(raw).lower() in ("1", "true", "yes", "on")
+    value = str(raw)
+    if len(value) > var.max_length:
+        raise ValueError(f"longer than {var.max_length} characters")
+    if any(ord(c) < 32 for c in value):
+        raise ValueError("contains control characters")
+    if var.pattern and not re.match(var.pattern, value):
+        raise ValueError("has an invalid format")
+    return value
+
+
 def coerce_values(resolved: ResolvedTemplate, values: Mapping[str, Any]) -> dict[str, Any]:
     errors: list[str] = []
     unknown = set(values) - set(resolved.variables)
@@ -238,20 +255,7 @@ def coerce_values(resolved: ResolvedTemplate, values: Mapping[str, Any]) -> dict
             out[name] = None
             continue
         try:
-            if var.type == "integer":
-                value: Any = int(raw)
-            elif var.type == "boolean":
-                value = (
-                    raw if isinstance(raw, bool) else str(raw).lower() in ("1", "true", "yes", "on")
-                )
-            else:
-                value = str(raw)
-                if len(value) > var.max_length:
-                    raise ValueError(f"longer than {var.max_length} characters")
-                if any(ord(c) < 32 for c in value):
-                    raise ValueError("contains control characters")
-                if var.pattern and not re.match(var.pattern, value):
-                    raise ValueError("has an invalid format")
+            value = coerce_one(var, raw)
         except (ValueError, TypeError) as e:
             errors.append(f"{name} {e}")
             continue

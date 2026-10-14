@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,6 +40,12 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     name: Mapped[str] = mapped_column(String(200))
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Enrollment credential phones use before they have their own
+    # (docs/DEVICE_PROVISIONING.md §3.2); secret encrypted with the installation
+    # key, purpose ``organization.provisioning_secret:<id>``.
+    provisioning_user: Mapped[str | None] = mapped_column(String(63))
+    provisioning_secret_ciphertext: Mapped[str | None] = mapped_column(Text)
+    provisioning_secret_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Site(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
@@ -58,6 +64,8 @@ class Site(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     region: Mapped[str | None] = mapped_column(String(100))
     postal_code: Mapped[str | None] = mapped_column(String(20))
     country: Mapped[str | None] = mapped_column(String(2))
+    # Default emergency caller ID for the site's extensions (docs/TRUNKS_ROUTING.md §7).
+    emergency_caller_id_number: Mapped[str | None] = mapped_column(String(32))
 
 
 class Building(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
