@@ -188,3 +188,10 @@ The owner may take 9b before 9c or the other way round.
   permanent local allow list). Until then the hardware checks use the
   opt-in HTTP provisioning on the voice VLAN (instructions in the 0.11.0
   release message and INSTALLATION.md §4a).
+
+## Addendum (2026-10-14 17:02 UTC)
+
+The owner upgraded dev1 from `~/veyra-release` to **0.11.0-b2315aff97**:
+backups taken, schema current (0011), Asterisk configuration unchanged,
+services restarted, all verify checks OK including `engine-cli` and the
+provisioning checks, old releases pruned to three.
