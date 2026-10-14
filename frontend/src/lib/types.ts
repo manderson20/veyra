@@ -1533,3 +1533,84 @@ export interface CallMetrics {
   current: Omit<CallMetricPoint, "at"> | null;
   available: boolean;
 }
+
+// ---------------------------------------------------------------- calendars and bells (docs/PAGING_RECORDINGS.md §4)
+
+export interface CalendarSub {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  kind: "ical";
+  url_display: string;
+  poll_minutes: number;
+  timezone: string | null;
+  is_enabled: boolean;
+  last_polled_at: string | null;
+  last_status: "ok" | "failed" | null;
+  last_error: string | null;
+  event_count: number;
+  schedules: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarSubInput {
+  organization_id?: string;
+  name?: string;
+  url?: string;
+  poll_minutes?: number;
+  timezone?: string | null;
+  is_enabled?: boolean;
+}
+
+export interface CalendarEventOut {
+  uid: string;
+  summary: string;
+  starts_at: string;
+  ends_at: string | null;
+  all_day: boolean;
+}
+
+export type BellTrigger = "start" | "end" | "both";
+
+export interface BellSchedule {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  calendar_id: string;
+  calendar_name: string;
+  page_id: string;
+  page_name: string;
+  match: string;
+  trigger: BellTrigger;
+  tolerance_seconds: number;
+  all_day_events: boolean;
+  is_enabled: boolean;
+  next_rings: { summary: string; due_at: string; trigger: string }[];
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BellScheduleInput {
+  organization_id?: string;
+  name?: string;
+  calendar_id?: string;
+  page_id?: string;
+  match?: string;
+  trigger?: BellTrigger;
+  tolerance_seconds?: number;
+  all_day_events?: boolean;
+  is_enabled?: boolean;
+}
+
+export interface BellRing {
+  id: string;
+  summary: string;
+  due_at: string;
+  rang_at: string;
+  outcome: "started" | "failed" | "skipped";
+  detail: Record<string, unknown>;
+}
