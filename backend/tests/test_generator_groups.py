@@ -134,9 +134,11 @@ def test_ring_group_ringall_skips_busy_members_and_fails_over():
         " same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])\n"
         " same => n,GotoIf($[${VEYRA_GROUP_DEPTH} > 6]?toodeep)\n"
         " same => n,Set(VEYRA_DIAL=)\n"
-        ' same => n,GotoIf($["${DEVICE_STATE(PJSIP/example-1001)}" : "(INUSE|BUSY|RINGINUSE)"]?m2)\n'
+        ' same => n,GotoIf($["${DEVICE_STATE(PJSIP/example-1001)}" : '
+        '"(INUSE|BUSY|RINGINUSE)"]?m2)\n'
         " same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/example-1001)\n"
-        ' same => n(m2),GotoIf($["${DEVICE_STATE(PJSIP/example-1002)}" : "(INUSE|BUSY|RINGINUSE)"]?dial)\n'
+        ' same => n(m2),GotoIf($["${DEVICE_STATE(PJSIP/example-1002)}" : '
+        '"(INUSE|BUSY|RINGINUSE)"]?dial)\n'
         " same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/example-1002)\n"
         ' same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)\n'
         " same => n,Dial(${VEYRA_DIAL:1},20)\n"
@@ -169,8 +171,8 @@ def test_ring_group_sequential_ring_busy_prefix_and_empty():
     )
     assert "DEVICE_STATE" not in dp
     assert (
-        " same => n(failover),NoOp(Veyra ring group Sales: not answered)\n same => n,Playback(vm-goodbye)"
-        in dp
+        " same => n(failover),NoOp(Veyra ring group Sales: not answered)\n"
+        " same => n,Playback(vm-goodbye)" in dp
     )
     # sequential with the busy check uses the next member as the skip target
     seq = _files(_snapshot(ring_groups=[_group(strategy="sequential")]))["extensions.conf"].content

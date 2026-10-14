@@ -105,7 +105,7 @@ pickup group, no paging, one dialplan context until Milestone 14.
 Device provisioning and custom templates (roadmap row 9, 0.11.0): HTTPS
 delivery of phone configuration from the provisioning templates, device
 registration by MAC address with an extension and a template, and hardware
-validation on the Poly VVX 411/450 the district uses, including the BLF
+validation on the Poly VVX phones in use, including the BLF
 and pickup prefix settings this milestone relies on. Alternatives if
 preferred: the short 6c (Google sign-in), or a queue follow-up (agent
 login/logout codes and a live queue view).

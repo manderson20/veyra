@@ -331,8 +331,7 @@ def test_event_ticket_and_stream(admin, app):
         assert delivered == 1
         # events for somebody else's phone are not delivered
         assert (
-            hub.publish(CallEvent("call.ringing", "ch2", "example-9999", "in", "1", None, now))
-            == 0
+            hub.publish(CallEvent("call.ringing", "ch2", "example-9999", "in", "1", None, now)) == 0
         )
         msg = ws.receive_json()
         assert msg["type"] == "call.ringing" and msg["extension_number"] == "1001"
