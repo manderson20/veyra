@@ -14,7 +14,7 @@ classroom, hallway), and carries:
 
 | Field | Notes |
 |---|---|
-| `number` | Digits only, validated against the numbering plan (§2); unique across the installation |
+| `number` | Digits only, validated against the numbering plan (§2); unique across the installation, shared with ring group and queue numbers ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md)) |
 | `display_name` | Shown in the interface and used as the default caller ID name |
 | `endpoint_name` | The SIP user name, `<organization slug>-<number>` (for example `example-1001`). Generated, globally unique, follows the number when an extension is renumbered |
 | `user_id` | Optional. The user must belong to the same organization |
@@ -50,8 +50,10 @@ collide. `GET /extensions/next-number[?after=]` suggests the lowest free
 number; the "Suggest next free" button in the interface uses it.
 
 **Numbers are unique across the whole installation**, not per
-organization, because every extension is dialled in the single
-`veyra-internal` context until Milestone 14 introduces per-tenant contexts
+organization, and ring groups and queues take their numbers from the same
+space (`409 number_in_use` names what holds the number), because everything
+is dialled in the single `veyra-internal` context until Milestone 14
+introduces per-tenant contexts
 (see [ARCHITECTURE.md](ARCHITECTURE.md) §6, tenant isolation). The
 generator refuses a snapshot with a duplicate number as a second line of
 defence. Changing the plan never touches existing extensions; it applies to

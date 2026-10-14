@@ -25,7 +25,7 @@ the milestones after it.
 ## 2. Files
 
 The installer replaces the package's sample `pjsip.conf`, `extensions.conf`,
-`rtp.conf` and `voicemail.conf` with Veyra-managed stubs (the `pjsip.conf`
+`rtp.conf`, `voicemail.conf` and `queues.conf` with Veyra-managed stubs (the `pjsip.conf`
 stub includes the three generated PJSIP files) (the samples are backed up
 beside them as `*.veyra-backup-<timestamp>`). Each stub only `#tryinclude`s
 the generated files:
@@ -33,11 +33,12 @@ the generated files:
 | Stub in `/etc/asterisk/` | Generated file in `/etc/asterisk/veyra/` | Content | Reload |
 |---|---|---|---|
 | `pjsip.conf` | `pjsip.transports.conf` | UDP, TCP and optional TLS transports from the SIP settings, NAT addresses, local networks | `res_pjsip.so` |
-| `pjsip.conf` | `pjsip.endpoints.conf` | Endpoint, auth and AOR templates; one endpoint, auth and AOR section per enabled extension of an active organization ([EXTENSIONS.md](EXTENSIONS.md)); `mailboxes=<number>@veyra` on the endpoint and AOR of extensions with a voicemail box (MWI). **Sensitive** when it contains SIP secrets: never shown in diffs, stored encrypted in the revision | `res_pjsip.so` |
+| `pjsip.conf` | `pjsip.endpoints.conf` | Endpoint, auth and AOR templates; one endpoint, auth and AOR section per enabled extension of an active organization ([EXTENSIONS.md](EXTENSIONS.md)); `mailboxes=<number>@veyra` on the endpoint and AOR of extensions with a voicemail box (MWI); `named_call_group`/`named_pickup_group` with the extension's pickup groups ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md) §4). **Sensitive** when it contains SIP secrets: never shown in diffs, stored encrypted in the revision | `res_pjsip.so` |
 | `pjsip.conf` | `pjsip.trunks.conf` | Per enabled trunk: endpoint, AOR, identify and, in registration mode, auth and registration sections ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §8). **Sensitive** when it carries a trunk password | `res_pjsip.so` |
-| `extensions.conf` | `extensions.conf` | `[veyra-features]` (`*43` echo test, `*60` speaking clock, `*95` prompt recording, `*97`/`*98` voicemail), `[veyra-internal]` (one `Dial(PJSIP/<endpoint>,30)` per extension, or `Dial(...,<ring_seconds>)` followed by `VoiceMail()` for extensions with a box; includes `veyra-features`, `veyra-outbound`, then `veyra-invalid`), `[veyra-invalid]` (invalid-number handling; kept out of `veyra-internal` because Asterisk matches a context's own patterns before its includes, which would shadow the feature codes), `[veyra-outbound]` and one `[veyra-out-<slug>]` per outbound route, `[veyra-from-trunk]` (shared DIDs) and `[veyra-from-trunk-<slug>]` plus `-fallback` per trunk ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §3-§4), one `[veyra-ivr-<slug>]` per enabled IVR menu ([VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §5) | `pbx_config.so` |
+| `extensions.conf` | `extensions.conf` | `[veyra-features]` (`*43` echo test, `*60` speaking clock, `*95` prompt recording, `*97`/`*98` voicemail, `*8` group pickup, `**<extension>` directed pickup within the organization), `[veyra-internal]` (a `hint` and one `Dial(PJSIP/<endpoint>,30)` per extension, or `Dial(...,<ring_seconds>)` followed by `VoiceMail()` for extensions with a box; ring group and queue numbers jumping to their contexts; includes `veyra-features`, `veyra-outbound`, then `veyra-invalid`), `[veyra-invalid]` (invalid-number handling; kept out of `veyra-internal` because Asterisk matches a context's own patterns before its includes, which would shadow the feature codes), `[veyra-outbound]` and one `[veyra-out-<slug>]` per outbound route, `[veyra-from-trunk]` (shared DIDs) and `[veyra-from-trunk-<slug>]` plus `-fallback` per trunk ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §3-§4), one `[veyra-ivr-<slug>]` per enabled IVR menu ([VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §5), one `[veyra-rg-<slug>]` per ring group and `[veyra-queue-<slug>]` per queue ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md) §2, §3) | `pbx_config.so` |
 | `rtp.conf` | `rtp.conf` | RTP port range, strict RTP | `res_rtp_asterisk.so` |
 | `voicemail.conf` | `voicemail.conf` | `[general]` (formats, limits, sender, `mailcmd` into Veyra's mail queue), `[zonemessages]` per organization time zone, `[veyra]` with one mailbox line per enabled box ([VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §3.2). **Sensitive**: carries PINs in clear | `app_voicemail.so` |
+| `queues.conf` | `queues.conf` | `[general]` and one `[veyra-<slug>]` per enabled queue with its strategy, timers, limits, announcements and static `member =>` lines ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md) §3) | `app_queue.so` |
 
 `/etc/asterisk/veyra` is `2750 veyra:asterisk`: the deployer (user `veyra`)
 writes, Asterisk (group `asterisk`) reads, files are `0640`. `verify.sh`

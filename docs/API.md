@@ -30,16 +30,19 @@ Conventions:
 | Updates | `/updates/policies[/{component}]`, `/updates/check`, `/updates/checks/latest`, `/updates/available`, `/updates/history` |
 | Provisioning | `/provisioning/variables`, `/provisioning/templates[/{key}[/preview,/export]]`, `/provisioning/templates/{validate,import}` |
 | Telephony | `/telephony/engine`, `/telephony/settings`, `/telephony/numbering`, `/telephony/apply` and `/telephony/revisions/{id}/deploy` (both take `{"mode": "now"\|"when_idle"}`), `/telephony/revisions[/{id}]`, `/telephony/revisions/{id}/discard` (see [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md)) |
-| Extensions | `/extensions[/{id}]`, `/extensions/next-number`, `/extensions/{id}/sip-credentials[/rotate]` (see [EXTENSIONS.md](EXTENSIONS.md)) |
+| Extensions | `/extensions[/{id}]` (with the extension's `ring_groups`, `queues` and `pickup_groups`), `/extensions/next-number` (free across extensions, ring groups and queues), `/extensions/{id}/sip-credentials[/rotate]` (see [EXTENSIONS.md](EXTENSIONS.md)) |
 | Calls | `/calls` (active channels), `/calls/originate` (click-to-dial) |
 | Me | `/me/extensions` (own extensions with registration), `/me/preferences` (Companion speed dials and settings), `/me/voicemail` and `/me/voicemail/{id}/pin` (own voicemail boxes and PIN change) |
 | Directory | `/directory?q=` (extensions and people in the caller's organizations; permission `directory.read`, every role) |
 | Events | `/events/ticket` (one-time ticket), WebSocket `/events/calls?ticket=` (call events for the caller's own extensions) |
 | Trunks | `/trunks[/{id}]` (SIP trunks with live status; see [TRUNKS_ROUTING.md](TRUNKS_ROUTING.md)) |
-| Routing | `/routing/inbound[/{id}]` (DIDs; destinations are an extension, a voicemail box or an IVR menu), `/routing/outbound[/{id}]`, `/routing/outbound/order`, `/routing/time-conditions[/{id}]` |
+| Routing | `/routing/inbound[/{id}]` (DIDs; destinations are an extension, a voicemail box, an IVR menu, a ring group or a queue), `/routing/outbound[/{id}]`, `/routing/outbound/order`, `/routing/time-conditions[/{id}]` |
 | Voicemail | `/voicemail[/{id}]` (one box per extension; the PIN is returned once on creation), `/voicemail/{id}/reset-pin` (see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §3) |
 | Prompts | `/prompts[/{id}]` (multipart WAV upload, converted to 8 kHz mono), `/prompts/{id}/audio` (GET streams, PUT replaces), `/prompts/recordings[/{file}/audio\|/adopt]` (recordings made from phones with `*95`; see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §4) |
 | IVR | `/ivr[/{id}]` (menus with key map, fallbacks and `problems`; see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §5) |
+| Ring groups | `/ring-groups[/{id}]` (number, ordered members, strategy, failover destination, `problems`, `in_use_by`; `409 ring_group_in_use`; see [RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md) §2) |
+| Queues | `/queues[/{id}]` (number, agents with penalties, strategy, announcements, limits, failover; `409 queue_in_use`; see [RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md) §3) |
+| Pickup groups | `/pickup-groups[/{id}]` (members that may answer each other's calls with `*8`; see [RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md) §4) |
 | Email delivery | `/system/smtp` (GET/PUT, platform settings permission; password write-only), `/system/smtp/test` (sends a test message to the caller) |
 
 Planned (later milestones): `/devices`, ring groups, queues, call history and others.
