@@ -67,6 +67,8 @@ export const NAV: NavSection[] = [
     { label: "Pickup Groups", href: "/pickup-groups/", icon: "phone", permissions: ["groups.read"] },
     { label: "Paging Zones", href: "/paging-zones/", icon: "megaphone", permissions: ["paging.read"] },
     { label: "Pages", href: "/paging/", icon: "megaphone", permissions: ["paging.read"] },
+    { label: "Calendars", href: "/calendars/", icon: "clock", permissions: ["bells.read"] },
+    { label: "Bell Schedules", href: "/bells/", icon: "clock", permissions: ["bells.read"] },
     ...PLANNED_FEATURES.map((f) => ({
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
     })),

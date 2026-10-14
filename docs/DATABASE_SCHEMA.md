@@ -64,6 +64,10 @@ the two agree. Constraint names follow a fixed naming convention.
 | `pages` | A page over zones (migration `0014`; [PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §1) | unique (`organization_id`, `name`) and (`organization_id`, `slug`); `number` unique (shared number space), `audio_id` (`prompts`, `SET NULL`; NULL = live), `pre_tone`, `repeat`, `priority`, `allowed`, `max_seconds`, `is_enabled` |
 | `page_zones`, `page_members` | Zones of a page; phones allowed to start it (migration `0014`) | composite PKs, `CASCADE` |
 | `page_log` | Every page started (migration `0014`) | `at` indexed; `page_id` (`SET NULL`), `page_name`, `zones` (JSONB slugs), `trigger` (`dial`/`api`/`bell`/`ui`), `actor`, `outcome`, `detail`; pruned after 90 days |
+| `calendars` | iCal subscriptions for bells (migration `0015`; [PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §4) | unique (`organization_id`, `name`); `url_ciphertext` (installation key, purpose `calendar.url:<id>`), `url_display`, `poll_minutes`, `timezone`, `last_polled_at`/`last_status`/`last_error`, `event_count` |
+| `calendar_events` | Cached occurrences of the next 48 hours (migration `0015`) | unique (`calendar_id`, `uid`, `starts_at`); `summary`, `ends_at`, `all_day`; replaced at every poll |
+| `bell_schedules` | Calendar → page (migration `0015`) | unique (`organization_id`, `name`); `calendar_id` and `page_id` `CASCADE`; `match` (glob on the title), `trigger` (`start`/`end`/`both`), `tolerance_seconds`, `all_day_events`, `is_enabled` |
+| `bell_rings` | Ring-once guard and history (migration `0015`) | unique (`schedule_id`, `event_key`); `due_at`, `rang_at`, `outcome`, `detail`; pruned after 90 days |
 
 Tenant-owned tables (`sites`, `buildings`, `departments`, `extensions`,
 `devices`, `device_profiles`, `paging_zones`, `inbound_routes`, `time_conditions`) carry `organization_id` with `ON DELETE RESTRICT`, so deleting an
