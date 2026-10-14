@@ -1172,3 +1172,267 @@ export interface PickupGroupInput {
   description?: string | null;
   members?: string[];
 }
+
+// ---------------------------------------------------------------- devices (docs/DEVICE_PROVISIONING.md)
+
+export interface Site {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  timezone: string | null;
+  street: string | null;
+  city: string | null;
+  region: string | null;
+  postal_code: string | null;
+  country: string | null;
+  /** Default emergency caller ID for the site's extensions. */
+  emergency_caller_id_number: string | null;
+  extensions: number;
+  devices: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SiteInput {
+  organization_id?: string;
+  name?: string;
+  timezone?: string | null;
+  street?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  emergency_caller_id_number?: string | null;
+}
+
+export type PagingKind = "normal" | "priority" | "emergency";
+export type PagingCodec = "G.711Mu" | "G.722";
+
+export interface PagingZone {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  site_id: string | null;
+  site_name: string | null;
+  name: string;
+  slug: string;
+  description: string | null;
+  /** Plain multicast group the speakers listen to. */
+  multicast_address: string;
+  multicast_port: number;
+  /** Poly group paging address, port and group number (1-25). */
+  poly_address: string;
+  poly_port: number;
+  poly_group: number;
+  kind: PagingKind;
+  codec: PagingCodec;
+  is_enabled: boolean;
+  profiles: { id: string; name: string }[];
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PagingZoneInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  site_id?: string | null;
+  multicast_address?: string;
+  multicast_port?: number;
+  poly_address?: string;
+  poly_port?: number;
+  poly_group?: number;
+  kind?: PagingKind;
+  codec?: PagingCodec;
+  is_enabled?: boolean;
+}
+
+export type LineKeyType = "line" | "blf" | "speed_dial" | "page";
+
+export interface LineKey {
+  type: LineKeyType;
+  label: string | null;
+  value: string;
+}
+
+export type PagingRole = "none" | "default" | "priority" | "emergency";
+
+export interface PagingMembership {
+  zone_id: string;
+  subscribed: boolean;
+  transmit: boolean;
+  role: PagingRole;
+  zone_name: string;
+  poly_group: number;
+  kind: PagingKind;
+}
+
+export interface PagingMembershipInput {
+  zone_id: string;
+  subscribed?: boolean;
+  transmit?: boolean;
+  role?: PagingRole;
+}
+
+export interface FirmwareRef {
+  id: string;
+  manufacturer?: string;
+  version: string;
+  filename: string;
+  source?: "device" | "profile";
+}
+
+export interface DeviceProfile {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  site_id: string | null;
+  site_name: string | null;
+  name: string;
+  description: string | null;
+  template_key: string;
+  template_name: string | null;
+  template_abstract: boolean | null;
+  manufacturer: string | null;
+  /** Model → concrete template key the family resolves to. */
+  models: Record<string, string>;
+  values: Record<string, string | number | boolean>;
+  keys: LineKey[];
+  paging: PagingMembership[];
+  firmware: FirmwareRef | null;
+  devices: number;
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceProfileInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  site_id?: string | null;
+  template_key?: string;
+  values?: Record<string, string | number | boolean>;
+  keys?: LineKey[];
+  paging?: PagingMembershipInput[];
+  firmware_image_id?: string | null;
+}
+
+export interface ExtensionRef {
+  id: string;
+  number: string;
+  display_name: string;
+  is_enabled: boolean;
+}
+
+export type DeviceStatus = "never" | "provisioned" | "stale" | "error";
+
+export interface Device {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  site_id: string | null;
+  site_name: string | null;
+  mac_address: string;
+  mac_display: string;
+  manufacturer: string;
+  model: string;
+  label: string | null;
+  profile_id: string | null;
+  profile_name: string | null;
+  template_key: string | null;
+  extension: ExtensionRef | null;
+  lines: ExtensionRef[];
+  keys: LineKey[] | null;
+  values: Record<string, string | number | boolean>;
+  firmware: FirmwareRef | null;
+  firmware_reported: string | null;
+  firmware_state: "unknown" | "up_to_date" | "pending" | "none";
+  is_enabled: boolean;
+  status: DeviceStatus;
+  last_seen_at: string | null;
+  last_seen_ip: string | null;
+  last_user_agent: string | null;
+  last_result: string | null;
+  credential_user: string;
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceInput {
+  organization_id?: string;
+  mac_address?: string;
+  manufacturer?: string;
+  model?: string;
+  label?: string | null;
+  site_id?: string | null;
+  profile_id?: string | null;
+  primary_extension_id?: string | null;
+  lines?: string[];
+  keys?: LineKey[] | null;
+  values?: Record<string, string | number | boolean>;
+  firmware_image_id?: string | null;
+  is_enabled?: boolean;
+}
+
+export interface UnregisteredDevice {
+  mac_address: string;
+  mac_display: string;
+  organization_id: string | null;
+  organization_name: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  last_seen_at: string;
+  requests: number;
+}
+
+export interface DevicePreview {
+  template_key: string | null;
+  files: RenderedFile[];
+  error: string | null;
+  error_code: string | null;
+}
+
+export interface ReprovisionResult {
+  sent: boolean;
+  endpoint: string | null;
+  message: string;
+}
+
+export interface FirmwareImage {
+  id: string;
+  manufacturer: string;
+  models: string[];
+  version: string;
+  filename: string;
+  size: number;
+  sha256: string;
+  notes: string | null;
+  uploaded_by: string | null;
+  url: string;
+  profiles: number;
+  devices: number;
+  created_at: string;
+}
+
+export interface ProvisioningCredential {
+  organization_id: string;
+  username: string | null;
+  url: string;
+  http_enabled: boolean;
+  rotated_at: string | null;
+}
+
+export interface ProvisioningCredentialRotated extends ProvisioningCredential {
+  password: string;
+}
+
+export interface CatalogModels {
+  manufacturers: { name: string; models: string[] }[];
+}
