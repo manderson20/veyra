@@ -55,6 +55,13 @@ class Settings(BaseSettings):
         default_factory=lambda: [Path("/opt/veyra/provisioning/templates")]
     )
 
+    # --- Provisioning (docs/DEVICE_PROVISIONING.md §3) --------------------------
+    # Host name phones reach this server by (the certificate's name); defaults
+    # to the system's fully qualified name.
+    public_host: str | None = None
+    # Plain-HTTP provisioning server block enabled by the installer (opt-in).
+    provisioning_http: bool = False
+
     # --- Sessions & security --------------------------------------------------
     session_ttl_hours: int = 12
     session_idle_minutes: int = 60

@@ -63,7 +63,7 @@ def test_render_poly_inherits_and_escapes(catalog):
     phone = files[1].content
     assert 'reg.1.auth.password="p@ss&lt;&amp;&gt;&#34;"' in phone
     assert 'reg.1.label="Front &lt;Office&gt;"' in phone
-    assert "Model-specific settings for VVX 411" in phone  # child block
+    assert "VVX 411: 12 line keys" in phone  # child block
     assert "device.net.vlanId" not in phone  # vlan_id not set
 
 

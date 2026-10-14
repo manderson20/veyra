@@ -1,0 +1,547 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Structured facts for spec version 2 templates and the rendering of one
+device (docs/DEVICE_PROVISIONING.md §4): lines from the device's extensions,
+line keys with resolved labels, paging groups from the profile's zones, the
+server's addresses and daylight-saving rules."""
+
+from __future__ import annotations
+
+import calendar
+import socket
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from veyra.core.config import Settings
+from veyra.core.models import (
+    Device,
+    DeviceProfile,
+    DeviceProfilePaging,
+    Extension,
+    FirmwareImage,
+    Organization,
+    PagingZone,
+    RingGroup,
+    Site,
+    VoicemailBox,
+)
+from veyra.core.security.crypto import DecryptionError, InstallationKey
+from veyra.provisioning.renderer import (
+    MASK,
+    RenderedFile,
+    TemplateCatalog,
+    model_slug,
+    render,
+)
+from veyra.provisioning.spec import TemplateError
+from veyra.telephony.settings import load_sip_settings
+from veyra.telephony.snapshot import secret_purpose
+
+PICKUP_PREFIX = "**"
+GROUP_PICKUP_CODE = "*8"
+VOICEMAIL_NUMBER = "*97"
+
+
+class ProvisioningError(Exception):
+    """The device cannot be rendered; ``code`` names why (no_profile,
+    no_template, render_error, secret_unreadable)."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+# ----------------------------------------------------------------- daylight saving
+
+
+def _offset_seconds(dt: datetime) -> int:
+    off = dt.utcoffset()
+    return int(off.total_seconds()) if off else 0
+
+
+def _rule(day: datetime, hour: int) -> dict[str, Any]:
+    """A "nth weekday of the month" rule in Poly's terms: ``day_of_week`` 1 =
+    Sunday … 7 = Saturday; ``date`` is the earliest day the nth weekday can
+    fall on; ``last_in_month`` when it is the last such weekday."""
+    nth = (day.day - 1) // 7 + 1
+    days_in_month = calendar.monthrange(day.year, day.month)[1]
+    last = day.day + 7 > days_in_month
+    return {
+        "month": day.month,
+        "week": 5 if last else nth,
+        "day_of_week": day.isoweekday() % 7 + 1,
+        "weekday": day.strftime("%A"),
+        "date": 1 if last else 1 + 7 * (nth - 1),
+        "last_in_month": last,
+        "hour": hour,
+    }
+
+
+def dst_rules(tz_name: str, year: int | None = None) -> dict[str, Any]:
+    """Daylight-saving rules of ``tz_name`` for ``year`` (this year by default)
+    derived from the zone database: ``enabled``, ``standard_offset`` (seconds
+    east of UTC), ``start`` and ``stop`` rules (§4.3). Unknown zones count as
+    UTC without daylight saving."""
+    try:
+        zone = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return {"enabled": False, "standard_offset": 0, "start": None, "stop": None}
+    year = year or datetime.now(zone).year
+    first = datetime(year, 1, 1, 12, tzinfo=zone)
+    transitions: list[tuple[datetime, int, int]] = []
+    prev = first
+    for n in range(1, 367):
+        day = first + timedelta(days=n)
+        if day.year != year:
+            break
+        if _offset_seconds(day) != _offset_seconds(prev):
+            transitions.append((day, _offset_seconds(prev), _offset_seconds(day)))
+        prev = day
+    if not transitions:
+        return {
+            "enabled": False,
+            "standard_offset": _offset_seconds(first),
+            "start": None,
+            "stop": None,
+        }
+    standard = min(_offset_seconds(first), *(t[2] for t in transitions))
+    start = stop = None
+    for day, before, after in transitions:
+        # The change happens between the previous noon and this one: find the
+        # local wall-clock hour (in the old offset) at which it occurred.
+        hour = 2
+        probe = (day - timedelta(days=1)).astimezone(ZoneInfo("UTC"))
+        for h in range(1, 25):
+            t = probe + timedelta(hours=h)
+            if _offset_seconds(t.astimezone(zone)) == after:
+                hour = (t + timedelta(seconds=before)).hour
+                break
+        rule = _rule(day, hour)
+        if after > before:
+            start = rule
+        else:
+            stop = rule
+    return {
+        "enabled": start is not None and stop is not None,
+        "standard_offset": standard,
+        "start": start,
+        "stop": stop,
+    }
+
+
+# ----------------------------------------------------------------- facts
+
+
+@dataclass
+class DeviceContext:
+    device: Device
+    profile: DeviceProfile
+    organization: Organization
+    site: Site | None
+    template_key: str
+
+
+def _host(settings: Settings, host: str | None) -> str:
+    return (host or settings.public_host or socket.getfqdn() or "localhost").strip()
+
+
+def provisioning_url(settings: Settings, host: str | None = None, scheme: str = "https") -> str:
+    return f"{scheme}://{_host(settings, host)}/provisioning/"
+
+
+def _secret(key: InstallationKey | None, token: str | None, purpose: str, what: str) -> str | None:
+    if not token:
+        return None
+    if key is None:
+        raise ProvisioningError(
+            "secret_unreadable", f"the installation key is not available ({what})"
+        )
+    try:
+        return key.decrypt(token, purpose)
+    except DecryptionError as e:
+        raise ProvisioningError("secret_unreadable", f"{what} cannot be read: {e}") from e
+
+
+def _line(
+    index: int, ext: Extension, key: InstallationKey | None, boxes: set[uuid.UUID], mask: bool
+) -> dict[str, Any]:
+    secret = (
+        MASK
+        if mask
+        else _secret(
+            key,
+            ext.sip_secret_ciphertext,
+            secret_purpose(ext.id),
+            f"the SIP secret of {ext.number}",
+        )
+    )
+    return {
+        "index": index,
+        "extension_id": str(ext.id),
+        "extension_number": ext.number,
+        "sip_username": ext.endpoint_name,
+        "sip_password": secret or "",
+        "display_name": ext.display_name,
+        "caller_id_name": ext.caller_id_name,
+        "caller_id_number": ext.caller_id_number or ext.number,
+        "label": ext.display_name,
+        "voicemail": ext.id in boxes,
+        "voicemail_number": VOICEMAIL_NUMBER,
+    }
+
+
+def _keys(
+    db: Session, org_id: uuid.UUID, raw: list[dict[str, Any]], zones: dict[str, PagingZone]
+) -> list[dict[str, Any]]:
+    numbers = {k.get("value") for k in raw if k.get("type") in ("blf", "speed_dial")}
+    names: dict[str, str] = {}
+    if numbers:
+        for e in db.scalars(
+            select(Extension).where(
+                Extension.organization_id == org_id, Extension.number.in_(numbers)
+            )
+        ):
+            names[e.number] = e.display_name
+        for g in db.scalars(
+            select(RingGroup).where(
+                RingGroup.organization_id == org_id, RingGroup.number.in_(numbers)
+            )
+        ):
+            names.setdefault(g.number, g.name)
+    out: list[dict[str, Any]] = []
+    blf = speed = 0
+    for i, k in enumerate(raw, 1):
+        kind = str(k.get("type") or "")
+        value = str(k.get("value") or "")
+        label = k.get("label") or None
+        entry: dict[str, Any] = {"index": i, "type": kind, "value": value, "label": label}
+        if kind == "blf":
+            blf += 1
+            entry["blf_index"] = blf
+            entry["label"] = label or names.get(value, value)
+        elif kind == "speed_dial":
+            speed += 1
+            entry["speed_dial_index"] = speed
+            entry["label"] = label or names.get(value, value)
+        elif kind == "page":
+            zone = zones.get(value)
+            if zone is None:
+                continue  # zone removed since the key was saved
+            entry["group"] = zone.poly_group
+            entry["label"] = label or zone.name
+        elif kind == "line":
+            entry["label"] = label or f"Line {value}"
+        out.append(entry)
+    return out
+
+
+def _paging(db: Session, profile: DeviceProfile) -> dict[str, Any]:
+    rows = db.execute(
+        select(DeviceProfilePaging, PagingZone)
+        .join(PagingZone, PagingZone.id == DeviceProfilePaging.zone_id)
+        .where(DeviceProfilePaging.profile_id == profile.id, PagingZone.is_enabled.is_(True))
+        .order_by(PagingZone.poly_group)
+    ).all()
+    groups = []
+    roles: dict[str, int | None] = {"default": None, "priority": None, "emergency": None}
+    for m, z in rows:
+        groups.append(
+            {
+                "number": z.poly_group,
+                "label": z.name,
+                "slug": z.slug,
+                "subscribed": bool(m.subscribed),
+                "transmit": bool(m.transmit),
+                "kind": z.kind,
+                "multicast_address": z.multicast_address,
+                "multicast_port": z.multicast_port,
+            }
+        )
+        if m.role in roles and roles[m.role] is None:
+            roles[m.role] = z.poly_group
+    for _m, z in rows:
+        if z.kind == "emergency" and roles["emergency"] is None:
+            roles["emergency"] = z.poly_group
+        if z.kind == "priority" and roles["priority"] is None:
+            roles["priority"] = z.poly_group
+    first = rows[0][1] if rows else None
+    return {
+        "enabled": bool(rows),
+        "address": first.poly_address if first else None,
+        "port": first.poly_port if first else None,
+        "codec": first.codec if first else "G.711Mu",
+        "groups": groups,
+        "default_group": roles["default"] or (groups[0]["number"] if groups else None),
+        "priority_group": roles["priority"],
+        "emergency_group": roles["emergency"],
+    }
+
+
+def resolve_device(catalog: TemplateCatalog, db: Session, device: Device) -> DeviceContext:
+    """The profile, organization, site and concrete template of a device."""
+    from veyra.api.v1.device_common import model_templates  # local import: API helper
+
+    if device.profile_id is None:
+        raise ProvisioningError("no_profile", "the device has no profile")
+    profile = db.get(DeviceProfile, device.profile_id)
+    if profile is None:
+        raise ProvisioningError("no_profile", "the device's profile is missing")
+    rec = catalog.records.get(profile.template_key)
+    if rec is None:
+        raise ProvisioningError("no_template", f"template {profile.template_key} is missing")
+    if rec.manifest.template.abstract:
+        found = model_templates(catalog, profile.template_key, device.model)
+        if not found:
+            raise ProvisioningError(
+                "no_template", f"no template under {profile.template_key} supports {device.model}"
+            )
+        template_key = found[0]
+    elif device.model not in rec.manifest.template.models:
+        raise ProvisioningError(
+            "no_template", f"template {profile.template_key} does not support {device.model}"
+        )
+    else:
+        template_key = profile.template_key
+    org = db.get(Organization, device.organization_id)
+    assert org is not None
+    site = db.get(Site, device.site_id) if device.site_id else None
+    return DeviceContext(device, profile, org, site, template_key)
+
+
+def build_facts(
+    db: Session,
+    settings: Settings,
+    ctx: DeviceContext,
+    *,
+    key: InstallationKey | None,
+    host: str | None = None,
+    mask_secrets: bool = False,
+    scheme: str = "https",
+    values: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    device, profile, org = ctx.device, ctx.profile, ctx.organization
+    values = values or {}
+    ext_ids = [device.primary_extension_id] if device.primary_extension_id else []
+    for line in device.lines:
+        try:
+            ext_ids.append(uuid.UUID(str(line.get("extension_id"))))
+        except (ValueError, AttributeError):
+            continue
+    exts = (
+        {e.id: e for e in db.scalars(select(Extension).where(Extension.id.in_(ext_ids)))}
+        if ext_ids
+        else {}
+    )
+    boxes = (
+        set(
+            db.scalars(
+                select(VoicemailBox.extension_id).where(
+                    VoicemailBox.extension_id.in_(ext_ids), VoicemailBox.is_enabled.is_(True)
+                )
+            )
+        )
+        if ext_ids
+        else set()
+    )
+    lines: list[dict[str, Any]] = []
+    for ext_id in ext_ids:
+        ext = exts.get(ext_id)
+        if ext is None or not ext.is_enabled:
+            continue
+        lines.append(_line(len(lines) + 1, ext, key, boxes, mask_secrets))
+    zones = {
+        z.slug: z
+        for z in db.scalars(select(PagingZone).where(PagingZone.organization_id == org.id))
+    }
+    raw_keys = device.keys if device.keys is not None else profile.keys
+    keys = _keys(db, org.id, list(raw_keys or []), zones)
+    paging = _paging(db, profile)
+    sip = load_sip_settings(db)
+    transport = str(values.get("sip_transport") or "UDPOnly")
+    sip_port = sip.tls_port if transport == "TLS" and sip.tls_enabled else sip.udp_port
+    sip_host = str(
+        values.get("sip_server") or sip.external_signaling_address or _host(settings, host)
+    )
+    tz = (ctx.site.timezone if ctx.site and ctx.site.timezone else None) or org.timezone or "UTC"
+    tz = str(values.get("timezone") or tz)
+    fw_id = device.firmware_image_id or profile.firmware_image_id
+    fw = db.get(FirmwareImage, fw_id) if fw_id else None
+    base = f"{scheme}://{_host(settings, host)}"
+    credential = (
+        MASK
+        if mask_secrets
+        else _secret(
+            key,
+            device.provisioning_secret_ciphertext,
+            f"device.provisioning_secret:{device.id}",
+            "the device credential",
+        )
+    )
+    return {
+        "device": {
+            "mac": device.mac_address,
+            "mac_upper": device.mac_address.upper(),
+            "model": device.model,
+            "model_slug": model_slug(device.model),
+            "manufacturer": device.manufacturer,
+            "label": device.label,
+            "site_name": ctx.site.name if ctx.site else None,
+            "site_slug": ctx.site.slug if ctx.site else None,
+            "credential_user": f"dev-{device.mac_address}" if credential else None,
+            "credential_password": credential,
+        },
+        "organization": {"name": org.name, "slug": org.slug},
+        "lines": lines,
+        "keys": keys,
+        "paging": paging,
+        "server": {
+            "sip_host": sip_host,
+            "sip_port": sip_port,
+            "transport": transport,
+            "provisioning_url": f"{base}/provisioning/",
+            "provisioning_server_type": "HTTPS" if scheme == "https" else "HTTP",
+            "ntp_server": str(values.get("ntp_server") or "pool.ntp.org"),
+            "timezone": tz,
+            "dst": dst_rules(tz),
+            "pickup_prefix": PICKUP_PREFIX,
+            "group_pickup_code": GROUP_PICKUP_CODE,
+            "voicemail_number": VOICEMAIL_NUMBER,
+            "firmware_url": f"{base}/provisioning/firmware/{fw.id}/{fw.filename}" if fw else None,
+            "firmware_version": fw.version if fw else None,
+        },
+        "features": {
+            "voicemail": bool(lines) and bool(lines[0]["voicemail"]),
+            "blf": any(k["type"] == "blf" for k in keys),
+            "paging": paging["enabled"],
+        },
+    }
+
+
+def render_device(
+    db: Session,
+    settings: Settings,
+    catalog: TemplateCatalog,
+    device: Device,
+    *,
+    key: InstallationKey | None,
+    host: str | None = None,
+    mask_secrets: bool = False,
+    scheme: str = "https",
+) -> list[RenderedFile]:
+    """Every file the device's template produces, with the profile's values,
+    the device's overrides and the facts (§4.1). Raises ``ProvisioningError``
+    or ``TemplateError``."""
+    ctx = resolve_device(catalog, db, device)
+    resolved = catalog.resolve(ctx.template_key)
+    values: dict[str, Any] = {**dict(ctx.profile.values), **dict(device.values)}
+    facts = build_facts(
+        db,
+        settings,
+        ctx,
+        key=key,
+        host=host,
+        mask_secrets=mask_secrets,
+        scheme=scheme,
+        values=values,
+    )
+    line1 = facts["lines"][0] if facts["lines"] else None
+    core = {
+        "extension_number": line1["extension_number"] if line1 else "0",
+        "sip_username": line1["sip_username"] if line1 else "none",
+        "sip_password": line1["sip_password"] if line1 else "none",
+        "sip_server": facts["server"]["sip_host"],
+        "sip_port": facts["server"]["sip_port"],
+        "display_name": line1["display_name"] if line1 else (device.label or ""),
+        "caller_id": line1["caller_id_name"] if line1 else None,
+        "timezone": facts["server"]["timezone"],
+        "ntp_server": facts["server"]["ntp_server"],
+        "provisioning_url": facts["server"]["provisioning_url"],
+    }
+    for name, value in core.items():
+        if values.get(name) in (None, ""):
+            values[name] = value
+    try:
+        return render(
+            resolved,
+            values,
+            mac=device.mac_address,
+            model=device.model,
+            mask_secrets=mask_secrets,
+            facts=facts,
+        )
+    except TemplateError as e:
+        raise ProvisioningError("render_error", "; ".join(e.errors)) from e
+
+
+def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]:
+    """Facts for a preview without a device: one line from the sample values,
+    no keys, paging off, the server from the values (§7 template editor)."""
+    tz = str(values.get("timezone") or "UTC")
+    line = {
+        "index": 1,
+        "extension_id": None,
+        "extension_number": str(values.get("extension_number") or "1001"),
+        "sip_username": str(values.get("sip_username") or "example-1001"),
+        "sip_password": str(values.get("sip_password") or MASK),
+        "display_name": str(values.get("display_name") or "Sample Phone"),
+        "caller_id_name": values.get("caller_id"),
+        "caller_id_number": str(values.get("extension_number") or "1001"),
+        "label": str(values.get("display_name") or "Sample Phone"),
+        "voicemail": True,
+        "voicemail_number": VOICEMAIL_NUMBER,
+    }
+    host = str(values.get("sip_server") or "pbx.example.invalid")
+    return {
+        "device": {
+            "mac": mac,
+            "mac_upper": mac.upper(),
+            "model": model,
+            "model_slug": model_slug(model),
+            "manufacturer": "",
+            "label": "Sample device",
+            "site_name": None,
+            "site_slug": None,
+            "credential_user": f"dev-{mac}",
+            "credential_password": MASK,
+        },
+        "organization": {"name": "Sample organization", "slug": "sample"},
+        "lines": [line],
+        "keys": [],
+        "paging": {
+            "enabled": False,
+            "address": None,
+            "port": None,
+            "codec": "G.711Mu",
+            "groups": [],
+            "default_group": None,
+            "priority_group": None,
+            "emergency_group": None,
+        },
+        "server": {
+            "sip_host": host,
+            "sip_port": int(values.get("sip_port") or 5060),
+            "transport": str(values.get("sip_transport") or "UDPOnly"),
+            "provisioning_url": str(
+                values.get("provisioning_url") or f"https://{host}/provisioning/"
+            ),
+            "provisioning_server_type": "HTTPS",
+            "ntp_server": str(values.get("ntp_server") or "pool.ntp.org"),
+            "timezone": tz,
+            "dst": dst_rules(tz),
+            "pickup_prefix": PICKUP_PREFIX,
+            "group_pickup_code": GROUP_PICKUP_CODE,
+            "voicemail_number": VOICEMAIL_NUMBER,
+            "firmware_url": None,
+            "firmware_version": None,
+        },
+        "features": {"voicemail": True, "blf": False, "paging": False},
+    }
+
+
+def master_filename(mac: str) -> str:
+    return f"{mac}.cfg"
