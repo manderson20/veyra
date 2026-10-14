@@ -395,3 +395,21 @@ def test_is_open_respects_zone_ranges_and_holidays():
     )
     assert not routing.is_open(ranges, [], tz, datetime(2026, 10, 11, 9, 0, tzinfo=ZoneInfo(tz)))
     assert not routing.is_open(ranges, ["10-12"], tz, monday_morning)
+
+
+def test_shared_extensions_get_more_contacts_and_the_notify_file_is_managed():
+    snap = _snapshot()
+    snap["extensions"][0]["max_contacts"] = 2
+    files = _files(snap)
+    ep = files["pjsip.endpoints.conf"].content
+    assert "[example-1001](veyra-aor)\nmax_contacts=2\n" in ep
+    plain = _files(_snapshot())["pjsip.endpoints.conf"].content
+    assert "max_contacts" not in plain.split("[example-1001](veyra-aor)")[1]
+    notify = files["pjsip_notify.conf"]
+    assert not notify.sensitive and generator.FILE_NOTIFY in generator.MANAGED_FILES
+    assert generator.RELOAD_SCOPES[generator.FILE_NOTIFY] == "res_pjsip_notify.so"
+    assert "[veyra-check-config]\nEvent=>check-sync;reboot=false" in notify.content
+    assert "[veyra-reboot]\nEvent=>check-sync;reboot=true" in notify.content
+    snap["extensions"][0]["max_contacts"] = 99
+    with pytest.raises(generator.GenerationError, match="max_contacts"):
+        generator.generate(snap)

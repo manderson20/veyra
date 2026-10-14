@@ -63,6 +63,24 @@ else
     check schema fail "Database schema is not current: $out"
 fi
 
+# --- phone provisioning (Milestone 9, docs/DEVICE_PROVISIONING.md §3)
+if grep -qs "location /provisioning/" /etc/nginx/sites-available/veyra.conf; then
+    check prov-location pass "NGINX serves /provisioning/"
+else
+    check prov-location fail "NGINX site has no /provisioning/ location (re-run the installer)"
+fi
+code="$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/provisioning/000000000000.cfg 2>/dev/null || echo 000)"
+[[ "$code" == "401" ]] && check prov-auth pass "provisioning requires credentials (401)" \
+    || check prov-auth fail "https://127.0.0.1/provisioning/000000000000.cfg answered $code (expected 401)"
+if grep -qs '^VEYRA_PROVISIONING_HTTP=1' "$VEYRA_ETC/veyra.env"; then
+    check prov-http warn "phone provisioning is also served over plain HTTP: SIP secrets cross the network unencrypted"
+else
+    check prov-http pass "provisioning over HTTPS only"
+fi
+[[ "$(perm "$VEYRA_DATA/firmware")" == "755 veyra:veyra" ]] \
+    && check firmware-dir pass "755 veyra:veyra" \
+    || check firmware-dir fail "$VEYRA_DATA/firmware is $(perm "$VEYRA_DATA/firmware") (expected 755 veyra:veyra)"
+
 # --- exposure
 listeners="$(ss -H -ltn 2>/dev/null | awk '{print $4}')"
 exposed() { # port → prints non-loopback listeners
@@ -90,7 +108,7 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm /etc/asterisk/veyra)" == "2750 veyra:asterisk" ]] \
         && check engine-include-dir pass "2750 veyra:asterisk" \
         || check engine-include-dir fail "/etc/asterisk/veyra is $(perm /etc/asterisk/veyra) (expected 2750 veyra:asterisk)"
-    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf; do
+    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf; do
         grep -qs "Managed by Veyra" "/etc/asterisk/$f" \
             && check "engine-stub:$f" pass "Veyra-managed" \
             || check "engine-stub:$f" fail "/etc/asterisk/$f is not the Veyra-managed stub"
@@ -114,6 +132,12 @@ if [[ "$ENGINE" == "asterisk" ]]; then
             check "engine-app:$app" fail "the $app application is not registered in Asterisk"
         fi
     done
+    # Device management (Milestone 9): the service account sends NOTIFY through the CLI.
+    if runuser -u veyra -- asterisk -rx "core show version" 2>/dev/null | grep -q "Asterisk"; then
+        check engine-cli pass "service account can use the Asterisk CLI (control socket group asterisk)"
+    else
+        check engine-cli fail "the veyra service account cannot use the Asterisk CLI (asterisk.conf: astctlpermissions = 0660, astctlgroup = asterisk, then restart Asterisk); phones cannot be told to reprovision"
+    fi
     if asterisk -rx "moh show classes" 2>/dev/null | grep -q "Class: default"; then
         check engine-moh pass "music-on-hold class default is loaded"
     else

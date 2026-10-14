@@ -11,8 +11,11 @@ VEYRA_DATA="${VEYRA_DATA:-/var/lib/veyra}"
 VEYRA_LOG_DIR="${VEYRA_LOG_DIR:-/var/log/veyra}"
 VEYRA_BACKUP_DIR="${VEYRA_BACKUP_DIR:-/var/backups/veyra}"
 # Optional site settings for the installer, kept across upgrades. Known keys:
-#   VEYRA_PUBLIC_HOST  the host name users type for this server (Companion
-#                      host permission and policy, docs/COMPANION.md §5.1)
+#   VEYRA_PUBLIC_HOST  the host name users and phones type for this server
+#                      (Companion host permission and policy, docs/COMPANION.md
+#                      §5.1; provisioning URL, docs/DEVICE_PROVISIONING.md §3)
+#   VEYRA_PROVISIONING_HTTP  1 to also serve phone provisioning over plain HTTP
+#                      (opt-in with a warning; docs/DEVICE_PROVISIONING.md §3.3)
 # shellcheck disable=SC1091
 [[ -f "/etc/veyra/installer.conf" ]] && source "/etc/veyra/installer.conf"
 VEYRA_USER="veyra"
