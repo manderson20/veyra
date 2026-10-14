@@ -346,3 +346,65 @@ def test_enrollment_credential_rotation_and_scoping(admin, app):
         "poly_group": 1,
     }
     assert tech.post(ZONES, json=zone).status_code == 403  # technicians read paging zones only
+
+
+def test_template_editor_customize_save_and_delete(admin):
+    org = _org(admin)
+    base = "/api/v1/provisioning/templates"
+    # Official templates are read-only; Customize creates an editable child.
+    r = admin.put(f"{base}/poly.vvx.411", json={"manifest": {}, "sources": {}})
+    assert r.status_code == 409 and r.json()["code"] == "template_read_only"
+    r = admin.post(
+        f"{base}/poly.vvx.base/customize",
+        json={"key": "local.poly.vvx", "name": "Our VVX settings", "organization_id": org["id"]},
+    )
+    assert r.status_code == 201, r.text
+    t = r.json()
+    assert t["parent"] == "poly.vvx.base" and t["abstract"] is True and t["source"] == "local"
+    assert t["validation"] == [] and "phone.cfg.j2" in {f["source"] for f in t["files"]}
+    # A customized family gets its own model templates under it.
+    keys = {x["key"]: x for x in admin.get(base).json()["items"]}
+    assert keys["local.poly.vvx.411"]["parent"] == "local.poly.vvx"
+    assert keys["local.poly.vvx.450"]["models"] == ["VVX 450"]
+    assert keys["local.poly.vvx.411"]["models"] == ["VVX 411", "VVX 410"]
+    r = admin.post(f"{base}/poly.vvx.base/customize", json={"key": "local.poly.vvx", "name": "x"})
+    assert r.status_code == 409
+    # Save with a changed source; a bad source is rejected.
+    export = admin.get(f"{base}/local.poly.vvx/export").json()
+    sources = dict(export["sources"])
+    sources["phone.cfg.j2"] = (
+        '{% extends "poly.vvx.base/phone.cfg.j2" %}{% block model_settings %}'
+        '  <up up.oneTouchVoiceMail="1" />{% endblock %}'
+    )
+    r = admin.put(
+        f"{base}/local.poly.vvx", json={"manifest": export["manifest"], "sources": sources}
+    )
+    assert r.status_code == 200, r.text
+    # Validation runs on concrete templates (families render only through a child).
+    r = admin.post(
+        f"{base}/poly.vvx.411/customize",
+        json={"key": "local.poly.411", "name": "Our 411", "organization_id": org["id"]},
+    )
+    assert r.status_code == 201, r.text
+    export411 = admin.get(f"{base}/local.poly.411/export").json()
+    bad = dict(export411["sources"])
+    bad["phone.cfg.j2"] = (
+        "{% extends 'poly.vvx.411/phone.cfg.j2' %}"
+        "{% block model_settings %}{{ undeclared }}{% endblock %}"
+    )
+    r = admin.put(
+        f"{base}/local.poly.411", json={"manifest": export411["manifest"], "sources": bad}
+    )
+    assert r.status_code == 422 and "undeclared" in r.text
+    assert admin.delete(f"{base}/local.poly.411").status_code == 204
+    # A profile on the family resolves to the official models.
+    profile = _profile(admin, org["id"], template="local.poly.vvx")
+    assert set(profile["models"]) == {"VVX 410", "VVX 411", "VVX 450"}
+    r = admin.delete(f"{base}/local.poly.vvx")
+    assert r.status_code == 409 and r.json()["code"] == "template_in_use"
+    admin.delete(f"{PROFILES}/{profile['id']}")
+    assert admin.delete(f"{base}/local.poly.vvx").status_code == 409  # children depend on it
+    assert admin.delete(f"{base}/local.poly.vvx.411").status_code == 204
+    assert admin.delete(f"{base}/local.poly.vvx.450").status_code == 204
+    assert admin.delete(f"{base}/local.poly.vvx").status_code == 204
+    assert admin.get(f"{base}/local.poly.vvx").status_code == 404

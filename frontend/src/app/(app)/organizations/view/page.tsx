@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { timeZones } from "@/lib/timezones";
 import type { Organization } from "@/lib/types";
+import { ProvisioningCredentialCard } from "@/components/organizations/ProvisioningCredentialCard";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useSession } from "@/hooks/useSession";
@@ -95,9 +96,10 @@ function OrganizationView() {
             <dt>Created</dt><dd>{formatDateTime(o.created_at)}</dd>
           </dl>
           <div style={{ marginTop: 16 }}>
-            <Callout tone="neutral">Sites, buildings and departments will be managed here in a later milestone.</Callout>
+            <Callout tone="neutral">Sites are managed under Directory → Sites.</Callout>
           </div>
         </Card>
+        {can("devices.read") ? <ProvisioningCredentialCard organizationId={o.id} editable={can("devices.write")} /> : null}
       </div>
     </div>
   );

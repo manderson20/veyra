@@ -30,8 +30,6 @@ export interface PlannedFeature {
 }
 
 export const PLANNED_FEATURES: PlannedFeature[] = [
-  { key: "devices", label: "Devices", icon: "device", milestone: 9,
-    summary: "Register desk phones by MAC address, assign provisioning templates and extensions." },
   { key: "paging", label: "Paging", icon: "megaphone", milestone: null,
     summary: "Paging groups, SIP paging endpoints (such as Algo speakers), multicast paging and intercom. " +
       "SIP paging is not a life-safety notification system." },
@@ -51,6 +49,7 @@ export const NAV: NavSection[] = [
   ] },
   { id: "directory", label: "Directory", items: [
     { label: "Organizations", href: "/organizations/", icon: "building", permissions: ["organizations.read"] },
+    { label: "Sites", href: "/sites/", icon: "building", permissions: ["organizations.read"] },
     { label: "Users", href: "/users/", icon: "users", permissions: ["users.read"] },
   ] },
   { id: "telephony", label: "Telephony", collapsible: true, items: [
@@ -66,12 +65,16 @@ export const NAV: NavSection[] = [
     { label: "Ring Groups", href: "/ring-groups/", icon: "group", permissions: ["groups.read"] },
     { label: "Call Queues", href: "/queues/", icon: "queue", permissions: ["groups.read"] },
     { label: "Pickup Groups", href: "/pickup-groups/", icon: "phone", permissions: ["groups.read"] },
+    { label: "Paging Zones", href: "/paging-zones/", icon: "megaphone", permissions: ["paging.read"] },
     ...PLANNED_FEATURES.map((f) => ({
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
     })),
   ] },
   { id: "provisioning", label: "Provisioning", items: [
+    { label: "Devices", href: "/devices/", icon: "device", permissions: ["devices.read"] },
+    { label: "Device Profiles", href: "/device-profiles/", icon: "settings", permissions: ["devices.read"] },
     { label: "Templates", href: "/provisioning/", icon: "template", permissions: ["provisioning.read"] },
+    { label: "Firmware", href: "/firmware/", icon: "update", permissions: ["provisioning.read"] },
   ] },
   { id: "modules", label: "Modules", items: [] },
   { id: "system", label: "System", items: [

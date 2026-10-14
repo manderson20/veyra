@@ -5,12 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { CopyButton } from "@/components/common/CopyButton";
 import { TEMPLATE_SOURCE } from "@/components/common/labels";
-import { ImportTemplateDialog } from "@/components/provisioning/ImportTemplateDialog";
+import { CustomizeDialog } from "@/components/provisioning/CustomizeDialog";
+import { TemplateEditor } from "@/components/provisioning/TemplateEditor";
 import {
   Badge,
   Button,
   Callout,
   Card,
+  ConfirmDialog,
   DataTable,
   Dialog,
   ErrorState,
@@ -44,7 +46,10 @@ function TemplateView() {
   const [tab, setTab] = useState("overview");
   const [exportText, setExportText] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [copyText, setCopyText] = useState<string | null>(null);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (!key) return <ErrorState title="No template selected" error={{ message: "Open a template from the list." }} />;
   if (detail.error) return <ErrorState title="Could not load template" error={detail.error} onRetry={detail.reload} />;
@@ -64,21 +69,15 @@ function TemplateView() {
       setExportText("");
     }
   };
-  const openLocalCopy = async () => {
+  const remove = async () => {
+    setDeleteBusy(true);
+    setDeleteError(null);
     try {
-      const doc = await fetchExport();
-      const manifest = doc.manifest as { template: Record<string, unknown> };
-      manifest.template = {
-        ...manifest.template,
-        key: `${t.key}-local`,
-        name: `${t.name} (local)`,
-        parent: t.key,
-        parent_version: t.version,
-        abstract: t.abstract,
-      };
-      setCopyText(JSON.stringify(doc, null, 2));
+      await api.del(`/provisioning/templates/${encodeURIComponent(t.key)}`);
+      router.push("/provisioning/");
     } catch (err) {
-      setExportError(errorMessage(err));
+      setDeleteError(errorMessage(err));
+      setDeleteBusy(false);
     }
   };
 
@@ -115,7 +114,8 @@ function TemplateView() {
         actions={
           <>
             <Button icon="download" onClick={openExport}>Export</Button>
-            {can("provisioning.write") ? <Button icon="copy" onClick={openLocalCopy}>Create local copy</Button> : null}
+            {can("provisioning.write") ? <Button icon="copy" onClick={() => setCustomizeOpen(true)}>Customize</Button> : null}
+            {can("provisioning.write") && t.source === "local" ? <Button variant="ghost" icon="trash" onClick={() => setDeleting(true)}>Delete</Button> : null}
           </>
         }
       />
@@ -134,6 +134,7 @@ function TemplateView() {
           { id: "overview", label: "Overview" },
           { id: "variables", label: `Variables (${t.variables.length})` },
           { id: "preview", label: "Preview" },
+          ...(t.source === "local" && can("provisioning.write") ? [{ id: "editor", label: "Edit" }] : []),
         ]} />
         <TabPanel idBase="tpl" id="overview" active={tab}>
           <div className="grid grid--2" style={{ alignItems: "start" }}>
@@ -172,6 +173,9 @@ function TemplateView() {
             <DataTable columns={varColumns} rows={t.variables} rowKey={(v) => v.name} caption="Template variables" />
           </Card>
         </TabPanel>
+        <TabPanel idBase="tpl" id="editor" active={tab}>
+          {t.source === "local" ? <TemplateEditor template={t} onSaved={(saved) => detail.setData(saved)} /> : null}
+        </TabPanel>
         <TabPanel idBase="tpl" id="preview" active={tab}>
           {t.abstract ? (
             <Callout tone="neutral">Base templates cannot be previewed directly. Open one of the model templates that inherit from it.</Callout>
@@ -186,8 +190,10 @@ function TemplateView() {
         footer={exportText ? <CopyButton text={exportText} label="Copy JSON" /> : undefined}>
         {exportText ? <pre className="code" tabIndex={0}>{exportText}</pre> : <LoadingState />}
       </Dialog>
-      <ImportTemplateDialog open={copyText !== null} onClose={() => setCopyText(null)} initialText={copyText ?? ""}
-        onImported={(k) => router.push(`/provisioning/view/?key=${encodeURIComponent(k)}`)} />
+      <CustomizeDialog open={customizeOpen} template={t} onClose={() => setCustomizeOpen(false)} onCreated={(k) => router.push(`/provisioning/view/?key=${encodeURIComponent(k)}`)} />
+      <ConfirmDialog open={deleting} title={`Delete the local template "${t.name}"?`} confirmLabel="Delete template" tone="danger" busy={deleteBusy} error={deleteError} onConfirm={remove} onCancel={() => { setDeleting(false); setDeleteError(null); }}>
+        <p>Templates used by a device profile or inherited by another template cannot be deleted.</p>
+      </ConfirmDialog>
     </div>
   );
 }
