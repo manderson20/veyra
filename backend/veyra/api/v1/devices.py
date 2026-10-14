@@ -35,7 +35,9 @@ from veyra.core.models import (
 )
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
+from veyra.core.security.crypto import try_load_installation_key
 from veyra.core.security.principal import Principal
+from veyra.provisioning import facts
 from veyra.provisioning.renderer import normalize_mac
 from veyra.provisioning.spec import TemplateError
 
@@ -597,6 +599,44 @@ def create_device(
     _record(db, ctx, principal, "device.create", device, {"profile_id": str(body.profile_id)})
     db.commit()
     return _outs(request, db, [device])[0]
+
+
+class PreviewOut(BaseModel):
+    template_key: str | None
+    files: list[dict[str, str]]
+    error: str | None = None
+    error_code: str | None = None
+
+
+@router.get(
+    "/{device_id}/preview", response_model=PreviewOut, summary="Rendered files, secrets masked"
+)
+def preview_device(
+    device_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> PreviewOut:
+    device = _get(db, principal, device_id, READ)
+    settings = request.app.state.settings
+    catalog = catalog_for(request, db)
+    try:
+        ctx = facts.resolve_device(catalog, db, device)
+        files = facts.render_device(
+            db,
+            settings,
+            catalog,
+            device,
+            key=try_load_installation_key(settings),
+            host=request.headers.get("host"),
+            mask_secrets=True,
+        )
+    except facts.ProvisioningError as e:
+        return PreviewOut(template_key=None, files=[], error=str(e), error_code=e.code)
+    return PreviewOut(
+        template_key=ctx.template_key,
+        files=[{"filename": f.filename, "format": f.format, "content": f.content} for f in files],
+    )
 
 
 @router.get("/{device_id}", response_model=DeviceOut)

@@ -1,18 +1,20 @@
-spec_version = 1
-features = ["single_line", "ntp", "timezone_offset", "vlan"]
+spec_version = 2
+features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "group_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential"]
 
 [template]
 key = "poly.vvx.base"
 name = "Poly VVX (common settings)"
-version = "0.1.0"
+version = "0.2.0"
 manufacturer = "Poly"
 abstract = true
 firmware = "UC Software 5.9 / 6.x"
 status = "experimental"
 description = """
 Shared configuration for Poly VVX phones running UC Software. Produces the
-master configuration file ({mac}.cfg) and a per-phone configuration file.
-Not yet verified on hardware — see docs/PROVISIONING_TEMPLATES.md."""
+master configuration file ({mac}.cfg) and a per-phone configuration file with
+every line, the line keys (BLF, speed dials, paging), voicemail indication,
+group paging, time and DST rules, VLAN and the device credential. Not yet
+verified on hardware — see docs/DEVICE_PROVISIONING.md §9."""
 
 [[files]]
 name = "{mac}.cfg"
@@ -26,7 +28,7 @@ format = "xml"
 
 [[variables]]
 name = "sip_transport"
-description = "SIP transport for the registration"
+description = "SIP transport for the registrations"
 default = "UDPOnly"
 pattern = "^(UDPOnly|TCPOnly|TLS|DNSnaptr)$"
 
@@ -35,3 +37,33 @@ name = "registration_expires"
 type = "integer"
 description = "Registration interval in seconds"
 default = 300
+
+[[variables]]
+name = "admin_password"
+description = "Local administrator password of the phone (blank keeps the factory default 456)"
+sensitive = true
+max_length = 32
+
+[[variables]]
+name = "backlight_idle"
+type = "integer"
+description = "Backlight intensity when idle (0-3)"
+default = 1
+
+[[variables]]
+name = "screen_saver_minutes"
+type = "integer"
+description = "Minutes before the screen saver starts (0 = off)"
+default = 0
+
+[[variables]]
+name = "polling_hour"
+type = "integer"
+description = "Hour (0-23) at which the phone checks for new configuration every day"
+default = 3
+
+[[variables]]
+name = "paging_default_volume"
+type = "integer"
+description = "Default page volume (0-10)"
+default = 8

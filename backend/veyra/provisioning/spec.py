@@ -81,7 +81,10 @@ CORE_VARIABLES: tuple[VariableDef, ...] = (
     ),
 )
 # Device facts available to filenames and templates (not user-editable values).
-DEVICE_VARIABLES = ("mac", "mac_upper", "model")
+DEVICE_VARIABLES = ("mac", "mac_upper", "model", "model_slug")
+# Structured facts (spec version 2, docs/DEVICE_PROVISIONING.md §4.1): read-only
+# objects Veyra builds from the device, its profile, extensions and zones.
+FACT_NAMES = ("device", "organization", "lines", "keys", "paging", "server", "features")
 CORE_NAMES = {v.name for v in CORE_VARIABLES}
 
 
@@ -152,7 +155,7 @@ class TemplateInfo(BaseModel):
 class TemplateManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    spec_version: Literal[1] = 1
+    spec_version: Literal[1, 2] = 1
     template: TemplateInfo
     files: list[FileSpec] = Field(default_factory=list)
     variables: list[VariableDef] = Field(default_factory=list)
@@ -167,6 +170,7 @@ class TemplateManifest(BaseModel):
                 not VARIABLE_RE.match(var.name)
                 or var.name in CORE_NAMES
                 or var.name in DEVICE_VARIABLES
+                or var.name in FACT_NAMES
             ):
                 raise ValueError(
                     f"variable {var.name!r} is invalid or collides with a core variable"

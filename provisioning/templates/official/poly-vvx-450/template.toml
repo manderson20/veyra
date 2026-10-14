@@ -1,14 +1,14 @@
-spec_version = 1
-features = ["single_line", "ntp", "timezone_offset", "vlan"]
+spec_version = 2
+features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "group_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential"]
 
 [template]
 key = "poly.vvx.450"
 name = "Poly VVX 450"
-version = "0.1.0"
+version = "0.2.0"
 manufacturer = "Poly"
 models = ["VVX 450"]
 parent = "poly.vvx.base"
-parent_version = "0.1.0"
+parent_version = "0.2.0"
 firmware = "UC Software 5.9 / 6.x"
 status = "experimental"
 description = "Poly VVX 450 desk phone. Initial hardware test target; not yet verified on hardware."

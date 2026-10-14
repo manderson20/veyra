@@ -176,6 +176,7 @@ def preview(
 ) -> dict[str, Any]:
     try:
         resolved = _catalog(request, db).resolve(key)
+        # No facts given: the renderer builds sample facts from the masked values.
         files = render(resolved, body.values, mac=body.mac, model=body.model, mask_secrets=True)
     except TemplateError as e:
         raise _template_error(e) from e

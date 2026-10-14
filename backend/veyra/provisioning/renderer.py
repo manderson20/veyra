@@ -28,6 +28,7 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment
 from veyra.provisioning.spec import (
     CORE_VARIABLES,
     DEVICE_VARIABLES,
+    FACT_NAMES,
     TEMPLATE_FILENAME,
     FileSpec,
     TemplateError,
@@ -37,6 +38,17 @@ from veyra.provisioning.spec import (
 )
 
 MASK = "********"
+# What templates see for the structured facts when a preview renders without a
+# device (docs/DEVICE_PROVISIONING.md §4.1).
+EMPTY_FACTS: dict[str, Any] = {
+    "device": {},
+    "organization": {},
+    "lines": [],
+    "keys": [],
+    "paging": {"enabled": False, "groups": []},
+    "server": {},
+    "features": {},
+}
 MAX_SOURCE_BYTES = 256 * 1024
 MAX_OUTPUT_BYTES = 1024 * 1024
 OUTPUT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -217,7 +229,7 @@ def output_filename(pattern: str, mac: str, model: str) -> str:
     name = (
         pattern.replace("{mac}", mac)
         .replace("{mac_upper}", mac.upper())
-        .replace("{model_slug}", re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-"))
+        .replace("{model_slug}", model_slug(model))
     )
     if not OUTPUT_NAME_RE.match(name) or ".." in name:
         raise TemplateError(f"Generated filename {name!r} is not allowed")
@@ -270,7 +282,7 @@ def validate(resolved: ResolvedTemplate) -> list[str]:
     problems: list[str] = []
     if resolved.record.manifest.template.abstract:
         return problems  # rendered only through a concrete child template
-    allowed = set(resolved.variables) | set(DEVICE_VARIABLES)
+    allowed = set(resolved.variables) | set(DEVICE_VARIABLES) | set(FACT_NAMES)
     for f in resolved.files:
         env = _environment(resolved.chain, autoescape=f.format == "xml")
         try:
@@ -290,6 +302,10 @@ def validate(resolved: ResolvedTemplate) -> list[str]:
     return problems
 
 
+def model_slug(model: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-")
+
+
 def render(
     resolved: ResolvedTemplate,
     values: Mapping[str, Any],
@@ -297,7 +313,11 @@ def render(
     mac: str,
     model: str,
     mask_secrets: bool = False,
+    facts: Mapping[str, Any] | None = None,
 ) -> list[RenderedFile]:
+    """Render every file of a concrete template. ``facts`` are the structured
+    objects of spec version 2 (already masked by the caller when needed); they
+    are added to the context as they are, never validated as variables."""
     if resolved.record.manifest.template.abstract:
         raise TemplateError("Abstract templates cannot be rendered; use a model template")
     if model not in resolved.record.manifest.template.models:
@@ -308,7 +328,14 @@ def render(
         for name, var in resolved.variables.items():
             if var.sensitive and context.get(name) is not None:
                 context[name] = MASK
-    context.update(mac=mac, mac_upper=mac.upper(), model=model)
+    context.update(mac=mac, mac_upper=mac.upper(), model=model, model_slug=model_slug(model))
+    if facts is None:
+        # Previews without a device: sample facts derived from the values.
+        from veyra.provisioning.facts import sample_facts  # local import: facts uses this module
+
+        facts = sample_facts({k: v for k, v in context.items() if v is not None}, mac, model)
+    for name in FACT_NAMES:
+        context[name] = facts.get(name, EMPTY_FACTS[name])
     rendered: list[RenderedFile] = []
     for f in resolved.files:
         env = _environment(resolved.chain, autoescape=f.format == "xml")

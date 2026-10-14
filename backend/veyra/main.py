@@ -26,6 +26,7 @@ from veyra.core.events import bus
 from veyra.core.security.crypto import InstallationKeyError, load_installation_key
 from veyra.core.signing import Keyring
 from veyra.modules.manager import ModuleManager
+from veyra.provisioning import serve
 from veyra.provisioning.renderer import TemplateCatalog
 from veyra.telephony import get_adapter
 from veyra.telephony.asterisk.ari import AriClient
@@ -143,4 +144,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     install_error_handlers(app)
     app.include_router(api_router)
+    app.include_router(serve.router)
     return app

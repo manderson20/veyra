@@ -175,11 +175,16 @@ def test_device_profile_resolves_family_values_keys_and_paging(admin):
     )
     # An abstract family resolves to the model templates underneath it.
     assert profile["template_abstract"] is True and profile["manufacturer"] == "Poly"
-    assert profile["models"] == {"VVX 411": "poly.vvx.411", "VVX 450": "poly.vvx.450"}
+    assert profile["models"] == {
+        "VVX 410": "poly.vvx.411",
+        "VVX 411": "poly.vvx.411",
+        "VVX 450": "poly.vvx.450",
+    }
     assert profile["values"] == {"sip_transport": "TCPOnly", "registration_expires": 600}
     assert profile["keys"][1]["label"] == "Front" and profile["paging"][0]["poly_group"] == 1
     r = admin.patch(f"{PROFILES}/{profile['id']}", json={"template_key": "poly.vvx.411"})
-    assert r.status_code == 200 and r.json()["models"] == {"VVX 411": "poly.vvx.411"}
+    assert r.status_code == 200
+    assert r.json()["models"] == {"VVX 410": "poly.vvx.411", "VVX 411": "poly.vvx.411"}
     r = admin.patch(
         f"{PROFILES}/{profile['id']}",
         json={"paging": [{"zone_id": zone["id"], "role": "default"}, {"zone_id": zone["id"]}]},
