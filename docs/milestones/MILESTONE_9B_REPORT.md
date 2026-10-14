@@ -86,3 +86,9 @@ trust, per the owner's "continue in order".
   should just be a link to the dashboard and not really a menu flyout" →
   categories with one page are plain links in the rail.
 * 2026-10-14: approved ("approved"); released as 0.12.0.
+
+## Addendum (2026-10-14 17:28 UTC)
+
+The owner upgraded dev1 from `~/veyra-release` to **0.12.0-aa1d31280b**:
+backups taken, schema current (0012), Asterisk unchanged, all verify
+checks OK, old releases pruned to three.
