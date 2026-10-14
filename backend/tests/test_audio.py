@@ -84,3 +84,28 @@ def test_ensure_org_dirs_creates_group_writable_incoming_folders(tmp_path):
     # a file in the way is logged, not raised
     (base / "broken").write_text("x")
     audio.ensure_org_dirs(base, ["broken"])
+
+
+def test_convert_any_passes_wav_through_and_needs_ffmpeg_for_compressed(monkeypatch):
+    data, duration = audio.convert_any(make_wav(1.0, 16000, 1), "tone.wav")
+    assert duration == pytest.approx(1.0, abs=0.01) and data[:4] == b"RIFF"
+    monkeypatch.setattr(audio.shutil, "which", lambda name: None)
+    with pytest.raises(audio.AudioError, match="ffmpeg"):
+        audio.convert_any(b"ID3\x04\x00 not audio", "song.mp3")
+    # Unknown suffix with non-WAV content is treated as compressed too.
+    with pytest.raises(audio.AudioError, match="ffmpeg"):
+        audio.convert_any(b"OggS\x00\x02", "clip.bin")
+    assert "install ffmpeg" in audio.accepted_formats()
+
+
+@pytest.mark.skipif(not audio.ffmpeg_available(), reason="ffmpeg is not installed")
+def test_convert_any_decodes_compressed_audio_with_ffmpeg(tmp_path):
+    import subprocess
+
+    wav = tmp_path / "tone.wav"
+    wav.write_bytes(make_wav(1.5, 16000, 2))
+    mp3 = tmp_path / "tone.mp3"
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(wav), str(mp3)], check=True)  # noqa: S603, S607
+    data, duration = audio.convert_any(mp3.read_bytes(), "tone.mp3")
+    assert duration == pytest.approx(1.5, abs=0.15) and data[:4] == b"RIFF"
+    assert "MP3" in audio.accepted_formats()

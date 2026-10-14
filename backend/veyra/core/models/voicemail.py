@@ -57,6 +57,11 @@ class Prompt(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     source: Mapped[str] = mapped_column(String(16), default="upload")
     duration_seconds: Mapped[float] = mapped_column(Float, default=0)
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    # Audio library (docs/PAGING_RECORDINGS.md §3): what the recording is for
+    # (prompt | bell | announcement | greeting | music) and where it came from.
+    kind: Mapped[str] = mapped_column(String(16), default="prompt")
+    license: Mapped[str | None] = mapped_column(String(100))
+    credit: Mapped[str | None] = mapped_column(String(200))
 
 
 class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

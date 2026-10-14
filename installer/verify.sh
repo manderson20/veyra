@@ -81,6 +81,13 @@ fi
     && check firmware-dir pass "755 veyra:veyra" \
     || check firmware-dir fail "$VEYRA_DATA/firmware is $(perm "$VEYRA_DATA/firmware") (expected 755 veyra:veyra)"
 
+# --- audio library (Milestone 9c): compressed uploads need ffmpeg
+if command -v ffmpeg >/dev/null 2>&1; then
+    check audio-ffmpeg pass "ffmpeg available (MP3 and other compressed uploads accepted)"
+else
+    check audio-ffmpeg warn "ffmpeg is not installed: the audio library accepts WAV uploads only (apt install ffmpeg)"
+fi
+
 # --- exposure
 listeners="$(ss -H -ltn 2>/dev/null | awk '{print $4}')"
 exposed() { # port → prints non-loopback listeners

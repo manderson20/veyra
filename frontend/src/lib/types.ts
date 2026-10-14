@@ -925,6 +925,8 @@ export interface MyVoicemail {
   is_enabled: boolean;
 }
 
+export type AudioKind = "prompt" | "bell" | "announcement" | "greeting" | "music";
+
 export interface Prompt {
   id: string;
   organization_id: string;
@@ -933,6 +935,10 @@ export interface Prompt {
   slug: string;
   description: string | null;
   source: "upload" | "recording";
+  /** What the recording is for (docs/PAGING_RECORDINGS.md §3). */
+  kind: AudioKind;
+  license: string | null;
+  credit: string | null;
   duration_seconds: number;
   size_bytes: number;
   file_present: boolean;

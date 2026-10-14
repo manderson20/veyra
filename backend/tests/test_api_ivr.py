@@ -378,3 +378,25 @@ def test_inbound_routes_to_ivr_and_deployment(admin, app, tmp_path):
     dp = (cfg / "extensions.conf").read_text()
     assert "[veyra-ivr-main-menu]" not in dp
     assert "Congestion(5)" in dp.split("exten => 5735550100,1,")[1].split("\nexten =>")[0]
+
+
+def test_audio_library_kinds_licence_and_filter(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    bell = _upload(admin, org["id"], "First period", kind="bell", license="CC0", credit="Freesound")
+    assert bell["kind"] == "bell" and bell["license"] == "CC0" and bell["credit"] == "Freesound"
+    prompt = _upload(admin, org["id"], "Welcome")
+    assert prompt["kind"] == "prompt" and prompt["license"] is None
+    assert admin.get(PROMPTS, params={"kind": "bell"}).json()["total"] == 1
+    assert admin.get(PROMPTS, params={"kind": "music"}).json()["total"] == 0
+    assert admin.get(PROMPTS, params={"kind": "song"}).status_code == 422
+    r = admin.patch(
+        f"{PROMPTS}/{prompt['id']}", json={"kind": "greeting", "license": " own recording "}
+    )
+    assert r.status_code == 200 and r.json()["kind"] == "greeting"
+    assert r.json()["license"] == "own recording"
+    r = admin.post(
+        PROMPTS,
+        data={"organization_id": org["id"], "name": "x", "kind": "jingle"},
+        files={"file": ("x.wav", make_wav(1.0, 8000, 1), "audio/wav")},
+    )
+    assert r.status_code == 422

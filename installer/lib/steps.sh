@@ -49,6 +49,9 @@ do_packages() {
     # asterisk-moh-opsound-wav fills the default music-on-hold class that call
     # queues play (docs/RING_GROUPS_QUEUES.md §7); without it callers wait in silence.
     [[ $SKIP_TELEPHONY == 1 ]] || pkgs+=(asterisk asterisk-modules asterisk-core-sounds-en asterisk-moh-opsound-wav)
+    # ffmpeg decodes MP3 and other compressed uploads for the audio library
+    # (docs/PAGING_RECORDINGS.md §3); without it only WAV uploads are accepted.
+    pkgs+=(ffmpeg)
     local missing=()
     local p
     for p in "${pkgs[@]}"; do

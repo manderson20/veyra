@@ -6,7 +6,7 @@ import { Badge, Button, Callout, Card, ConfirmDialog, DataTable, Dialog, EmptySt
 import { api, errorMessage } from "@/lib/api";
 import { formatBytes, formatDateTime, formatRelative } from "@/lib/format";
 import { formatSeconds } from "@/lib/routing";
-import type { Page, Prompt, Recording } from "@/lib/types";
+import type { AudioKind, Page, Prompt, Recording } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -14,7 +14,8 @@ import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
 
 const LIMIT = 25;
-const ACCEPT = "audio/wav,audio/x-wav,audio/wave,.wav";
+export const AUDIO_KIND_LABELS: Record<AudioKind, string> = { prompt: "Menu prompt", bell: "Bell", announcement: "Announcement", greeting: "Greeting", music: "Hold music" };
+const ACCEPT = ".wav,.mp3,.ogg,.oga,.flac,.m4a,audio/wav,audio/x-wav,audio/mpeg,audio/ogg,audio/flac,audio/mp4";
 
 /** Plays one audio URL at a time; a second click stops it. */
 function usePlayer() {
@@ -46,6 +47,7 @@ export default function PromptsPage() {
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [org, setOrg] = useState("");
+  const [kindFilter, setKindFilter] = useState("");
   const [offset, setOffset] = useState(0);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editing, setEditing] = useState<Prompt | null>(null);
@@ -61,7 +63,7 @@ export default function PromptsPage() {
     return () => window.clearTimeout(t);
   }, [q]);
 
-  const list = useApiData<Page<Prompt>>("/prompts", { q: debounced, organization_id: org || undefined, limit: LIMIT, offset });
+  const list = useApiData<Page<Prompt>>("/prompts", { q: debounced, organization_id: org || undefined, limit: LIMIT, offset, kind: kindFilter || undefined });
   const recordings = useApiData<Recording[]>("/prompts/recordings", { organization_id: org || undefined });
   const manyOrgs = organizations.length > 1;
   const editable = can("ivr.write");
@@ -101,6 +103,7 @@ export default function PromptsPage() {
       ),
     },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (p: Prompt) => <span>{p.organization_name}</span> }] : []),
+    { key: "kind", header: "Kind", render: (p) => <span>{AUDIO_KIND_LABELS[p.kind] ?? p.kind}{p.license ? <span className="table__secondary" style={{ display: "block" }}>{p.license}</span> : null}</span> },
     { key: "len", header: "Length", render: (p) => <span className="mono">{formatSeconds(p.duration_seconds)}</span> },
     { key: "source", header: "Source", render: (p) => <Badge tone="outline" icon={p.source === "recording" ? "mic" : "upload"}>{p.source === "recording" ? "Recorded from a phone" : "Uploaded"}</Badge> },
     { key: "use", header: "Used by", render: (p) => p.in_use_by ? <span>{p.in_use_by} menu{p.in_use_by === 1 ? "" : "s"}</span> : <span className="subtle">—</span> },
@@ -119,13 +122,15 @@ export default function PromptsPage() {
   return (
     <div className="stack">
       <PageHeader
-        title="Prompts"
-        description="Audio that IVR menus play. Upload a WAV file (it is converted to the phone system's format), or dial *95 from a phone to record one, then name it here."
-        actions={editable ? <Button variant="primary" icon="upload" onClick={() => setUploadOpen(true)}>Upload prompt</Button> : null}
+        title="Audio"
+        description="The audio library: menu prompts, bells, announcements, greetings and hold music. Upload a file (converted to the phone system's format), or dial *95 from a phone to record one, then name it here."
+        actions={editable ? <Button variant="primary" icon="upload" onClick={() => setUploadOpen(true)}>Upload audio</Button> : null}
       />
       <Card flush>
         <div className="table-toolbar">
-          <SearchInput value={q} onChange={setQ} placeholder="Search by name or description" label="Search prompts" />
+          <SearchInput value={q} onChange={setQ} placeholder="Search by name or description" label="Search audio" />
+          <SelectField label={<span className="sr-only">Kind</span>} value={kindFilter} placeholder="All kinds"
+            options={(Object.keys(AUDIO_KIND_LABELS) as AudioKind[]).map((k) => ({ value: k, label: AUDIO_KIND_LABELS[k] }))} onChange={(e) => { setKindFilter(e.target.value); setOffset(0); }} />
           {manyOrgs ? (
             <SelectField label={<span className="sr-only">Organization</span>} value={org} placeholder="All organizations"
               options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setOffset(0); }} />
@@ -138,8 +143,8 @@ export default function PromptsPage() {
           loading={list.loading}
           error={list.error}
           onRetry={list.reload}
-          caption="Prompts"
-          empty={<EmptyState icon="audio" title={debounced || org ? "No matching prompts" : "No prompts yet"}>{!debounced && !org && editable ? "Upload a WAV file, or record one from a phone with *95 and adopt it below." : null}</EmptyState>}
+          caption="Audio"
+          empty={<EmptyState icon="audio" title={debounced || org || kindFilter ? "No matching audio" : "No audio yet"}>{!debounced && !org && editable ? "Upload a WAV file, or record one from a phone with *95 and adopt it below." : null}</EmptyState>}
           pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null}
         />
       </Card>
@@ -167,6 +172,9 @@ function UploadDialog({ open, onClose, organizationId, organizations, onCreated 
   const [org, setOrg] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [kind, setKind] = useState<AudioKind>("prompt");
+  const [license, setLicense] = useState("");
+  const [credit, setCredit] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   useOnChange(open, () => {
@@ -174,6 +182,9 @@ function UploadDialog({ open, onClose, organizationId, organizations, onCreated 
       setOrg(organizationId);
       setName("");
       setDescription("");
+      setKind("prompt");
+      setLicense("");
+      setCredit("");
       setFile(null);
       errors.clear();
     }
@@ -188,9 +199,12 @@ function UploadDialog({ open, onClose, organizationId, organizations, onCreated 
       form.set("organization_id", org);
       form.set("name", name.trim());
       if (description.trim()) form.set("description", description.trim());
+      form.set("kind", kind);
+      if (license.trim()) form.set("license", license.trim());
+      if (credit.trim()) form.set("credit", credit.trim());
       form.set("file", file);
       const created = await api.upload<Prompt>("/prompts", form);
-      toast.success(`Prompt "${created.name}" uploaded`, `${formatSeconds(created.duration_seconds)} long, converted for the phone system.`);
+      toast.success(`"${created.name}" uploaded`, `${formatSeconds(created.duration_seconds)} long, converted for the phone system.`);
       onCreated(created);
       onClose();
     } catch (err) {
@@ -200,17 +214,24 @@ function UploadDialog({ open, onClose, organizationId, organizations, onCreated 
     }
   };
   return (
-    <Dialog open={open} onClose={onClose} busy={busy} title="Upload a prompt"
-      description="A WAV file (PCM, 8 or 16 bit, mono or stereo, up to 48 kHz, at most 10 MB and 5 minutes). It is converted to 8 kHz mono, the format phones hear."
+    <Dialog open={open} onClose={onClose} busy={busy} title="Upload audio"
+      description="A WAV file, or MP3, OGG, FLAC and M4A when the server has ffmpeg (at most 5 minutes). It is converted to 8 kHz mono, the format phones hear."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="prompt-upload" loading={busy} disabled={!org || !name.trim() || !file}>Upload</Button></>}>
       <form id="prompt-upload" className="stack stack--sm" onSubmit={submit}>
         {organizations.length > 1 ? (
           <SelectField label="Organization" required value={org} error={errors.fields.organization_id} placeholder="Choose an organization"
             options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => setOrg(e.target.value)} />
         ) : null}
-        <TextField label="Name" required autoFocus value={name} error={errors.fields.name} placeholder="e.g. Main greeting" onChange={(e) => setName(e.target.value)} />
-        <TextArea label="Description" rows={2} value={description} error={errors.fields.description} placeholder="What the prompt says, for the people who edit menus" onChange={(e) => setDescription(e.target.value)} />
-        <TextField label="WAV file" required type="file" accept={ACCEPT} error={errors.fields.file} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <div className="form-grid">
+          <TextField label="Name" required autoFocus value={name} error={errors.fields.name} placeholder="e.g. Main greeting" onChange={(e) => setName(e.target.value)} />
+          <SelectField label="Kind" value={kind} error={errors.fields.kind} options={(Object.keys(AUDIO_KIND_LABELS) as AudioKind[]).map((k) => ({ value: k, label: AUDIO_KIND_LABELS[k] }))} onChange={(e) => setKind(e.target.value as AudioKind)} />
+        </div>
+        <TextArea label="Description" rows={2} value={description} error={errors.fields.description} placeholder="What it says or is for, for the people who use it" onChange={(e) => setDescription(e.target.value)} />
+        <div className="form-grid">
+          <TextField label="Licence" value={license} error={errors.fields.license} placeholder="e.g. CC0, own recording" help="Where the rights come from; shown next to hold music." onChange={(e) => setLicense(e.target.value)} />
+          <TextField label="Credit" value={credit} error={errors.fields.credit} placeholder="Author or source" onChange={(e) => setCredit(e.target.value)} />
+        </div>
+        <TextField label="Audio file" required type="file" accept={ACCEPT} error={errors.fields.file} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>

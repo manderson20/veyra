@@ -64,7 +64,7 @@ export const NAV: NavSection[] = [
     { label: "Time Conditions", href: "/routing/time-conditions/", icon: "clock", permissions: ["routing.read"] },
     { label: "Voicemail", href: "/voicemail/", icon: "voicemail", permissions: ["voicemail.read"] },
     { label: "IVR Menus", href: "/ivr/", icon: "ivr", permissions: ["ivr.read"] },
-    { label: "Prompts", href: "/prompts/", icon: "audio", permissions: ["ivr.read"] },
+    { label: "Audio", href: "/prompts/", icon: "audio", permissions: ["ivr.read"] },
     { label: "Ring Groups", href: "/ring-groups/", icon: "group", permissions: ["groups.read"] },
     { label: "Call Queues", href: "/queues/", icon: "queue", permissions: ["groups.read"] },
     { label: "Pickup Groups", href: "/pickup-groups/", icon: "phone", permissions: ["groups.read"] },
