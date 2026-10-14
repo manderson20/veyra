@@ -90,7 +90,7 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm /etc/asterisk/veyra)" == "2750 veyra:asterisk" ]] \
         && check engine-include-dir pass "2750 veyra:asterisk" \
         || check engine-include-dir fail "/etc/asterisk/veyra is $(perm /etc/asterisk/veyra) (expected 2750 veyra:asterisk)"
-    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf; do
+    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf; do
         grep -qs "Managed by Veyra" "/etc/asterisk/$f" \
             && check "engine-stub:$f" pass "Veyra-managed" \
             || check "engine-stub:$f" fail "/etc/asterisk/$f is not the Veyra-managed stub"
@@ -104,6 +104,20 @@ if [[ "$ENGINE" == "asterisk" ]]; then
         check engine-voicemail-app pass "VoiceMail application registered"
     else
         check engine-voicemail-app fail "the VoiceMail application is not registered in Asterisk (restart Asterisk after the modules.conf change: sudo systemctl restart asterisk)"
+    fi
+    # Queues and call pickup (Milestone 8): the applications must be registered
+    # and the default music-on-hold class must have files to play.
+    for app in Queue Pickup PickupChan; do
+        if asterisk -rx "core show application $app" 2>/dev/null | grep -qi "Info about application '$app'"; then
+            check "engine-app:$app" pass "$app application registered"
+        else
+            check "engine-app:$app" fail "the $app application is not registered in Asterisk"
+        fi
+    done
+    if asterisk -rx "moh show classes" 2>/dev/null | grep -q "Class: default"; then
+        check engine-moh pass "music-on-hold class default is loaded"
+    else
+        check engine-moh fail "music-on-hold class 'default' is not loaded (install asterisk-moh-opsound-wav and run: sudo asterisk -rx 'moh reload'); queue callers would wait in silence"
     fi
     # Directories shared with Asterisk (Milestone 7): prompts and the mail queue.
     [[ "$(perm "$VEYRA_DATA")" == "750 veyra:asterisk" ]] \
