@@ -29,6 +29,7 @@ from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
 from veyra.core.models import (
+    Extension,
     InboundRoute,
     Organization,
     OutboundRoute,
@@ -999,13 +1000,28 @@ def _ordered_routes(db: Session) -> list[OutboundRoute]:
     )
 
 
-def _warnings(outs: list[OutboundRouteOut]) -> list[str]:
+def _warnings(db: Session, outs: list[OutboundRouteOut]) -> list[str]:
     warnings = []
-    if not any(r.is_emergency and r.is_enabled for r in outs):
+    emergency = [r for r in outs if r.is_emergency and r.is_enabled]
+    if not emergency:
         warnings.append(
             "No enabled emergency route: 911 dialled from a phone will not reach a carrier "
             "through Veyra."
         )
+    elif any(r.caller_id_number is None for r in emergency):
+        # Without a route number, the extension's emergency caller ID or the
+        # trunk default is presented (docs/TRUNKS_ROUTING.md §7).
+        missing = db.scalar(
+            select(func.count(Extension.id)).where(
+                Extension.is_enabled.is_(True), Extension.emergency_caller_id_number.is_(None)
+            )
+        )
+        if missing:
+            warnings.append(
+                f"{missing} enabled extension(s) have no emergency caller ID and an emergency "
+                "route has no caller ID number: the trunk's default number is presented for "
+                "their emergency calls."
+            )
     for r in outs:
         if r.is_enabled and not any(t.is_enabled for t in r.trunks):
             warnings.append(f"Route {r.name} has no enabled trunk; its calls will fail.")
@@ -1050,7 +1066,7 @@ def list_outbound(
     db: Session = Depends(get_db),
 ) -> OutboundRoutesOut:
     outs = _or_outs(db, _ordered_routes(db))
-    return OutboundRoutesOut(items=outs, warnings=_warnings(outs))
+    return OutboundRoutesOut(items=outs, warnings=_warnings(db, outs))
 
 
 @router.post(
@@ -1137,7 +1153,7 @@ def reorder_outbound(
         )
         db.commit()
     outs = _or_outs(db, _ordered_routes(db))
-    return OutboundRoutesOut(items=outs, warnings=_warnings(outs))
+    return OutboundRoutesOut(items=outs, warnings=_warnings(db, outs))
 
 
 @router.get("/outbound/{route_id}", response_model=OutboundRouteOut)

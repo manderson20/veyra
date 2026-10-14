@@ -4,8 +4,8 @@ Design and reference for Milestone 9: phones registered by MAC address,
 configuration files served over HTTPS from the provisioning templates,
 templates edited in the web interface, device profiles that separate one
 template family by use (for example one profile per building), paging zones
-written into the phones, and hardware validation on the Poly VVX 411 and
-VVX 450 the district uses.
+written into the phones, firmware management, and hardware validation on
+the Poly VVX 410/411/450 phones of the owner's installation.
 
 Status: design (2026-10-14). Sections marked *(later)* are out of scope for
 this milestone and listed so the data model does not paint us into a corner.
@@ -18,6 +18,14 @@ Owner requirements (2026-10-14) this design answers:
 3. Use multicast for the speakers and Poly paging groups for the phones, so
    the phones page in sync with the speakers instead of through a relay.
 4. Templates must be editable in the web interface.
+6. (Asked the same day) Manage firmware for devices (§3.5).
+7. (Asked the same day) The owner's fleet: AND (Advanced Network Devices)
+   clock speakers, Algo ceiling speakers and SIP horns, Yealink conference
+   phones, Poly VVX 410 and 411. Only the Poly phones need Poly paging
+   groups; everything else listens to regular multicast. A designated Algo
+   speaker relays pages today. Zones must expose the multicast address,
+   port and Poly group number so the phone templates match the speakers'
+   groups (§5).
 5. (Asked the same day) A place for an **emergency caller ID** per
    extension, separate from the regular caller ID: delivered first in this
    milestone (§12) because it is small and safety-relevant.
@@ -27,7 +35,7 @@ Owner requirements (2026-10-14) this design answers:
 | Object | Table | Scope | Purpose |
 |---|---|---|---|
 | **Template** | on disk (official, community) or `provisioning_templates` (local) | platform or organization | Files a phone downloads, rendered from variables (`PROVISIONING_TEMPLATES.md`). Unchanged, plus: editable local templates, structured facts (§4), spec version 2 |
-| **Device profile** | `device_profiles` | organization | A template (family or model) plus values and paging-zone memberships: "VVX, High School", "VVX, Middle School", "VVX, District Office". Devices point at a profile |
+| **Device profile** | `device_profiles` | organization | A template (family or model) plus values and paging-zone memberships: "VVX, Building A", "VVX, Building B", "VVX, Main Office". Devices point at a profile |
 | **Device** | `devices` (exists since Milestone 0, unused) | organization | A physical phone: MAC, manufacturer, model, label, site, profile, primary extension, extra line keys, per-device value overrides, provisioning credential and status |
 | **Paging zone** | `paging_zones` | organization | A multicast page group: the speakers' address and port, the Poly group number, codec, kind (normal, priority, emergency). Profiles subscribe devices to zones |
 | **Provisioning request** | `provisioning_requests` | platform | Log of what asked for which file from where (MAC, address, user agent, result); feeds the device "last seen" status and the unknown-device list |
@@ -37,14 +45,14 @@ Owner requirements (2026-10-14) this design answers:
 * **Brand and model families** are the template inheritance chain that
   already exists: `poly.vvx.base` (abstract, common settings) → `poly.vvx.411`,
   `poly.vvx.450` (model specifics). A local template can sit anywhere in
-  the chain: `district.poly.vvx` (parent `poly.vvx.base`, district-wide
+  the chain: `local.poly.vvx` (parent `poly.vvx.base`, organization-wide
   changes) with the official model templates untouched. The catalog shows
   templates grouped by manufacturer and family.
 * **Separation by use** is the device profile. A profile names a template
   key, which may be **abstract** (a family): when a device is rendered, the
   concrete template is the family's descendant that lists the device's
-  model, preferring local templates. So "VVX, High School" and "VVX, Middle
-  School" both point at `district.poly.vvx`, carry identical values except
+  model, preferring local templates. So "VVX, Building A" and "VVX, Building
+  B" both point at `local.poly.vvx`, carry identical values except
   their paging-zone memberships, and serve a VVX 411 and a VVX 450 alike.
 * **Paging** is a first-class object (§5) rendered into the phones from
   the profile's memberships; the phones get the Poly group-page settings
@@ -86,7 +94,7 @@ Device status shown in the list: **never provisioned** (no request),
 **provisioned** (last request within the polling interval, 200), **stale**
 (older than two polling intervals), **error** (last request failed:
 unauthorized, disabled, render error). "Reprovision" sends a SIP NOTIFY
-`check-sync`/`polycom-check-cfg` to the phone's endpoint (§3.4).
+`check-sync`/`polycom-check-cfg` to the phone's endpoint (§3.5).
 
 ## 3. Delivery
 
@@ -104,9 +112,10 @@ in Veyra is live at the phone's next check.
 Phones also upload logs, call lists and overrides (`<MAC>-phone.cfg`,
 `<MAC>-app.log`, `<MAC>-directory.xml`) with PUT. Veyra answers 200 and
 discards them (option *(later)*: keep logs for troubleshooting). Firmware:
-the master file's `APP_FILE_PATH` points at `/provisioning/firmware/<file>`
-only when an administrator uploaded a firmware image for the model (§7,
-optional); otherwise it is left blank and the phone keeps its software.
+the master file's `APP_FILE_PATH` points at
+`/provisioning/firmware/<id>/<file>` when the profile or device has a
+firmware image assigned (§3.5); otherwise it is left blank and the phone
+keeps its software.
 
 NGINX gets a `location /provisioning/` proxied to the API with its own rate
 limit (per address, 60 requests per minute, burst 30: a phone fetches four
@@ -152,7 +161,31 @@ that adds a plain-HTTP server block serving **only** `/provisioning/`
 provisioning is on, because SIP secrets then cross the LAN unencrypted.
 Recommended path: a trusted certificate; HTTP for a staging VLAN only.
 
-### 3.4 Reprovision
+### 3.4 Firmware
+
+Firmware is managed in Veyra, not copied to a web root by hand:
+
+* **Firmware images** (`firmware_images`): `manufacturer`, `models[]`,
+  `version`, `filename`, `size`, `sha256`, `uploaded_by`, `notes`; the file
+  lives in `/var/lib/veyra/firmware/<id>/<filename>` (the upload keeps the
+  original name because the phone asks for it by name). Uploads go through
+  `POST /provisioning/firmware` (multipart, up to 512 MB,
+  `provisioning.write`), are hashed and listed with the models they apply to.
+* **Assignment**: a device profile picks one image per model family
+  (`profile.firmware_image_id`, optional); a device may override it. The
+  master file's `APP_FILE_PATH` then points at
+  `/provisioning/firmware/<id>/<filename>`; without an assignment the phone
+  keeps its software. Poly phones compare the version in the file with the
+  running one and upgrade (or downgrade) at the next check, then reboot;
+  the device page shows `firmware_reported` against the assigned version
+  with an "up to date / pending / unknown" badge.
+* **Delivery**: NGINX serves the directory directly (`location
+  /provisioning/firmware/`, byte ranges, no authentication because Poly
+  phones fetch firmware without credentials and the images are public
+  vendor files); unknown paths return 404.
+* Images in use by a profile cannot be deleted (409 `firmware_in_use`).
+
+### 3.5 Reprovision
 
 Asterisk sends `NOTIFY Event: check-sync` to a PJSIP endpoint with
 `pjsip send notify <name> endpoint <endpoint>`; the names live in
@@ -233,8 +266,9 @@ CyberData can send both formats at once, and Algo documents that Poly
 phones buffer about 200 ms in group-page mode, so a sender aligning the
 two formats delays the plain-RTP stream by roughly that much.
 
-What the owner has today: speakers listening to plain multicast directly,
-and a relay that pages the phones separately, hence the lag. The fix has
+What the owner has today: AND clock speakers, Algo ceiling speakers and SIP
+horns listening to plain multicast directly, and a designated Algo speaker
+relaying pages to the phones separately, hence the lag. The fix has
 two halves: the phones must be configured for the right Poly groups (this
 milestone), and whatever originates a page must emit both formats in step
 (Milestone 9c, the Veyra page sender; or an Algo/CyberData sender in
@@ -244,7 +278,7 @@ milestone), and whatever originates a page must emit both formats in step
 
 | Field | Notes |
 |---|---|
-| `name`, `slug` | "High School", `high-school` |
+| `name`, `slug` | "Building A", `building-a` |
 | `site_id` | Optional, for grouping |
 | `multicast_address`, `multicast_port` | The speakers' group, e.g. `239.1.2.10:5004`; validated as a multicast address (224/4) |
 | `poly_group` | 1–25 (25 = emergency); unique per `(organization, poly_address, poly_port)` |
@@ -303,7 +337,8 @@ POST            /organizations/{id}/provisioning-credential/rotate   returns the
 PUT             /provisioning/templates/{key}           update a local template (manifest + sources)
 POST            /provisioning/templates/{key}/customize {key, name} → local child of an official template
 GET             /provisioning/models                    manufacturer → models from the catalog
-POST            /provisioning/firmware                   upload (optional), GET list, DELETE
+GET/POST        /provisioning/firmware                   list, upload (§3.5)
+GET/PATCH/DELETE /provisioning/firmware/{id}             notes and models; 409 firmware_in_use
 ```
 
 Phone-facing, outside `/api/v1`, mounted at `/provisioning/`:
@@ -331,6 +366,8 @@ hour).
 * **Provisioning → Device profiles**: list; form with template (families
   first), values (one field per resolved variable, defaults shown), line
   keys editor, paging zone memberships (subscribe, transmit, role), site.
+* **Provisioning → Firmware**: images with manufacturer, models, version,
+  size, hash, where assigned; upload and delete.
 * **Provisioning → Devices**: list with status badges, filters, "Unregistered
   phones seen" panel; add form (MAC with any separators, manufacturer and
   model pickers, label, site, profile, extension, extra lines); device page
@@ -380,7 +417,8 @@ Milestone 5, 7 and 8 handset checks still open.
 * One Poly paging address per organization; zones differ by group number.
 * Sending pages from Veyra, bell schedules and Poly-format emission are
   Milestone 9c; until then, phone-originated pages reach phones only.
-* Firmware upload is optional and manual; no automatic download from Poly.
+* Firmware images are uploaded by the administrator; Veyra does not fetch
+  them from the vendor.
 * Hot desking, expansion modules, directory and background images are
   later.
 * Only Poly VVX templates are official; other brands arrive as community
@@ -396,19 +434,22 @@ Milestone 5, 7 and 8 handset checks still open.
 
 Today an emergency route sends the route's `caller_id_number` (one per
 route), else the trunk's default, else the extension's regular caller ID.
-There is no per-extension value, so a district with several buildings on
-one route cannot present the building's ELIN or DID.
+There is no per-extension value, so an organization with several buildings
+on one route cannot present the building's ELIN or DID.
 
-Change: `extensions.emergency_caller_id_number` (optional, digits, 3–20)
-and `sites.emergency_caller_id_number` (default for the site's
-extensions). Precedence on an emergency route: extension → site → route
-`caller_id_number` → trunk default → regular caller ID. The snapshot
-resolves extension-or-site into a per-endpoint `set_var=VEYRA_EMERGENCY_CID=…`
-and the emergency branch of the outbound context runs
+Change (delivered first, migration `0010`): `extensions.emergency_caller_id_number`
+(optional, digits with an optional leading `+`). Precedence on an emergency
+route: extension → route `caller_id_number` → trunk default → regular
+caller ID. The snapshot (version 6) carries it, the generator writes a
+per-endpoint `set_var=VEYRA_EMERGENCY_CID=…`, and the emergency branch of
+the outbound context runs
 `ExecIf($["${VEYRA_EMERGENCY_CID}"!=""]?Set(CALLERID(num)=${VEYRA_EMERGENCY_CID}))`
-before dialling, so the route override no longer wins over a more specific
-value. The Extensions form and page get an "Emergency caller ID" field
-beside the regular caller ID; the site form gets the default; the Outbound
-Routes warning list adds "N extensions have no emergency caller ID and no
-site default" when an emergency route has no caller ID of its own. The
-WARNING log line gains the number presented. Migration `0010`.
+before dialling while the trunk step only sets its number when the
+variable is empty, so a more specific value always wins. The Extensions
+form and page get an "Emergency caller ID number" field; the Outbound
+Routes warning list adds "N enabled extension(s) have no emergency caller
+ID…" when an emergency route has no caller ID of its own. The WARNING log
+line names the emergency caller ID. A **site default** (`sites.emergency_caller_id_number`,
+precedence between extension and route) follows when sites get their API
+and form in the devices work of this milestone (§2): there is no sites API
+today.

@@ -16,9 +16,10 @@ classroom, hallway), and carries:
 |---|---|
 | `number` | Digits only, validated against the numbering plan (§2); unique across the installation, shared with ring group and queue numbers ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md)) |
 | `display_name` | Shown in the interface and used as the default caller ID name |
-| `endpoint_name` | The SIP user name, `<organization slug>-<number>` (for example `brookfield-1001`). Generated, globally unique, follows the number when an extension is renumbered |
+| `endpoint_name` | The SIP user name, `<organization slug>-<number>` (for example `example-1001`). Generated, globally unique, follows the number when an extension is renumbered |
 | `user_id` | Optional. The user must belong to the same organization |
 | `caller_id_name`, `caller_id_number` | Optional overrides for internal calls (letters, digits and `. ' & ( ) -`; digits with an optional leading `+`) |
+| `emergency_caller_id_number` | Optional. Presented on emergency routes (`911`) instead of the regular caller ID: the building's ELIN or registered DID. Wins over the route's and the trunk's numbers ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §7; migration `0010`) |
 | `is_enabled` | Disabled extensions are kept but left out of the generated configuration |
 | `sip_secret_ciphertext`, `sip_secret_changed_at` | The SIP secret, encrypted (§4), and when it was last set |
 
@@ -164,7 +165,7 @@ new extensions.
 
 ```
 GET    /extensions?q=&organization_id=&limit=&offset=
-POST   /extensions                              {organization_id, number, display_name, user_id?, caller_id_name?, caller_id_number?, is_enabled?}
+POST   /extensions                              {organization_id, number, display_name, user_id?, caller_id_name?, caller_id_number?, emergency_caller_id_number?, is_enabled?}
 GET    /extensions/next-number?after=
 GET    /extensions/{id}
 PATCH  /extensions/{id}

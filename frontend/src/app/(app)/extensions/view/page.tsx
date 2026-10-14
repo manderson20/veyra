@@ -50,6 +50,7 @@ function ExtensionView() {
   const [userId, setUserId] = useState("");
   const [cidName, setCidName] = useState("");
   const [cidNumber, setCidNumber] = useState("");
+  const [emergencyCid, setEmergencyCid] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -65,6 +66,7 @@ function ExtensionView() {
       setUserId(x.user_id ?? "");
       setCidName(x.caller_id_name ?? "");
       setCidNumber(x.caller_id_number ?? "");
+      setEmergencyCid(x.emergency_caller_id_number ?? "");
       setEnabled(x.is_enabled);
     }
   });
@@ -73,7 +75,7 @@ function ExtensionView() {
   if (ext.error) return <ErrorState title="Could not load extension" error={ext.error} onRetry={ext.reload} />;
   if (!ext.data) return <LoadingState />;
   const x = ext.data;
-  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || enabled !== x.is_enabled;
+  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || enabled !== x.is_enabled;
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === x.organization_id && (u.is_active || u.id === x.user_id));
 
   const save = async (e: FormEvent) => {
@@ -88,6 +90,7 @@ function ExtensionView() {
         user_id: userId || null,
         caller_id_name: cidName.trim() || null,
         caller_id_number: cidNumber.trim() || null,
+        emergency_caller_id_number: emergencyCid.trim() || null,
         is_enabled: enabled,
       }));
       setChanged((n) => n + 1);
@@ -151,6 +154,9 @@ function ExtensionView() {
               <TextField label="Caller ID name" disabled={!editable} value={cidName} error={errors.fields.caller_id_name} help="Defaults to the name." onChange={(e) => setCidName(e.target.value)} />
               <TextField label="Caller ID number" disabled={!editable} value={cidNumber} error={errors.fields.caller_id_number} help="Defaults to the extension number." onChange={(e) => setCidNumber(e.target.value)} />
             </div>
+            <TextField label="Emergency caller ID number" inputMode="tel" disabled={!editable} value={emergencyCid} error={errors.fields.emergency_caller_id_number}
+              help="Presented on emergency calls (911) instead of the regular caller ID: the building's registered number. Otherwise the emergency route's number is used."
+              onChange={(e) => setEmergencyCid(e.target.value)} />
             <Switch label="Enabled" description="Disabled extensions are left out of the engine configuration at the next deployment." checked={enabled} disabled={!editable} onChange={(e) => setEnabled(e.target.checked)} />
             {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
             {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save changes</Button></div> : null}

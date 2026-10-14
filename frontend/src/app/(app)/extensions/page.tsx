@@ -137,6 +137,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
   const [userId, setUserId] = useState("");
   const [cidName, setCidName] = useState("");
   const [cidNumber, setCidNumber] = useState("");
+  const [emergencyCid, setEmergencyCid] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [plan, setPlan] = useState<string>("");
   const [suggesting, setSuggesting] = useState(false);
@@ -187,6 +188,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
         user_id: userId || null,
         caller_id_name: cidName.trim() || null,
         caller_id_number: cidNumber.trim() || null,
+        emergency_caller_id_number: emergencyCid.trim() || null,
         is_enabled: enabled,
       });
       toast.success(`Extension ${created.number} created`, "Show the SIP credentials to configure the phone, then deploy the configuration.");
@@ -229,6 +231,9 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
           <TextField label="Caller ID name" value={cidName} error={errors.fields.caller_id_name} help="Shown to internal callers. Defaults to the name." onChange={(e) => setCidName(e.target.value)} />
           <TextField label="Caller ID number" value={cidNumber} error={errors.fields.caller_id_number} help="Defaults to the extension number." onChange={(e) => setCidNumber(e.target.value)} />
         </div>
+        <TextField label="Emergency caller ID number" inputMode="tel" value={emergencyCid} error={errors.fields.emergency_caller_id_number}
+          help="Presented on emergency calls (911) instead of the regular caller ID: the building's registered number. Otherwise the emergency route's number is used."
+          onChange={(e) => setEmergencyCid(e.target.value)} />
         <Switch label="Enabled" description="Disabled extensions are kept but left out of the engine configuration." checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>

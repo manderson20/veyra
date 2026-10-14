@@ -203,6 +203,30 @@ def test_caller_id_validation(admin):
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "caller_id_number"
     ext = _create(admin, a, "1001", caller_id_name="  Main Office (East)  ", caller_id_number=" ")
     assert ext["caller_id_name"] == "Main Office (East)" and ext["caller_id_number"] is None
+    assert ext["emergency_caller_id_number"] is None
+
+
+def test_emergency_caller_id_is_validated_stored_and_deployed(admin, app, tmp_path):
+    a = _org(admin)["id"]
+    r = admin.post(
+        EXT,
+        json={
+            "organization_id": a,
+            "number": "1001",
+            "display_name": "x",
+            "emergency_caller_id_number": "573-555-0123",
+        },
+    )
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "emergency_caller_id_number"
+    ext = _create(admin, a, "1001", emergency_caller_id_number=" 5735550123 ")
+    assert ext["emergency_caller_id_number"] == "5735550123"
+    r = admin.patch(f"{EXT}/{ext['id']}", json={"emergency_caller_id_number": "+15735550124"})
+    assert r.status_code == 200 and r.json()["emergency_caller_id_number"] == "+15735550124"
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    assert snap["extensions"][0]["emergency_caller_id_number"] == "+15735550124"
+    r = admin.patch(f"{EXT}/{ext['id']}", json={"emergency_caller_id_number": ""})
+    assert r.status_code == 200 and r.json()["emergency_caller_id_number"] is None
 
 
 def test_sip_secret_is_encrypted_at_rest_revealed_only_on_request_and_rotatable(admin, app):
@@ -307,7 +331,7 @@ def test_generated_configuration_and_encrypted_revision_artifacts(admin, app, tm
     assert ep["sensitive"] and ep["content"] is None
     assert rev["diff"]["pjsip.endpoints.conf"] == {"changed": True, "diff": None, "sensitive": True}
     dial = next(f for f in rev["files"] if f["path"] == "extensions.conf")
-    assert "Dial(PJSIP/brookfield-1001,30)" in dial["content"]
+    assert "Dial(PJSIP/example-1001,30)" in dial["content"]
     assert "1002" not in dial["content"]
     with session_scope() as db:
         row = db.get(ConfigRevision, rev["id"])
@@ -321,7 +345,7 @@ def test_generated_configuration_and_encrypted_revision_artifacts(admin, app, tm
     with session_scope() as db:
         deployer.run_once(db)
     written = (cfg / "pjsip.endpoints.conf").read_text()
-    assert f"password={secret}" in written and "[brookfield-1001](veyra-endpoint)" in written
+    assert f"password={secret}" in written and "[example-1001](veyra-endpoint)" in written
     assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is False
 
     # a save that does not change the files still raises the flag (like
@@ -365,7 +389,7 @@ def test_apply_generates_and_deploys_in_one_step(admin, app, tmp_path):
     with session_scope() as db:
         deployer.run_once(db)
     assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is False
-    assert "[brookfield-1001](veyra-endpoint)" in (cfg / "pjsip.endpoints.conf").read_text()
+    assert "[example-1001](veyra-endpoint)" in (cfg / "pjsip.endpoints.conf").read_text()
     # nothing changed: the revision is discarded rather than queued
     out = admin.post("/api/v1/telephony/apply").json()
     assert out["applied"] is False and out["unchanged"] is True
@@ -420,7 +444,7 @@ def test_setup_wizard_accepts_a_numbering_plan(client):
             "display_name": "Admin",
             "password": ADMIN_PASSWORD,
         },
-        "organization": {"name": "Brookfield Schools", "slug": "brookfield", "timezone": "UTC"},
+        "organization": {"name": "Example Schools", "slug": "example", "timezone": "UTC"},
         "numbering": {"extension_length": 3, "first_extension": "300", "last_extension": "100"},
     }
     r = client.post("/api/v1/setup/initialize", json=body)

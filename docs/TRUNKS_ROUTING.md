@@ -148,9 +148,20 @@ Milestone 6 delivers the routing part only:
   extension matches before any other pattern, with no prefix (Kari's Law
   direct dialling). The numbering plan already reserves `911` and `933`.
 * An emergency route ignores the loop check, dials with a 120-second
-  timeout, uses the route's `caller_id_number` (the ELIN or registered DID
-  for the site) and logs `Veyra EMERGENCY call from <extension>` at WARNING
-  level in the Asterisk log.
+  timeout and logs `Veyra EMERGENCY call from <extension>` at WARNING level
+  in the Asterisk log, with the extension's emergency caller ID when it has
+  one.
+* **Caller ID presented on an emergency call** (Milestone 9): the
+  extension's `emergency_caller_id_number` (the building's ELIN or
+  registered DID, [EXTENSIONS.md](EXTENSIONS.md) §1) when set; otherwise
+  the route's `caller_id_number`; otherwise the trunk's `default_caller_id`;
+  otherwise the extension's regular caller ID. The generator writes
+  `set_var=VEYRA_EMERGENCY_CID=<number>` on the endpoint and the emergency
+  context runs `ExecIf($["${VEYRA_EMERGENCY_CID}"!=""]?Set(CALLERID(num)=…))`
+  before dialling, so a more specific number always wins. `GET
+  /routing/outbound` warns when an emergency route has no number of its own
+  and enabled extensions have no emergency caller ID (the trunk default is
+  then presented for them).
 * `GET /routing/outbound` reports `warnings`, including "No enabled
   emergency route" when none exists, and the Outbound Routes page shows it.
   Veyra does not block deployment: an installation may legitimately route
