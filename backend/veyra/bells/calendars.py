@@ -63,7 +63,8 @@ def check_url(url: str) -> str:
 
 
 def fetch(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "Veyra calendar poller"})
+    # The scheme was restricted to http(s) by check_url when the calendar was saved.
+    req = urllib.request.Request(url, headers={"User-Agent": "Veyra calendar poller"})  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310
             data = resp.read(MAX_BYTES + 1)
