@@ -161,6 +161,32 @@ that adds a plain-HTTP server block serving **only** `/provisioning/`
 provisioning is on, because SIP secrets then cross the LAN unencrypted.
 Recommended path: a trusted certificate; HTTP for a staging VLAN only.
 
+### 3.3a Transports and how phones find the server
+
+Veyra serves provisioning over **HTTPS** (always) and **HTTP** (opt-in,
+§3.3). **TFTP and FTP are deliberately not offered**: neither can
+authenticate the phone or protect the SIP secret on the wire, and both
+would need a separate daemon serving files from disk instead of rendering
+per request, so a mistake in either exposes every phone's credentials to
+anyone on the LAN. Poly phones support HTTPS and HTTP natively, as do
+Yealink and most current desk phones.
+
+Phones learn the server address in one of three ways:
+
+* **DHCP option 66** (Poly also reads option 160, then 66) carrying the URL
+  with the enrollment credential embedded:
+  `https://veyra-<org>:<password>@<host>/provisioning/`; the phone then
+  needs nothing typed on it. Set it on the voice VLAN's DHCP scope.
+* **Typed on the phone** (Settings → Provisioning Server: type, server,
+  user, password), as the organization page's card describes.
+* **Vendor zero-touch services** (Poly ZTP) *(later)*: the phone asks the
+  vendor's cloud for its server before anything else; Veyra would register
+  the MAC addresses there.
+
+After the first successful fetch the phone's own configuration pins the
+server URL and its per-device credential, so the DHCP option is only
+needed for new or factory-reset phones.
+
 ### 3.4 Firmware
 
 Firmware is managed in Veyra, not copied to a web root by hand:
