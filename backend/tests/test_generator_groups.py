@@ -9,7 +9,7 @@ from veyra.telephony.asterisk import generator
 from veyra.telephony.settings import SipSettings
 
 
-def _ext(number, org="brookfield", **over):
+def _ext(number, org="example", **over):
     return {
         "endpoint_name": f"{org}-{number}",
         "number": number,
@@ -23,7 +23,7 @@ def _ext(number, org="brookfield", **over):
     }
 
 
-def _member(number, org="brookfield", **over):
+def _member(number, org="example", **over):
     return {"endpoint_name": f"{org}-{number}", "number": number, "name": f"Phone {number}", **over}
 
 
@@ -32,7 +32,7 @@ def _group(slug="sales", **over):
         "slug": slug,
         "name": "Sales",
         "number": "2300",
-        "organization": "brookfield",
+        "organization": "example",
         "strategy": "ringall",
         "ring_seconds": 20,
         "ring_busy_members": False,
@@ -48,7 +48,7 @@ def _queue(slug="support", **over):
         "slug": slug,
         "name": "Support",
         "number": "2400",
-        "organization": "brookfield",
+        "organization": "example",
         "strategy": "rrmemory",
         "member_timeout": 15,
         "retry_seconds": 5,
@@ -73,7 +73,7 @@ def _snapshot(**over):
         "installation": {"name": "Test District"},
         "sip": SipSettings().model_dump(mode="json"),
         "smtp": {"enabled": False, "from_address": "pbx@example.org", "from_name": "Test PBX"},
-        "organizations": [{"slug": "brookfield", "name": "Brookfield", "timezone": "UTC"}],
+        "organizations": [{"slug": "example", "name": "Example", "timezone": "UTC"}],
         "extensions": [
             _ext("1001", pickup_groups=["front"]),
             _ext("1002", pickup_groups=["front", "back"]),
@@ -82,7 +82,7 @@ def _snapshot(**over):
             {
                 "number": "1002",
                 "name": "Phone 1002",
-                "organization": "brookfield",
+                "organization": "example",
                 "timezone": "UTC",
                 "pin": "1234",
                 "email": None,
@@ -112,13 +112,13 @@ def test_pickup_groups_hints_and_feature_codes():
     assert "exten => *8,1,NoOp(Veyra group pickup by ${CALLERID(num)})\n same => n,Pickup()" in dp
     assert (
         "exten => **1001,1,NoOp(Veyra directed pickup of 1001 by ${CALLERID(num)})\n"
-        ' same => n,GotoIf($["${VEYRA_ORG}"!="brookfield"]?denied)\n'
-        " same => n,PickupChan(PJSIP/brookfield-1001,,p)\n"
+        ' same => n,GotoIf($["${VEYRA_ORG}"!="example"]?denied)\n'
+        " same => n,PickupChan(PJSIP/example-1001,,p)\n"
         " same => n,Hangup()\n"
         " same => n(denied),Playback(pbx-invalid)" in dp
     )
-    assert "exten => 1001,hint,PJSIP/brookfield-1001\n" in dp
-    assert "exten => 2300,hint,PJSIP/brookfield-1001&PJSIP/brookfield-1002\n" in dp
+    assert "exten => 1001,hint,PJSIP/example-1001\n" in dp
+    assert "exten => 2300,hint,PJSIP/example-1001&PJSIP/example-1002\n" in dp
     # an endpoint without groups carries no group keys
     plain = _files(_snapshot(extensions=[_ext("1001")], ring_groups=[], queues=[]))
     assert "named_call_group" not in plain["pjsip.endpoints.conf"].content
@@ -130,14 +130,16 @@ def test_ring_group_ringall_skips_busy_members_and_fails_over():
     assert "exten => 2300,1,NoOp(Veyra ring group Sales)\n same => n,Goto(veyra-rg-sales,s,1)" in dp
     assert (
         "[veyra-rg-sales]\n"
-        "exten => s,1,NoOp(Veyra ring group Sales (brookfield))\n"
+        "exten => s,1,NoOp(Veyra ring group Sales (example))\n"
         " same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])\n"
         " same => n,GotoIf($[${VEYRA_GROUP_DEPTH} > 6]?toodeep)\n"
         " same => n,Set(VEYRA_DIAL=)\n"
-        ' same => n,GotoIf($["${DEVICE_STATE(PJSIP/brookfield-1001)}" : "(INUSE|BUSY|RINGINUSE)"]?m2)\n'
-        " same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/brookfield-1001)\n"
-        ' same => n(m2),GotoIf($["${DEVICE_STATE(PJSIP/brookfield-1002)}" : "(INUSE|BUSY|RINGINUSE)"]?dial)\n'
-        " same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/brookfield-1002)\n"
+        ' same => n,GotoIf($["${DEVICE_STATE(PJSIP/example-1001)}" : '
+        '"(INUSE|BUSY|RINGINUSE)"]?m2)\n'
+        " same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/example-1001)\n"
+        ' same => n(m2),GotoIf($["${DEVICE_STATE(PJSIP/example-1002)}" : '
+        '"(INUSE|BUSY|RINGINUSE)"]?dial)\n'
+        " same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/example-1002)\n"
         ' same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)\n'
         " same => n,Dial(${VEYRA_DIAL:1},20)\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
@@ -161,25 +163,25 @@ def test_ring_group_sequential_ring_busy_prefix_and_empty():
     dp = _files(_snapshot(ring_groups=[group]))["extensions.conf"].content
     assert (
         " same => n,Set(CALLERID(name)=Sales: ${CALLERID(name)})\n"
-        " same => n,Dial(PJSIP/brookfield-1001,12)\n"
+        " same => n,Dial(PJSIP/example-1001,12)\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
-        " same => n(m2),Dial(PJSIP/brookfield-1002,12)\n"
+        " same => n(m2),Dial(PJSIP/example-1002,12)\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
         " same => n,Goto(failover)\n" in dp
     )
     assert "DEVICE_STATE" not in dp
     assert (
-        " same => n(failover),NoOp(Veyra ring group Sales: not answered)\n same => n,Playback(vm-goodbye)"
-        in dp
+        " same => n(failover),NoOp(Veyra ring group Sales: not answered)\n"
+        " same => n,Playback(vm-goodbye)" in dp
     )
     # sequential with the busy check uses the next member as the skip target
     seq = _files(_snapshot(ring_groups=[_group(strategy="sequential")]))["extensions.conf"].content
-    assert '"(INUSE|BUSY|RINGINUSE)"]?m2)\n same => n,Dial(PJSIP/brookfield-1001,20)' in seq
-    assert '"(INUSE|BUSY|RINGINUSE)"]?failover)\n same => n,Dial(PJSIP/brookfield-1002,20)' in seq
+    assert '"(INUSE|BUSY|RINGINUSE)"]?m2)\n same => n,Dial(PJSIP/example-1001,20)' in seq
+    assert '"(INUSE|BUSY|RINGINUSE)"]?failover)\n same => n,Dial(PJSIP/example-1002,20)' in seq
     # no members: straight to the failover, and no hint
     empty = _files(_snapshot(ring_groups=[_group(members=[])]))["extensions.conf"].content
     assert "exten => 2300,hint" not in empty
-    assert "exten => s,1,NoOp(Veyra ring group Sales (brookfield))" in empty
+    assert "exten => s,1,NoOp(Veyra ring group Sales (example))" in empty
     assert " same => n,Goto(failover)\n same => n(done),Hangup()" in empty
 
 
@@ -191,11 +193,11 @@ def test_queue_context_and_queues_conf():
     )
     assert (
         "[veyra-queue-support]\n"
-        "exten => s,1,NoOp(Veyra queue Support (brookfield))\n"
+        "exten => s,1,NoOp(Veyra queue Support (example))\n"
         " same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])\n"
         " same => n,GotoIf($[${VEYRA_GROUP_DEPTH} > 6]?toodeep)\n"
         " same => n,Answer()\n"
-        " same => n,Playback(/var/lib/veyra/prompts/brookfield/lines-busy)\n"
+        " same => n,Playback(/var/lib/veyra/prompts/example/lines-busy)\n"
         " same => n,Queue(veyra-support,t,,,300)\n"
         " same => n,NoOp(Veyra queue Support left with ${QUEUESTATUS})\n"
         " same => n,Goto(failover)\n"
@@ -211,7 +213,7 @@ def test_queue_context_and_queues_conf():
     )
     assert (
         "[veyra-support]\n"
-        "; Support (brookfield)\n"
+        "; Support (example)\n"
         "strategy=rrmemory\n"
         "timeout=15\n"
         "retry=5\n"
@@ -224,10 +226,10 @@ def test_queue_context_and_queues_conf():
         "announce-position=yes\n"
         "announce-frequency=90\n"
         "announce-holdtime=no\n"
-        "periodic-announce=/var/lib/veyra/prompts/brookfield/please-hold\n"
+        "periodic-announce=/var/lib/veyra/prompts/example/please-hold\n"
         "periodic-announce-frequency=60\n"
-        "member => PJSIP/brookfield-1001,0,Phone 1001,PJSIP/brookfield-1001\n"
-        "member => PJSIP/brookfield-1002,1,Phone 1002,PJSIP/brookfield-1002\n" in qc.content
+        "member => PJSIP/example-1001,0,Phone 1001,PJSIP/example-1001\n"
+        "member => PJSIP/example-1002,1,Phone 1002,PJSIP/example-1002\n" in qc.content
     )
     assert generator.reload_scopes(["queues.conf"]) == ["app_queue.so"]
     assert generator.reload_scopes(["queues.conf", "extensions.conf"]) == [
@@ -255,7 +257,7 @@ def test_queue_context_and_queues_conf():
     # a member whose extension is not deployed is left out
     q = _queue(members=[_member("1001"), _member("1009")])
     qc = _files(_snapshot(queues=[q]))["queues.conf"].content
-    assert "brookfield-1001" in qc and "brookfield-1009" not in qc
+    assert "example-1001" in qc and "example-1009" not in qc
     # without queues the file is still written with its header
     assert "[general]" in _files(_snapshot(queues=[]))["queues.conf"].content
 
@@ -264,7 +266,7 @@ def test_group_and_queue_destinations_and_direct_dial():
     menu = {
         "slug": "main",
         "name": "Main",
-        "organization": "brookfield",
+        "organization": "example",
         "prompt": "welcome",
         "invalid_prompt": None,
         "timeout_seconds": 5,

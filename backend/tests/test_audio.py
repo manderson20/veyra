@@ -75,12 +75,12 @@ def test_duration_and_atomic_write(tmp_path):
 
 def test_ensure_org_dirs_creates_group_writable_incoming_folders(tmp_path):
     base = tmp_path / "prompts"
-    audio.ensure_org_dirs(base, ["brookfield", "beta"])
-    for slug in ("brookfield", "beta"):
+    audio.ensure_org_dirs(base, ["example", "beta"])
+    for slug in ("example", "beta"):
         inc = base / slug / audio.INCOMING
         assert inc.is_dir()
         assert stat.S_IMODE(os.stat(inc).st_mode) == 0o770  # group asterisk comes from the parent
-    audio.ensure_org_dirs(base, ["brookfield"])  # idempotent
+    audio.ensure_org_dirs(base, ["example"])  # idempotent
     # a file in the way is logged, not raised
     (base / "broken").write_text("x")
     audio.ensure_org_dirs(base, ["broken"])

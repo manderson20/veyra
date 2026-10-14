@@ -50,18 +50,18 @@ clean on phones that honour it.
 [veyra-internal]
 exten => 2300,1,NoOp(Veyra ring group Sales)
  same => n,Goto(veyra-rg-sales,s,1)
-exten => 2300,hint,PJSIP/brookfield-2214&PJSIP/brookfield-2215
+exten => 2300,hint,PJSIP/example-2214&PJSIP/example-2215
 
 [veyra-rg-sales]
-exten => s,1,NoOp(Veyra ring group Sales (brookfield))
+exten => s,1,NoOp(Veyra ring group Sales (example))
  same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])
  same => n,GotoIf($[${VEYRA_GROUP_DEPTH} > 6]?toodeep)
  same => n,Set(CALLERID(name)=Sales: ${CALLERID(name)})      ; caller_id_prefix
  same => n,Set(VEYRA_DIAL=)
- same => n,GotoIf($["${DEVICE_STATE(PJSIP/brookfield-2214)}" : "(INUSE|BUSY|RINGINUSE)"]?m2)
- same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/brookfield-2214)  ; one pair per member
- same => n(m2),GotoIf($["${DEVICE_STATE(PJSIP/brookfield-2215)}" : "(INUSE|BUSY|RINGINUSE)"]?dial)
- same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/brookfield-2215)
+ same => n,GotoIf($["${DEVICE_STATE(PJSIP/example-2214)}" : "(INUSE|BUSY|RINGINUSE)"]?m2)
+ same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/example-2214)  ; one pair per member
+ same => n(m2),GotoIf($["${DEVICE_STATE(PJSIP/example-2215)}" : "(INUSE|BUSY|RINGINUSE)"]?dial)
+ same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/example-2215)
  same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)
  same => n,Dial(${VEYRA_DIAL:1},20)                           ; ringall
  same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)
@@ -119,7 +119,7 @@ autofill=yes
 shared_lastcall=yes
 monitor-type=
 
-[veyra-support]              ; Support (brookfield)
+[veyra-support]              ; Support (example)
 strategy=rrmemory
 timeout=15
 retry=5
@@ -131,9 +131,9 @@ leavewhenempty=strict
 musicclass=default
 announce-position=no
 announce-holdtime=no
-periodic-announce=/var/lib/veyra/prompts/brookfield/please-hold
+periodic-announce=/var/lib/veyra/prompts/example/please-hold
 periodic-announce-frequency=60
-member => PJSIP/brookfield-2214,0,Front Office,PJSIP/brookfield-2214
+member => PJSIP/example-2214,0,Front Office,PJSIP/example-2214
 ```
 
 Dialplan:
@@ -144,11 +144,11 @@ exten => 2400,1,NoOp(Veyra queue Support)
  same => n,Goto(veyra-queue-support,s,1)
 
 [veyra-queue-support]
-exten => s,1,NoOp(Veyra queue Support (brookfield))
+exten => s,1,NoOp(Veyra queue Support (example))
  same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])
  same => n,GotoIf($[${VEYRA_GROUP_DEPTH} > 6]?toodeep)
  same => n,Answer()
- same => n,Playback(/var/lib/veyra/prompts/brookfield/lines-busy)   ; announcement prompt
+ same => n,Playback(/var/lib/veyra/prompts/example/lines-busy)   ; announcement prompt
  same => n,Queue(veyra-support,t,,,300)                            ; r instead of t for music=ring; timeout = max_wait
  same => n,NoOp(Veyra queue Support left: ${QUEUESTATUS})
  same => n,<failover destination lines>
@@ -188,14 +188,14 @@ exten => *8,1,NoOp(Veyra group pickup by ${CALLERID(num)})
  same => n,Hangup()
 ; directed pickup: one entry per extension of the installation
 exten => **2214,1,NoOp(Veyra directed pickup of 2214 by ${CALLERID(num)})
- same => n,GotoIf($["${VEYRA_ORG}"!="brookfield"]?denied)
- same => n,PickupChan(PJSIP/brookfield-2214,,p)
+ same => n,GotoIf($["${VEYRA_ORG}"!="example"]?denied)
+ same => n,PickupChan(PJSIP/example-2214,,p)
  same => n,Hangup()
  same => n(denied),Playback(pbx-invalid)
  same => n,Hangup()
 
 [veyra-internal]
-exten => 2214,hint,PJSIP/brookfield-2214      ; one per extension
+exten => 2214,hint,PJSIP/example-2214      ; one per extension
 ```
 
 * **Group pickup `*8`**: answers a ringing call on another phone of one of

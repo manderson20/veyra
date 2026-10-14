@@ -69,7 +69,7 @@ test phone" with a box, prompt `m7-test-tone`, menu "M7 test menu" (1 →
 * With a handset: `*97`/`*98` with the PIN, the message-waiting lamp, the
   greeting; a real prompt recorded with `*95` and adopted on the Prompts
   page; a menu behind an inbound route (no trunk on dev1).
-* Email through a real SMTP server (the school's relay or Google Workspace
+* Email through a real SMTP server (the organization's relay or Google Workspace
   SMTP): the path was verified end to end against a loopback sink, not a
   real relay.
 

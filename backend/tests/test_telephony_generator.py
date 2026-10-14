@@ -11,7 +11,7 @@ def _snapshot(**overrides):
     snap = {
         "installation": {"name": "Test District"},
         "sip": SipSettings().model_dump(mode="json"),
-        "organizations": [{"slug": "brookfield", "name": "Brookfield", "timezone": "UTC"}],
+        "organizations": [{"slug": "example", "name": "Example", "timezone": "UTC"}],
         "extensions": [],
     }
     snap.update(overrides)
@@ -57,10 +57,10 @@ def test_nat_and_tls_settings_are_rendered():
 
 def test_extensions_render_endpoints_and_dialplan_and_mark_sensitive():
     ext = {
-        "endpoint_name": "brookfield-1001",
+        "endpoint_name": "example-1001",
         "number": "1001",
         "display_name": "Front Office",
-        "organization": "brookfield",
+        "organization": "example",
         "caller_id_name": None,
         "caller_id_number": None,
         "secret": "s3cret-value",
@@ -68,18 +68,18 @@ def test_extensions_render_endpoints_and_dialplan_and_mark_sensitive():
     files = {f.path: f for f in generator.generate(_snapshot(extensions=[ext]))}
     ep = files["pjsip.endpoints.conf"]
     assert ep.sensitive
-    assert "[brookfield-1001](veyra-endpoint)" in ep.content
+    assert "[example-1001](veyra-endpoint)" in ep.content
     assert "password=s3cret-value" in ep.content
     assert 'callerid="Front Office" <1001>' in ep.content
     assert "exten => 1001,1,NoOp(Veyra extension 1001)" in files["extensions.conf"].content
-    assert "Dial(PJSIP/brookfield-1001,30)" in files["extensions.conf"].content
+    assert "Dial(PJSIP/example-1001,30)" in files["extensions.conf"].content
 
 
 def test_feature_codes_are_not_shadowed_by_the_catch_all():
     """Asterisk matches patterns in the current context before it searches
     includes, so the invalid-number catch-all must not live in veyra-internal
     itself or *43/*60 would never be reached (found on dev1, 2026-10-13)."""
-    ext = {"endpoint_name": "brookfield-1001", "number": "1001", "display_name": "A", "secret": "x"}
+    ext = {"endpoint_name": "example-1001", "number": "1001", "display_name": "A", "secret": "x"}
     files = {f.path: f for f in generator.generate(_snapshot(extensions=[ext]))}
     dialplan = files["extensions.conf"].content
     sections = {}

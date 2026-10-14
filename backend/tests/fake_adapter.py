@@ -40,7 +40,7 @@ class FakeAdapter(TelephonyAdapter):
         self.fail_verify: list[str] = []
         self.fail_reload: str | None = None
         self.endpoints = [EndpointStatus("1001", True), EndpointStatus("1002", False)]
-        self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="brookfield-1001")]
+        self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="example-1001")]
         self.originated: list[tuple[str, str, str]] = []
         self.fail_originate: str | None = None
 

@@ -8,7 +8,7 @@ from veyra.telephony.asterisk import generator
 from veyra.telephony.settings import SipSettings
 
 
-def _ext(number, org="brookfield", **over):
+def _ext(number, org="example", **over):
     return {
         "endpoint_name": f"{org}-{number}",
         "number": number,
@@ -25,7 +25,7 @@ def _box(number, **over):
     return {
         "number": number,
         "name": f"Phone {number}",
-        "organization": "brookfield",
+        "organization": "example",
         "timezone": "America/Chicago",
         "pin": "123456",
         "email": f"user{number}@example.org",
@@ -40,7 +40,7 @@ def _menu(slug="main-menu", **over):
     return {
         "slug": slug,
         "name": "Main menu",
-        "organization": "brookfield",
+        "organization": "example",
         "prompt": "welcome",
         "invalid_prompt": None,
         "timeout_seconds": 6,
@@ -64,7 +64,7 @@ def _snapshot(**over):
         "installation": {"name": "Test District"},
         "sip": SipSettings().model_dump(mode="json"),
         "smtp": {"enabled": True, "from_address": "pbx@example.org", "from_name": "Test PBX"},
-        "organizations": [{"slug": "brookfield", "name": "Brookfield", "timezone": "UTC"}],
+        "organizations": [{"slug": "example", "name": "Example", "timezone": "UTC"}],
         "extensions": [_ext("1001"), _ext("1002")],
         "voicemail_boxes": [_box("1002")],
         "ivr_menus": [],
@@ -84,10 +84,10 @@ def test_voicemail_conf_is_rendered_sensitive_and_valid():
     assert "[general]" in vm.content and "serveremail=pbx@example.org" in vm.content
     assert "fromstring=Test PBX" in vm.content
     assert "mailcmd=/opt/veyra/current/installer/bin/veyra-mailqueue" in vm.content
-    assert "brookfield=America/Chicago|'vm-received' Q 'digits/at' IMp" in vm.content
+    assert "example=America/Chicago|'vm-received' Q 'digits/at' IMp" in vm.content
     assert (
         "1002 => 123456,Phone 1002,user1002@example.org,,"
-        "attach=yes|delete=no|tz=brookfield|saycid=yes|envelope=yes" in vm.content
+        "attach=yes|delete=no|tz=example|saycid=yes|envelope=yes" in vm.content
     )
     assert generator.validate(list(files.values())) == []
     assert "voicemail.conf" in generator.MANAGED_FILES
@@ -119,12 +119,12 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
     dp = files["extensions.conf"].content
     assert (
         "exten => 1001,1,NoOp(Veyra extension 1001)\n"
-        " same => n,Dial(PJSIP/brookfield-1001,30)\n"
+        " same => n,Dial(PJSIP/example-1001,30)\n"
         " same => n,Hangup()" in dp
     )
     assert (
         "exten => 1002,1,NoOp(Veyra extension 1002)\n"
-        " same => n,Dial(PJSIP/brookfield-1002,25)\n"
+        " same => n,Dial(PJSIP/example-1002,25)\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)\n'
         " same => n,VoiceMail(1002@veyra,u)\n"
         " same => n,Hangup()\n"
@@ -164,7 +164,7 @@ def test_ivr_context_keys_direct_dial_and_fallbacks():
     assert "[veyra-ivr-main-menu]" in dp and "[veyra-ivr-after-hours]" in dp
     body = dp.split("[veyra-ivr-main-menu]")[1].split("[veyra-ivr-after-hours]")[0]
     assert "GotoIf($[${VEYRA_IVR_DEPTH} > 8]?toodeep)" in body
-    assert " same => n(menu),Background(/var/lib/veyra/prompts/brookfield/welcome)" in body
+    assert " same => n(menu),Background(/var/lib/veyra/prompts/example/welcome)" in body
     # The timeout handler must be reached explicitly: WaitExten continues with
     # the next priority when one exists instead of going to 't'.
     assert " same => n,WaitExten(6)\n same => n,Goto(t,1)\n" in body
@@ -216,7 +216,7 @@ def test_ivr_without_prompt_is_congestion_and_custom_invalid_prompt_is_used():
     main = dp.split("[veyra-ivr-main-menu]")[1].split("[veyra-ivr-other]")[0]
     assert "no prompt, menu not deployable" in main and "Congestion(5)" in main
     other = dp.split("[veyra-ivr-other]")[1]
-    assert "Playback(/var/lib/veyra/prompts/brookfield/try-again)" in other
+    assert "Playback(/var/lib/veyra/prompts/example/try-again)" in other
     assert "exten => 1001,1,Goto" not in other  # direct dialling off
 
 

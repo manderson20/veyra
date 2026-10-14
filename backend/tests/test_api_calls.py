@@ -64,7 +64,7 @@ def _user(admin, email, role, org_id):
 def test_channel_parsing_helpers():
     from datetime import UTC, datetime
 
-    assert _endpoint_of("PJSIP/brookfield-1001-00000003") == "brookfield-1001"
+    assert _endpoint_of("PJSIP/example-1001-00000003") == "example-1001"
     assert _endpoint_of("Local/1001@veyra-internal-0000;1") is None
     now = datetime(2026, 10, 12, 20, 10, 0, tzinfo=UTC)
     assert _age_seconds("2026-10-12T20:07:31.123+0000", now) == 148

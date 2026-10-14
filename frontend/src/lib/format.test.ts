@@ -38,7 +38,7 @@ describe("formatting", () => {
     expect(initials("Morgan Anderson")).toBe("MA");
     expect(initials("  admin ")).toBe("A");
     expect(initials("")).toBe("?");
-    expect(slugify("Brookfield R-III Schools!")).toBe("brookfield-r-iii-schools");
+    expect(slugify("Lakeside R-IV Schools!")).toBe("lakeside-r-iv-schools");
     expect(slugify("Écoles Publiques")).toBe("ecoles-publiques");
     expect(humanize("system.health_read")).toBe("System health read");
   });

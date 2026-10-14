@@ -310,14 +310,14 @@ def test_voicemail_reaches_the_generated_configuration(admin, app, tmp_path):
     with session_scope() as db:
         deployer.run_once(db)
     vm = (cfg / "voicemail.conf").read_text()
-    assert "1001 => 1234,Front Office,fo@example.org,,attach=yes|delete=no|tz=brookfield" in vm
+    assert "1001 => 1234,Front Office,fo@example.org,,attach=yes|delete=no|tz=example" in vm
     assert "serveremail=pbx@example.org" in vm
     assert f"mailcmd={app.state.settings.mailqueue_command}" in vm
-    assert "brookfield=America/Chicago|" in vm
+    assert "example=America/Chicago|" in vm
     ep = (cfg / "pjsip.endpoints.conf").read_text()
     assert ep.count("mailboxes=1001@veyra") == 2
     dp = (cfg / "extensions.conf").read_text()
-    assert "Dial(PJSIP/brookfield-1001,20)" in dp and "VoiceMail(1001@veyra,u)" in dp
+    assert "Dial(PJSIP/example-1001,20)" in dp and "VoiceMail(1001@veyra,u)" in dp
     assert "app_voicemail.so" in adapter.reloads
     assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is False
     # the PIN never appears in a revision's readable artifacts

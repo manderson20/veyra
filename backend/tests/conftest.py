@@ -145,8 +145,8 @@ def complete_setup(client: TestClient) -> dict[str, object]:
                 "password": ADMIN_PASSWORD,
             },
             "organization": {
-                "name": "Brookfield Schools",
-                "slug": "brookfield",
+                "name": "Example Schools",
+                "slug": "example",
                 "timezone": "America/Chicago",
             },
         },

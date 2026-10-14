@@ -331,8 +331,7 @@ def test_event_ticket_and_stream(admin, app):
         assert delivered == 1
         # events for somebody else's phone are not delivered
         assert (
-            hub.publish(CallEvent("call.ringing", "ch2", "brookfield-9999", "in", "1", None, now))
-            == 0
+            hub.publish(CallEvent("call.ringing", "ch2", "example-9999", "in", "1", None, now)) == 0
         )
         msg = ws.receive_json()
         assert msg["type"] == "call.ringing" and msg["extension_number"] == "1001"
@@ -355,13 +354,13 @@ def test_event_ticket_and_stream(admin, app):
 
 
 def test_ari_event_translation():
-    assert endpoint_of("PJSIP/brookfield-1001-00000003") == "brookfield-1001"
+    assert endpoint_of("PJSIP/example-1001-00000003") == "example-1001"
     assert endpoint_of("PJSIP/trunk-carrier-0000000a") == "trunk-carrier"
     assert endpoint_of("Local/1001@veyra-internal-0000;1") is None
     t = AriEventTranslator()
     ch = {
         "id": "c1",
-        "name": "PJSIP/brookfield-1001-00000001",
+        "name": "PJSIP/example-1001-00000001",
         "state": "Down",
         "caller": {"name": "", "number": ""},
         "connected": {"name": "Jane Doe", "number": "5735551234"},
@@ -382,7 +381,7 @@ def test_ari_event_translation():
     )
     assert [e.type for e in ringing] == ["call.ringing"]
     assert ringing[0].remote_number == "5735551234" and ringing[0].direction == "in"
-    assert ringing[0].endpoint == "brookfield-1001" and ringing[0].at == "2026-10-13T12:00:01+0000"
+    assert ringing[0].endpoint == "example-1001" and ringing[0].at == "2026-10-13T12:00:01+0000"
     # no duplicate ringing
     assert t.translate({"type": "ChannelStateChange", "channel": {**ch, "state": "Ringing"}}) == []
     up = t.translate({"type": "ChannelStateChange", "channel": {**ch, "state": "Up"}})
@@ -399,7 +398,7 @@ def test_ari_event_translation():
     # an outgoing call from the phone
     out = {
         "id": "c2",
-        "name": "PJSIP/brookfield-1001-00000002",
+        "name": "PJSIP/example-1001-00000002",
         "state": "Ring",
         "caller": {"name": "Pat", "number": "1001"},
         "connected": {"name": "", "number": ""},
