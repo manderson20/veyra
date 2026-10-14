@@ -117,7 +117,7 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     if asterisk -rx "moh show classes" 2>/dev/null | grep -q "Class: default"; then
         check engine-moh pass "music-on-hold class default is loaded"
     else
-        check engine-moh fail "music-on-hold class 'default' is not loaded (install asterisk-moh-opsound-wav and run: sudo asterisk -rx 'moh reload'); queue callers would wait in silence"
+        check engine-moh fail "music-on-hold class 'default' is not loaded (install asterisk-moh-opsound-wav, then: sudo asterisk -rx 'module unload res_musiconhold.so' && sudo asterisk -rx 'module load res_musiconhold.so'); queue callers would wait in silence"
     fi
     # Directories shared with Asterisk (Milestone 7): prompts and the mail queue.
     [[ "$(perm "$VEYRA_DATA")" == "750 veyra:asterisk" ]] \

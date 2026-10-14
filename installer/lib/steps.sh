@@ -358,6 +358,15 @@ do_telephony() {
         done
         curl -fsS -u "veyra:$password" http://127.0.0.1:8088/ari/asterisk/info >/dev/null \
             || die "Asterisk started but ARI is not answering on 127.0.0.1:8088"
+        # The default music-on-hold class only registers when its directory has
+        # files. When asterisk-moh-opsound-wav arrived after Asterisk started,
+        # the class is missing and "moh reload" does nothing because
+        # musiconhold.conf itself is unchanged; reloading the module re-scans.
+        if ! asterisk -rx "moh show classes" 2>/dev/null | grep -q "Class: default"; then
+            info "Music-on-hold class 'default' is not loaded; reloading res_musiconhold"
+            run asterisk -rx "module unload res_musiconhold.so"
+            run asterisk -rx "module load res_musiconhold.so"
+        fi
     fi
     ok "Asterisk is running; ARI available on 127.0.0.1 only; AMI disabled"
 }
