@@ -47,6 +47,7 @@ awaiting the owner's browser check and approval.**
 | `alembic check` | No drift (migration `0012`); downgrade `0011` / upgrade head clean |
 | Frontend lint / typecheck / vitest | Clean (one pre-existing warning) / clean / **34 passed** (new: active location and rail icons; chart scales, axis maximum and tick labels) |
 | Frontend `npm run build` | Passed |
+| **Owner's `upgrade.sh` on dev1** | 0.11.0-b2315aff97 → 0.11.0-f79c739cf5 (2026-10-14 17:16 UTC): migration `0012` applied, all verify checks OK; the worker recorded its first `call_samples` row within a minute (channels 0, registrations 0 on an idle dev1); the metrics endpoint answers 401 without a session as expected |
 | **Owner's browser check** | *Pending*: rail, flyout by click and hover, keyboard, collapsed rail, mobile drawer, breadcrumb, the two graphs after the worker has sampled for a while |
 
 The rendering of the rail and flyout was checked by reading the generated
