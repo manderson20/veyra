@@ -1,8 +1,7 @@
 # Milestone 9b Report — Interface Rework
 
 Branch `milestone-9b` (from `main` at 0.11.0). Design:
-[INTERFACE_REWORK.md](../INTERFACE_REWORK.md). Status: **delivered,
-awaiting the owner's browser check and approval.**
+[INTERFACE_REWORK.md](../INTERFACE_REWORK.md). Status: **approved 2026-10-14, released as 0.12.0.**
 
 ## 1. Scope (owner requests of 2026-10-14)
 
@@ -86,4 +85,4 @@ trust, per the owner's "continue in order".
 * 2026-10-14 browser check: "The flyouts look good, I think the Overview
   should just be a link to the dashboard and not really a menu flyout" →
   categories with one page are plain links in the rail.
-* Approval: *pending*.
+* 2026-10-14: approved ("approved"); released as 0.12.0.
