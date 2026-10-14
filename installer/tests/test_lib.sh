@@ -33,6 +33,25 @@ done
 printf 'a=@ONE@ b=@TWO@\n' >"$TMP/in"
 render_template "$TMP/in" "$TMP/out" ONE=1 "TWO=x y"
 t "render_template substitutes" grep -qx 'a=1 b=x y' "$TMP/out"
+# The NGINX site renders with every placeholder, including the multi-line
+# optional HTTP provisioning block (docs/DEVICE_PROVISIONING.md §3.3).
+render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx.conf" \
+    "LISTEN_HTTP=    listen 127.0.0.1:80;" "LISTEN_HTTPS=    listen 127.0.0.1:443 ssl;" \
+    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra HTTP_PROVISIONING=
+t "nginx template has the provisioning location" grep -q 'location /provisioning/ {' "$TMP/nginx.conf"
+t "nginx template serves firmware from the data directory" grep -q 'alias /var/lib/veyra/firmware/;' "$TMP/nginx.conf"
+t "nginx template has no HTTP provisioning by default" not grep -q 'Provisioning over plain HTTP' "$TMP/nginx.conf"
+block="$(sed -e 's|@VEYRA_DATA@|/var/lib/veyra|g' -e 's|@VEYRA_ETC@|/etc/veyra|g' "$HERE/../templates/nginx/provisioning-http.conf.in")"
+render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx-http.conf" \
+    "LISTEN_HTTP=    listen 127.0.0.1:80;" "LISTEN_HTTPS=    listen 127.0.0.1:443 ssl;" \
+    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra "HTTP_PROVISIONING=$block"
+t "nginx template includes the HTTP provisioning block when enabled" grep -q 'Provisioning over plain HTTP' "$TMP/nginx-http.conf"
+t "HTTP provisioning block is rendered" not grep -q '@VEYRA_DATA@' "$TMP/nginx-http.conf"
+render_template "$HERE/../templates/veyra.env.in" "$TMP/env" VEYRA_ETC=/etc/veyra VEYRA_DATA=/var/lib/veyra \
+    VEYRA_LOG_DIR=/var/log/veyra VEYRA_PREFIX=/opt/veyra DB_NAME=veyra TELEPHONY_ENGINE=asterisk \
+    PUBLIC_HOST=pbx.example.invalid PROVISIONING_HTTP=0
+t "env template carries the public host" grep -qx 'VEYRA_PUBLIC_HOST=pbx.example.invalid' "$TMP/env"
+t "env template carries the HTTP provisioning flag" grep -qx 'VEYRA_PROVISIONING_HTTP=0' "$TMP/env"
 printf 'a=@MISSING@\n' >"$TMP/in2"
 t "render_template rejects unrendered placeholders" not bash -c \
     ". '$HERE/../lib/common.sh'; render_template '$TMP/in2' '$TMP/out2'"

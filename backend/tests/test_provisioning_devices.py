@@ -298,3 +298,59 @@ def test_provisioning_server_authenticates_logs_and_serves(admin, app):
     assert r.status_code == 401
     audit_rows = admin.get("/api/v1/audit", params={"q": "provisioning"}).json()["items"]
     assert any(e["action"] == "provisioning_credential.rotate" for e in audit_rows)
+
+
+def test_snapshot_counts_phones_per_extension_and_site_emergency_default(admin, app):
+    from veyra.core.db import session_scope
+    from veyra.core.security.crypto import load_installation_key
+    from veyra.telephony.snapshot import build_snapshot
+
+    org, ext, other, _zone, profile, device = _setup(admin, app)
+    site = admin.post(
+        "/api/v1/sites",
+        json={
+            "organization_id": org["id"],
+            "name": "Annex",
+            "emergency_caller_id_number": "5735550199",
+        },
+    ).json()
+    with session_scope() as db:
+        from veyra.core.models import Extension
+
+        row = db.get(Extension, other["id"])
+        row.site_id = site["id"]
+        db.commit()
+    # A second phone carrying extension 1001 on line 2 → two contacts.
+    r = admin.post(
+        DEVICES,
+        json={
+            "organization_id": org["id"],
+            "mac_address": "0004f2aabbdd",
+            "manufacturer": "Poly",
+            "model": "VVX 411",
+            "profile_id": profile["id"],
+            "primary_extension_id": other["id"],
+            "lines": [ext["id"]],
+        },
+    )
+    assert r.status_code == 201, r.text
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    by_number = {e["number"]: e for e in snap["extensions"]}
+    assert by_number["1001"]["max_contacts"] == 2 and by_number["1002"]["max_contacts"] == 2
+    assert by_number["1002"]["emergency_caller_id_number"] == "5735550199"  # site default
+    assert by_number["1001"]["emergency_caller_id_number"] is None
+    admin.patch(f"{EXT}/{other['id']}", json={"emergency_caller_id_number": "5735550123"})
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    assert {e["number"]: e for e in snap["extensions"]}["1002"][
+        "emergency_caller_id_number"
+    ] == "5735550123"
+    # Reprovision: without Asterisk on the test host the request is refused cleanly and audited.
+    r = admin.post(f"{DEVICES}/{device['id']}/reprovision", json={"action": "check_config"})
+    assert r.status_code == 200 and r.json()["endpoint"] == ext["endpoint_name"]
+    assert r.json()["sent"] in (True, False)
+    assert any(
+        e["action"] == "device.reprovision"
+        for e in admin.get("/api/v1/audit", params={"q": "reprovision"}).json()["items"]
+    )

@@ -8,13 +8,16 @@ upstream veyra_api {
 }
 
 limit_req_zone $binary_remote_addr zone=veyra_auth:10m rate=20r/m;
+# Phones fetch four to six files in a burst at boot (docs/DEVICE_PROVISIONING.md §3.1).
+limit_req_zone $binary_remote_addr zone=veyra_prov:10m rate=60r/m;
 
 server {
 @LISTEN_HTTP@
     server_name _;
     server_tokens off;
-    # Plain HTTP only redirects to HTTPS (phone provisioning over HTTP is a
-    # separate, explicitly enabled server block in a later milestone).
+    # Plain HTTP only redirects to HTTPS. Phone provisioning over HTTP is
+    # served below only when VEYRA_PROVISIONING_HTTP=1 (docs/DEVICE_PROVISIONING.md §3.3).
+@HTTP_PROVISIONING@
     location / { return 301 https://$host$request_uri; }
 }
 
@@ -67,6 +70,21 @@ server {
     }
 
     location /api/ {
+        proxy_pass http://veyra_api;
+        include @VEYRA_ETC@/nginx-proxy.conf;
+    }
+
+    # Phone provisioning (docs/DEVICE_PROVISIONING.md §3): rendered files with
+    # HTTP Basic authentication, and firmware images served from disk.
+    location /provisioning/firmware/ {
+        alias @VEYRA_DATA@/firmware/;
+        types { }
+        default_type application/octet-stream;
+        add_header Cache-Control "no-store";
+    }
+    location /provisioning/ {
+        limit_req zone=veyra_prov burst=30 nodelay;
+        client_max_body_size 8m;
         proxy_pass http://veyra_api;
         include @VEYRA_ETC@/nginx-proxy.conf;
     }

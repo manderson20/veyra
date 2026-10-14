@@ -310,3 +310,15 @@ def _catalog(request: Request, db: Session) -> Any:
     from veyra.api.v1.provisioning import catalog_for  # local import: API helper
 
     return catalog_for(request, db)
+
+
+def prune_requests(db: Session, days: int = 30) -> int:
+    """Drop request-log rows older than ``days`` (run hourly by the worker)."""
+    from datetime import timedelta
+
+    from sqlalchemy import delete
+
+    cutoff = utcnow() - timedelta(days=days)
+    result = db.execute(delete(ProvisioningRequest).where(ProvisioningRequest.at < cutoff))
+    db.commit()
+    return int(getattr(result, "rowcount", 0) or 0)

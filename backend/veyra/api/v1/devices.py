@@ -40,6 +40,7 @@ from veyra.core.security.principal import Principal
 from veyra.provisioning import facts
 from veyra.provisioning.renderer import normalize_mac
 from veyra.provisioning.spec import TemplateError
+from veyra.telephony.asterisk import cli
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 
@@ -599,6 +600,49 @@ def create_device(
     _record(db, ctx, principal, "device.create", device, {"profile_id": str(body.profile_id)})
     db.commit()
     return _outs(request, db, [device])[0]
+
+
+class ReprovisionIn(BaseModel):
+    action: Literal["check_config", "reboot"] = "check_config"
+
+
+class ReprovisionOut(BaseModel):
+    sent: bool
+    endpoint: str | None
+    message: str
+
+
+@router.post(
+    "/{device_id}/reprovision",
+    response_model=ReprovisionOut,
+    summary="Ask the phone to re-read its configuration or reboot (SIP NOTIFY)",
+)
+def reprovision_device(
+    device_id: uuid.UUID,
+    body: ReprovisionIn,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> ReprovisionOut:
+    device = _get(db, principal, device_id, WRITE)
+    ext = db.get(Extension, device.primary_extension_id) if device.primary_extension_id else None
+    if ext is None:
+        return ReprovisionOut(sent=False, endpoint=None, message="The device has no extension.")
+    sent, message = cli.send_notify(body.action, ext.endpoint_name)
+    _record(
+        db,
+        ctx,
+        principal,
+        "device.reprovision",
+        device,
+        {"action": body.action, "endpoint": ext.endpoint_name, "sent": sent},
+    )
+    db.commit()
+    if sent:
+        message = (
+            "Reboot requested." if body.action == "reboot" else "Configuration check requested."
+        )
+    return ReprovisionOut(sent=sent, endpoint=ext.endpoint_name, message=message)
 
 
 class PreviewOut(BaseModel):

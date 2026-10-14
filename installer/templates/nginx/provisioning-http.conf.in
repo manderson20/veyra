@@ -1,0 +1,15 @@
+    # Provisioning over plain HTTP (opt-in: VEYRA_PROVISIONING_HTTP=1 in
+    # /etc/veyra/installer.conf). Credentials are still required, but SIP
+    # secrets cross the network unencrypted: use it on a staging VLAN only.
+    location /provisioning/firmware/ {
+        alias @VEYRA_DATA@/firmware/;
+        types { }
+        default_type application/octet-stream;
+        add_header Cache-Control "no-store";
+    }
+    location /provisioning/ {
+        limit_req zone=veyra_prov burst=30 nodelay;
+        client_max_body_size 8m;
+        proxy_pass http://veyra_api;
+        include @VEYRA_ETC@/nginx-proxy.conf;
+    }

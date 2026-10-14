@@ -53,6 +53,7 @@ def test_generate_deploy_supersede_and_rollback(client, tmp_path):
         "pbx_config.so",
         "app_voicemail.so",
         "app_queue.so",
+        "res_pjsip_notify.so",
     ]
     assert not list(cfg.glob(".*tmp*"))
 

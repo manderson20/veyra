@@ -32,6 +32,7 @@ FILE_DIALPLAN = "extensions.conf"
 FILE_RTP = "rtp.conf"
 FILE_VOICEMAIL = "voicemail.conf"
 FILE_QUEUES = "queues.conf"
+FILE_NOTIFY = "pjsip_notify.conf"
 MANAGED_FILES = [
     FILE_TRANSPORTS,
     FILE_ENDPOINTS,
@@ -40,6 +41,7 @@ MANAGED_FILES = [
     FILE_RTP,
     FILE_VOICEMAIL,
     FILE_QUEUES,
+    FILE_NOTIFY,
 ]
 
 # Module reload per file. Order matters: transports before endpoints is the
@@ -52,6 +54,7 @@ RELOAD_SCOPES: dict[str, str] = {
     FILE_RTP: "res_rtp_asterisk.so",
     FILE_VOICEMAIL: "app_voicemail.so",
     FILE_QUEUES: "app_queue.so",
+    FILE_NOTIFY: "res_pjsip_notify.so",
 }
 SCOPE_ORDER = [
     "res_rtp_asterisk.so",
@@ -59,6 +62,7 @@ SCOPE_ORDER = [
     "pbx_config.so",
     "app_voicemail.so",
     "app_queue.so",
+    "res_pjsip_notify.so",
 ]
 
 CONTEXT_INTERNAL = "veyra-internal"
@@ -150,6 +154,27 @@ def _path(value: str, what: str) -> str:
     return value.rstrip("/")
 
 
+def _notify_conf() -> GeneratedFile:
+    """``pjsip_notify.conf``: the NOTIFY types the device pages send with
+    ``pjsip send notify`` (docs/DEVICE_PROVISIONING.md §3.5). ``check-sync``
+    makes Poly and Yealink phones re-read their configuration; with
+    ``reboot=true`` Yealink phones restart (Poly phones restart when the
+    configuration changed)."""
+    lines = [
+        HEADER,
+        "; NOTIFY types for device management: pjsip send notify <type> endpoint <endpoint>",
+        "",
+        "[veyra-check-config]",
+        "Event=>check-sync;reboot=false",
+        "Content-Length=>0",
+        "",
+        "[veyra-reboot]",
+        "Event=>check-sync;reboot=true",
+        "Content-Length=>0",
+    ]
+    return GeneratedFile(FILE_NOTIFY, "\n".join(lines) + "\n")
+
+
 def generate(
     snapshot: dict[str, Any],
     *,
@@ -175,6 +200,7 @@ def generate(
         _rtp(sip),
         _voicemail(snapshot, boxes, _path(mailqueue_command, "mail queue command")),
         _queues(queues, extensions, prompts),
+        _notify_conf(),
     ]
 
 
@@ -294,6 +320,11 @@ def _endpoints(
             sorted(_slug(g, f"pickup group of {number}") for g in (ext.get("pickup_groups") or []))
         )
         pickup = [f"named_call_group={groups}", f"named_pickup_group={groups}"] if groups else []
+        # Several phones may carry one extension (docs/DEVICE_PROVISIONING.md §2).
+        max_contacts = int(ext.get("max_contacts") or 1)
+        if not 1 <= max_contacts <= 16:
+            raise GenerationError(f"endpoint {name!r}: max_contacts {max_contacts} out of range")
+        contacts = [f"max_contacts={max_contacts}"] if max_contacts > 1 else []
         lines += [
             f"; {org} {number}",
             f"[{name}](veyra-endpoint)",
@@ -311,6 +342,7 @@ def _endpoints(
             f"password={_check_value(str(secret), 'SIP secret')}",
             "",
             f"[{name}](veyra-aor)",
+            *contacts,
             *mwi,
             "",
         ]

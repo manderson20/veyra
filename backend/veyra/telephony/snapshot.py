@@ -15,6 +15,7 @@ Callers must not log or persist a snapshot.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from sqlalchemy import select
@@ -23,6 +24,7 @@ from sqlalchemy.orm import Session
 from veyra.core.mail import load_smtp_settings, sender
 from veyra.core.models import (
     CallQueue,
+    Device,
     Extension,
     InboundRoute,
     Installation,
@@ -38,6 +40,7 @@ from veyra.core.models import (
     RingGroup,
     RingGroupMember,
     SipTrunk,
+    Site,
     TimeCondition,
     VoicemailBox,
 )
@@ -124,6 +127,10 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     org_slug = {o.id: o.slug for o in orgs}
     org_tz = {o.id: o.timezone for o in orgs}
     ext_by_id = {e.id: e for e in extensions}
+    # Site defaults for the emergency caller ID (docs/TRUNKS_ROUTING.md §7) and
+    # the number of phones registering each extension (docs/DEVICE_PROVISIONING.md §2).
+    site_ecid = {s.id: s.emergency_caller_id_number for s in db.scalars(select(Site))}
+    contacts = _contacts(db, ext_by_id)
     ring_groups = [
         g
         for g in db.scalars(select(RingGroup).order_by(RingGroup.number)).all()
@@ -170,7 +177,9 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "organization": org_slug.get(e.organization_id, ""),
                 "caller_id_name": e.caller_id_name,
                 "caller_id_number": e.caller_id_number,
-                "emergency_caller_id_number": e.emergency_caller_id_number,
+                "emergency_caller_id_number": e.emergency_caller_id_number
+                or (site_ecid.get(e.site_id) if e.site_id else None),
+                "max_contacts": contacts.get(e.id, 1),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
             }
@@ -180,6 +189,22 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         **groups,
         **_routing(db, key, active, extensions, targets),
     }
+
+
+def _contacts(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, int]:
+    """Extensions carried by more than one device register more than once."""
+    counts: dict[Any, int] = {}
+    for d in db.scalars(select(Device).where(Device.is_enabled.is_(True))):
+        ids = [d.primary_extension_id] if d.primary_extension_id else []
+        for line in d.lines or []:
+            try:
+                ids.append(uuid.UUID(str(line.get("extension_id"))))
+            except (ValueError, AttributeError):
+                continue
+        for ext_id in ids:
+            if ext_id in ext_by_id:
+                counts[ext_id] = counts.get(ext_id, 0) + 1
+    return {k: v for k, v in counts.items() if v > 1}
 
 
 class Targets:

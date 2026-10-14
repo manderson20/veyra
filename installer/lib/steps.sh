@@ -221,7 +221,7 @@ PY
         if [[ "$DRY_RUN" == "1" ]]; then
             info "[dry-run] would sign companion/veyra-companion.crx with $VEYRA_ETC/secrets/companion-signing.key"
         else
-            local public_host; public_host="${VEYRA_PUBLIC_HOST:-$(hostname -f 2>/dev/null || hostname)}"
+            local public_host; public_host="$(public_host)"
             (umask 077; "$RELEASE_DIR/backend/.venv/bin/python" "$RELEASE_DIR/installer/bin/crx3-pack.py" \
                 --key "$VEYRA_ETC/secrets/companion-signing.key" \
                 --host-permission "https://$public_host/*" \
@@ -239,6 +239,10 @@ PY
     run chmod -R go-w "$RELEASE_DIR"
 }
 
+# The name phones and browsers use for this server (installer.conf overrides).
+public_host() { printf '%s' "${VEYRA_PUBLIC_HOST:-$(hostname -f 2>/dev/null || hostname)}"; }
+provisioning_http() { [[ "${VEYRA_PROVISIONING_HTTP:-0}" == "1" ]] && printf 1 || printf 0; }
+
 do_activate() {
     begin activate "Activating release"
     local previous=""
@@ -255,7 +259,8 @@ do_activate() {
     tmp="$(mktemp)"
     render_template "$SCRIPT_DIR/templates/veyra.env.in" "$tmp" \
         "VEYRA_ETC=$VEYRA_ETC" "VEYRA_DATA=$VEYRA_DATA" "VEYRA_LOG_DIR=$VEYRA_LOG_DIR" \
-        "VEYRA_PREFIX=$VEYRA_PREFIX" "DB_NAME=$VEYRA_DB_NAME" "TELEPHONY_ENGINE=$TELEPHONY_ENGINE"
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "DB_NAME=$VEYRA_DB_NAME" "TELEPHONY_ENGINE=$TELEPHONY_ENGINE" \
+        "PUBLIC_HOST=$(public_host)" "PROVISIONING_HTTP=$(provisioning_http)"
     if [[ -f "$VEYRA_ETC/veyra.env" ]] && ! cmp -s "$tmp" "$VEYRA_ETC/veyra.env"; then
         # Keep a locally configured update source across re-installs.
         local url
@@ -309,11 +314,27 @@ do_telephony() {
     # Module selection needs a restart to take effect, hence a core file.
     install_managed_file "$SCRIPT_DIR/templates/asterisk/modules.conf" /etc/asterisk/modules.conf 0640 root:asterisk
     core_changed=$MANAGED_FILE_CHANGED
+    # The service account sends NOTIFY requests through the Asterisk CLI
+    # (docs/DEVICE_PROVISIONING.md §3.5): the control socket must be writable
+    # by group asterisk. Edited in place in asterisk.conf with a backup.
+    if [[ -f /etc/asterisk/asterisk.conf ]] && ! grep -qE '^astctlpermissions *= *0660' /etc/asterisk/asterisk.conf; then
+        if [[ "$DRY_RUN" != "1" ]]; then
+            cp -a /etc/asterisk/asterisk.conf "/etc/asterisk/asterisk.conf.veyra-backup-$(date +%Y%m%d%H%M%S)"
+            sed -i -E \
+                -e 's/^;?astctlpermissions *=.*/astctlpermissions = 0660/' \
+                -e 's/^;?astctlgroup *=.*/astctlgroup = asterisk/' \
+                /etc/asterisk/asterisk.conf
+            grep -qE '^astctlpermissions' /etc/asterisk/asterisk.conf \
+                || printf '\n[files]\nastctlpermissions = 0660\nastctlgroup = asterisk\n' >>/etc/asterisk/asterisk.conf
+        fi
+        info "Asterisk control socket opened to group asterisk (asterisk.conf; restart needed)"
+        core_changed=1
+    fi
     # Stub files that #tryinclude Veyra's generated configuration. The sample
     # files shipped by the package are backed up beside them.
     MANAGED_FILE_CHANGED=0
     local stub
-    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf; do
+    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf; do
         install_managed_file "$SCRIPT_DIR/templates/asterisk/$stub" "/etc/asterisk/$stub" 0640 root:asterisk
     done
     stub_changed=$MANAGED_FILE_CHANGED
@@ -340,6 +361,8 @@ do_telephony() {
     run install -d -m 2770 -o "$VEYRA_USER" -g asterisk "$VEYRA_DATA/prompts" \
         "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed"
     run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed"
+    # Firmware images uploaded through the API, served by NGINX (www-data reads).
+    run install -d -m 0755 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firmware"
     run systemctl enable asterisk
     if (( core_changed )) || ! systemctl is-active --quiet asterisk; then
         run systemctl restart asterisk
@@ -434,9 +457,16 @@ do_nginx() {
     begin nginx "Configuring NGINX"
     local tmp
     tmp="$(mktemp)"
+    local http_prov=""
+    if [[ "$(provisioning_http)" == "1" ]]; then
+        http_prov="$(sed -e "s|@VEYRA_DATA@|$VEYRA_DATA|g" -e "s|@VEYRA_ETC@|$VEYRA_ETC|g" \
+            "$SCRIPT_DIR/templates/nginx/provisioning-http.conf.in")"
+        warn "Phone provisioning is also served over plain HTTP (VEYRA_PROVISIONING_HTTP=1): SIP secrets cross the network unencrypted"
+    fi
     render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$tmp" \
         "LISTEN_HTTP=$(listen_directives 80 '')" "LISTEN_HTTPS=$(listen_directives 443 ' ssl')" \
-        "API_PORT=$VEYRA_API_PORT" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_PREFIX=$VEYRA_PREFIX"
+        "API_PORT=$VEYRA_API_PORT" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_PREFIX=$VEYRA_PREFIX" \
+        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov"
     # Veyra listens on specific addresses. A reload cannot bind them while
     # NGINX still holds wildcard sockets (the package default site) on the same
     # ports: it binds 443, fails on 80, retries for ~2 s, then drops the whole
