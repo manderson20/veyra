@@ -88,6 +88,7 @@ export function moveItem<T>(items: T[], from: number, to: number): T[] {
 export const DESTINATION_LABELS: Record<DestinationType, string> = {
   extension: "Extension",
   voicemail: "Voicemail of an extension",
+  voicemail_box: "Shared voicemail inbox",
   ivr: "IVR menu",
   ring_group: "Ring group",
   queue: "Call queue",
@@ -101,22 +102,25 @@ export interface DestinationDraft {
   ivr_id: string;
   ring_group_id: string;
   queue_id: string;
+  voicemail_box_id: string;
 }
 
-export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "" };
-export const HANGUP: DestinationDraft = { type: "hangup", extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "" };
+export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "" };
+export const HANGUP: DestinationDraft = { type: "hangup", extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "" };
 
 export function destinationDraft(d: Destination | null | undefined, fallback: DestinationDraft = EMPTY_DESTINATION): DestinationDraft {
   if (!d || d.type === "missing") return fallback;
-  return { type: d.type, extension_id: d.extension_id ?? "", ivr_id: d.ivr_id ?? "", ring_group_id: d.ring_group_id ?? "", queue_id: d.queue_id ?? "" };
+  return { type: d.type, extension_id: d.extension_id ?? "", ivr_id: d.ivr_id ?? "", ring_group_id: d.ring_group_id ?? "", queue_id: d.queue_id ?? "", voicemail_box_id: d.voicemail_box_id ?? "" };
 }
 
 /** The draft field that holds the target of a kind (none for hang up). */
-export function destinationTargetField(type: DestinationType): "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | null {
+export function destinationTargetField(type: DestinationType): "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | null {
   switch (type) {
     case "extension":
     case "voicemail":
       return "extension_id";
+    case "voicemail_box":
+      return "voicemail_box_id";
     case "ivr":
       return "ivr_id";
     case "ring_group":
@@ -137,6 +141,7 @@ export function destinationBody(d: DestinationDraft): DestinationInput {
     ivr_id: field === "ivr_id" ? d.ivr_id || null : null,
     ring_group_id: field === "ring_group_id" ? d.ring_group_id || null : null,
     queue_id: field === "queue_id" ? d.queue_id || null : null,
+    voicemail_box_id: field === "voicemail_box_id" ? d.voicemail_box_id || null : null,
   };
 }
 

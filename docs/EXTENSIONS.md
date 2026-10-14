@@ -14,7 +14,7 @@ classroom, hallway), and carries:
 
 | Field | Notes |
 |---|---|
-| `number` | Digits only, validated against the numbering plan (§2); unique across the installation, shared with ring group and queue numbers ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md)) |
+| `number` | Digits only, validated against the numbering plan (§2); unique across the installation, shared with ring group, queue, paging zone, page and shared inbox numbers ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md), [PAGING_RECORDINGS.md](PAGING_RECORDINGS.md)) |
 | `display_name` | Shown in the interface and used as the default caller ID name |
 | `endpoint_name` | The SIP user name, `<organization slug>-<number>` (for example `example-1001`). Generated, globally unique, follows the number when an extension is renumbered. Registers from one phone unless several registered devices carry the extension ([DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §2), then `max_contacts` follows |
 | `user_id` | Optional. The user must belong to the same organization |

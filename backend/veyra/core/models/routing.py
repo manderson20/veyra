@@ -102,6 +102,9 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     destination_queue_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_queues.id", ondelete="SET NULL")
     )
+    destination_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
     time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("time_conditions.id", ondelete="RESTRICT")
     )
@@ -117,6 +120,9 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     after_hours_queue_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_queues.id", ondelete="SET NULL")
+    )
+    after_hours_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
     )
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

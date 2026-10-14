@@ -181,6 +181,7 @@ def test_ivr_menu_crud_validation_and_in_use(admin, app, tmp_path):
         "ivr_id": None,
         "ring_group_id": None,
         "queue_id": None,
+        "voicemail_box_id": None,
         "label": "Hang up",
         "missing": False,
     }

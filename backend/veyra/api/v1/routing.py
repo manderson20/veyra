@@ -404,7 +404,7 @@ def delete_time_condition(
 # =============================================================== inbound routes
 
 
-DestinationType = Literal["extension", "voicemail", "ivr", "ring_group", "queue"]
+DestinationType = Literal["extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue"]
 
 
 class InboundRouteIn(BaseModel):
@@ -420,12 +420,14 @@ class InboundRouteIn(BaseModel):
     destination_ivr_id: uuid.UUID | None = None
     destination_ring_group_id: uuid.UUID | None = None
     destination_queue_id: uuid.UUID | None = None
+    destination_voicemail_box_id: uuid.UUID | None = None
     time_condition_id: uuid.UUID | None = None
     after_hours_type: DestinationType = "extension"
     after_hours_extension_id: uuid.UUID | None = None
     after_hours_ivr_id: uuid.UUID | None = None
     after_hours_ring_group_id: uuid.UUID | None = None
     after_hours_queue_id: uuid.UUID | None = None
+    after_hours_voicemail_box_id: uuid.UUID | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
     is_enabled: bool = True
 
@@ -453,12 +455,14 @@ class InboundRoutePatch(BaseModel):
     destination_ivr_id: uuid.UUID | None = None
     destination_ring_group_id: uuid.UUID | None = None
     destination_queue_id: uuid.UUID | None = None
+    destination_voicemail_box_id: uuid.UUID | None = None
     time_condition_id: uuid.UUID | None = None
     after_hours_type: DestinationType | None = None
     after_hours_extension_id: uuid.UUID | None = None
     after_hours_ivr_id: uuid.UUID | None = None
     after_hours_ring_group_id: uuid.UUID | None = None
     after_hours_queue_id: uuid.UUID | None = None
+    after_hours_voicemail_box_id: uuid.UUID | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
     is_enabled: bool | None = None
 
@@ -478,6 +482,7 @@ class InboundRouteOut(BaseModel):
     destination_ivr_id: uuid.UUID | None
     destination_ring_group_id: uuid.UUID | None
     destination_queue_id: uuid.UUID | None
+    destination_voicemail_box_id: uuid.UUID | None
     # Extension number and name for extension and voicemail destinations.
     destination_number: str | None
     destination_name: str | None
@@ -490,6 +495,7 @@ class InboundRouteOut(BaseModel):
     after_hours_ivr_id: uuid.UUID | None
     after_hours_ring_group_id: uuid.UUID | None
     after_hours_queue_id: uuid.UUID | None
+    after_hours_voicemail_box_id: uuid.UUID | None
     after_hours_number: str | None
     after_hours_name: str | None
     after_hours: DestinationOut | None
@@ -547,6 +553,7 @@ def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
                 destination_ivr_id=r.destination_ivr_id,
                 destination_ring_group_id=r.destination_ring_group_id,
                 destination_queue_id=r.destination_queue_id,
+                destination_voicemail_box_id=r.destination_voicemail_box_id,
                 destination_number=dest.number if dest else None,
                 destination_name=dest.display_name if dest else None,
                 destination=dest_out,
@@ -559,6 +566,7 @@ def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
                 after_hours_ivr_id=r.after_hours_ivr_id,
                 after_hours_ring_group_id=r.after_hours_ring_group_id,
                 after_hours_queue_id=r.after_hours_queue_id,
+                after_hours_voicemail_box_id=r.after_hours_voicemail_box_id,
                 after_hours_number=after.number if after else None,
                 after_hours_name=after.display_name if after else None,
                 after_hours=after_out,
@@ -668,12 +676,14 @@ def create_inbound(
         destination_ivr_id=body.destination_ivr_id,
         destination_ring_group_id=body.destination_ring_group_id,
         destination_queue_id=body.destination_queue_id,
+        destination_voicemail_box_id=body.destination_voicemail_box_id,
         time_condition_id=body.time_condition_id,
         after_hours_type=body.after_hours_type,
         after_hours_extension_id=body.after_hours_extension_id,
         after_hours_ivr_id=body.after_hours_ivr_id,
         after_hours_ring_group_id=body.after_hours_ring_group_id,
         after_hours_queue_id=body.after_hours_queue_id,
+        after_hours_voicemail_box_id=body.after_hours_voicemail_box_id,
         caller_id_prefix=body.caller_id_prefix,
         is_enabled=body.is_enabled,
     )
@@ -708,6 +718,11 @@ def create_inbound(
             ),
             "destination_queue_id": (
                 str(route.destination_queue_id) if route.destination_queue_id else None
+            ),
+            "destination_voicemail_box_id": (
+                str(route.destination_voicemail_box_id)
+                if route.destination_voicemail_box_id
+                else None
             ),
         },
     )
@@ -760,12 +775,14 @@ def update_inbound(
         "destination_ivr_id",
         "destination_ring_group_id",
         "destination_queue_id",
+        "destination_voicemail_box_id",
         "time_condition_id",
         "after_hours_type",
         "after_hours_extension_id",
         "after_hours_ivr_id",
         "after_hours_ring_group_id",
         "after_hours_queue_id",
+        "after_hours_voicemail_box_id",
         "is_enabled",
     ):
         if field in changes and changes[field] != getattr(route, field):
@@ -780,6 +797,7 @@ def update_inbound(
     if route.time_condition_id is None:
         route.after_hours_extension_id = route.after_hours_ivr_id = None
         route.after_hours_ring_group_id = route.after_hours_queue_id = None
+        route.after_hours_voicemail_box_id = None
     else:
         destinations.apply(
             route,

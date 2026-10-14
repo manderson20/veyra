@@ -349,7 +349,7 @@ def generate(
     _check_group_numbers(extensions, ring_groups, queues)
     return [
         _transports(sip),
-        _endpoints(sip, extensions, set(boxes)),
+        _endpoints(sip, extensions, set(boxes), dict(snapshot.get("shared_mailboxes") or {})),
         _trunks(sip, trunks),
         _dialplan(snapshot, extensions, trunks, boxes, prompts),
         _rtp(sip),
@@ -404,7 +404,10 @@ def _bind(address: str, port: int) -> str:
 
 
 def _endpoints(
-    sip: SipSettings, extensions: list[dict[str, Any]], mailboxes: set[str] | None = None
+    sip: SipSettings,
+    extensions: list[dict[str, Any]],
+    mailboxes: set[str] | None = None,
+    shared_mailboxes: dict[str, list[str]] | None = None,
 ) -> GeneratedFile:
     allow = ",".join(sip.codecs)
     mailboxes = mailboxes or set()
@@ -469,7 +472,17 @@ def _endpoints(
         emergency_cid = [f"set_var=VEYRA_EMERGENCY_CID={ecid}"] if ecid else []
         # Message waiting indication: the phone subscribes to, or is notified
         # about, its own mailbox (docs/VOICEMAIL_IVR.md §3.2).
-        mwi = [f"mailboxes={number}@{VOICEMAIL_CONTEXT}"] if number in mailboxes else []
+        # Own box plus the shared inboxes the phone's lamp follows
+        # (docs/PAGING_RECORDINGS.md §5).
+        boxes_of_phone = ([number] if number in mailboxes else []) + [
+            _check_value(str(n), "shared inbox number")
+            for n in (shared_mailboxes or {}).get(number, [])
+        ]
+        mwi = (
+            [f"mailboxes={','.join(f'{n}@{VOICEMAIL_CONTEXT}' for n in boxes_of_phone)}"]
+            if boxes_of_phone
+            else []
+        )
         # Pickup groups (docs/RING_GROUPS_QUEUES.md §4): the phone can be
         # picked up by, and can pick up, every member of its groups.
         groups = ",".join(
@@ -760,6 +773,14 @@ def _dialplan(
                 f" same => n(busy),VoiceMail({number}@{VOICEMAIL_CONTEXT},b)",
                 " same => n,Hangup()",
             ]
+    for number, b in sorted(boxes.items(), key=lambda kv: (len(kv[0]), kv[0])):
+        if not b.get("shared"):
+            continue
+        lines += [
+            f"exten => {number},1,NoOp(Veyra shared inbox {number})",
+            f" same => n,VoiceMail({number}@{VOICEMAIL_CONTEXT},u)",
+            " same => n,Hangup()",
+        ]
     for g in ring_groups:
         slug = _slug(g["slug"], "ring group slug")
         number = str(g["number"])
@@ -1347,8 +1368,10 @@ def _check_boxes(
         number = str(b.get("number") or "")
         if not _NUMBER_RE.match(number):
             raise GenerationError(f"voicemail box number {number!r} is not valid")
-        if number not in numbers:
+        if number not in numbers and not b.get("shared"):
             continue
+        if b.get("shared") and number in numbers:
+            raise GenerationError(f"shared inbox {number} uses an extension's number")
         if number in out:
             raise GenerationError(f"extension {number} has more than one voicemail box")
         ring = int(b.get("ring_seconds") or 20)

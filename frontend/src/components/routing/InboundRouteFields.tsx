@@ -40,6 +40,7 @@ export function inboundRouteDraft(r: InboundRoute): InboundRouteDraft {
       ivr_id: r.destination_ivr_id ?? "",
       ring_group_id: r.destination_ring_group_id ?? "",
       queue_id: r.destination_queue_id ?? "",
+      voicemail_box_id: r.destination_voicemail_box_id ?? "",
     },
     time_condition_id: r.time_condition_id ?? "",
     after_hours: r.time_condition_id
@@ -49,6 +50,7 @@ export function inboundRouteDraft(r: InboundRoute): InboundRouteDraft {
         ivr_id: r.after_hours_ivr_id ?? "",
         ring_group_id: r.after_hours_ring_group_id ?? "",
         queue_id: r.after_hours_queue_id ?? "",
+        voicemail_box_id: r.after_hours_voicemail_box_id ?? "",
       }
       : destinationDraft(null),
     caller_id_prefix: r.caller_id_prefix ?? "",
