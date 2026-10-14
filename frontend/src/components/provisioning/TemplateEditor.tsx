@@ -98,7 +98,7 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
         </Card>
       </div>
       {problems.length ? <Callout tone="danger" title="The template did not validate"><ul style={{ margin: 0, paddingLeft: 18 }}>{problems.map((p) => <li key={p}>{p}</li>)}</ul></Callout> : errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
-      <div className="form-actions"><Button variant="primary" type="submit" loading={busy} icon="save">Save template</Button></div>
+      <div className="form-actions"><Button variant="primary" type="submit" loading={busy} icon="check">Save template</Button></div>
     </form>
   );
 }

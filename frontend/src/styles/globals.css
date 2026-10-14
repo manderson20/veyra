@@ -376,3 +376,61 @@ button.sidebar__heading:hover { color: var(--sidebar-text); }
 .list-plain > li + li { border-top: 1px solid var(--border); }
 .list-row { display: flex; gap: var(--space-3); align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-5); }
 .divider { height: 1px; background: var(--border); border: 0; margin: 0; }
+
+/* ---------------- Navigation rail and flyout (docs/INTERFACE_REWORK.md §1) ---------------- */
+.sidebar--rail { overflow: visible; }
+.rail { flex: 1; padding: var(--space-3); }
+.rail__button {
+  width: 100%; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3);
+  border: 0; border-radius: var(--radius-md); background: none; color: var(--sidebar-text); font: inherit;
+  font-weight: var(--weight-medium); cursor: pointer; text-align: left;
+}
+.rail__button:hover, .rail__button--open { background: var(--sidebar-hover-bg); color: #fff; }
+.rail__button--current { background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
+.rail__button svg:first-child { flex: 0 0 20px; }
+.rail__button svg:last-child { margin-left: auto; opacity: 0.6; }
+.rail__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell--collapsed .rail__label, .shell--collapsed .rail__button svg:last-child { display: none; }
+.shell--collapsed .rail__button { justify-content: center; padding: var(--space-3) var(--space-2); }
+.rail__inline { margin: var(--space-1) 0 var(--space-2); padding-left: var(--space-4); }
+.flyout {
+  position: fixed; top: 0; bottom: 0; left: var(--sidebar-width); width: 280px; z-index: 34;
+  background: var(--surface); color: var(--text); border-right: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; overflow-y: auto; padding: var(--space-4) var(--space-3);
+}
+.shell--collapsed .flyout { left: var(--sidebar-collapsed); }
+.flyout__head { padding: var(--space-2) var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); margin-bottom: var(--space-2); }
+.flyout__title { display: block; font-weight: var(--weight-semibold); font-size: var(--text-lg); }
+.flyout__description { display: block; color: var(--text-muted); font-size: var(--text-sm); margin-top: var(--space-1); }
+.flyout__list li, .rail__inline li { border-top: 0; }
+.flyout__link {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md); color: inherit; font-weight: var(--weight-medium);
+}
+.flyout__link:hover { background: var(--surface-muted, rgba(127,127,127,0.12)); text-decoration: none; }
+.flyout__link[aria-current="page"] { background: var(--primary); color: #fff; }
+.flyout__link--planned { color: var(--text-muted); font-weight: 400; }
+.flyout__link-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail__inline .flyout__link { color: var(--sidebar-text); }
+.rail__inline .flyout__link:hover { background: var(--sidebar-hover-bg); color: #fff; }
+.rail__inline .flyout__link[aria-current="page"] { background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
+.breadcrumb { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); white-space: nowrap; }
+.breadcrumb strong { color: var(--text); font-weight: var(--weight-semibold); }
+@media (max-width: 1024px) {
+  .flyout { display: none; }
+  .breadcrumb { display: none; }
+}
+
+/* ---------------- Charts (docs/INTERFACE_REWORK.md §2.3) ---------------- */
+.chart { display: flex; flex-direction: column; gap: var(--space-2); }
+.chart__svg { width: 100%; height: 160px; display: block; }
+.chart__grid { stroke: var(--border); stroke-width: 1; }
+.chart__cursor { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart__axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.chart__legend { display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: var(--text-sm); }
+.chart__legend-item { display: inline-flex; align-items: center; gap: var(--space-2); }
+.chart__swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart__empty { margin: 0; }
+.range-picker { display: inline-flex; gap: 2px; }
+.range-picker button { font-size: var(--text-xs); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; }
+.range-picker button[aria-pressed="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }

@@ -124,3 +124,10 @@ Call history and reports (Milestone 10) and per-organization graphs
 
 * 2026-10-14: owner chose to continue in roadmap order, so 9b follows 9
   directly.
+* 2026-10-14 (implementation): the worker's default interval changed from
+  60 to 30 seconds so the sampler matches §2.1 without a second loop; the
+  external-call count is the number of trunk legs, the internal count the
+  paired remainder; the flyout is a fixed panel beside the rail, hidden on
+  narrow screens where the drawer expands the category inline; the open
+  category is remembered together with the route it was opened on, so a
+  navigation closes it without an effect.

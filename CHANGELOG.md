@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.12.0-dev — unreleased (Milestone 9b)
+
+### Changed
+- **Navigation**: the sidebar is a rail of six categories that never scrolls; clicking or hovering a category opens a flyout panel with its pages (keyboard: Enter opens, arrows move, Escape closes); in the mobile drawer a category expands inline; the top bar shows a breadcrumb (category › page) ([INTERFACE_REWORK.md](docs/INTERFACE_REWORK.md) §1).
+
+### Added
+- **Dashboard graphs**: two cards, Channels (with registered phones) and Calls internal vs external, with a 1 h / 6 h / 24 h / 7 d range, refreshed every 30 s, drawn by a dependency-free SVG chart with a screen-reader table. The worker records one engine reading per iteration (every 30 s, `call_samples`, kept 14 days); `GET /system/metrics/calls` serves it downsampled to at most 300 points per range (migration `0012`).
+
 ## 0.11.0 — 2026-10-14 (Milestone 9)
 
 ### Added

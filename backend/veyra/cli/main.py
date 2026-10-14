@@ -799,6 +799,7 @@ def cmd_worker(args: argparse.Namespace) -> int:
     settings = get_settings()
     log.info("%s worker started", plain_header())
     last_purge = 0.0
+    last_metrics_prune = 0.0
     while True:
         try:
             with session_scope() as db:
@@ -838,6 +839,14 @@ def cmd_worker(args: argparse.Namespace) -> int:
                 process_mail_queue(db, settings, log)
                 if settings.telephony_engine != "none":
                     ensure_prompt_dirs(db, settings)
+                    # Dashboard graphs: one reading per iteration (docs/INTERFACE_REWORK.md §2).
+                    from veyra.telephony import get_adapter
+                    from veyra.telephony.metrics import prune, record_sample
+
+                    record_sample(db, get_adapter(settings))
+                    if time.monotonic() - last_metrics_prune >= 3600 or args.once:
+                        prune(db)
+                        last_metrics_prune = time.monotonic()
         except Exception:
             log.exception("Worker iteration failed")
         if args.once:
@@ -989,7 +998,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_deployer)
 
     s = sub.add_parser("worker", help="Run the background worker")
-    s.add_argument("--interval", type=int, default=60)
+    s.add_argument("--interval", type=int, default=30)
     s.add_argument("--once", action="store_true")
     s.set_defaults(func=cmd_worker)
     return p

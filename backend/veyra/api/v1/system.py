@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -108,6 +108,23 @@ def health(
         # Live counts from the engine; None when the engine cannot report them.
         "active_calls": active_calls,
         "registrations": registrations,
+    }
+
+
+@router.get("/metrics/calls", summary="Channel and call history for the dashboard graphs")
+def call_metrics(
+    request: Request,
+    range: str = Query("1h", pattern="^(1h|6h|24h|7d)$"),
+    principal: Principal = Depends(require("system.health.read")),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    from veyra.telephony import metrics
+
+    current = metrics.read(request.app.state.telephony)
+    return {
+        **metrics.series(db, range),
+        "current": current.as_dict() if current else None,
+        "available": current is not None,
     }
 
 

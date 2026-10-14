@@ -1436,3 +1436,24 @@ export interface ProvisioningCredentialRotated extends ProvisioningCredential {
 export interface CatalogModels {
   manufacturers: { name: string; models: string[] }[];
 }
+
+// ---------------------------------------------------------------- dashboard graphs (docs/INTERFACE_REWORK.md §2)
+
+export type MetricsRange = "1h" | "6h" | "24h" | "7d";
+
+export interface CallMetricPoint {
+  at: string;
+  channels: number;
+  calls_internal: number;
+  calls_external: number;
+  registrations: number;
+}
+
+export interface CallMetrics {
+  range: MetricsRange;
+  step_seconds: number;
+  since: string;
+  points: CallMetricPoint[];
+  current: Omit<CallMetricPoint, "at"> | null;
+  available: boolean;
+}

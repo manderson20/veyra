@@ -23,6 +23,7 @@ from veyra.core.models.identity import (
     UserPreference,
     UserSession,
 )
+from veyra.core.models.metrics import CallSample
 from veyra.core.models.platform import (
     AuditEvent,
     AvailableUpdate,
@@ -62,6 +63,7 @@ __all__ = [
     "Base",
     "Building",
     "CallQueue",
+    "CallSample",
     "ClusterEvent",
     "ClusterNode",
     "ConfigRevision",

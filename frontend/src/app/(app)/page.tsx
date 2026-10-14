@@ -2,7 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Chart } from "@/components/common/Chart";
 import { MetricCard, Meter } from "@/components/common/Metric";
 import { OUTCOME, TELEPHONY_STATE } from "@/components/common/labels";
 import {
@@ -17,7 +18,7 @@ import {
   toStatus,
 } from "@/components/ui";
 import { formatBytes, formatDuration, formatPercent, formatRelative } from "@/lib/format";
-import type { AuditEvent, AvailableUpdate, Page, SystemHealth } from "@/lib/types";
+import type { AuditEvent, AvailableUpdate, CallMetrics, MetricsRange, Page, SystemHealth } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
 
@@ -29,6 +30,52 @@ function NotAvailable({ text }: { text: string }) {
       <Badge tone="outline">Not available yet</Badge>
       <span className="subtle">{text}</span>
     </span>
+  );
+}
+
+const RANGE_SECONDS: Record<MetricsRange, number> = { "1h": 3600, "6h": 6 * 3600, "24h": 86400, "7d": 7 * 86400 };
+
+function RangePicker({ value, onChange }: { value: MetricsRange; onChange: (r: MetricsRange) => void }) {
+  return (
+    <span className="range-picker" role="group" aria-label="Time range">
+      {(Object.keys(RANGE_SECONDS) as MetricsRange[]).map((r) => (
+        <button key={r} type="button" aria-pressed={value === r} onClick={() => onChange(r)}>{r}</button>
+      ))}
+    </span>
+  );
+}
+
+/** The two graph cards of docs/INTERFACE_REWORK.md §2.3, sharing one range and one request. */
+function CallGraphs() {
+  const [range, setRange] = useState<MetricsRange>("1h");
+  const metrics = useApiData<CallMetrics>("/system/metrics/calls", { range });
+  const reload = metrics.reload;
+  useEffect(() => {
+    const t = window.setInterval(reload, REFRESH_MS);
+    return () => window.clearInterval(t);
+  }, [reload]);
+  const m = metrics.data;
+  const picker = <RangePicker value={range} onChange={setRange} />;
+  const unavailable = m && !m.available && m.points.length === 0;
+  return (
+    <div className="grid grid--2">
+      <Card title="Channels" subtitle={m?.current ? `${m.current.channels} now · ${m.current.registrations} phones registered` : "Engine channels over time"} actions={picker}>
+        {metrics.error ? <ErrorState compact error={metrics.error} onRetry={metrics.reload} /> : !m ? <LoadingState /> : unavailable ? (
+          <NotAvailable text="The telephony engine is not reporting calls." />
+        ) : (
+          <Chart points={m.points} rangeSeconds={RANGE_SECONDS[range]} ariaLabel="Channels and registered phones over time"
+            series={[{ key: "channels", label: "Channels", color: "var(--primary)", area: true }, { key: "registrations", label: "Registered phones", color: "var(--text-muted)" }]} />
+        )}
+      </Card>
+      <Card title="Calls: internal vs external" subtitle={m?.current ? `${m.current.calls_internal} internal · ${m.current.calls_external} external now` : "Calls between phones and calls through trunks"} actions={picker}>
+        {metrics.error ? <ErrorState compact error={metrics.error} onRetry={metrics.reload} /> : !m ? <LoadingState /> : unavailable ? (
+          <NotAvailable text="The telephony engine is not reporting calls." />
+        ) : (
+          <Chart points={m.points} rangeSeconds={RANGE_SECONDS[range]} ariaLabel="Internal and external calls over time"
+            series={[{ key: "calls_internal", label: "Internal", color: "var(--primary)" }, { key: "calls_external", label: "External", color: "var(--danger)" }]} />
+        )}
+      </Card>
+    </div>
   );
 }
 
@@ -86,6 +133,8 @@ export default function Dashboard() {
             </MetricCard>
             <MetricCard icon="clock" label="Uptime" value={formatDuration(h.host.uptime_seconds)} hint="Since the server last started" />
           </section>
+
+          <CallGraphs />
 
           <div className="grid grid--2">
             <Card title="Calls and registrations" subtitle="Live telephony activity">
