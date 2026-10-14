@@ -163,6 +163,16 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin", "technician"),
     ),
     PermissionDef(
+        "bells.read",
+        "View calendars and bell schedules",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef(
+        "bells.write",
+        "Create and edit calendars and bell schedules",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
         "devices.read",
         "View devices",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),

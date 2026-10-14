@@ -2,6 +2,7 @@
 """All core ORM models. Import this package so metadata is complete."""
 
 from veyra.core.models.base import Base
+from veyra.core.models.bells import BellRing, BellSchedule, Calendar, CalendarEvent
 from veyra.core.models.groups import (
     CallQueue,
     PickupGroup,
@@ -62,7 +63,11 @@ __all__ = [
     "AuditEvent",
     "AvailableUpdate",
     "Base",
+    "BellRing",
+    "BellSchedule",
     "Building",
+    "Calendar",
+    "CalendarEvent",
     "CallQueue",
     "CallSample",
     "ClusterEvent",

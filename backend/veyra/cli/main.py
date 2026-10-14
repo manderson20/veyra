@@ -765,6 +765,31 @@ def process_mail_queue(db: Any, settings: Any, log: Any) -> None:
         log.info("Mail queue: %d sent, %d failed", len(result.sent), len(result.failed))
 
 
+def poll_calendars_and_ring_bells(db: Any, settings: Any, log: Any) -> None:
+    """Bell schedules (docs/PAGING_RECORDINGS.md §4): poll due calendars, ring
+    what is due; errors are logged on the calendar row and never stop the worker."""
+    from veyra.bells import calendars, scheduler
+    from veyra.core.security.crypto import try_load_installation_key
+    from veyra.telephony import get_adapter
+
+    key = try_load_installation_key(settings)
+    for cal in calendars.due_calendars(db):
+        try:
+            n = calendars.poll(db, cal, key)
+            log.info("Calendar %s: %d event(s) in the next two days", cal.name, n)
+        except Exception:
+            db.rollback()
+            log.exception("Calendar %s: poll failed", cal.name)
+    if settings.telephony_engine == "none":
+        return
+    try:
+        for ring in scheduler.ring(db, get_adapter(settings)):
+            log.info("Bell %s: %s", ring.summary, ring.outcome)
+    except Exception:
+        db.rollback()
+        log.exception("Bell scheduler pass failed")
+
+
 def ensure_prompt_dirs(db: Any, settings: Any) -> None:
     """Every active organization gets its prompt folder and ``incoming``
     sub-folder, so ``*95`` recordings from phones have a place to land before
@@ -842,10 +867,14 @@ def cmd_worker(args: argparse.Namespace) -> int:
                     if pruned:
                         log.info("Pruned %d provisioning request log rows", pruned)
                     from veyra.api.v1.pages import prune_log
+                    from veyra.bells import scheduler
 
                     pruned_pages = prune_log(db)
                     if pruned_pages:
                         log.info("Pruned %d page log rows", pruned_pages)
+                    pruned_rings = scheduler.prune(db)
+                    if pruned_rings:
+                        log.info("Pruned %d bell rings", pruned_rings)
                 policy = db.get(UpdatePolicy, "veyra_core")
                 last = db.scalar(
                     select(UpdateCheck).order_by(UpdateCheck.checked_at.desc()).limit(1)
@@ -864,6 +893,7 @@ def cmd_worker(args: argparse.Namespace) -> int:
                     check = check_for_updates(db, settings, Keyring.load(settings.trust_dir))
                     log.info("Update check: %s %s", check.outcome, check.message)
                 process_mail_queue(db, settings, log)
+                poll_calendars_and_ring_bells(db, settings, log)
                 if settings.telephony_engine != "none":
                     ensure_prompt_dirs(db, settings)
                     # Dashboard graphs: one reading per iteration (docs/INTERFACE_REWORK.md §2).
