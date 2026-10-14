@@ -89,6 +89,8 @@ export const DESTINATION_LABELS: Record<DestinationType, string> = {
   extension: "Extension",
   voicemail: "Voicemail of an extension",
   ivr: "IVR menu",
+  ring_group: "Ring group",
+  queue: "Call queue",
   hangup: "Hang up",
 };
 
@@ -97,28 +99,51 @@ export interface DestinationDraft {
   type: DestinationType;
   extension_id: string;
   ivr_id: string;
+  ring_group_id: string;
+  queue_id: string;
 }
 
-export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", extension_id: "", ivr_id: "" };
-export const HANGUP: DestinationDraft = { type: "hangup", extension_id: "", ivr_id: "" };
+export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "" };
+export const HANGUP: DestinationDraft = { type: "hangup", extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "" };
 
 export function destinationDraft(d: Destination | null | undefined, fallback: DestinationDraft = EMPTY_DESTINATION): DestinationDraft {
   if (!d || d.type === "missing") return fallback;
-  return { type: d.type, extension_id: d.extension_id ?? "", ivr_id: d.ivr_id ?? "" };
+  return { type: d.type, extension_id: d.extension_id ?? "", ivr_id: d.ivr_id ?? "", ring_group_id: d.ring_group_id ?? "", queue_id: d.queue_id ?? "" };
+}
+
+/** The draft field that holds the target of a kind (none for hang up). */
+export function destinationTargetField(type: DestinationType): "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | null {
+  switch (type) {
+    case "extension":
+    case "voicemail":
+      return "extension_id";
+    case "ivr":
+      return "ivr_id";
+    case "ring_group":
+      return "ring_group_id";
+    case "queue":
+      return "queue_id";
+    default:
+      return null;
+  }
 }
 
 /** Normalize a draft for the API: only the target of its kind is sent. */
 export function destinationBody(d: DestinationDraft): DestinationInput {
-  if (d.type === "hangup") return { type: "hangup", extension_id: null, ivr_id: null };
-  if (d.type === "ivr") return { type: "ivr", extension_id: null, ivr_id: d.ivr_id || null };
-  return { type: d.type, extension_id: d.extension_id || null, ivr_id: null };
+  const field = destinationTargetField(d.type);
+  return {
+    type: d.type,
+    extension_id: field === "extension_id" ? d.extension_id || null : null,
+    ivr_id: field === "ivr_id" ? d.ivr_id || null : null,
+    ring_group_id: field === "ring_group_id" ? d.ring_group_id || null : null,
+    queue_id: field === "queue_id" ? d.queue_id || null : null,
+  };
 }
 
 /** A draft is complete when its kind has the target it needs. */
 export function destinationComplete(d: DestinationDraft): boolean {
-  if (d.type === "hangup") return true;
-  if (d.type === "ivr") return d.ivr_id.length > 0;
-  return d.extension_id.length > 0;
+  const field = destinationTargetField(d.type);
+  return field === null || d[field].length > 0;
 }
 
 /** Keys an IVR menu can map, in keypad order. */
