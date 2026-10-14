@@ -317,14 +317,18 @@ do_telephony() {
     # The service account sends NOTIFY requests through the Asterisk CLI
     # (docs/DEVICE_PROVISIONING.md §3.5): the control socket must be writable
     # by group asterisk. Edited in place in asterisk.conf with a backup.
-    if [[ -f /etc/asterisk/asterisk.conf ]] && ! grep -qE '^astctlpermissions *= *0660' /etc/asterisk/asterisk.conf; then
+    # The package ships the settings commented out under a commented-out
+    # [files] header; both must be active.
+    if [[ -f /etc/asterisk/asterisk.conf ]] && { ! grep -qE '^astctlpermissions *= *0660' /etc/asterisk/asterisk.conf \
+        || ! grep -qE '^\[files\]' /etc/asterisk/asterisk.conf; }; then
         if [[ "$DRY_RUN" != "1" ]]; then
             cp -a /etc/asterisk/asterisk.conf "/etc/asterisk/asterisk.conf.veyra-backup-$(date +%Y%m%d%H%M%S)"
             sed -i -E \
+                -e 's/^;\[files\]/[files]/' \
                 -e 's/^;?astctlpermissions *=.*/astctlpermissions = 0660/' \
                 -e 's/^;?astctlgroup *=.*/astctlgroup = asterisk/' \
                 /etc/asterisk/asterisk.conf
-            grep -qE '^astctlpermissions' /etc/asterisk/asterisk.conf \
+            grep -qE '^\[files\]' /etc/asterisk/asterisk.conf \
                 || printf '\n[files]\nastctlpermissions = 0660\nastctlgroup = asterisk\n' >>/etc/asterisk/asterisk.conf
         fi
         info "Asterisk control socket opened to group asterisk (asterisk.conf; restart needed)"
