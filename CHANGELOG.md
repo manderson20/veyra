@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.13.0-dev — unreleased (Milestone 9c)
+
+### Added
+- **Audio library** (Telephony → Audio, the former Prompts page; `/prompts` with `kind`, `license`, `credit` and a `kind` filter): recordings are classed as menu prompt, bell, announcement, greeting or hold music; MP3, OGG, FLAC and M4A uploads are decoded by `ffmpeg` (installer package; WAV only without it, `verify.sh` warns) ([PAGING_RECORDINGS.md](docs/PAGING_RECORDINGS.md) §3; migration `0013`).
+
 ## 0.12.0 — 2026-10-14 (Milestone 9b)
 
 ### Changed

@@ -11,7 +11,7 @@ import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -60,9 +60,16 @@ def _unsupported(message: str) -> ProblemError:
 # ----------------------------------------------------------------- schemas
 
 
+Kind = Literal["prompt", "bell", "announcement", "greeting", "music"]
+KINDS: tuple[str, ...] = ("prompt", "bell", "announcement", "greeting", "music")
+
+
 class PromptPatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, max_length=2000)
+    kind: Kind | None = None
+    license: str | None = Field(None, max_length=100)
+    credit: str | None = Field(None, max_length=200)
 
     @field_validator("name")
     @classmethod
@@ -83,6 +90,9 @@ class PromptOut(BaseModel):
     slug: str
     description: str | None
     source: str
+    kind: str
+    license: str | None
+    credit: str | None
     duration_seconds: float
     size_bytes: int
     file_present: bool
@@ -173,6 +183,9 @@ def _outs(request: Request, db: Session, rows: list[Prompt]) -> list[PromptOut]:
                 slug=r.slug,
                 description=r.description,
                 source=r.source,
+                kind=r.kind,
+                license=r.license,
+                credit=r.credit,
                 duration_seconds=round(r.duration_seconds, 1),
                 size_bytes=r.size_bytes,
                 file_present=prompt_path(base, org.slug, r.slug).is_file() if org else False,
@@ -209,11 +222,11 @@ def _unique_slug(db: Session, org_id: uuid.UUID, name: str) -> str:
 
 
 async def _read_upload(file: UploadFile) -> tuple[bytes, float]:
-    data = await file.read(audio.MAX_UPLOAD_BYTES + 1)
+    data = await file.read(audio.MAX_COMPRESSED_BYTES + 1)
     if not data:
         raise _unsupported("the file is empty")
     try:
-        return audio.convert_wav(data)
+        return audio.convert_any(data, file.filename)
     except audio.AudioError as e:
         raise _unsupported(str(e)) from e
 
@@ -403,6 +416,7 @@ def delete_recording(
 def list_prompts(
     request: Request,
     organization_id: uuid.UUID | None = None,
+    kind: Kind | None = None,
     q: str | None = Query(None, max_length=100),
     params: PageParams = Depends(page_params),
     principal: Principal = Depends(require("ivr.read")),
@@ -413,6 +427,8 @@ def list_prompts(
     )
     if organization_id:
         stmt = stmt.where(Prompt.organization_id == organization_id)
+    if kind:
+        stmt = stmt.where(Prompt.kind == kind)
     if q:
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(Prompt.name.ilike(like), Prompt.description.ilike(like)))
@@ -422,12 +438,20 @@ def list_prompts(
     )
 
 
-@router.post("", response_model=PromptOut, status_code=201, summary="Upload a prompt (WAV)")
+@router.post(
+    "",
+    response_model=PromptOut,
+    status_code=201,
+    summary="Upload audio (WAV, or MP3 and others with ffmpeg)",
+)
 async def create_prompt(
     request: Request,
     organization_id: uuid.UUID = Form(...),
     name: str = Form(..., min_length=1, max_length=100),
     description: str | None = Form(None, max_length=2000),
+    kind: Kind = Form("prompt"),
+    license: str | None = Form(None, max_length=100),
+    credit: str | None = Form(None, max_length=200),
     file: UploadFile = File(...),
     principal: Principal = Depends(require("ivr.write")),
     db: Session = Depends(get_db),
@@ -445,6 +469,9 @@ async def create_prompt(
         slug=_unique_slug(db, org.id, name),
         description=(description or "").strip() or None,
         source="upload",
+        kind=kind,
+        license=(license or "").strip() or None,
+        credit=(credit or "").strip() or None,
         duration_seconds=duration,
         size_bytes=len(data),
     )
@@ -556,6 +583,15 @@ def update_prompt(
         if desc != prompt.description:
             prompt.description = desc
             details["description"] = True
+    if "kind" in changes and changes["kind"] and changes["kind"] != prompt.kind:
+        details["kind"] = {"from": prompt.kind, "to": changes["kind"]}
+        prompt.kind = changes["kind"]
+    for field in ("license", "credit"):
+        if field in changes:
+            value = (changes[field] or "").strip() or None
+            if value != getattr(prompt, field):
+                setattr(prompt, field, value)
+                details[field] = value
     if not details:
         return _outs(request, db, [prompt])[0]
     db.flush()

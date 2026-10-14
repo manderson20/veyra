@@ -10,6 +10,8 @@ from __future__ import annotations
 import io
 import logging
 import os
+import shutil
+import subprocess
 import sys
 import wave
 from array import array
@@ -28,6 +30,24 @@ ACCEPTED = (
     "a WAV file (PCM, 8 or 16 bit, mono or stereo, up to 48 kHz), "
     f"at most {MAX_UPLOAD_BYTES // (1024 * 1024)} MB and {MAX_SECONDS // 60} minutes"
 )
+# Compressed uploads (MP3, OGG, FLAC, M4A) are decoded by ffmpeg when it is
+# installed (docs/PAGING_RECORDINGS.md §3); the installer adds the package.
+COMPRESSED_SUFFIXES = (".mp3", ".ogg", ".oga", ".flac", ".m4a", ".aac", ".wma", ".opus")
+MAX_COMPRESSED_BYTES = 25 * 1024 * 1024
+FFMPEG_TIMEOUT = 60
+
+
+def ffmpeg_available() -> bool:
+    return shutil.which("ffmpeg") is not None
+
+
+def accepted_formats() -> str:
+    if ffmpeg_available():
+        return (
+            "a WAV, MP3, OGG, FLAC or M4A file (up to "
+            f"{MAX_COMPRESSED_BYTES // (1024 * 1024)} MB and {MAX_SECONDS // 60} minutes)"
+        )
+    return ACCEPTED + " (install ffmpeg to accept MP3 and other compressed files)"
 
 
 class AudioError(ValueError):
@@ -113,6 +133,60 @@ def convert_wav(data: bytes) -> tuple[bytes, float]:
         out.setframerate(TARGET_RATE)
         out.writeframes(samples.tobytes())
     return buf.getvalue(), len(samples) / TARGET_RATE
+
+
+def _decode_with_ffmpeg(data: bytes) -> bytes:
+    """Decode a compressed upload to 16-bit PCM WAV at the target rate, mono."""
+    binary = shutil.which("ffmpeg")
+    if binary is None:
+        raise AudioError("compressed audio needs ffmpeg on the server; upload a WAV file instead")
+    try:
+        proc = subprocess.run(  # noqa: S603 — fixed binary, data on stdin only
+            [
+                binary,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-nostdin",
+                "-i",
+                "pipe:0",
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                str(TARGET_RATE),
+                "-acodec",
+                "pcm_s16le",
+                "-t",
+                str(MAX_SECONDS + 1),
+                "-f",
+                "wav",
+                "pipe:1",
+            ],
+            input=data,
+            capture_output=True,
+            timeout=FFMPEG_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise AudioError("decoding the file took too long") from e
+    except OSError as e:
+        raise AudioError(f"ffmpeg could not run: {e}") from e
+    if proc.returncode != 0 or not proc.stdout:
+        reason = (proc.stderr or b"").decode(errors="replace").strip().splitlines()
+        raise AudioError("the file could not be decoded" + (f" ({reason[-1]})" if reason else ""))
+    return proc.stdout
+
+
+def convert_any(data: bytes, filename: str | None = None) -> tuple[bytes, float]:
+    """``convert_wav`` for WAV uploads; compressed files are decoded by ffmpeg
+    first (by suffix, or by content when the WAV parse fails)."""
+    suffix = Path(filename or "").suffix.lower()
+    if suffix in COMPRESSED_SUFFIXES or (suffix != ".wav" and not data[:4] == b"RIFF"):
+        if len(data) > MAX_COMPRESSED_BYTES:
+            raise AudioError(f"the file is larger than {MAX_COMPRESSED_BYTES // (1024 * 1024)} MB")
+        return convert_wav(_decode_with_ffmpeg(data))
+    return convert_wav(data)
 
 
 def wav_duration(path: Path) -> float:
