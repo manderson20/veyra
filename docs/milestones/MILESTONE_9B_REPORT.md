@@ -48,7 +48,7 @@ awaiting the owner's browser check and approval.**
 | Frontend lint / typecheck / vitest | Clean (one pre-existing warning) / clean / **34 passed** (new: active location and rail icons; chart scales, axis maximum and tick labels) |
 | Frontend `npm run build` | Passed |
 | **Owner's `upgrade.sh` on dev1** | 0.11.0-b2315aff97 → 0.11.0-f79c739cf5 (2026-10-14 17:16 UTC): migration `0012` applied, all verify checks OK; the worker recorded its first `call_samples` row within a minute (channels 0, registrations 0 on an idle dev1); the metrics endpoint answers 401 without a session as expected |
-| **Owner's browser check** | *Pending*: rail, flyout by click and hover, keyboard, collapsed rail, mobile drawer, breadcrumb, the two graphs after the worker has sampled for a while |
+| **Owner's browser check** | Flyouts look good (2026-10-14); Overview changed to a direct link; keyboard, collapsed rail, mobile drawer and the graphs with traffic still to be looked at |
 
 The rendering of the rail and flyout was checked by reading the generated
 markup and styles, not in a browser (no browser on the development host);
@@ -83,4 +83,7 @@ trust, per the owner's "continue in order".
 
 ## 8. Owner decisions
 
+* 2026-10-14 browser check: "The flyouts look good, I think the Overview
+  should just be a link to the dashboard and not really a menu flyout" →
+  categories with one page are plain links in the rail.
 * Approval: *pending*.
