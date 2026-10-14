@@ -2,9 +2,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { MemberListEditor, membersFromIds, type MemberDraft } from "@/components/groups/MemberListEditor";
 import { Button, Callout, Dialog, SelectField, Switch, TextArea, TextField, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { Page, PagingCodec, PagingKind, PagingZone, PagingZoneInput, Site } from "@/lib/types";
+import type { Extension, Page, PagingAllowed, PagingCodec, PagingKind, PagingZone, PagingZoneInput, Site } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -12,6 +13,7 @@ import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
 
 export const PAGING_KIND_LABELS: Record<PagingKind, string> = { normal: "Normal", priority: "Priority (interrupts calls)", emergency: "Emergency (group 25)" };
+export const PAGING_ALLOWED_LABELS: Record<PagingAllowed, string> = { everyone: "Everyone in the organization", members: "Listed phones only", administrators: "Only from Veyra (interface, bells, API)" };
 
 /** Create or edit a paging zone (docs/DEVICE_PROVISIONING.md §5). */
 export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boolean; onClose: () => void; zone?: PagingZone; onSaved: (z: PagingZone) => void }) {
@@ -31,9 +33,14 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
   const [kind, setKind] = useState<PagingKind>("normal");
   const [codec, setCodec] = useState<PagingCodec>("G.711Mu");
   const [enabled, setEnabled] = useState(true);
+  const [number, setNumber] = useState("");
+  const [allowed, setAllowed] = useState<PagingAllowed>("everyone");
+  const [members, setMembers] = useState<MemberDraft[]>([]);
+  const [maxSeconds, setMaxSeconds] = useState("120");
   const [busy, setBusy] = useState(false);
   const effectiveOrg = zone?.organization_id ?? (org || (organizations.length === 1 ? organizations[0]!.id : ""));
   const sites = useApiData<Page<Site>>(open && effectiveOrg ? "/sites" : null, { organization_id: effectiveOrg, limit: 200 });
+  const extensions = useApiData<Page<Extension>>(open && effectiveOrg && allowed === "members" ? "/extensions" : null, { organization_id: effectiveOrg, limit: 200 });
 
   useOnChange(open, () => {
     if (open) {
@@ -49,6 +56,10 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
       setKind(zone?.kind ?? "normal");
       setCodec(zone?.codec ?? "G.711Mu");
       setEnabled(zone?.is_enabled ?? true);
+      setNumber(zone?.number ?? "");
+      setAllowed(zone?.allowed ?? "everyone");
+      setMembers(zone ? membersFromIds(zone.members) : []);
+      setMaxSeconds(String(zone?.max_seconds ?? 120));
       errors.clear();
     }
   });
@@ -70,6 +81,10 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
         kind,
         codec,
         is_enabled: enabled,
+        number: number.trim() || null,
+        allowed,
+        members: allowed === "members" ? members.map((m) => m.extension_id) : [],
+        max_seconds: Number(maxSeconds) || 120,
       };
       const saved = zone
         ? await api.patch<PagingZone>(`/paging-zones/${zone.id}`, body)
@@ -110,6 +125,14 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
           <TextField label="Poly paging port" type="number" min={1024} max={65535} value={polyPort} error={errors.fields.poly_port} onChange={(e) => setPolyPort(e.target.value)} />
         </div>
         <SelectField label="Codec" value={codec} options={[{ value: "G.711Mu", label: "G.711 µ-law (default)" }, { value: "G.722", label: "G.722 (wideband)" }]} onChange={(e) => setCodec(e.target.value as PagingCodec)} />
+        <div className="form-grid">
+          <TextField label="Number to dial (optional)" inputMode="numeric" value={number} error={errors.fields.number} help="From the numbering plan; shares the space with extensions, groups and pages. Dialling it pages this zone live." onChange={(e) => setNumber(e.target.value.replace(/\D/g, ""))} />
+          <TextField label="Longest page (seconds)" type="number" min={5} max={600} value={maxSeconds} error={errors.fields.max_seconds} onChange={(e) => setMaxSeconds(e.target.value)} />
+        </div>
+        <SelectField label="Who may page it" value={allowed} error={errors.fields.allowed} options={(Object.keys(PAGING_ALLOWED_LABELS) as PagingAllowed[]).map((a) => ({ value: a, label: PAGING_ALLOWED_LABELS[a] }))} onChange={(e) => setAllowed(e.target.value as PagingAllowed)} />
+        {allowed === "members" ? (
+          <MemberListEditor label="Phones allowed to page" members={members} extensions={extensions.data?.items ?? []} loading={extensions.loading} onChange={setMembers} error={errors.fields.members} emptyText="No phones yet: nobody can page this zone from a phone." />
+        ) : null}
         <TextArea label="Description" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
         <Switch label="Enabled" description="Disabled zones are left out of the phones' paging groups." checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}

@@ -52,6 +52,7 @@ export default function PagingZonesPage() {
   const columns: Column<PagingZone>[] = [
     { key: "name", header: "Zone", render: (z) => <span><span className="table__primary" style={{ display: "block" }}>{z.name}</span><span className="table__secondary">{z.site_name ?? z.description ?? <span className="mono">{z.slug}</span>}</span></span> },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (z: PagingZone) => <span>{z.organization_name}</span> }] : []),
+    { key: "number", header: "Dial", render: (z) => z.number ? <span className="mono">{z.number}</span> : <span className="subtle">—</span> },
     { key: "mc", header: "Speakers (multicast)", render: (z) => <span className="mono">{z.multicast_address}:{z.multicast_port}</span> },
     { key: "poly", header: "Poly group", render: (z) => <span><span className="mono">{z.poly_group}</span> <span className="subtle">on {z.poly_address}:{z.poly_port}</span></span> },
     { key: "kind", header: "Kind", render: (z) => <span>{PAGING_KIND_LABELS[z.kind]} · {z.codec}</span> },

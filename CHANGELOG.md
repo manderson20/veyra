@@ -11,6 +11,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ## 0.13.0-dev — unreleased (Milestone 9c)
 
 ### Added
+- **Paging** (Telephony → Pages and Paging Zones; [PAGING_RECORDINGS.md](docs/PAGING_RECORDINGS.md) §2): zones can be dialled by a number from the shared number space, with a policy of who may page (everyone, listed phones, only Veyra) and a longest page; **pages** combine zones with live audio or a recording from the library, a pre-tone, repeats and a Poly priority, are dialable, startable from the interface and the API (`POST /pages/{id}/send`, permission `paging.send`) for external triggers such as a door-held-open alarm, and logged. The **page sender** service (`veyra-pager`) takes one stream from Asterisk per zone and emits the speakers' multicast after the Poly phones' buffering delay together with the Poly group-page datagram, so phones and speakers play in step (the Poly header itself waits for a capture from the phones; until then the Poly leg carries plain RTP). Migration `0014`.
 - **Audio library** (Telephony → Audio, the former Prompts page; `/prompts` with `kind`, `license`, `credit` and a `kind` filter): recordings are classed as menu prompt, bell, announcement, greeting or hold music; MP3, OGG, FLAC and M4A uploads are decoded by `ffmpeg` (installer package; WAV only without it, `verify.sh` warns) ([PAGING_RECORDINGS.md](docs/PAGING_RECORDINGS.md) §3; migration `0013`).
 
 ## 0.12.0 — 2026-10-14 (Milestone 9b)
