@@ -33,6 +33,8 @@ with every milestone.
   panel keeps it open; leaving both closes it after 250 ms.
 * The category of the current page is highlighted in the rail; the current
   item is highlighted in the flyout.
+* A category with a single page (Overview → Dashboard) is a plain link in
+  the rail, no flyout (owner's browser check, 2026-10-14).
 * **Keyboard**: the rail is a vertical list of buttons; Enter or Space
   opens the flyout and moves focus to its first item; Arrow Up/Down move
   within the flyout, Escape returns focus to the category; Tab leaves the

@@ -388,6 +388,8 @@ button.sidebar__heading:hover { color: var(--sidebar-text); }
 .rail__button:hover, .rail__button--open { background: var(--sidebar-hover-bg); color: #fff; }
 .rail__button--current { background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
 .rail__button svg:first-child { flex: 0 0 20px; }
+a.rail__button { text-decoration: none; }
+a.rail__button:hover { color: #fff; }
 .rail__button svg:last-child { margin-left: auto; opacity: 0.6; }
 .rail__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shell--collapsed .rail__label, .shell--collapsed .rail__button svg:last-child { display: none; }

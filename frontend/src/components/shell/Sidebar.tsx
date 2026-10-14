@@ -153,6 +153,19 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, drawer }: {
             {sections.map((s) => {
               const isCurrent = current?.section.id === s.id;
               const isOpen = open === s.id;
+              const only = s.items.length === 1 ? s.items[0] : null;
+              if (only) {
+                // A category with one page (Overview → Dashboard) is a plain link.
+                return (
+                  <li key={s.id} style={{ borderTop: 0 }} onMouseEnter={() => { clearTimers(); setOpen(null); }}>
+                    <Link href={only.href} className={`rail__button${isCurrent ? " rail__button--current" : ""}`} aria-current={isCurrent ? "page" : undefined}
+                      title={collapsed ? s.label : undefined} onClick={() => { setOpen(null); onNavigate(); }}>
+                      <Icon name={s.icon ?? only.icon} />
+                      <span className="rail__label">{s.label}</span>
+                    </Link>
+                  </li>
+                );
+              }
               return (
                 <li key={s.id} style={{ borderTop: 0 }} onMouseEnter={() => hoverOpen(s.id)}>
                   <button type="button" className={`rail__button${isCurrent ? " rail__button--current" : ""}${isOpen ? " rail__button--open" : ""}`}
