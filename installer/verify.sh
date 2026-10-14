@@ -125,15 +125,25 @@ if [[ "$ENGINE" == "asterisk" ]]; then
         || check engine-modules-conf fail "/etc/asterisk/modules.conf is not Veyra-managed (voicemail may not work)"
     # The VoiceMail application must be registered (Milestone 7): a competing
     # voicemail module that failed to load unregisters it.
-    if asterisk -rx "core show application VoiceMail" 2>/dev/null | grep -qi "Info about application 'VoiceMail'"; then
+    app_registered() { # app → 0 when registered (up to three looks, a second apart)
+        for _ in 1 2 3; do
+            asterisk -rx "core show application $1" 2>/dev/null | grep -qi "Info about application '$1'" && return 0
+            sleep 1
+        done
+        return 1
+    }
+    if app_registered VoiceMail; then
         check engine-voicemail-app pass "VoiceMail application registered"
     else
         check engine-voicemail-app fail "the VoiceMail application is not registered in Asterisk (restart Asterisk after the modules.conf change: sudo systemctl restart asterisk)"
     fi
     # Queues and call pickup (Milestone 8): the applications must be registered
     # and the default music-on-hold class must have files to play.
+    # An application is unregistered for a moment while its module reloads
+    # (the deployer reloads app_queue.so right after the services start), so
+    # a miss is retried before it counts.
     for app in Queue Pickup PickupChan; do
-        if asterisk -rx "core show application $app" 2>/dev/null | grep -qi "Info about application '$app'"; then
+        if app_registered "$app"; then
             check "engine-app:$app" pass "$app application registered"
         else
             check "engine-app:$app" fail "the $app application is not registered in Asterisk"
