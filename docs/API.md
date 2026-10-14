@@ -28,7 +28,10 @@ Conventions:
 | System | `/system/ping` (public), `/system/health`, `/system/info`, `/ha/status`, `/audit` |
 | Modules | `/modules`, `/modules/ui-extensions`, `/modules/{id}`, `/modules/{id}/{install,enable,disable,update,uninstall}`, module routes under `/api/v1/ext/<prefix>/` |
 | Updates | `/updates/policies[/{component}]`, `/updates/check`, `/updates/checks/latest`, `/updates/available`, `/updates/history` |
-| Provisioning | `/provisioning/variables`, `/provisioning/templates[/{key}[/preview,/export]]`, `/provisioning/templates/{validate,import}` |
+| Provisioning | `/provisioning/variables`, `/provisioning/models` (manufacturers and models of the catalog), `/provisioning/templates[/{key}[/preview,/export]]`, `/provisioning/templates/{validate,import}`, `PUT`/`DELETE /provisioning/templates/{key}` (local templates, editor), `/provisioning/templates/{key}/customize` (editable local child; a family also gets local model templates), `/provisioning/firmware[/{id}]` (multipart upload of vendor images; see [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §3.4, §7) |
+| Devices | `/devices[/{id}]` (phones by MAC with profile, lines, key and value overrides, status from the request log, `problems`), `/devices/unregistered` (phones seen with a valid credential but not registered), `/devices/{id}/preview` (rendered files, secrets masked), `/devices/{id}/reprovision` (`check_config` or `reboot` via SIP NOTIFY), `/device-profiles[/{id}]` (template family or model plus values, line keys, paging memberships, firmware; `409 profile_in_use`), `/organizations/{id}/provisioning-credential[/rotate]` (enrollment credential, password shown once); see [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) |
+| Paging zones | `/paging-zones[/{id}]` (speakers' multicast group plus the Poly group number; `409 zone_in_use`, `409 poly_group_in_use`; permissions `paging.read`/`paging.write`; see [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §5) |
+| Sites | `/sites[/{id}]` (locations of an organization with time zone, address and the default emergency caller ID; `409 site_in_use`; permissions `organizations.read`/`organizations.write`) |
 | Telephony | `/telephony/engine`, `/telephony/settings`, `/telephony/numbering`, `/telephony/apply` and `/telephony/revisions/{id}/deploy` (both take `{"mode": "now"\|"when_idle"}`), `/telephony/revisions[/{id}]`, `/telephony/revisions/{id}/discard` (see [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md)) |
 | Extensions | `/extensions[/{id}]` (with the extension's `ring_groups`, `queues` and `pickup_groups`, and `emergency_caller_id_number`), `/extensions/next-number` (free across extensions, ring groups and queues), `/extensions/{id}/sip-credentials[/rotate]` (see [EXTENSIONS.md](EXTENSIONS.md)) |
 | Calls | `/calls` (active channels), `/calls/originate` (click-to-dial) |
@@ -45,4 +48,6 @@ Conventions:
 | Pickup groups | `/pickup-groups[/{id}]` (members that may answer each other's calls with `*8`; see [RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md) §4) |
 | Email delivery | `/system/smtp` (GET/PUT, platform settings permission; password write-only), `/system/smtp/test` (sends a test message to the caller) |
 
-Planned (later milestones): `/devices`, ring groups, queues, call history and others.
+Outside `/api/v1`: `GET`/`PUT /provisioning/<file>` is the phone-facing provisioning server (HTTP Basic authentication with the enrollment or the device credential; [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §3), and `/provisioning/firmware/<id>/<file>` is served by NGINX.
+
+Planned (later milestones): paging from Veyra, call history and others.

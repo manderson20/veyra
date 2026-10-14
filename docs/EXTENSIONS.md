@@ -16,8 +16,9 @@ classroom, hallway), and carries:
 |---|---|
 | `number` | Digits only, validated against the numbering plan (§2); unique across the installation, shared with ring group and queue numbers ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md)) |
 | `display_name` | Shown in the interface and used as the default caller ID name |
-| `endpoint_name` | The SIP user name, `<organization slug>-<number>` (for example `example-1001`). Generated, globally unique, follows the number when an extension is renumbered |
+| `endpoint_name` | The SIP user name, `<organization slug>-<number>` (for example `example-1001`). Generated, globally unique, follows the number when an extension is renumbered. Registers from one phone unless several registered devices carry the extension ([DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §2), then `max_contacts` follows |
 | `user_id` | Optional. The user must belong to the same organization |
+| `site_id` | Optional site (building); its emergency caller ID is the default for the extension |
 | `caller_id_name`, `caller_id_number` | Optional overrides for internal calls (letters, digits and `. ' & ( ) -`; digits with an optional leading `+`) |
 | `emergency_caller_id_number` | Optional. Presented on emergency routes (`911`) instead of the regular caller ID: the building's ELIN or registered DID. Wins over the route's and the trunk's numbers ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §7; migration `0010`) |
 | `is_enabled` | Disabled extensions are kept but left out of the generated configuration |

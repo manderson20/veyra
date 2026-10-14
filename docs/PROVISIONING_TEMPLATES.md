@@ -4,10 +4,13 @@ Veyra generates phone configuration files from **templates**. Templates are
 data, not code: they are rendered in a sandbox and cannot run server-side
 code, read files or reach the network.
 
-Status (Milestone 0): the specification, the catalog, validation, preview,
-export and import (API), and the official Poly VVX 411/450 templates. Serving
-files to phones over HTTPS, assigning templates to devices and testing on
-real hardware come in **Milestone 9**. The Poly templates are marked
+Status: the specification (version 1 and, since Milestone 9, version 2 with
+structured facts), the catalog, validation, preview, export and import, an
+in-place editor for local templates, and the official Poly VVX 410/411/450
+templates (0.2.0: lines, line keys, BLF, pickup, voicemail indication, group
+paging, DST rules, VLAN, firmware, device credential). Serving files to
+phones, device profiles and devices are described in
+[DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md). The Poly templates stay
 `experimental` until they have been verified on real phones.
 
 ## 1. Sources and precedence
@@ -19,7 +22,7 @@ real hardware come in **Milestone 9**. The Poly templates are marked
 | local | Database (`provisioning_templates`) | The administrator | **Never** |
 
 * Official template keys are reserved: a community or local template cannot take an official key.
-* **To customize an official template**, create a local template with its own key whose `parent` is the official template, and override only what you need. The official template is never modified, so official updates and local customizations never conflict.
+* **To customize an official template**, use **Customize** on its page (or import a local template with its own key whose `parent` is the official template) and override only what you need. Customizing a family also creates local model templates under the copy. The official template is never modified, so official updates and local customizations never conflict. Local templates are edited in place on their **Edit** tab (manifest fields and source files; saving validates in the sandbox).
 * Local templates record `parent_version`. When an official parent is updated, the catalog flags the local template (`parent_updated: true`) so the administrator can compare and adopt changes. Nothing is merged automatically.
 
 ## 2. Template directory
@@ -89,7 +92,14 @@ Approved core variables (`GET /api/v1/provisioning/variables`):
 | `provisioning_url` | string | http(s) URL |
 
 Device facts available to templates and filenames: `mac` (12 lower-case hex
-digits), `mac_upper`, `model`.
+digits), `mac_upper`, `model`, `model_slug`.
+
+**Spec version 2 (Milestone 9)** adds structured, read-only facts Veyra
+builds from the device, its profile, its extensions and its zones: `device`,
+`organization`, `lines[]`, `keys[]`, `paging`, `server` (with `dst` rules)
+and `features` ([DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §4.1).
+Templates use them without declaring them; variables may not take these
+names. Previews without a device render with sample facts.
 
 Templates may declare additional variables. They cannot redefine core or
 device variables. Every value is validated (type, length, pattern, no
@@ -134,12 +144,11 @@ a template directory.
 
 | Key | Models | Status | Notes |
 |---|---|---|---|
-| `poly.vvx.base` | (abstract) | experimental | Master `{mac}.cfg` plus `veyra-{mac}.cfg` with registration, SNTP and VLAN |
-| `poly.vvx.411` | VVX 411 | experimental | Initial hardware test target |
+| `poly.vvx.base` | (abstract) | experimental | Master `{mac}.cfg` plus `veyra-{mac}.cfg` with every line, line keys, voicemail indication, group paging, time and DST rules, VLAN, polling and the device credential |
+| `poly.vvx.411` | VVX 411, VVX 410 | experimental | Initial hardware test target |
 | `poly.vvx.450` | VVX 450 | experimental | Initial hardware test target |
 
 Known limitations of the Poly templates:
 
-* Time zones are written as a fixed UTC offset computed at render time, with DST disabled. Files must be regenerated after DST changes until proper DST rules are added (M9).
-* Single line only. Line keys, BLF, directory and firmware upgrade parameters are planned for M9.
-* Not yet verified on VVX 411/450 hardware.
+* Expansion modules, directory and background images are later.
+* Not yet verified on VVX 410/411/450 hardware ([DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §9).
