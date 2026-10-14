@@ -289,8 +289,13 @@ write raises the Deploy changes flag (pickup groups and members change
   `asterisk` ships a `[default]` music-on-hold class pointing at the empty
   `moh` directory of its data directory, so queues would hold callers in
   silence. The package fills it with the Open Sound license-free music;
-  `verify.sh` checks that class `default` reports files (`moh show
-  classes`). Custom hold music is a later milestone (§10).
+  `verify.sh` checks that class `default` is loaded (`moh show classes`).
+  When the package arrives while Asterisk is already running (an upgrade),
+  the class is missing because it only registers when its directory has
+  files, and `moh reload` does nothing while `musiconhold.conf` is
+  unchanged; the Asterisk step therefore unloads and loads
+  `res_musiconhold.so` when `moh show classes` lacks `Class: default`.
+  Custom hold music is a later milestone (§10).
 * No module changes: `app_queue`, `app_directed_pickup` and
   `res_musiconhold` are core modules already loaded; `verify.sh` checks
   that the `Queue` and `Pickup` applications are registered.

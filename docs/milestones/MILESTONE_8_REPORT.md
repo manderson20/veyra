@@ -43,17 +43,33 @@ host name for now.
 | Installer `tests/test_lib.sh` | **38 passed**; `shellcheck` clean; `sudo installer/upgrade.sh --dry-run --yes` shows the `asterisk-moh-opsound-wav` install and the `queues.conf` stub |
 | Frontend lint / typecheck / vitest | Clean / clean / **30 passed** (destination tests extended to the two new kinds) |
 | Frontend `npm run build` | Passed; `/ring-groups`, `/ring-groups/view`, `/queues`, `/queues/view` and `/pickup-groups` exported |
-| **Owner's `upgrade.sh` on dev1** | *Pending* |
+| **Owner's `upgrade.sh` on dev1** | 0.9.0-0e88091a91 → 0.9.0-7fefc4b534: backups taken, `asterisk-moh-opsound-wav` installed, migration `0009` applied, `queues.conf` stub installed (sample backed up), Asterisk reloaded, services restarted. Verification failed on one check, `engine-moh`: Asterisk had started with the empty `moh` directory, so the `default` class had never registered, and `moh reload` is a no-op while `musiconhold.conf` is unchanged. Unloading and loading `res_musiconhold.so` fixed it; the installer now does that itself when the class is missing (commit after 7fefc4b) and `verify.sh` names the same fix. `sudo installer/verify.sh` afterwards: all checks OK |
 
 ### Live checks on dev1
 
-*Pending the owner's upgrade* (§6). Plan: `tools/fakephone.py` registers
-two throwaway extensions (22216, 22217); a ring group 22300 with both, a
-queue 22400 with both as agents, and a pickup group with both are seeded;
-calls are originated from the Asterisk CLI to the group and queue numbers
-(answer order, busy skip, failover), a call to 22216 that is not answered
-is picked up from 22217 with `*8` and with `**22216`; `verify.sh` must
-report the queue applications and the music class.
+Run from the session after the upgrade with `tools/fakephone.py`
+registering two throwaway extensions (22216 "A", 22217 "B"), seeded
+together with ring group 22300 (A and B), queue 22400 (A penalty 0, B
+penalty 1, `rrmemory`, agent timeout 10 s, retry 2 s, hold music) and a
+pickup group with both; calls were originated from the Asterisk CLI
+(`channel originate Local/<number>@veyra-internal`) and watched through
+`core show channels`, `queue show`, a temporary verbose logger channel,
+`queue_log` and the fake phones' logs. All objects were removed afterwards
+and the configuration redeployed (dev1 is back to extensions 22214 and
+22215).
+
+| Check | Result |
+|---|---|
+| Deployment | Revision deployed `extensions.conf`, `pjsip.endpoints.conf` and `queues.conf`; both endpoints show `named_call_group`/`named_pickup_group` `m8-test-pickup`; `queue show` lists both agents with their penalties; hints `22216`, `22217` and `22300` (both members) exist and follow the phones |
+| Ring group, ring all | Both phones rang at once; A answered after 3 s, B received CANCEL; caller bridged with A |
+| Ring group, busy member skipped | With A on a call (`DEVICE_STATE` in use), a call to 22300 rang only B, which answered |
+| Ring group, sequential | Strategy changed to sequential with 5 s per member and failover to the queue: A rang 5 s and was cancelled, then B rang and answered |
+| Ring group, failover | Same group with B's phone stopped: A rang 5 s, B failed at once, the dialplan went to `failover` and into the queue context (`Goto(veyra-queue-m8-test-queue,s,1)`) |
+| Queue | Caller answered and queued; verbose log shows `Started music on hold, class 'default'` on the caller, then `Called PJSIP/…-22216`, A answered after 4 s, `Stopped music on hold`, bridge; `queue_log` has `ENTERQUEUE`, `CONNECT`, `COMPLETECALLER` |
+| Queue, agent not answering | A set to answer after 12 s (longer than the 10 s agent timeout): A was rung 10 s, 2 s pause, rung again, until the caller hung up (`RINGNOANSWER` twice, `ABANDON`); B (penalty 1) was never rung, as documented: a higher penalty only rings when every lower-penalty agent is busy or absent, not when they do not answer |
+| `*8` group pickup | Call to A ringing (A set not to answer); B originated into `*8@veyra-features`: `Pickup()` took the call (`app_directed_pickup: pickup PJSIP/…-22216 attempt by PJSIP/…-22217`), A received CANCEL, B bridged with the caller |
+| `**22216` directed pickup | Same with `**22216`: the organization check passed (`GotoIf("0?denied")`), `PickupChan(PJSIP/…-22216,,p)` took the call, A cancelled, B bridged |
+| `verify.sh` | `engine-stub:queues.conf`, `engine-app:Queue/Pickup/PickupChan` and `engine-moh` all OK after the installer fix |
 
 ## 4. Not verified
 
@@ -74,10 +90,10 @@ pickup group, no paging, one dialplan context until Milestone 14.
 
 ## 6. Open items
 
-* Owner: upgrade dev1 from `~/veyra` on `milestone-8` (`sudo
-  installer/upgrade.sh --yes`; `frontend/out` and `companion/dist` are
-  prebuilt there), then the live checks of §3 are run from the session and
-  appended here; remove the test objects afterwards.
+* Owner upgraded dev1 on 2026-10-14 (§3); the live checks are done and the
+  test objects removed. The installer fix for the music-on-hold class is
+  committed on `milestone-8` after the release the owner installed; it
+  takes effect on the next upgrade (dev1 itself is already fixed).
 * Owner: BLF and hold-music checks with a handset (§4); the handset checks
   still open from Milestones 5 and 7.
 * From Milestone 7: the M7 test objects on dev1 (extension 22215, prompt
@@ -99,4 +115,6 @@ login/logout codes and a live queue view).
 * Milestone 8 chosen over 6c on 2026-10-14; `VEYRA_PUBLIC_HOST` stays
   `veyra-dev1` with the self-signed certificate until the reverse proxy and
   domain name are ready.
+* Upgrade of dev1 run by the owner on 2026-10-14; the one failed verify
+  check (`engine-moh`) was fixed in place and in the installer.
 * Approval: *pending*.
