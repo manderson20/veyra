@@ -124,3 +124,10 @@ login/logout codes and a live queue view).
   paging; multicast paging zones for the phones so they page in sync with
   the multicast speakers (today a relay pages the phones and they lag the
   speakers); Poly paging groups as an option.
+
+## Addendum (2026-10-14 14:34 UTC)
+
+The owner upgraded dev1 from `~/veyra-release` to **0.10.0-980d95b0dd**:
+backups taken, no package changes, schema current (0009), Asterisk
+configuration unchanged (no reload), services restarted, all verify
+checks OK including `engine-moh`, old releases pruned to three.
