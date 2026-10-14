@@ -16,11 +16,21 @@ from sqlalchemy import Select, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1 import group_helpers as helpers
+from veyra.api.v1.group_helpers import MemberOut
+from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
-from veyra.core.models import DeviceProfile, DeviceProfilePaging, Organization, PagingZone, Site
+from veyra.core.models import (
+    DeviceProfile,
+    DeviceProfilePaging,
+    Organization,
+    PagingZone,
+    PagingZoneMember,
+    Site,
+)
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
@@ -34,6 +44,7 @@ POLY_DEFAULT_PORT = 5001
 EMERGENCY_GROUP = 25
 Kind = Literal["normal", "priority", "emergency"]
 Codec = Literal["G.711Mu", "G.722"]
+Allowed = Literal["everyone", "members", "administrators"]
 
 
 def multicast_address(v: str) -> str:
@@ -66,6 +77,17 @@ class ZoneIn(BaseModel):
     kind: Kind = "normal"
     codec: Codec = "G.711Mu"
     is_enabled: bool = True
+    # Milestone 9c: dialable number, who may page, longest page.
+    number: str | None = Field(None, max_length=32)
+    allowed: Allowed = "everyone"
+    members: list[uuid.UUID] = Field(default_factory=list, max_length=64)
+    max_seconds: int = Field(120, ge=5, le=600)
+
+    @field_validator("number")
+    @classmethod
+    def _number(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        return v or None
 
     @field_validator("name")
     @classmethod
@@ -99,6 +121,16 @@ class ZonePatch(BaseModel):
     kind: Kind | None = None
     codec: Codec | None = None
     is_enabled: bool | None = None
+    number: str | None = Field(None, max_length=32)
+    allowed: Allowed | None = None
+    members: list[uuid.UUID] | None = Field(None, max_length=64)
+    max_seconds: int | None = Field(None, ge=5, le=600)
+
+    @field_validator("number")
+    @classmethod
+    def _number(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        return v or None
 
     @field_validator("name")
     @classmethod
@@ -138,6 +170,10 @@ class ZoneOut(BaseModel):
     kind: str
     codec: str
     is_enabled: bool
+    number: str | None
+    allowed: str
+    members: list[MemberOut]
+    max_seconds: int
     profiles: list[ProfileRef]
     problems: list[str]
     created_at: datetime
@@ -190,9 +226,17 @@ def _outs(db: Session, rows: list[PagingZone]) -> list[ZoneOut]:
         select(PagingZone).where(PagingZone.organization_id.in_({r.organization_id for r in rows}))
     ):
         poly.setdefault(z.organization_id, set()).add((z.poly_address, z.poly_port))
+    member_ids: dict[uuid.UUID, list[uuid.UUID]] = {r.id: [] for r in rows}
+    for m in db.scalars(
+        select(PagingZoneMember).where(PagingZoneMember.zone_id.in_({r.id for r in rows}))
+    ):
+        member_ids[m.zone_id].append(m.extension_id)
+    exts = helpers.extensions_by_id(db, {e for ms in member_ids.values() for e in ms})
     out = []
     for r in rows:
         problems = []
+        if r.allowed == "members" and not member_ids[r.id]:
+            problems.append("Only members may page this zone, and it has none.")
         if len(poly.get(r.organization_id, set())) > 1:
             problems.append(
                 "Zones of this organization use different Poly paging addresses or ports; "
@@ -218,6 +262,22 @@ def _outs(db: Session, rows: list[PagingZone]) -> list[ZoneOut]:
                 kind=r.kind,
                 codec=r.codec,
                 is_enabled=r.is_enabled,
+                number=r.number,
+                allowed=r.allowed,
+                members=sorted(
+                    (
+                        MemberOut(
+                            extension_id=e.id,
+                            number=e.number,
+                            display_name=e.display_name,
+                            is_enabled=e.is_enabled,
+                        )
+                        for e in (exts.get(i) for i in member_ids[r.id])
+                        if e is not None
+                    ),
+                    key=lambda m: m.number,
+                ),
+                max_seconds=r.max_seconds,
                 profiles=profiles[r.id],
                 problems=problems,
                 created_at=r.created_at,
@@ -257,9 +317,20 @@ def _check_site(db: Session, organization_id: uuid.UUID, site_id: uuid.UUID | No
         )
 
 
+def _set_members(db: Session, zone: PagingZone, extension_ids: list[uuid.UUID]) -> None:
+    for old in db.scalars(select(PagingZoneMember).where(PagingZoneMember.zone_id == zone.id)):
+        db.delete(old)
+    db.flush()
+    for ext_id in extension_ids:
+        db.add(PagingZoneMember(zone_id=zone.id, extension_id=ext_id))
+    db.flush()
+
+
 def _conflict(e: IntegrityError, db: Session) -> Exception:
     db.rollback()
     text = str(e.orig).lower() if e.orig else ""
+    if "number" in text:
+        return conflict("That number is already used.", "number_in_use")
     if "poly_group" in text:
         return conflict(
             "Another zone of this organization already uses that Poly group number.",
@@ -327,17 +398,23 @@ def create_zone(
     if org is None:
         raise not_found("Organization")
     _check_site(db, org.id, body.site_id)
+    if body.number:
+        helpers.check_number(db, body.number, "paging zone", None)
+    helpers.load_members(db, org.id, body.members, "members")
+    fields = body.model_dump(exclude={"members"})
     zone = PagingZone(
         id=uuid.uuid4(),
         slug=_unique_slug(db, org.id, body.name),
-        **{**body.model_dump(), "description": (body.description or "").strip() or None},
+        **{**fields, "description": (body.description or "").strip() or None},
     )
     db.add(zone)
     try:
         db.flush()
     except IntegrityError as e:
         raise _conflict(e, db) from e
+    _set_members(db, zone, body.members)
     _record(db, ctx, principal, "paging_zone.create", zone, {"poly_group": zone.poly_group})
+    configmgmt.mark_changed(db, by=principal.label, what=f"paging zone {zone.name}")
     db.commit()
     return _outs(db, [zone])[0]
 
@@ -365,11 +442,25 @@ def update_zone(
         _check_site(db, zone.organization_id, changes["site_id"])
     if "description" in changes:
         changes["description"] = (changes["description"] or "").strip() or None
+    if changes.get("number") and changes["number"] != zone.number:
+        helpers.check_number(db, changes["number"], "paging zone", zone.id)
+    members = changes.pop("members", None)
     details: dict[str, Any] = {}
     for field, value in changes.items():
+        if value is None and field not in ("site_id", "description", "number"):
+            continue
         if value != getattr(zone, field):
             details[field] = value
             setattr(zone, field, value)
+    if members is not None:
+        helpers.load_members(db, zone.organization_id, list(members), "members")
+        have = sorted(
+            str(m.extension_id)
+            for m in db.scalars(select(PagingZoneMember).where(PagingZoneMember.zone_id == zone.id))
+        )
+        if sorted(str(x) for x in members) != have:
+            _set_members(db, zone, list(members))
+            details["members"] = len(members)
     if not details:
         return _outs(db, [zone])[0]
     try:
@@ -377,6 +468,7 @@ def update_zone(
     except IntegrityError as e:
         raise _conflict(e, db) from e
     _record(db, ctx, principal, "paging_zone.update", zone, details)
+    configmgmt.mark_changed(db, by=principal.label, what=f"paging zone {zone.name}")
     db.commit()
     return _outs(db, [zone])[0]
 
@@ -402,5 +494,6 @@ def delete_zone(
         )
     _record(db, ctx, principal, "paging_zone.delete", zone, {"slug": zone.slug})
     db.delete(zone)
+    configmgmt.mark_changed(db, by=principal.label, what=f"delete paging zone {zone.name}")
     db.commit()
     return Response(status_code=204)

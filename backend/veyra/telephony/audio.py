@@ -182,7 +182,7 @@ def convert_any(data: bytes, filename: str | None = None) -> tuple[bytes, float]
     """``convert_wav`` for WAV uploads; compressed files are decoded by ffmpeg
     first (by suffix, or by content when the WAV parse fails)."""
     suffix = Path(filename or "").suffix.lower()
-    if suffix in COMPRESSED_SUFFIXES or (suffix != ".wav" and not data[:4] == b"RIFF"):
+    if suffix in COMPRESSED_SUFFIXES or (suffix != ".wav" and data[:4] != b"RIFF"):
         if len(data) > MAX_COMPRESSED_BYTES:
             raise AudioError(f"the file is larger than {MAX_COMPRESSED_BYTES // (1024 * 1024)} MB")
         return convert_wav(_decode_with_ffmpeg(data))

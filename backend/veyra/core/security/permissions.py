@@ -154,8 +154,13 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
     ),
     PermissionDef(
         "paging.write",
-        "Create and edit paging zones",
+        "Create and edit paging zones and pages",
         default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
+        "paging.send",
+        "Start recorded pages from the interface or the API",
+        default_roles=("org_admin", "site_admin", "technician"),
     ),
     PermissionDef(
         "devices.read",

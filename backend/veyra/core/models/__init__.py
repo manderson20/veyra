@@ -24,6 +24,7 @@ from veyra.core.models.identity import (
     UserSession,
 )
 from veyra.core.models.metrics import CallSample
+from veyra.core.models.paging import Page, PageLog, PageMember, PageZone, PagingZoneMember
 from veyra.core.models.platform import (
     AuditEvent,
     AvailableUpdate,
@@ -84,7 +85,12 @@ __all__ = [
     "Organization",
     "OutboundRoute",
     "OutboundRouteTrunk",
+    "Page",
+    "PageLog",
+    "PageMember",
+    "PageZone",
     "PagingZone",
+    "PagingZoneMember",
     "PasswordResetToken",
     "Permission",
     "PickupGroup",

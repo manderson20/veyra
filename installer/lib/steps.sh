@@ -409,7 +409,7 @@ do_telephony() {
 # Units this installation runs. The deployer only exists with a telephony engine.
 veyra_units() {
     local units=(veyra-api veyra-worker)
-    [[ "${TELEPHONY_ENGINE:-none}" != "none" ]] && units+=(veyra-deployer)
+    [[ "${TELEPHONY_ENGINE:-none}" != "none" ]] && units+=(veyra-deployer veyra-pager)
     printf '%s\n' "${units[@]}"
 }
 
@@ -426,8 +426,8 @@ do_services() {
         rm -f "$tmp"
     done
     if [[ "${TELEPHONY_ENGINE:-none}" == "none" && -f /etc/systemd/system/veyra-deployer.service ]]; then
-        run systemctl disable --now veyra-deployer || true
-        run rm -f /etc/systemd/system/veyra-deployer.service
+        run systemctl disable --now veyra-deployer veyra-pager || true
+        run rm -f /etc/systemd/system/veyra-deployer.service /etc/systemd/system/veyra-pager.service
     fi
     run systemctl daemon-reload
     run systemctl enable "${units[@]}"

@@ -152,22 +152,29 @@ def used_numbers(db: Session) -> set[str]:
     """Every number taken by an extension, a ring group or a queue."""
     from sqlalchemy import select
 
-    from veyra.core.models import CallQueue, Extension, RingGroup
+    from veyra.core.models import CallQueue, Extension, Page, PagingZone, RingGroup
 
     used: set[str] = set()
-    for column in (Extension.number, RingGroup.number, CallQueue.number):
-        used |= set(db.scalars(select(column)).all())
+    for column in (
+        Extension.number,
+        RingGroup.number,
+        CallQueue.number,
+        PagingZone.number,
+        Page.number,
+    ):
+        used |= {n for n in db.scalars(select(column)).all() if n}
     return used
 
 
 def number_owner(db: Session, number: str, *, exclude: tuple[str, Any] | None = None) -> str | None:
-    """What already uses ``number``: ``"extension"``, ``"ring group"`` or
-    ``"queue"``; None when it is free. Takes the advisory lock that serialises
-    concurrent creations of the same number across the three tables.
+    """What already uses ``number``: ``"extension"``, ``"ring group"``,
+    ``"queue"``, ``"paging zone"`` or ``"page"``; None when it is free. Takes
+    the advisory lock that serialises concurrent creations of the same number
+    across the tables.
     ``exclude`` is ``(kind, id)`` of the object being edited."""
     from sqlalchemy import select, text
 
-    from veyra.core.models import CallQueue, Extension, RingGroup
+    from veyra.core.models import CallQueue, Extension, Page, PagingZone, RingGroup
 
     db.execute(
         text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"veyra.extension:{number}"}
@@ -176,6 +183,8 @@ def number_owner(db: Session, number: str, *, exclude: tuple[str, Any] | None = 
         ("extension", Extension),
         ("ring group", RingGroup),
         ("queue", CallQueue),
+        ("paging zone", PagingZone),
+        ("page", Page),
     ):
         stmt = select(model.id).where(model.number == number)
         if exclude is not None and exclude[0] == kind:
