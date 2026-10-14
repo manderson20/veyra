@@ -203,6 +203,30 @@ def test_caller_id_validation(admin):
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "caller_id_number"
     ext = _create(admin, a, "1001", caller_id_name="  Main Office (East)  ", caller_id_number=" ")
     assert ext["caller_id_name"] == "Main Office (East)" and ext["caller_id_number"] is None
+    assert ext["emergency_caller_id_number"] is None
+
+
+def test_emergency_caller_id_is_validated_stored_and_deployed(admin, app, tmp_path):
+    a = _org(admin)["id"]
+    r = admin.post(
+        EXT,
+        json={
+            "organization_id": a,
+            "number": "1001",
+            "display_name": "x",
+            "emergency_caller_id_number": "573-555-0123",
+        },
+    )
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "emergency_caller_id_number"
+    ext = _create(admin, a, "1001", emergency_caller_id_number=" 5735550123 ")
+    assert ext["emergency_caller_id_number"] == "5735550123"
+    r = admin.patch(f"{EXT}/{ext['id']}", json={"emergency_caller_id_number": "+15735550124"})
+    assert r.status_code == 200 and r.json()["emergency_caller_id_number"] == "+15735550124"
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    assert snap["extensions"][0]["emergency_caller_id_number"] == "+15735550124"
+    r = admin.patch(f"{EXT}/{ext['id']}", json={"emergency_caller_id_number": ""})
+    assert r.status_code == 200 and r.json()["emergency_caller_id_number"] is None
 
 
 def test_sip_secret_is_encrypted_at_rest_revealed_only_on_request_and_rotatable(admin, app):

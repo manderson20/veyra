@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.11.0-dev — unreleased (Milestone 9)
+
+### Added
+- **Emergency caller ID per extension** (`emergency_caller_id_number` on `/extensions`, Extensions form and page): presented on emergency routes instead of the regular caller ID, ahead of the route's and the trunk's numbers; the Outbound Routes page warns when extensions have none and the emergency route has no number of its own ([TRUNKS_ROUTING.md](docs/TRUNKS_ROUTING.md) §7; migration `0010`, snapshot version 6).
+
 ## 0.10.0 — 2026-10-14 (Milestone 8)
 
 ### Added

@@ -30,7 +30,7 @@ Conventions:
 | Updates | `/updates/policies[/{component}]`, `/updates/check`, `/updates/checks/latest`, `/updates/available`, `/updates/history` |
 | Provisioning | `/provisioning/variables`, `/provisioning/templates[/{key}[/preview,/export]]`, `/provisioning/templates/{validate,import}` |
 | Telephony | `/telephony/engine`, `/telephony/settings`, `/telephony/numbering`, `/telephony/apply` and `/telephony/revisions/{id}/deploy` (both take `{"mode": "now"\|"when_idle"}`), `/telephony/revisions[/{id}]`, `/telephony/revisions/{id}/discard` (see [TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md)) |
-| Extensions | `/extensions[/{id}]` (with the extension's `ring_groups`, `queues` and `pickup_groups`), `/extensions/next-number` (free across extensions, ring groups and queues), `/extensions/{id}/sip-credentials[/rotate]` (see [EXTENSIONS.md](EXTENSIONS.md)) |
+| Extensions | `/extensions[/{id}]` (with the extension's `ring_groups`, `queues` and `pickup_groups`, and `emergency_caller_id_number`), `/extensions/next-number` (free across extensions, ring groups and queues), `/extensions/{id}/sip-credentials[/rotate]` (see [EXTENSIONS.md](EXTENSIONS.md)) |
 | Calls | `/calls` (active channels), `/calls/originate` (click-to-dial) |
 | Me | `/me/extensions` (own extensions with registration), `/me/preferences` (Companion speed dials and settings), `/me/voicemail` and `/me/voicemail/{id}/pin` (own voicemail boxes and PIN change) |
 | Directory | `/directory?q=` (extensions and people in the caller's organizations; permission `directory.read`, every role) |

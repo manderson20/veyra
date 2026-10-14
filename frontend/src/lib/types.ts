@@ -278,6 +278,8 @@ export interface Extension {
   user_email: string | null;
   caller_id_name: string | null;
   caller_id_number: string | null;
+  /** Presented on emergency routes instead of the regular caller ID (the building's ELIN or DID). */
+  emergency_caller_id_number: string | null;
   is_enabled: boolean;
   sip_secret_set: boolean;
   sip_secret_changed_at: string | null;

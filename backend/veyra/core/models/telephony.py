@@ -35,6 +35,9 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     sip_secret_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     caller_id_name: Mapped[str | None] = mapped_column(String(80))
     caller_id_number: Mapped[str | None] = mapped_column(String(32))
+    # Number presented on emergency routes instead of the regular caller ID
+    # (docs/TRUNKS_ROUTING.md §7): the building's ELIN or registered DID.
+    emergency_caller_id_number: Mapped[str | None] = mapped_column(String(32))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

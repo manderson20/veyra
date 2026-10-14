@@ -279,6 +279,12 @@ def _endpoints(
         if not _NUMBER_RE.match(cid_num):
             raise GenerationError(f"caller ID number {cid_num!r} is not valid")
         org = _check_value(str(ext.get("organization") or ""), "organization")
+        # Emergency caller ID (docs/TRUNKS_ROUTING.md §7): read by the
+        # emergency routes, which present it instead of the route's number.
+        ecid = ext.get("emergency_caller_id_number")
+        if ecid and not _NUMBER_RE.match(str(ecid)):
+            raise GenerationError(f"emergency caller ID {ecid!r} is not valid")
+        emergency_cid = [f"set_var=VEYRA_EMERGENCY_CID={ecid}"] if ecid else []
         # Message waiting indication: the phone subscribes to, or is notified
         # about, its own mailbox (docs/VOICEMAIL_IVR.md §3.2).
         mwi = [f"mailboxes={number}@{VOICEMAIL_CONTEXT}"] if number in mailboxes else []
@@ -295,6 +301,7 @@ def _endpoints(
             f"aors={name}",
             f'callerid="{cid_name}" <{cid_num}>',
             f"set_var=VEYRA_ORG={org}",
+            *emergency_cid,
             *mwi,
             *(["mwi_subscribe_replaces_unsolicited=yes"] if mwi else []),
             *pickup,
@@ -641,10 +648,15 @@ def _outbound_contexts(
                 f" same => n,Set(__VEYRA_ROUTE={slug})",
             ]
             if emergency:
+                # The extension's emergency caller ID wins over the route's
+                # and the trunk's numbers (docs/TRUNKS_ROUTING.md §7).
                 lines += [
                     " same => n,Set(__VEYRA_EMERGENCY=1)",
                     " same => n,Log(WARNING,Veyra EMERGENCY call from ${CALLERID(num)}"
-                    " to ${EXTEN})",
+                    ' to ${EXTEN}; extension emergency caller ID: ${IF($["${VEYRA_EMERGENCY_CID}"'
+                    '!=""]?${VEYRA_EMERGENCY_CID}:none)})',
+                    ' same => n,ExecIf($["${VEYRA_EMERGENCY_CID}"!=""]'
+                    "?Set(CALLERID(num)=${VEYRA_EMERGENCY_CID}))",
                 ]
             else:
                 lines.append(" same => n,GotoIf($[0${VEYRA_HOPS} > 0]?loop)")
@@ -667,7 +679,13 @@ def _outbound_contexts(
                 if cid:
                     if not _NUMBER_RE.match(str(cid)):
                         raise GenerationError(f"trunk {tslug}: caller ID {cid!r} is not valid")
-                    step.append(f" same => n,Set(CALLERID(num)={cid})")
+                    if emergency:
+                        step.append(
+                            ' same => n,ExecIf($["${VEYRA_EMERGENCY_CID}"=""]'
+                            f"?Set(CALLERID(num)={cid}))"
+                        )
+                    else:
+                        step.append(f" same => n,Set(CALLERID(num)={cid})")
                 step += [
                     f" same => n,Dial(PJSIP/${{VEYRA_DIAL}}@{TRUNK_PREFIX}{tslug},{timeout})",
                     ' same => n,GotoIf($["${DIALSTATUS}"="CHANUNAVAIL"'

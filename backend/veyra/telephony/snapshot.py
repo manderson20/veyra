@@ -45,7 +45,7 @@ from veyra.core.security.crypto import DecryptionError, InstallationKey
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 5
+SNAPSHOT_VERSION = 6
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -170,6 +170,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "organization": org_slug.get(e.organization_id, ""),
                 "caller_id_name": e.caller_id_name,
                 "caller_id_number": e.caller_id_number,
+                "emergency_caller_id_number": e.emergency_caller_id_number,
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
             }

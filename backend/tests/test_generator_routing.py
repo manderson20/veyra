@@ -191,9 +191,24 @@ def test_outbound_routes_emergency_first_with_failover_and_loop_check():
     assert "Playback(all-circuits-busy)" in local_ctx and "Hangup(21)" in local_ctx
     em = _section(d, "veyra-out-emergency")
     assert "exten => 911,1," in em and "Log(WARNING,Veyra EMERGENCY call" in em
-    assert "Set(CALLERID(num)=5735550199)" in em  # route override
+    # The extension's emergency caller ID wins; the route override applies without one.
+    assert 'ExecIf($["${VEYRA_EMERGENCY_CID}"!=""]?Set(CALLERID(num)=${VEYRA_EMERGENCY_CID}))' in em
+    assert 'ExecIf($["${VEYRA_EMERGENCY_CID}"=""]?Set(CALLERID(num)=5735550199))' in em
+    assert em.index('VEYRA_EMERGENCY_CID}"!=') < em.index("Dial(PJSIP/")
     assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier,120)" in em
     assert "loop" not in em and "GROUP_COUNT" not in em
+    assert "Set(CALLERID(num)=5735550100)" in local_ctx  # normal routes keep the plain Set
+
+
+def test_extension_emergency_caller_id_is_an_endpoint_variable():
+    snap = _snapshot()
+    snap["extensions"][0]["emergency_caller_id_number"] = "5735550123"
+    files = _files(snap)
+    assert "set_var=VEYRA_EMERGENCY_CID=5735550123" in files["pjsip.endpoints.conf"].content
+    assert "VEYRA_EMERGENCY_CID" not in _files(_snapshot())["pjsip.endpoints.conf"].content
+    snap["extensions"][0]["emergency_caller_id_number"] = "573-555"
+    with pytest.raises(generator.GenerationError, match="emergency caller ID"):
+        generator.generate(snap)
 
 
 def test_outbound_route_without_usable_trunks_fails_cleanly():

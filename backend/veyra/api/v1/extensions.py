@@ -117,6 +117,7 @@ class ExtensionIn(BaseModel):
     user_id: uuid.UUID | None = None
     caller_id_name: str | None = Field(None, max_length=80)
     caller_id_number: str | None = Field(None, max_length=32)
+    emergency_caller_id_number: str | None = Field(None, max_length=32)
     is_enabled: bool = True
 
     @field_validator("number")
@@ -137,7 +138,7 @@ class ExtensionIn(BaseModel):
     def _cid_name(cls, v: str | None) -> str | None:
         return _caller_id_name(v)
 
-    @field_validator("caller_id_number")
+    @field_validator("caller_id_number", "emergency_caller_id_number")
     @classmethod
     def _cid_number(cls, v: str | None) -> str | None:
         return _caller_id_number(v)
@@ -149,6 +150,7 @@ class ExtensionPatch(BaseModel):
     user_id: uuid.UUID | None = None
     caller_id_name: str | None = Field(None, max_length=80)
     caller_id_number: str | None = Field(None, max_length=32)
+    emergency_caller_id_number: str | None = Field(None, max_length=32)
     is_enabled: bool | None = None
 
     @field_validator("number")
@@ -171,7 +173,7 @@ class ExtensionPatch(BaseModel):
     def _cid_name(cls, v: str | None) -> str | None:
         return _caller_id_name(v)
 
-    @field_validator("caller_id_number")
+    @field_validator("caller_id_number", "emergency_caller_id_number")
     @classmethod
     def _cid_number(cls, v: str | None) -> str | None:
         return _caller_id_number(v)
@@ -196,6 +198,9 @@ class ExtensionOut(BaseModel):
     user_email: str | None
     caller_id_name: str | None
     caller_id_number: str | None
+    # Presented on emergency routes instead of the regular caller ID
+    # (docs/TRUNKS_ROUTING.md §7).
+    emergency_caller_id_number: str | None
     is_enabled: bool
     sip_secret_set: bool
     sip_secret_changed_at: datetime | None
@@ -324,6 +329,7 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 user_email=user.email if user else None,
                 caller_id_name=r.caller_id_name,
                 caller_id_number=r.caller_id_number,
+                emergency_caller_id_number=r.emergency_caller_id_number,
                 is_enabled=r.is_enabled,
                 sip_secret_set=bool(r.sip_secret_ciphertext),
                 sip_secret_changed_at=r.sip_secret_changed_at,
@@ -523,6 +529,7 @@ def create_extension(
         user_id=body.user_id,
         caller_id_name=body.caller_id_name,
         caller_id_number=body.caller_id_number,
+        emergency_caller_id_number=body.emergency_caller_id_number,
         is_enabled=body.is_enabled,
     )
     _set_secret(ext, key)
@@ -590,7 +597,13 @@ def update_extension(
         _check_user(db, changes["user_id"], ext.organization_id)
         ext.user_id = changes["user_id"]
         details["user_id"] = str(ext.user_id) if ext.user_id else None
-    for field in ("display_name", "caller_id_name", "caller_id_number", "is_enabled"):
+    for field in (
+        "display_name",
+        "caller_id_name",
+        "caller_id_number",
+        "emergency_caller_id_number",
+        "is_enabled",
+    ):
         if field in changes and changes[field] != getattr(ext, field):
             setattr(ext, field, changes[field])
             details[field] = changes[field]
