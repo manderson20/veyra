@@ -136,7 +136,7 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     if runuser -u veyra -- asterisk -rx "core show version" 2>/dev/null | grep -q "Asterisk"; then
         check engine-cli pass "service account can use the Asterisk CLI (control socket group asterisk)"
     else
-        check engine-cli fail "the veyra service account cannot use the Asterisk CLI (asterisk.conf: astctlpermissions = 0660, astctlgroup = asterisk, then restart Asterisk); phones cannot be told to reprovision"
+        check engine-cli fail "the veyra service account cannot use the Asterisk CLI (asterisk.conf, under an active [files] header: astctlpermissions = 0660, astctlgroup = asterisk, then restart Asterisk); phones cannot be told to reprovision"
     fi
     if asterisk -rx "moh show classes" 2>/dev/null | grep -q "Class: default"; then
         check engine-moh pass "music-on-hold class default is loaded"
