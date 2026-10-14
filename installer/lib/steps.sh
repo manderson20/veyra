@@ -238,6 +238,35 @@ PY
     else
         warn "Companion extension not built (no prebuilt dist/ and no npm); the download will be unavailable"
     fi
+    # Modules shipped with the release (docs/MODULE_DEVELOPMENT.md §6) are
+    # signed with this server's own key, which is trusted as official, so
+    # they can be installed from Modules. The example module stays unsigned
+    # (development only).
+    local mkey="$VEYRA_ETC/secrets/bundled-modules.key"
+    local mpub="$VEYRA_ETC/trust/official/bundled-modules.pub"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        info "[dry-run] would sign the bundled modules with $mkey"
+    else
+        if [[ ! -s "$mkey" || ! -s "$mpub" ]]; then
+            local ktmp; ktmp="$(mktemp -d)"
+            "$RELEASE_DIR/backend/.venv/bin/veyra" modules keygen bundled-modules --output-dir "$ktmp" >/dev/null \
+                || die "Creating the module signing key failed"
+            install -m 0600 -o root -g root "$ktmp/bundled-modules.key" "$mkey"
+            install -m 0644 -o root -g root "$ktmp/bundled-modules.pub" "$mpub"
+            rm -rf "$ktmp"
+            ok "Created the module signing key ($mkey)"
+        fi
+        local mdir signed=0
+        for mdir in "$RELEASE_DIR"/modules/*/; do
+            [[ -f "$mdir/module.toml" ]] || continue
+            case "$(basename "$mdir")" in veyra-example-*) continue ;; esac
+            "$RELEASE_DIR/backend/.venv/bin/veyra" modules sign "$mdir" --key-file "$mkey" \
+                --key-id bundled-modules >>"${INSTALL_LOG:-/dev/null}" 2>&1 \
+                || die "Signing the module in $mdir failed (see ${INSTALL_LOG:-the console})"
+            signed=$((signed + 1))
+        done
+        ok "Bundled modules signed ($signed)"
+    fi
     run chown -R root:root "$RELEASE_DIR"
     run chmod -R go-w "$RELEASE_DIR"
 }

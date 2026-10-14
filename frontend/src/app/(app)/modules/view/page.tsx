@@ -172,7 +172,7 @@ function CreateDialog({ open, onClose, fields, title, submit, onCreated }: {
           if (f.type === "textarea") return <TextArea key={f.key} {...common} maxLength={f.max_length ?? undefined} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} />;
           if (f.type === "boolean") return <Checkbox key={f.key} label={f.label} description={f.help ?? undefined} checked={Boolean(values[f.key])} onChange={(e) => set(f.key, e.target.checked)} />;
           if (f.type === "choice") return <SelectField key={f.key} {...common} value={String(values[f.key] ?? "")} placeholder="Choose…" options={(f.choices ?? []).map((c) => ({ value: c, label: c }))} onChange={(e) => set(f.key, e.target.value)} />;
-          return <TextField key={f.key} {...common} type={f.type === "integer" ? "number" : "text"} maxLength={f.max_length ?? undefined} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} />;
+          return <TextField key={f.key} {...common} type={f.type === "integer" ? "number" : f.type === "password" ? "password" : "text"} autoComplete={f.type === "password" ? "new-password" : undefined} maxLength={f.max_length ?? undefined} value={String(values[f.key] ?? "")} onChange={(e) => set(f.key, e.target.value)} />;
         })}
         {message ? <Callout tone="danger">{message}</Callout> : null}
       </form>

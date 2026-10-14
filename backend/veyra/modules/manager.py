@@ -26,6 +26,7 @@ import importlib.util
 import logging
 import re
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -354,6 +355,60 @@ class ModuleManager:
                 row.state, row.last_error = "failed", str(getattr(e, "detail", None) or e)
         bootstrap.sync_permissions(db)
 
+    # ---------------------------------------------------------------- worker
+    def sync_worker(self, db: Session) -> None:
+        """Worker side (module API 1.1): keep the loaded modules in step with
+        the enabled ones, without routes and without changing module rows
+        (the API service records failures). Event subscriptions and periodic
+        tasks of enabled modules run in the worker process."""
+        rows = {
+            r.module_id: r.version
+            for r in db.scalars(select(InstalledModule).where(InstalledModule.state == "enabled"))
+        }
+        for module_id in list(self.loaded):
+            loaded = self.loaded[module_id]
+            if rows.get(module_id) != loaded.manifest.module.version:
+                self._unload(module_id)
+        for module_id, version in rows.items():
+            if module_id in self.loaded:
+                continue
+            try:
+                cand = self.candidate(module_id)
+                manifest = cand.manifest
+                assert manifest is not None
+                problems = self.trust_problems(manifest, cand.verification)
+                if manifest.module.version != version:
+                    problems.append("Files on disk do not match the installed version.")
+                if problems:
+                    raise ModuleError("; ".join(problems))
+                self._activate(self._load(manifest, cand.path))
+                log.info("Worker loaded module %s %s", module_id, version)
+            except Exception as e:
+                log.error(
+                    "Module %s not loaded in the worker: %s",
+                    module_id,
+                    getattr(e, "detail", None) or e,
+                )
+
+    def run_periodic(self, now: float | None = None) -> int:
+        """Run the periodic tasks that are due; returns how many ran."""
+        now = time.monotonic() if now is None else now
+        ran = 0
+        for module_id in sorted(self.enabled):
+            loaded = self.loaded.get(module_id)
+            if loaded is None:
+                continue
+            for task in loaded.ctx.periodic_tasks:
+                if task.last_run is not None and now - task.last_run < task.interval_seconds:
+                    continue
+                task.last_run = now
+                ran += 1
+                try:
+                    task.fn()
+                except Exception:
+                    log.exception("Module %s: periodic task %s failed", module_id, task.name)
+        return ran
+
     def is_enabled(self, module_id: str) -> bool:
         return module_id in self.enabled
 
@@ -437,7 +492,7 @@ class ModuleManager:
             self._purge_python(pkg_name)
             raise
         data_dir = self.settings.data_dir / "modules" / manifest.id
-        ctx = ModuleContext(manifest, path, data_dir, self.bus)
+        ctx = ModuleContext(manifest, path, data_dir, self.bus, self.settings)
         entry.register(ctx)
         loaded = LoadedModule(manifest, path, ctx, entry, pkg_name)
         self.loaded[manifest.id] = loaded

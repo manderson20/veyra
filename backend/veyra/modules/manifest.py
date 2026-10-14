@@ -175,7 +175,7 @@ class UiColumn(_Strict):
 class UiFormField(_Strict):
     key: str
     label: str
-    type: Literal["text", "textarea", "integer", "boolean", "choice"] = "text"
+    type: Literal["text", "textarea", "integer", "boolean", "choice", "password"] = "text"
     required: bool = False
     max_length: int | None = None
     choices: list[str] | None = None

@@ -194,6 +194,15 @@ if [[ -s "$VEYRA_ETC/secrets/installation.key" ]] \
 else
     check installation-key fail "$VEYRA_ETC/secrets/installation.key is missing, malformed or not group $VEYRA_USER (run: sudo veyra installation-key generate)"
 fi
+# Modules shipped with the release are signed with this server's key
+# (docs/MODULE_DEVELOPMENT.md §6); the example module is unsigned on purpose.
+if out="$(/usr/local/bin/veyra modules list 2>&1)"; then
+    unsigned="$(awk 'NR > 1 && $1 !~ /^veyra\.example-/ && $NF != "official" {print $1}' <<<"$out" | paste -sd' ')"
+    [[ -z "$unsigned" ]] && check modules-signed pass "bundled modules verified" \
+        || check modules-signed fail "not verified: $unsigned (re-run the upgrade to sign them)"
+else
+    check modules-signed fail "veyra modules list failed: $(head -1 <<<"$out")"
+fi
 [[ "$(perm "$VEYRA_ETC/tls/veyra.key" | cut -d' ' -f1)" == "600" ]] && check tls-key pass "600" \
     || check tls-key fail "TLS key permissions are $(perm "$VEYRA_ETC/tls/veyra.key")"
 # Symbolic links (the venv's python and lib64 links) always report mode 777 and are skipped.
