@@ -23,19 +23,21 @@ completed milestones in the order below (see
 | 6b | **Veyra Companion** browser extension (Chrome/Edge first; macOS desktop later if needed): sign in with Veyra credentials (MFA included), click-to-dial any number (desk phone rings, then the call is placed), directory lookup, incoming caller ID pop-up, personal speed dials and quick buttons stored in the user's Veyra profile | 0.8.0 | **Complete, approved 2026-10-13** ([report](milestones/MILESTONE_6B_REPORT.md)); owner request 2026-10-12 (replaces a Metaswitch desktop dialler); owner's browser check pending |
 | 7 | Voicemail and IVR (voicemail boxes with PIN and voicemail-to-email, MWI, prompts uploaded or recorded from a phone, IVR menus, email delivery settings) | 0.9.0 | **Complete, approved 2026-10-13** ([report](milestones/MILESTONE_7_REPORT.md)); design and reference [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) |
 | 8 | Ring groups, queues and **call pickup groups** (pick up a ringing call on another phone from your own: group pickup `*8`, directed pickup `**<extension>`, pickup-group membership per extension, BLF-friendly) | 0.10.0 | **Complete, approved 2026-10-14** ([report](milestones/MILESTONE_8_REPORT.md)); design and reference [RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md); owner request 2026-10-13: pickup groups; verified on dev1 with software phones, handset BLF/hold-music checks pending |
-| 9 | Device provisioning and custom templates (HTTPS delivery, hardware validation on Poly VVX 411/450; **owner requirements 2026-10-14:** brand and model families sharing common settings, per-use variants of a template such as one per building that differ only in multicast paging, multicast paging zones so phones page in sync with the multicast speakers instead of through a relay, Poly paging groups as an option) | 0.11.0 | **In progress** (started 2026-10-14) |
-| 10 | Reporting and monitoring (CDR, dashboards, metrics) | 0.12.0 | |
-| 11 | Module management and independent updates (service runtime, package install, module settings UI) | 0.13.0 | |
-| 12 | Software update management (download/approve/apply, maintenance windows, release signing) | 0.14.0 | |
-| 13 | Integrations | 0.15.0 | |
-| 14 | Multi-tenancy (telephony isolation and tests before activation) | 0.16.0 | |
-| 15 | Centralized instance management | 0.17.0 | |
-| 16 | High availability implementation and testing | 0.18.0 | |
-| 17 | Production hardening (backups, encryption, retention, security review, emergency calling validation) | 0.19.0 | |
+| 9 | Device provisioning and custom templates ([design](DEVICE_PROVISIONING.md)): devices by MAC, HTTPS delivery, device profiles (one template family, separated by use such as per building), paging zones written into the phones (Poly paging groups matching the speakers' multicast groups), templates editable in the web interface, hardware validation on Poly VVX 411/450; emergency caller ID per extension and per site (owner question 2026-10-14). Owner requirements 2026-10-14 | 0.11.0 | **In progress** (started 2026-10-14) |
+| 9b | Interface rework (owner request 2026-10-14): flyout navigation like Infinite Campus (left menu shows the categories, a flyout shows the items, no scrolling), dashboard graphs of active channels and of internal vs external calls as separate dashboard items | 0.12.0 | |
+| 9c | Paging and recordings (owner requests 2026-10-14): paging zones dialable from any phone, a Veyra page sender emitting plain multicast for speakers and Poly group-page format for phones in step, bell schedules (scheduled playback of uploaded recordings to zones), an audio library (MP3/WAV upload reused by prompts, greetings and bells), shared voicemail inboxes; SIP paging is not a life-safety notification system | 0.13.0 | |
+| 10 | Reporting and monitoring (CDR, dashboards, metrics) | 0.14.0 | |
+| 11 | Module management and independent updates (service runtime, package install, module settings UI) | 0.15.0 | |
+| 12 | Software update management (download/approve/apply, maintenance windows, release signing) | 0.16.0 | |
+| 13 | Integrations | 0.17.0 | |
+| 14 | Multi-tenancy (telephony isolation and tests before activation) | 0.18.0 | |
+| 15 | Centralized instance management | 0.19.0 | |
+| 16 | High availability implementation and testing | 0.20.0 | |
+| 17 | Production hardening (backups, encryption, retention, security review, emergency calling validation) | 0.21.0 | |
 | 18 | Public release preparation (license decision, disclosure policy, packaging) | 1.0.0 | |
 
 Planned UI areas (shown in navigation as "coming later" with their
 milestone): Extensions (M4), Devices (M9), SIP Trunks (M6), Inbound and
 Outbound Routing (M6), IVR and Voicemail (M7), Ring Groups, Call Queues and Pickup Groups (M8),
-Paging (later; SIP paging is not a life-safety notification system), Call
+Paging (M9c; SIP paging is not a life-safety notification system), Call
 History (M10), Call Recording (M10).
