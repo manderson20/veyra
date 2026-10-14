@@ -285,7 +285,7 @@ def _endpoints(
         # Pickup groups (docs/RING_GROUPS_QUEUES.md §4): the phone can be
         # picked up by, and can pick up, every member of its groups.
         groups = ",".join(
-            _slug(g, f"pickup group of {number}") for g in (ext.get("pickup_groups") or [])
+            sorted(_slug(g, f"pickup group of {number}") for g in (ext.get("pickup_groups") or []))
         )
         pickup = [f"named_call_group={groups}", f"named_pickup_group={groups}"] if groups else []
         lines += [

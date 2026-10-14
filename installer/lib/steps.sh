@@ -46,7 +46,9 @@ do_packages() {
     if [[ ! -d "$SOURCE_DIR/frontend/out" ]]; then
         pkgs+=(nodejs npm)
     fi
-    [[ $SKIP_TELEPHONY == 1 ]] || pkgs+=(asterisk asterisk-modules asterisk-core-sounds-en)
+    # asterisk-moh-opsound-wav fills the default music-on-hold class that call
+    # queues play (docs/RING_GROUPS_QUEUES.md §7); without it callers wait in silence.
+    [[ $SKIP_TELEPHONY == 1 ]] || pkgs+=(asterisk asterisk-modules asterisk-core-sounds-en asterisk-moh-opsound-wav)
     local missing=()
     local p
     for p in "${pkgs[@]}"; do
@@ -311,7 +313,7 @@ do_telephony() {
     # files shipped by the package are backed up beside them.
     MANAGED_FILE_CHANGED=0
     local stub
-    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf; do
+    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf; do
         install_managed_file "$SCRIPT_DIR/templates/asterisk/$stub" "/etc/asterisk/$stub" 0640 root:asterisk
     done
     stub_changed=$MANAGED_FILE_CHANGED
