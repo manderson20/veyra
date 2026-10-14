@@ -429,6 +429,18 @@ Milestone 5, 7 and 8 handset checks still open.
 
 * 2026-10-14: scope and requirements from the owner (above). Open
   questions of §5.3 sent; answers to be recorded here.
+* 2026-10-14: the owner's fleet (requirement 7) and the Algo relay; only the
+  Poly phones need Poly paging groups.
+* 2026-10-14: firmware management promoted from optional to a full item
+  (requirement 6).
+* 2026-10-14 (implementation): customizing a **family** creates local model
+  templates under the copy (`local.poly.vvx` → `local.poly.vvx.411`,
+  `.450`), because the official model templates inherit from the official
+  family; the VVX 411 template also lists the VVX 410 (same hardware
+  generation); the control socket of Asterisk is opened to group `asterisk`
+  by the installer so the API can send NOTIFY (§3.5) — ARI has no NOTIFY.
+* Sites: `/sites` with `organizations.read`/`organizations.write`; buildings
+  restrict deletion, everything else is set to no site.
 
 ## 12. Emergency caller ID per extension
 
@@ -449,7 +461,6 @@ variable is empty, so a more specific value always wins. The Extensions
 form and page get an "Emergency caller ID number" field; the Outbound
 Routes warning list adds "N enabled extension(s) have no emergency caller
 ID…" when an emergency route has no caller ID of its own. The WARNING log
-line names the emergency caller ID. A **site default** (`sites.emergency_caller_id_number`,
-precedence between extension and route) follows when sites get their API
-and form in the devices work of this milestone (§2): there is no sites API
-today.
+line names the emergency caller ID. The **site default** (`sites.emergency_caller_id_number`, precedence
+between extension and route, resolved in the snapshot) arrived with the
+sites API and page (`/sites`, Directory → Sites) in the same milestone.

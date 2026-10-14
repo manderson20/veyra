@@ -75,9 +75,9 @@ The installer then:
 7. Activates the release atomically and writes `/etc/veyra/veyra.env`.
 8. Applies database migrations.
 9. Creates a self-signed TLS certificate for the hostname and addresses (see §4).
-10. Configures Asterisk: ARI on `127.0.0.1:8088` only, AMI disabled, originals backed up as `*.veyra-backup-<timestamp>`.
+10. Configures Asterisk: ARI on `127.0.0.1:8088` only, AMI disabled, originals backed up as `*.veyra-backup-<timestamp>`; the control socket is opened to group `asterisk` (`astctlpermissions = 0660` in `asterisk.conf`) so the Veyra service account can send NOTIFY requests to phones (one Asterisk restart the first time).
 11. Installs and starts `veyra-api` (127.0.0.1:8100) and `veyra-worker`, both with systemd hardening.
-12. Configures NGINX: HTTPS with an HTTP→HTTPS redirect, the default site disabled (its file is kept), and security headers. NGINX is **restarted** (not reloaded) when the Veyra site is first installed or its addresses change, because its address-specific listeners cannot be bound while the default site's wildcard sockets are open; upgrades with an unchanged site only reload.
+12. Configures NGINX: HTTPS with an HTTP→HTTPS redirect, the default site disabled (its file is kept), security headers, and the phone provisioning locations (`/provisioning/`, rate-limited, and `/provisioning/firmware/` from `/var/lib/veyra/firmware`; see §4a). NGINX is **restarted** (not reloaded) when the Veyra site is first installed or its addresses change, because its address-specific listeners cannot be bound while the default site's wildcard sockets are open; upgrades with an unchanged site only reload.
 13. Runs `verify.sh`.
 14. Prints a **one-time setup token** and the URL of the setup wizard.
 
@@ -115,6 +115,21 @@ The self-signed certificate is in `/etc/veyra/tls/veyra.crt` and
 `veyra.key`. To use your own certificate, replace both files (key mode 0600)
 and run `sudo systemctl reload nginx`. The installer never overwrites
 existing certificate files.
+
+### 4a. Phone provisioning
+
+Phones fetch their configuration from `https://<host>/provisioning/` with
+HTTP Basic authentication ([DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md)
+§3). The host name phones use is `VEYRA_PUBLIC_HOST`, set in
+`/etc/veyra/installer.conf` (default: the server's fully qualified name)
+and written to `veyra.env` by the installer. Poly phones do not trust a
+self-signed certificate: install a trusted certificate (§4), add the
+certificate to the phones once, or, for a staging VLAN only, enable the
+plain-HTTP provisioning block with `VEYRA_PROVISIONING_HTTP=1` in
+`installer.conf` and re-run the installer. With HTTP enabled, `verify.sh`
+and the organization page warn that SIP secrets cross the network
+unencrypted. Firmware images uploaded through the interface are served by
+NGINX from `/var/lib/veyra/firmware`.
 
 ## 5. Verify and operate
 

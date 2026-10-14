@@ -10,8 +10,8 @@ the two agree. Constraint names follow a fixed naming convention.
 | Table | Purpose | Key columns / constraints |
 |---|---|---|
 | `installation` | Single row: identity of this installation | `instance_id` (permanent UUID for HA and central management), `deployment_mode`, `multi_tenancy_enabled`, `central_management_enabled`, `setup_completed_at` |
-| `organizations` | Tenants | `slug` unique, `timezone`, `is_active` |
-| `sites` | Locations of an organization | `organization_id`, unique (`organization_id`, `slug`), civic address (future dispatchable location) |
+| `organizations` | Tenants | `slug` unique, `timezone`, `is_active`; `provisioning_user`, `provisioning_secret_ciphertext` (migration `0011`: the enrollment credential, purpose `organization.provisioning_secret:<id>`) |
+| `sites` | Locations of an organization | `organization_id`, unique (`organization_id`, `slug`), civic address (future dispatchable location); `emergency_caller_id_number` (migration `0011`, default for the site's extensions) |
 | `buildings` | Buildings at a site | `site_id`, unique (`site_id`, `name`) |
 | `departments` | Departments | unique (`organization_id`, `name`) |
 | `users` | Accounts | `email` unique (stored lower-case), `password_hash` (Argon2id, NULL for SSO-only), `auth_source`, `is_recovery_admin`, `home_organization_id`, lockout fields, `password_changed_at` and `must_change_password` (migration `0002`), `mfa_required_at` and `mfa_grace_until` (migration `0004`) |
@@ -26,7 +26,7 @@ the two agree. Constraint names follow a fixed naming convention.
 | `audit_log` | Append-only audit trail | indexed by time and organization; **UPDATE/DELETE blocked by trigger** `audit_log_append_only` (DELETE allowed only with `SET LOCAL veyra.audit_retention='on'`) |
 | `system_settings` | Key/value settings | e.g. `setup.token` (hash plus expiry), `updates.metadata_sequence`, `telephony.sip` (SIP and media settings, M3), `telephony.numbering` (numbering plan, M4), `telephony.pending_change` (set by any engine-relevant save until the next deployment), `security.mfa` (two-factor policy, M4b) |
 | `extensions` | Extensions (engine-neutral) | unique (`organization_id`, `number`); `endpoint_name` globally unique (`<org slug>-<number>`); numbers also unique installation-wide (enforced by the API with an advisory lock until M14); `sip_secret_ciphertext` (AES-256-GCM token, installation key) and `sip_secret_changed_at` (migration `0003`); `emergency_caller_id_number` (migration `0010`, presented on emergency routes) |
-| `devices` | Phones | `mac_address` unique (12 hex digits), `template_key`, `primary_extension_id` |
+| `devices` | Phones registered by MAC address (migration `0011` adds the Milestone 9 columns; [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §2) | `mac_address` unique (12 hex digits), `profile_id` (`SET NULL`), `primary_extension_id` (`SET NULL`), `lines` (JSONB extra registrations), `keys` (JSONB line keys, NULL = the profile's), `values` (JSONB overrides), `firmware_image_id`, `provisioning_secret_ciphertext` (installation key, purpose `device.provisioning_secret:<id>`), `last_seen_*`, `last_result`, `firmware_reported`, `is_enabled` |
 | `installed_modules` | Module registry | `module_id` PK, `version`, `state`, `trust_level`, `signature_verified`, `manifest` (JSONB) |
 | `module_configs` | Module configuration | unique (`module_id`, `organization_id`) |
 | `update_policies` | Update policy per component | `component` PK, `mode`, `channel`, window, categories |
@@ -54,9 +54,14 @@ the two agree. Constraint names follow a fixed naming convention.
 | `queue_members` | Agents (migration `0009`) | PK (`queue_id`, `extension_id`), both `CASCADE`; `penalty` |
 | `pickup_groups` | Extensions that may answer each other's calls (migration `0009`) | unique (`organization_id`, `name`), `slug` unique (the Asterisk named group); `description` |
 | `pickup_group_members` | Membership (migration `0009`) | PK (`group_id`, `extension_id`), both `CASCADE` |
+| `paging_zones` | Multicast page groups (migration `0011`, M9; [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §5) | unique (`organization_id`, `name`), (`organization_id`, `slug`), (`organization_id`, `poly_group`); `multicast_address`/`multicast_port` (speakers), `poly_address`/`poly_port`/`poly_group` (phones), `kind`, `codec`, `site_id` (`SET NULL`), `is_enabled` |
+| `device_profiles` | Template family or model plus values, keys and firmware (migration `0011`) | unique (`organization_id`, `name`); `template_key`, `values` (JSONB), `keys` (JSONB), `site_id`, `firmware_image_id` (`SET NULL`) |
+| `device_profile_paging` | Zone memberships of a profile (migration `0011`) | PK (`profile_id`, `zone_id`), both `CASCADE`; `subscribed`, `transmit`, `role` (`none`/`default`/`priority`/`emergency`) |
+| `firmware_images` | Uploaded vendor firmware (migration `0011`) | unique (`manufacturer`, `version`, `filename`); `models` (JSONB), `size`, `sha256`, `uploaded_by` (`SET NULL`); file at `<data>/firmware/<id>/<filename>` |
+| `provisioning_requests` | Log of phone requests (migration `0011`) | `at` and `mac` indexed; `filename`, `method`, `ip_address`, `user_agent`, `organization_id`/`device_id` (`SET NULL`), `result`, `status`; pruned after 30 days by the worker |
 
 Tenant-owned tables (`sites`, `buildings`, `departments`, `extensions`,
-`devices`, `inbound_routes`, `time_conditions`) carry `organization_id` with `ON DELETE RESTRICT`, so deleting an
+`devices`, `device_profiles`, `paging_zones`, `inbound_routes`, `time_conditions`) carry `organization_id` with `ON DELETE RESTRICT`, so deleting an
 organization never silently removes telephony data.
 
 ## Module tables
