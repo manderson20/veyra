@@ -25,7 +25,7 @@ Conventions:
 | Two-factor | `/auth/mfa/challenge`, `/auth/mfa/verify` (rate limited), `/auth/mfa/totp/{begin,confirm}`, `/auth/mfa/methods[/{id}/remove]`, `/auth/mfa/recovery-codes/regenerate`, `/auth/mfa/policy`; `/users/{id}/mfa/reset` (see [MFA_DESIGN.md](MFA_DESIGN.md)) |
 | Setup | `/setup/status`, `/setup/initialize` |
 | Directory | `/organizations[/{id}]`, `/users[/{id}]`, `/users/{id}/roles[/{assignment}]`, `/users/{id}/unlock`, `/users/{id}/password-reset-link`, `/users/{id}/sessions`, `/roles`, `/search` (organizations, users, extensions) |
-| System | `/system/ping` (public), `/system/health`, `/system/info`, `/ha/status`, `/audit` |
+| System | `/system/ping` (public), `/system/health`, `/system/info`, `/system/metrics/calls?range=1h\|6h\|24h\|7d` (channel and call history for the dashboard graphs, [INTERFACE_REWORK.md](INTERFACE_REWORK.md) §2), `/ha/status`, `/audit` |
 | Modules | `/modules`, `/modules/ui-extensions`, `/modules/{id}`, `/modules/{id}/{install,enable,disable,update,uninstall}`, module routes under `/api/v1/ext/<prefix>/` |
 | Updates | `/updates/policies[/{component}]`, `/updates/check`, `/updates/checks/latest`, `/updates/available`, `/updates/history` |
 | Provisioning | `/provisioning/variables`, `/provisioning/models` (manufacturers and models of the catalog), `/provisioning/templates[/{key}[/preview,/export]]`, `/provisioning/templates/{validate,import}`, `PUT`/`DELETE /provisioning/templates/{key}` (local templates, editor), `/provisioning/templates/{key}/customize` (editable local child; a family also gets local model templates), `/provisioning/firmware[/{id}]` (multipart upload of vendor images; see [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §3.4, §7) |

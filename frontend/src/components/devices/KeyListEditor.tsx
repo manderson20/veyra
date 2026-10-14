@@ -32,8 +32,8 @@ export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys
           <TextField label={<span className="sr-only">Key {i + 1} label</span>} disabled={disabled} value={k.label ?? ""} placeholder="Label (optional)" style={{ width: 160 }} onChange={(e) => update(i, { label: e.target.value || null })} />
           {!disabled ? (
             <span className="row" style={{ gap: 2, paddingBottom: 2 }}>
-              <Button size="sm" variant="ghost" icon="arrowUp" onClick={() => move(i, -1)} aria-label="Move up" disabled={i === 0} />
-              <Button size="sm" variant="ghost" icon="arrowDown" onClick={() => move(i, 1)} aria-label="Move down" disabled={i === keys.length - 1} />
+              <Button size="sm" variant="ghost" icon="chevronUp" onClick={() => move(i, -1)} aria-label="Move up" disabled={i === 0} />
+              <Button size="sm" variant="ghost" icon="chevronDown" onClick={() => move(i, 1)} aria-label="Move down" disabled={i === keys.length - 1} />
               <Button size="sm" variant="ghost" icon="trash" onClick={() => onChange(keys.filter((_, j) => j !== i))} aria-label="Remove key" />
             </span>
           ) : null}

@@ -75,7 +75,7 @@ export default function PagingZonesPage() {
         </div>
         <DataTable columns={columns} rows={list.data?.items} rowKey={(z) => z.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Paging zones"
           onRowClick={editable ? (z) => setEditing(z) : undefined} rowLabel={(z) => `Edit paging zone ${z.name}`}
-          empty={<EmptyState icon="megaphone" title={debounced || org ? "No matching zones" : "No paging zones yet"}>{!debounced && !org && editable ? "Create one zone per building with the speakers' multicast address and a Poly group number." : null}</EmptyState>}
+          empty={<EmptyState icon="megaphone" title={debounced || org ? "No matching zones" : "No paging zones yet"}>{!debounced && !org && editable ? "Create a zone per paging area (a building, a wing, a floor, outdoors) with the speakers' multicast address and a Poly group number; a building can have as many zones as it needs." : null}</EmptyState>}
           pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null} />
       </Card>
       <PagingZoneDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => list.reload()} />

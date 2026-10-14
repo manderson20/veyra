@@ -60,7 +60,7 @@ export default function SitesPage() {
 
   return (
     <div className="stack">
-      <PageHeader title="Sites" description="Buildings and campuses. Device profiles and paging zones are usually one per site; a site's time zone and emergency caller ID are defaults for its extensions."
+      <PageHeader title="Sites" description="Buildings and campuses. Device profiles and paging zones can belong to a site (as many zones per site as the building needs); a site's time zone and emergency caller ID are defaults for its extensions."
         actions={editable ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New site</Button> : null} />
       <Card flush>
         <div className="table-toolbar">
@@ -69,7 +69,7 @@ export default function SitesPage() {
         </div>
         <DataTable columns={columns} rows={list.data?.items} rowKey={(s) => s.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Sites"
           onRowClick={editable ? (s) => setEditing(s) : undefined} rowLabel={(s) => `Edit site ${s.name}`}
-          empty={<EmptyState icon="building" title={debounced || org ? "No matching sites" : "No sites yet"}>{!debounced && !org && editable ? "Add a site per building to separate paging zones and emergency caller IDs." : null}</EmptyState>}
+          empty={<EmptyState icon="building" title={debounced || org ? "No matching sites" : "No sites yet"}>{!debounced && !org && editable ? "Add a site per building to group its paging zones, phones and emergency caller ID." : null}</EmptyState>}
           pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null} />
       </Card>
       <SiteDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => list.reload()} />

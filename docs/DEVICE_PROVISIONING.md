@@ -56,7 +56,11 @@ Owner requirements (2026-10-14) this design answers:
   their paging-zone memberships, and serve a VVX 411 and a VVX 450 alike.
 * **Paging** is a first-class object (§5) rendered into the phones from
   the profile's memberships; the phones get the Poly group-page settings
-  that match the speakers' multicast groups. Sending pages from Veyra and
+  that match the speakers' multicast groups. A building can have any
+  number of zones (wings, floors, outdoors, "all call"); a profile
+  subscribes to any set of them. The only ceiling is Poly's 24 groups plus
+  the emergency group per organization, because Poly phones listen on one
+  address. Sending pages from Veyra and
   bell schedules are Milestone 9c.
 * **Editable templates**: local templates get an editor (§7); official
   templates stay read-only and "Customize" creates a local child.
@@ -467,6 +471,11 @@ Milestone 5, 7 and 8 handset checks still open.
   by the installer so the API can send NOTIFY (§3.5) — ARI has no NOTIFY.
 * Sites: `/sites` with `organizations.read`/`organizations.write`; buildings
   restrict deletion, everything else is set to no site.
+* 2026-10-14 (owner): "there could be multiple zones per building,
+  depending on what the entity wants to do" — the model already allows it
+  (a zone's site is optional and non-unique; profiles subscribe to any
+  number of zones); interface and documentation wording changed from "one
+  zone per building" to "as many zones per building as needed".
 
 ## 12. Emergency caller ID per extension
 

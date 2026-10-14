@@ -19,6 +19,9 @@ export interface NavSection {
   label: string;
   items: NavItem[];
   collapsible?: boolean;
+  /** Rail icon and flyout description (docs/INTERFACE_REWORK.md §1). */
+  icon?: string;
+  description?: string;
 }
 
 export interface PlannedFeature {
@@ -44,15 +47,15 @@ export function plannedFeature(key: string | null): PlannedFeature | undefined {
 }
 
 export const NAV: NavSection[] = [
-  { id: "overview", label: "Overview", items: [
+  { id: "overview", label: "Overview", icon: "dashboard", description: "System status, resources and telephony activity at a glance.", items: [
     { label: "Dashboard", href: "/", icon: "dashboard", permissions: ["system.health.read"] },
   ] },
-  { id: "directory", label: "Directory", items: [
+  { id: "directory", label: "Directory", icon: "users", description: "Organizations, their sites and the people who sign in.", items: [
     { label: "Organizations", href: "/organizations/", icon: "building", permissions: ["organizations.read"] },
     { label: "Sites", href: "/sites/", icon: "building", permissions: ["organizations.read"] },
     { label: "Users", href: "/users/", icon: "users", permissions: ["users.read"] },
   ] },
-  { id: "telephony", label: "Telephony", collapsible: true, items: [
+  { id: "telephony", label: "Telephony", icon: "phone", collapsible: true, description: "Extensions, calls, trunks, routing, voicemail, menus, groups and paging.", items: [
     { label: "Extensions", href: "/extensions/", icon: "phone", permissions: ["extensions.read"] },
     { label: "Active Calls", href: "/calls/", icon: "activity", permissions: ["calls.read"] },
     { label: "SIP Trunks", href: "/trunks/", icon: "trunk", permissions: ["trunks.read"] },
@@ -70,14 +73,14 @@ export const NAV: NavSection[] = [
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
     })),
   ] },
-  { id: "provisioning", label: "Provisioning", items: [
+  { id: "provisioning", label: "Provisioning", icon: "device", description: "Phones, their profiles, configuration templates and firmware.", items: [
     { label: "Devices", href: "/devices/", icon: "device", permissions: ["devices.read"] },
     { label: "Device Profiles", href: "/device-profiles/", icon: "settings", permissions: ["devices.read"] },
     { label: "Templates", href: "/provisioning/", icon: "template", permissions: ["provisioning.read"] },
     { label: "Firmware", href: "/firmware/", icon: "update", permissions: ["provisioning.read"] },
   ] },
-  { id: "modules", label: "Modules", items: [] },
-  { id: "system", label: "System", items: [
+  { id: "modules", label: "Modules", icon: "modules", description: "Pages added by installed modules.", items: [] },
+  { id: "system", label: "System", icon: "settings", description: "Health, the telephony engine, high availability, updates, modules, audit and settings.", items: [
     { label: "Health", href: "/system/health/", icon: "health", permissions: ["system.health.read"] },
     { label: "Telephony Engine", href: "/system/telephony/", icon: "server", permissions: ["config.read"] },
     { label: "High Availability", href: "/system/ha/", icon: "ha", permissions: ["ha.read"] },
@@ -121,6 +124,19 @@ export function buildNav(ctx: NavContext, sections: NavSection[] = NAV): NavSect
       return { ...s, items: items.filter((i) => canSee(i, ctx)) };
     })
     .filter((s) => s.items.length > 0);
+}
+
+/** The section and item of the current route, for the rail highlight and the breadcrumb. */
+export function activeLocation(sections: NavSection[], pathname: string, search = ""): { section: NavSection; item: NavItem } | null {
+  let best: { section: NavSection; item: NavItem; length: number } | null = null;
+  for (const section of sections) {
+    for (const item of section.items) {
+      if (!isActive(item.href, pathname, search)) continue;
+      const length = item.href.length;
+      if (!best || length > best.length) best = { section, item, length };
+    }
+  }
+  return best ? { section: best.section, item: best.item } : null;
 }
 
 /** True when `href` is the active route for `pathname` (+ search). */

@@ -75,3 +75,16 @@ describe("isActive", () => {
     expect(isActive("/planned/?feature=ivr", "/planned/", "feature=paging")).toBe(false);
   });
 });
+
+describe("activeLocation and rail metadata", () => {
+  it("finds the category and page of the current path, preferring the longest match", async () => {
+    const { NAV, activeLocation, buildNav } = await import("./nav");
+    const sections = buildNav({ permissions: [], isPlatformAdmin: true });
+    const loc = activeLocation(sections, "/routing/inbound/", "");
+    expect(loc?.section.id).toBe("telephony");
+    expect(loc?.item.label).toBe("Inbound Routes");
+    expect(activeLocation(sections, "/", "")?.item.label).toBe("Dashboard");
+    expect(activeLocation(sections, "/nowhere/", "")).toBeNull();
+    for (const s of NAV) expect(s.icon, `${s.id} has an icon`).toBeTruthy();
+  });
+});

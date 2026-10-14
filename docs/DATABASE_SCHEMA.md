@@ -59,6 +59,7 @@ the two agree. Constraint names follow a fixed naming convention.
 | `device_profile_paging` | Zone memberships of a profile (migration `0011`) | PK (`profile_id`, `zone_id`), both `CASCADE`; `subscribed`, `transmit`, `role` (`none`/`default`/`priority`/`emergency`) |
 | `firmware_images` | Uploaded vendor firmware (migration `0011`) | unique (`manufacturer`, `version`, `filename`); `models` (JSONB), `size`, `sha256`, `uploaded_by` (`SET NULL`); file at `<data>/firmware/<id>/<filename>` |
 | `provisioning_requests` | Log of phone requests (migration `0011`) | `at` and `mac` indexed; `filename`, `method`, `ip_address`, `user_agent`, `organization_id`/`device_id` (`SET NULL`), `result`, `status`; pruned after 30 days by the worker |
+| `call_samples` | Engine readings for the dashboard graphs (migration `0012`, M9b; [INTERFACE_REWORK.md](INTERFACE_REWORK.md) §2) | `at` indexed; `channels`, `calls_internal`, `calls_external`, `registrations`; one row per worker iteration (30 s), pruned after 14 days |
 
 Tenant-owned tables (`sites`, `buildings`, `departments`, `extensions`,
 `devices`, `device_profiles`, `paging_zones`, `inbound_routes`, `time_conditions`) carry `organization_id` with `ON DELETE RESTRICT`, so deleting an
