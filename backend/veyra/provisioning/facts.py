@@ -147,7 +147,9 @@ class DeviceContext:
 
 
 def _host(settings: Settings, host: str | None) -> str:
-    return (host or settings.public_host or socket.getfqdn() or "localhost").strip()
+    """The configured public host wins over the request's Host header (which
+    may be an address a technician typed into the phone)."""
+    return (settings.public_host or host or socket.getfqdn() or "localhost").strip().split(":")[0]
 
 
 def provisioning_url(settings: Settings, host: str | None = None, scheme: str = "https") -> str:

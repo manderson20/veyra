@@ -80,17 +80,34 @@ a free module catalog on GitHub and custom module upload.
 | Installer `tests/test_lib.sh` | **45 passed**; `shellcheck` clean; `upgrade.sh --dry-run` clean (shows the control-socket change) |
 | Frontend lint / typecheck / vitest | Clean / clean / **30 passed** |
 | Frontend `npm run build` | Passed; `/sites`, `/paging-zones`, `/devices`, `/devices/view`, `/device-profiles`, `/device-profiles/view`, `/firmware` exported |
-| **Owner's `upgrade.sh` on dev1** | *Pending* |
+| **Owner's `upgrade.sh` on dev1** | 0.10.0-980d95b0dd → 0.10.0-9fda32c943 (2026-10-14 15:34 UTC): backups, migrations `0010`/`0011` applied, `pjsip_notify.conf` stub installed, `asterisk.conf` edited and Asterisk restarted, services restarted; verification failed only `engine-cli`: the package keeps `astctlpermissions` under a commented-out `[files]` header, so the uncommented settings were inactive and the socket stayed `0755`. Fixed on dev1 by activating `[files]` and restarting Asterisk once more; the installer now does both (commit c517502) and also lets group `asterisk` read `asterisk.conf`. `verify.sh` afterwards: all checks OK |
 
-### Live checks on dev1
+### Live checks on dev1 (2026-10-14, after the upgrade)
 
-*Pending the owner's upgrade.* From the session afterwards: `verify.sh`
-(expect `prov-location`, `prov-auth`, `prov-http`, `firmware-dir`,
-`engine-cli`, `engine-stub:pjsip_notify.conf`), create a site, a zone, a
-profile and a device for a test extension, fetch the files with `curl`
-using the enrollment credential and then the device credential, check the
-request log and status on the Devices page, and send a `check_config`
-NOTIFY to a registered software phone.
+Seeded from the session: test extension 22216, a site in `America/Chicago`
+with an emergency caller ID, a paging zone (group 7, speakers at
+`239.1.2.10:5004`), a profile on `poly.vvx.base` with a line, a BLF and a
+page key, a VVX 411 device on the profile, the organization's enrollment
+credential and the device credential. Removed afterwards; dev1 is back to
+extensions 22214 and 22215 (the enrollment credential stays on the
+organization, which is harmless).
+
+| Check | Result |
+|---|---|
+| No or wrong credentials | `401` with `WWW-Authenticate: Basic` |
+| Enrollment credential | `000000000000.cfg` → 200 empty master; `0004f2aabbcc.cfg` → 200 master naming `veyra-0004f2aabbcc.cfg`; the phone file → 200 `application/xml`, `Cache-Control: no-store`, with the registration (`reg.1.address`), the SIP secret in clear, the BLF key resolved to extension 22214's name, `lineKey.3.category="Paging"`, `ptt.pageMode.group.7.label`, `defaultGroup="7"`, the site's DST rules (`gmtOffset="-21600"`, `daylightSavings.enable="1"`, `start.month="3"`), `device.prov.user="dev-0004f2aabbcc"` with its password and the server URL, `prov.polling.time="04:00"` from the profile's values |
+| Unknown MAC with a valid credential | `404`; logged as `unknown_device` |
+| Device credential | Its own files 200; wrong password 401; another phone's file 404; `PUT` of `0004f2aabbcc-app.log` 200 and logged as `uploaded` |
+| Path traversal | `400` from NGINX |
+| Request log and status | Nine rows with method, file, result, status, address and user agent; the device shows `last_result`, `last_seen_ip` and `firmware_reported` `6.4.5.1234` parsed from the Poly user agent |
+| Deployment | Revision 23 deployed `extensions.conf`, `pjsip.endpoints.conf` and `pjsip_notify.conf`; the NOTIFY types are loaded |
+| NOTIFY | `pjsip send notify veyra-check-config endpoint …` as the `veyra` user: Asterisk sent `NOTIFY … Event: check-sync` to the registered software phone, which answered `200 OK`; the same command succeeds inside the API unit's systemd sandbox (`ProtectSystem=strict`, `RestrictAddressFamilies=AF_UNIX …`) |
+| `verify.sh` | `prov-location`, `prov-auth`, `prov-http`, `firmware-dir`, `engine-cli`, `engine-stub:pjsip_notify.conf` all OK |
+
+Two small fixes came out of the checks: the configured public host now
+wins over the request's `Host` header when the files name the server, and
+the installer gives group `asterisk` read access to `asterisk.conf` so the
+CLI runs without warnings.
 
 ## 4. Not verified
 
@@ -121,9 +138,8 @@ NOTIFY to a registered software phone.
 
 ## 6. Open items
 
-* Owner: upgrade dev1 from `~/veyra` on `milestone-9` (`sudo
-  installer/upgrade.sh --yes`; one Asterisk restart), then the live checks
-  of §3 run from the session.
+* Owner upgraded dev1 on 2026-10-14 (§3); the live checks are done. The
+  two installer fixes made after that upgrade take effect on the next one.
 * Owner: decide how the phones trust the server (trusted certificate,
   per-phone CA install, or HTTP on a staging VLAN; design §3.3), then the
   hardware checks of §4 with a VVX 411 and a VVX 450.
@@ -153,4 +169,14 @@ The owner may take 9b before 9c or the other way round.
 
 * 2026-10-14: requirements 1–7 of §1 and the privacy rule (nothing
   identifying the school in the repository or the product wording).
+* 2026-10-14: the owner asked about fail2ban or something better. Today
+  Veyra rate-limits sign-in, second factor, password reset and
+  provisioning at NGINX, locks accounts, and keeps the API, ARI and
+  PostgreSQL on loopback with AMI off; nothing blocks SIP brute force at
+  the network level. Proposal: a Veyra-native blocker (Asterisk security
+  events and NGINX authentication failures feeding an nftables set with
+  timed bans, an allow-list for trunks and the LAN, and a page showing bans)
+  with optional CrowdSec integration for community blocklists; fail2ban
+  remains the known fallback. Scheduled with production hardening
+  (roadmap row 17) unless the owner pulls it forward.
 * Approval: *pending*.
