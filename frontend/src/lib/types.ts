@@ -1235,11 +1235,18 @@ export interface PagingZone {
   kind: PagingKind;
   codec: PagingCodec;
   is_enabled: boolean;
+  /** Dialable number from the shared number space, who may page, longest page (docs/PAGING_RECORDINGS.md §2). */
+  number: string | null;
+  allowed: PagingAllowed;
+  members: GroupMember[];
+  max_seconds: number;
   profiles: { id: string; name: string }[];
   problems: string[];
   created_at: string;
   updated_at: string;
 }
+
+export type PagingAllowed = "everyone" | "members" | "administrators";
 
 export interface PagingZoneInput {
   organization_id?: string;
@@ -1254,6 +1261,69 @@ export interface PagingZoneInput {
   kind?: PagingKind;
   codec?: PagingCodec;
   is_enabled?: boolean;
+  number?: string | null;
+  allowed?: PagingAllowed;
+  members?: string[];
+  max_seconds?: number;
+}
+
+export type PagePriority = "normal" | "priority" | "emergency";
+
+export interface PagingPage {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  number: string | null;
+  zones: { id: string; name: string; slug: string; poly_group: number }[];
+  audio: { id: string; name: string; duration_seconds: number } | null;
+  pre_tone: boolean;
+  repeat: number;
+  priority: PagePriority;
+  allowed: PagingAllowed;
+  members: GroupMember[];
+  max_seconds: number;
+  is_enabled: boolean;
+  last_sent_at: string | null;
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PagingPageInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  number?: string | null;
+  zones?: string[];
+  audio_id?: string | null;
+  pre_tone?: boolean;
+  repeat?: number;
+  priority?: PagePriority;
+  allowed?: PagingAllowed;
+  members?: string[];
+  max_seconds?: number;
+  is_enabled?: boolean;
+}
+
+export interface PageSendResult {
+  started: boolean;
+  message: string;
+  channel_id: string | null;
+}
+
+export interface PageLogEntry {
+  id: string;
+  at: string;
+  page_id: string | null;
+  page_name: string;
+  zones: string[];
+  trigger: "dial" | "api" | "bell" | "ui";
+  actor: string | null;
+  outcome: "started" | "failed";
+  detail: Record<string, unknown>;
 }
 
 export type LineKeyType = "line" | "blf" | "speed_dial" | "page";

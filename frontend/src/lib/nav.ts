@@ -33,9 +33,6 @@ export interface PlannedFeature {
 }
 
 export const PLANNED_FEATURES: PlannedFeature[] = [
-  { key: "paging", label: "Paging", icon: "megaphone", milestone: null,
-    summary: "Paging groups, SIP paging endpoints (such as Algo speakers), multicast paging and intercom. " +
-      "SIP paging is not a life-safety notification system." },
   { key: "call-history", label: "Call History", icon: "history", milestone: 10,
     summary: "Searchable call detail records with filtering and CSV export, respecting tenant permissions." },
   { key: "recording", label: "Call Recording", icon: "record", milestone: 10,
@@ -69,6 +66,7 @@ export const NAV: NavSection[] = [
     { label: "Call Queues", href: "/queues/", icon: "queue", permissions: ["groups.read"] },
     { label: "Pickup Groups", href: "/pickup-groups/", icon: "phone", permissions: ["groups.read"] },
     { label: "Paging Zones", href: "/paging-zones/", icon: "megaphone", permissions: ["paging.read"] },
+    { label: "Pages", href: "/paging/", icon: "megaphone", permissions: ["paging.read"] },
     ...PLANNED_FEATURES.map((f) => ({
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone },
     })),

@@ -841,6 +841,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
                     pruned = prune_requests(db)
                     if pruned:
                         log.info("Pruned %d provisioning request log rows", pruned)
+                    from veyra.api.v1.pages import prune_log
+
+                    pruned_pages = prune_log(db)
+                    if pruned_pages:
+                        log.info("Pruned %d page log rows", pruned_pages)
                 policy = db.get(UpdatePolicy, "veyra_core")
                 last = db.scalar(
                     select(UpdateCheck).order_by(UpdateCheck.checked_at.desc()).limit(1)
