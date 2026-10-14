@@ -61,6 +61,8 @@ class OrganizationPatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     timezone: str | None = None
     is_active: bool | None = None
+    # Default hold music set of the organization's phones; null = built-in.
+    moh_class_id: uuid.UUID | None = None
 
     @field_validator("timezone")
     @classmethod
@@ -74,6 +76,7 @@ class OrganizationOut(ORM):
     slug: str
     timezone: str
     is_active: bool
+    moh_class_id: uuid.UUID | None = None
     created_at: datetime
 
 

@@ -25,7 +25,7 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import IvrMenu, Organization, Prompt
+from veyra.core.models import IvrMenu, MohClass, MohClassTrack, Organization, Prompt
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import audio, routing
@@ -158,7 +158,7 @@ def _uses(db: Session, ids: set[uuid.UUID]) -> dict[Any, int]:
     counts: dict[Any, int] = {}
     if not ids:
         return counts
-    for col in (IvrMenu.prompt_id, IvrMenu.invalid_prompt_id):
+    for col in (IvrMenu.prompt_id, IvrMenu.invalid_prompt_id, MohClassTrack.prompt_id):
         for pid, n in db.execute(select(col, func.count()).where(col.in_(ids)).group_by(col)):
             counts[pid] = counts.get(pid, 0) + n
     return counts
@@ -549,6 +549,10 @@ async def replace_audio(
     prompt.size_bytes = len(data)
     prompt.source = "upload"
     db.flush()
+    # Hold music sets play copies; refresh them (docs/PAGING_RECORDINGS.md §3.2).
+    from veyra.api.v1 import hold_music
+
+    hold_music.sync_sets_using(request, db, prompt.id)
     _audit(
         db,
         ctx,
@@ -630,6 +634,20 @@ def delete_prompt(
             f"These IVR menus play it: {', '.join(used)}.",
             code="prompt_in_use",
             errors=[{"field": "menus", "message": n} for n in used],
+        )
+    sets = db.scalars(
+        select(MohClass.name)
+        .join(MohClassTrack, MohClassTrack.class_id == MohClass.id)
+        .where(MohClassTrack.prompt_id == prompt.id)
+        .order_by(MohClass.name)
+    ).all()
+    if sets:
+        raise ProblemError(
+            409,
+            "Recording in use",
+            f"These hold music sets play it: {', '.join(sets)}.",
+            code="prompt_in_use",
+            errors=[{"field": "hold_music", "message": n} for n in sets],
         )
     org = db.get(Organization, prompt.organization_id)
     path = prompt_path(prompts_dir(request), org.slug if org else "", prompt.slug)

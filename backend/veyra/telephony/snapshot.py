@@ -16,6 +16,7 @@ Callers must not log or persist a snapshot.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import select
@@ -30,6 +31,8 @@ from veyra.core.models import (
     Installation,
     IvrEntry,
     IvrMenu,
+    MohClass,
+    MohClassTrack,
     Organization,
     OutboundRoute,
     OutboundRouteTrunk,
@@ -51,10 +54,11 @@ from veyra.core.models import (
     VoicemailBoxMember,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
+from veyra.telephony import moh
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 8
+SNAPSHOT_VERSION = 9
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -157,7 +161,8 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     voicemail = _voicemail_ivr(
         db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues
     )
-    groups = _groups(db, extensions, org_slug, targets, ring_groups, queues)
+    hold_music, moh_slug = _hold_music(db, active, org_slug)
+    groups = _groups(db, extensions, org_slug, targets, ring_groups, queues, moh_slug)
     pickup = _pickup_groups(db, active, ext_by_id)
     smtp = load_smtp_settings(db)
     from_address, from_name = sender(smtp, inst.name if inst else "Veyra")
@@ -172,9 +177,16 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         "sip": load_sip_settings(db).model_dump(mode="json"),
         "smtp": {"enabled": smtp.enabled, "from_address": from_address, "from_name": from_name},
         "organizations": [
-            {"slug": o.slug, "name": o.name, "timezone": o.timezone, "is_active": o.is_active}
+            {
+                "slug": o.slug,
+                "name": o.name,
+                "timezone": o.timezone,
+                "is_active": o.is_active,
+                "hold_music": moh_slug(o.moh_class_id, o.id),
+            }
             for o in orgs
         ],
+        "hold_music": hold_music,
         "extensions": [
             {
                 "endpoint_name": e.endpoint_name,
@@ -451,6 +463,44 @@ def _voicemail_ivr(
     }
 
 
+def _hold_music(
+    db: Session, active_orgs: set[Any], org_slug: dict[Any, str]
+) -> tuple[list[dict[str, Any]], Callable[[Any, Any], str | None]]:
+    """Hold music sets of active organizations with their track file names
+    (docs/PAGING_RECORDINGS.md §3.2), and a lookup of a set's slug that
+    ignores sets of another organization."""
+    classes = {
+        c.id: c
+        for c in db.scalars(select(MohClass).order_by(MohClass.slug)).all()
+        if c.organization_id in active_orgs
+    }
+    prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
+    tracks: dict[Any, list[MohClassTrack]] = {}
+    for t in db.scalars(select(MohClassTrack).order_by(MohClassTrack.position)).all():
+        if t.class_id in classes:
+            tracks.setdefault(t.class_id, []).append(t)
+    sets = [
+        {
+            "slug": c.slug,
+            "name": c.name,
+            "organization": org_slug.get(c.organization_id, ""),
+            "random": c.random,
+            "files": [
+                moh.track_name(i, prompts[t.prompt_id].slug)
+                for i, t in enumerate(tracks.get(c.id, []))
+                if t.prompt_id in prompts
+            ],
+        }
+        for c in classes.values()
+    ]
+
+    def moh_slug(class_id: Any, org_id: Any) -> str | None:
+        c = classes.get(class_id) if class_id else None
+        return c.slug if c is not None and c.organization_id == org_id else None
+
+    return sets, moh_slug
+
+
 def _groups(
     db: Session,
     extensions: list[Extension],
@@ -458,6 +508,7 @@ def _groups(
     targets: Targets,
     ring_groups: list[RingGroup],
     queues: list[CallQueue],
+    moh_slug: Callable[[Any, Any], str | None] = lambda _c, _o: None,
 ) -> dict[str, Any]:
     """Enabled ring groups and queues of active organizations with their
     enabled members (docs/RING_GROUPS_QUEUES.md §2, §3)."""
@@ -490,6 +541,8 @@ def _groups(
                 "ring_seconds": g.ring_seconds,
                 "ring_busy_members": g.ring_busy_members,
                 "caller_id_prefix": g.caller_id_prefix,
+                "music": g.music,
+                "hold_music": moh_slug(g.moh_class_id, g.organization_id),
                 "members": [member(ext_by_id[m.extension_id]) for m in rg_members.get(g.id, [])],
                 "failover": targets.dest(g, "failover"),
             }
@@ -514,6 +567,7 @@ def _groups(
                 "periodic_prompt": prompt_slug(q.periodic_prompt_id, q.organization_id),
                 "periodic_seconds": q.periodic_seconds,
                 "music": q.music,
+                "hold_music": moh_slug(q.moh_class_id, q.organization_id),
                 "members": [
                     {**member(ext_by_id[m.extension_id]), "penalty": m.penalty}
                     for m in sorted(

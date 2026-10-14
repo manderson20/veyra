@@ -15,7 +15,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from veyra.api.v1 import destinations
+from veyra.api.v1 import destinations, hold_music
 from veyra.api.v1 import group_helpers as helpers
 from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
 from veyra.api.v1.group_helpers import READ, WRITE, MemberOut
@@ -47,6 +47,10 @@ class RingGroupIn(BaseModel):
     ring_seconds: int = Field(20, ge=5, le=120)
     ring_busy_members: bool = False
     caller_id_prefix: str | None = Field(None, max_length=40)
+    # What callers hear while members ring: ringing, or hold music (the set
+    # below, or the built-in one) (docs/PAGING_RECORDINGS.md §3.2).
+    music: Literal["ring", "default"] = "ring"
+    moh_class_id: uuid.UUID | None = None
     failover: DestinationIn = Field(default_factory=lambda: DestinationIn(type="hangup"))
     members: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_MEMBERS)
     is_enabled: bool = True
@@ -86,6 +90,8 @@ class RingGroupPatch(BaseModel):
     ring_seconds: int | None = Field(None, ge=5, le=120)
     ring_busy_members: bool | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
+    music: Literal["ring", "default"] | None = None
+    moh_class_id: uuid.UUID | None = None
     failover: DestinationIn | None = None
     members: list[uuid.UUID] | None = Field(None, max_length=MAX_MEMBERS)
     is_enabled: bool | None = None
@@ -104,6 +110,9 @@ class RingGroupOut(BaseModel):
     ring_seconds: int
     ring_busy_members: bool
     caller_id_prefix: str | None
+    music: str
+    moh_class_id: uuid.UUID | None
+    moh_class_name: str | None
     failover: DestinationOut
     members: list[MemberOut]
     is_enabled: bool
@@ -134,6 +143,7 @@ def _outs(db: Session, rows: list[RingGroup]) -> list[RingGroupOut]:
     if not rows:
         return []
     orgs = helpers.org_names(db, {r.organization_id for r in rows})
+    moh_names = hold_music.set_names(db, {r.moh_class_id for r in rows})
     members = _members(db, {r.id for r in rows})
     exts = helpers.extensions_by_id(
         db, {m.extension_id for rows_ in members.values() for m in rows_}
@@ -180,6 +190,9 @@ def _outs(db: Session, rows: list[RingGroup]) -> list[RingGroupOut]:
                 ring_seconds=r.ring_seconds,
                 ring_busy_members=r.ring_busy_members,
                 caller_id_prefix=r.caller_id_prefix,
+                music=r.music,
+                moh_class_id=r.moh_class_id,
+                moh_class_name=moh_names.get(r.moh_class_id) if r.moh_class_id else None,
                 failover=failover,
                 members=member_outs,
                 is_enabled=r.is_enabled,
@@ -212,6 +225,7 @@ def _set_members(db: Session, group: RingGroup, extension_ids: list[uuid.UUID]) 
 def _check(db: Session, org_id: uuid.UUID, body: RingGroupIn, self_id: uuid.UUID | None) -> None:
     helpers.check_number(db, body.number, "ring group", self_id)
     helpers.load_members(db, org_id, body.members, "members")
+    hold_music.check_set(db, org_id, body.moh_class_id, "moh_class_id")
     check_destination(
         db, org_id, body.failover, field="failover", allow_hangup=True, exclude_ring_group=self_id
     )
@@ -271,6 +285,8 @@ def create_group(
         ring_seconds=body.ring_seconds,
         ring_busy_members=body.ring_busy_members,
         caller_id_prefix=body.caller_id_prefix,
+        music=body.music,
+        moh_class_id=body.moh_class_id,
         is_enabled=body.is_enabled,
     )
     destinations.apply(group, "failover", body.failover)
@@ -323,6 +339,8 @@ def update_group(
         "ring_seconds": group.ring_seconds,
         "ring_busy_members": group.ring_busy_members,
         "caller_id_prefix": group.caller_id_prefix,
+        "music": group.music,
+        "moh_class_id": group.moh_class_id,
         "failover": destinations.as_input(destinations.ref_of(group, "failover")),
         "members": current_members,
         "is_enabled": group.is_enabled,
@@ -346,6 +364,8 @@ def update_group(
         "ring_seconds",
         "ring_busy_members",
         "caller_id_prefix",
+        "music",
+        "moh_class_id",
         "is_enabled",
     ):
         value = getattr(validated, field)

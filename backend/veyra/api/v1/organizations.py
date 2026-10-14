@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from veyra.api.v1.schemas import OrganizationIn, OrganizationOut, OrganizationPatch
+from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
@@ -108,8 +109,14 @@ def update_organization(
     if org is None:
         raise not_found("Organization")
     changes = body.model_dump(exclude_unset=True)
+    if "moh_class_id" in changes:
+        from veyra.api.v1 import hold_music
+
+        hold_music.check_set(db, org.id, changes["moh_class_id"], "moh_class_id")
     for k, v in changes.items():
         setattr(org, k, v)
+    if "moh_class_id" in changes:
+        configmgmt.mark_changed(db, by=principal.label, what=f"hold music of {org.slug}")
     audit.record(
         db,
         action="organization.update",

@@ -295,7 +295,9 @@ write raises the Deploy changes flag (pickup groups and members change
   files, and `moh reload` does nothing while `musiconhold.conf` is
   unchanged; the Asterisk step therefore unloads and loads
   `res_musiconhold.so` when `moh show classes` lacks `Class: default`.
-  Custom hold music is a later milestone (§10).
+  Custom hold music sets arrived in Milestone 9c
+  ([PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §3.2); the stub
+  `/etc/asterisk/musiconhold.conf` keeps `[default]` and includes them.
 * No module changes: `app_queue`, `app_directed_pickup` and
   `res_musiconhold` are core modules already loaded; `verify.sh` checks
   that the `Queue` and `Pickup` applications are registered.
@@ -338,8 +340,9 @@ answer and dialling `*8` and `**<ext>` from another.
 * Queue agents are static: no login/logout or pause codes, no dynamic
   membership from the browser; a live queue view and statistics come with
   reporting (Milestone 10).
-* One music-on-hold class (`default`) for every queue; custom or
-  per-organization hold music is later.
+* Hold music sets (per organization, queue and ring group) are described
+  in [PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §3.2; streamed music is
+  later.
 * Ring group members are extensions only; external numbers (follow-me to a
   mobile) are later.
 * `*8` answers the longest-ringing call in the caller's groups; there is

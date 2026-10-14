@@ -175,7 +175,7 @@ a user's page in the UI.
 | `veyra-worker` | veyra | Heartbeat, update checks, session purge, outgoing mail queue (voicemail notifications), prompt folders |
 | `veyra-deployer` | veyra | Writes generated telephony configuration to `/etc/asterisk/veyra` and reloads Asterisk (only with a telephony engine) |
 | `veyra-pager` | veyra | Page sender: speakers' multicast and Poly group pages from one stream ([PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §2.2) |
-| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf`, `voicemail.conf` and `queues.conf` are Veyra-managed stubs that include the generated files. `asterisk-moh-opsound-wav` provides the hold music call queues play |
+| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf`, `voicemail.conf`, `queues.conf`, `pjsip_notify.conf` and `musiconhold.conf` are Veyra-managed stubs that include the generated files. `asterisk-moh-opsound-wav` provides the built-in hold music; Veyra's hold music sets live in `<data>/moh/` |
 
 `journalctl -u veyra-deployer` shows deployments; `sudo veyra config status`
 summarises the engine and recent revisions.

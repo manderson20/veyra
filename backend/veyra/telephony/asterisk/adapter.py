@@ -76,10 +76,12 @@ class AsteriskAdapter(TelephonyAdapter):
         *,
         prompts_dir: Path | str = generator.DEFAULT_PROMPTS_DIR,
         mailqueue_command: str = generator.DEFAULT_MAILQUEUE_COMMAND,
+        moh_dir: Path | str = generator.DEFAULT_MOH_DIR,
     ) -> None:
         self.ari = AriClient(ari_url, username, password_file)
         self.prompts_dir = str(prompts_dir)
         self.mailqueue_command = mailqueue_command
+        self.moh_dir = str(moh_dir)
 
     def capabilities(self) -> set[Capability]:
         return {
@@ -188,7 +190,10 @@ class AsteriskAdapter(TelephonyAdapter):
 
     def generate_config(self, snapshot: dict[str, Any]) -> list[GeneratedFile]:
         return generator.generate(
-            snapshot, prompts_dir=self.prompts_dir, mailqueue_command=self.mailqueue_command
+            snapshot,
+            prompts_dir=self.prompts_dir,
+            mailqueue_command=self.mailqueue_command,
+            moh_dir=self.moh_dir,
         )
 
     def validate_config(self, files: list[GeneratedFile]) -> list[str]:
