@@ -54,6 +54,13 @@ class PagingZone(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     kind: Mapped[str] = mapped_column(String(16), default="normal")  # normal|priority|emergency
     codec: Mapped[str] = mapped_column(String(16), default="G.711Mu")  # G.711Mu|G.722
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Milestone 9c (docs/PAGING_RECORDINGS.md §2): dialable number from the
+    # shared number space, who may page it and the longest page.
+    number: Mapped[str | None] = mapped_column(String(32), unique=True)
+    allowed: Mapped[str] = mapped_column(
+        String(16), default="everyone"
+    )  # everyone|members|administrators
+    max_seconds: Mapped[int] = mapped_column(Integer, default=120)
 
 
 class FirmwareImage(UUIDPrimaryKey, Timestamps, Base):

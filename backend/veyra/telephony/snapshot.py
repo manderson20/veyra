@@ -33,6 +33,11 @@ from veyra.core.models import (
     Organization,
     OutboundRoute,
     OutboundRouteTrunk,
+    Page,
+    PageMember,
+    PageZone,
+    PagingZone,
+    PagingZoneMember,
     PickupGroup,
     PickupGroupMember,
     Prompt,
@@ -48,7 +53,7 @@ from veyra.core.security.crypto import DecryptionError, InstallationKey
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 6
+SNAPSHOT_VERSION = 7
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -188,7 +193,87 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         **voicemail,
         **groups,
         **_routing(db, key, active, extensions, targets),
+        "paging": _paging(db, active, org_slug, ext_by_id),
     }
+
+
+PAGING_BASE_PORT = 40000
+
+
+def _paging(
+    db: Session, active_orgs: set[Any], org_slug: dict[Any, str], ext_by_id: dict[Any, Extension]
+) -> dict[str, Any]:
+    """Zones with their sender ports and pages (docs/PAGING_RECORDINGS.md §2):
+    the dialplan and ``paging.json`` come from the same table, so the port a
+    zone is paged on is the one the sender listens on."""
+    zones = sorted(
+        (
+            z
+            for z in db.scalars(select(PagingZone)).all()
+            if z.is_enabled and z.organization_id in active_orgs
+        ),
+        key=lambda z: (org_slug.get(z.organization_id, ""), z.slug),
+    )
+    zone_members: dict[Any, list[str]] = {}
+    for m in db.scalars(select(PagingZoneMember)).all():
+        ext = ext_by_id.get(m.extension_id)
+        if ext is not None:
+            zone_members.setdefault(m.zone_id, []).append(ext.number)
+    zone_rows = []
+    for i, z in enumerate(zones):
+        zone_rows.append(
+            {
+                "slug": z.slug,
+                "name": z.name,
+                "organization": org_slug.get(z.organization_id, ""),
+                "number": z.number,
+                "port": PAGING_BASE_PORT + i,
+                "multicast_address": z.multicast_address,
+                "multicast_port": z.multicast_port,
+                "poly_address": z.poly_address,
+                "poly_port": z.poly_port,
+                "poly_group": z.poly_group,
+                "kind": z.kind,
+                "codec": z.codec,
+                "allowed": z.allowed,
+                "members": sorted(zone_members.get(z.id, [])),
+                "max_seconds": z.max_seconds,
+            }
+        )
+    zone_by_id = {z.id: z for z in zones}
+    page_zones: dict[Any, list[str]] = {}
+    for pz in db.scalars(select(PageZone)).all():
+        linked = zone_by_id.get(pz.zone_id)
+        if linked is not None:
+            page_zones.setdefault(pz.page_id, []).append(linked.slug)
+    page_members: dict[Any, list[str]] = {}
+    for pm in db.scalars(select(PageMember)).all():
+        ext = ext_by_id.get(pm.extension_id)
+        if ext is not None:
+            page_members.setdefault(pm.page_id, []).append(ext.number)
+    prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
+    page_rows = []
+    for p in db.scalars(select(Page).order_by(Page.slug)).all():
+        if not p.is_enabled or p.organization_id not in active_orgs:
+            continue
+        audio = prompts.get(p.audio_id) if p.audio_id else None
+        page_rows.append(
+            {
+                "slug": p.slug,
+                "name": p.name,
+                "organization": org_slug.get(p.organization_id, ""),
+                "number": p.number,
+                "zones": sorted(page_zones.get(p.id, [])),
+                "audio": audio.slug if audio else None,
+                "pre_tone": bool(p.pre_tone),
+                "repeat": int(p.repeat),
+                "priority": p.priority,
+                "allowed": p.allowed,
+                "members": sorted(page_members.get(p.id, [])),
+                "max_seconds": p.max_seconds,
+            }
+        )
+    return {"zones": zone_rows, "pages": page_rows, "defaults": {"delay_ms": 200, "ttl": 1}}
 
 
 def _contacts(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, int]:

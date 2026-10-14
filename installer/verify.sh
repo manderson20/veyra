@@ -31,7 +31,7 @@ perm() { stat -c '%a %U:%G' "$1" 2>/dev/null || echo missing; }
 
 # --- services
 services=(postgresql veyra-api veyra-worker nginx)
-[[ "$ENGINE" == "asterisk" ]] && services+=(asterisk veyra-deployer)
+[[ "$ENGINE" == "asterisk" ]] && services+=(asterisk veyra-deployer veyra-pager)
 for svc in "${services[@]}"; do
     if systemctl is-active --quiet "$svc"; then
         check "service:$svc" pass "active"

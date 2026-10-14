@@ -34,7 +34,10 @@ def test_generation_is_deterministic_and_complete():
     assert "exten => *43,1," in by["extensions.conf"].content
     assert "VEYRA_INSTALLATION=Test District" in by["extensions.conf"].content
     assert "rtpstart=10000" in by["rtp.conf"].content
-    assert all(f.content.startswith("; Managed by Veyra") for f in a)
+    assert all(
+        f.content.startswith("; Managed by Veyra") for f in a if not f.path.endswith(".json")
+    )
+    assert a[-1].path == "paging.json" and a[-1].content.startswith("{")
     assert generator.validate(a) == []
 
 
@@ -95,6 +98,7 @@ def test_feature_codes_are_not_shadowed_by_the_catch_all():
     includes = [ln for ln in internal if ln.startswith("include =>")]
     assert includes == [
         f"include => {generator.CONTEXT_FEATURES}",
+        f"include => {generator.CONTEXT_PAGING}",
         f"include => {generator.CONTEXT_OUTBOUND}",
         f"include => {generator.CONTEXT_INVALID}",
     ]

@@ -13,6 +13,7 @@ dialplan change never touches SIP registrations and vice versa.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -33,6 +34,7 @@ FILE_RTP = "rtp.conf"
 FILE_VOICEMAIL = "voicemail.conf"
 FILE_QUEUES = "queues.conf"
 FILE_NOTIFY = "pjsip_notify.conf"
+FILE_PAGING = "paging.json"
 MANAGED_FILES = [
     FILE_TRANSPORTS,
     FILE_ENDPOINTS,
@@ -42,6 +44,7 @@ MANAGED_FILES = [
     FILE_VOICEMAIL,
     FILE_QUEUES,
     FILE_NOTIFY,
+    FILE_PAGING,
 ]
 
 # Module reload per file. Order matters: transports before endpoints is the
@@ -67,6 +70,9 @@ SCOPE_ORDER = [
 
 CONTEXT_INTERNAL = "veyra-internal"
 CONTEXT_FEATURES = "veyra-features"
+CONTEXT_PAGING = "veyra-paging"
+CONTEXT_PAGE_PLAY = "veyra-page-play"
+PAGER_HOST = "127.0.0.1"
 CONTEXT_FROM_TRUNK = "veyra-from-trunk"
 # Catch-all for unknown numbers. It lives in its own context, included after the
 # feature codes: Asterisk matches patterns in the current context before it looks
@@ -154,6 +160,155 @@ def _path(value: str, what: str) -> str:
     return value.rstrip("/")
 
 
+def _page_dial(zones: list[dict[str, Any]], slugs: list[str], max_seconds: int) -> str:
+    """The ``Page()`` line for ``slugs``: one sender port per zone."""
+    by_slug = {str(z["slug"]): z for z in zones}
+    targets = "&".join(
+        f"MulticastRTP/basic/{PAGER_HOST}:{int(by_slug[slug]['port'])}"
+        for slug in slugs
+        if slug in by_slug
+    )
+    return f" same => n,Page({targets},i,{int(max_seconds)})"
+
+
+def _allowed_lines(entry: dict[str, Any], org: str) -> list[str]:
+    """Organization check plus the ``allowed`` policy (docs/PAGING_RECORDINGS.md §2.4)."""
+    out = [f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?denied)']
+    allowed = str(entry.get("allowed") or "everyone")
+    if allowed == "administrators":
+        out.append(' same => n,GotoIf($["${VEYRA_PAGE_BY}"!="veyra"]?denied)')
+    elif allowed == "members":
+        members = [_check_value(str(n), "member number") for n in entry.get("members") or []]
+        if not members:
+            out.append(" same => n,Goto(denied)")
+        else:
+            pattern = "|".join(members)
+            out.append(
+                f' same => n,GotoIf($["${{VEYRA_PAGE_BY}}"!="veyra" & '
+                f'!${{REGEX("^({pattern})$" ${{CALLERID(num)}})}}]?denied)'
+            )
+    return out
+
+
+def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
+    """``veyra-paging`` (zone and page numbers dialled from phones) and
+    ``veyra-page-play`` (recordings played into a page by Veyra)."""
+    zones = list(paging.get("zones") or [])
+    pages = list(paging.get("pages") or [])
+    lines = [
+        f"[{CONTEXT_PAGING}]",
+        "; Paging zones and pages dialled from phones (docs/PAGING_RECORDINGS.md §2.3).",
+    ]
+    seen: set[str] = set()
+    for z in zones:
+        number = z.get("number")
+        if not number:
+            continue
+        number = _check_value(str(number), "zone number")
+        if number in seen:
+            raise GenerationError(f"paging number {number} is used twice")
+        seen.add(number)
+        org = _check_value(str(z.get("organization") or ""), "organization")
+        slug = _check_section(str(z["slug"]), "zone slug")
+        lines += [
+            f"exten => {number},1,NoOp(Veyra page zone {slug} by ${{CALLERID(num)}})",
+            *_allowed_lines(z, org),
+            " same => n,Playback(beep)",
+            _page_dial(zones, [slug], int(z.get("max_seconds") or 120)),
+            " same => n,Hangup()",
+            " same => n(denied),NoOp(Veyra: not allowed to page)",
+            " same => n,Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
+    for p in pages:
+        number = p.get("number")
+        if not number:
+            continue
+        number = _check_value(str(number), "page number")
+        if number in seen:
+            raise GenerationError(f"paging number {number} is used twice")
+        seen.add(number)
+        org = _check_value(str(p.get("organization") or ""), "organization")
+        slug = _check_section(str(p["slug"]), "page slug")
+        zone_slugs = [str(x) for x in p.get("zones") or []]
+        lines += [
+            f"exten => {number},1,NoOp(Veyra page {slug} by ${{CALLERID(num)}})",
+            *_allowed_lines(p, org),
+        ]
+        if not zone_slugs:
+            lines.append(" same => n,Goto(denied)")
+        elif p.get("audio"):
+            # A recorded page: start the play leg and let the caller go.
+            lines += [
+                f" same => n,Originate(Local/play-{slug}@{CONTEXT_PAGE_PLAY},exten,"
+                f"{CONTEXT_PAGE_PLAY},{slug},1,,a)",
+                " same => n,Playback(beep)",
+            ]
+        else:
+            if p.get("pre_tone", True):
+                lines.append(" same => n,Playback(beep)")
+            lines.append(_page_dial(zones, zone_slugs, int(p.get("max_seconds") or 120)))
+        lines += [
+            " same => n,Hangup()",
+            " same => n(denied),NoOp(Veyra: not allowed to page)",
+            " same => n,Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
+    lines += [
+        "",
+        f"[{CONTEXT_PAGE_PLAY}]",
+        "; Recorded pages: the far leg plays the recording into the Page().",
+    ]
+    for p in pages:
+        if not p.get("audio") or not p.get("zones"):
+            continue
+        slug = _check_section(str(p["slug"]), "page slug")
+        org = _check_value(str(p.get("organization") or ""), "organization")
+        audio = _check_section(str(p["audio"]), "audio slug")
+        repeat = max(1, min(5, int(p.get("repeat") or 1)))
+        zone_slugs = [str(x) for x in p.get("zones") or []]
+        # The near leg of Local/play-<slug> runs Page() with the far leg's
+        # playback as its audio (originated by the API, a bell or a phone).
+        lines += [
+            f"exten => {slug},1,NoOp(Veyra recorded page {slug})",
+            " same => n,Answer()",
+            _page_dial(zones, zone_slugs, int(p.get("max_seconds") or 120)),
+            " same => n,Hangup()",
+            f"exten => play-{slug},1,NoOp(Veyra plays {audio} into page {slug})",
+            " same => n,Answer()",
+            *([" same => n,Playback(beep)"] if p.get("pre_tone", True) else []),
+            *[f" same => n,Playback({prompts}/{org}/{audio})" for _ in range(repeat)],
+            " same => n,Hangup()",
+        ]
+    lines.append("")
+    return lines
+
+
+def _paging_json(paging: dict[str, Any]) -> GeneratedFile:
+    """The sender's zone table (docs/PAGING_RECORDINGS.md §2.2)."""
+    doc = {
+        "defaults": paging.get("defaults") or {"delay_ms": 200, "ttl": 1},
+        "zones": [
+            {
+                k: z[k]
+                for k in (
+                    "slug",
+                    "organization",
+                    "port",
+                    "multicast_address",
+                    "multicast_port",
+                    "poly_address",
+                    "poly_port",
+                    "poly_group",
+                    "kind",
+                )
+            }
+            for z in paging.get("zones") or []
+        ],
+    }
+    return GeneratedFile(FILE_PAGING, json.dumps(doc, indent=2, sort_keys=True) + "\n")
+
+
 def _notify_conf() -> GeneratedFile:
     """``pjsip_notify.conf``: the NOTIFY types the device pages send with
     ``pjsip send notify`` (docs/DEVICE_PROVISIONING.md §3.5). ``check-sync``
@@ -201,6 +356,7 @@ def generate(
         _voicemail(snapshot, boxes, _path(mailqueue_command, "mail queue command")),
         _queues(queues, extensions, prompts),
         _notify_conf(),
+        _paging_json(snapshot.get("paging") or {}),
     ]
 
 
@@ -576,6 +732,7 @@ def _dialplan(
         "; Extensions first; then feature codes, outbound routes and the catch-all",
         "; (includes are searched in order, after this context's own entries).",
         f"include => {CONTEXT_FEATURES}",
+        f"include => {CONTEXT_PAGING}",
         f"include => {CONTEXT_OUTBOUND}",
         f"include => {CONTEXT_INVALID}",
     ]
@@ -630,6 +787,7 @@ def _dialplan(
         " same => n,Hangup()",
         "",
     ]
+    lines += _paging_contexts(snapshot.get("paging") or {}, prompts_dir)
     lines += _outbound_contexts(outbound, trunk_info)
     lines += _inbound_contexts(inbound, conditions, trunk_slugs)
     lines += _ivr_contexts(menus, prompts_dir)
@@ -1286,6 +1444,13 @@ def validate(files: list[GeneratedFile]) -> list[str]:
     for f in files:
         if f.path not in MANAGED_FILES:
             problems.append(f"{f.path}: not a file Veyra manages")
+            continue
+        if f.path.endswith(".json"):
+            # The page sender's table: must parse, nothing else.
+            try:
+                json.loads(f.content)
+            except ValueError as e:
+                problems.append(f"{f.path}: not valid JSON ({e})")
             continue
         section_seen = False
         for n, line in enumerate(f.content.splitlines(), start=1):

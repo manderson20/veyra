@@ -778,6 +778,28 @@ def ensure_prompt_dirs(db: Any, settings: Any) -> None:
     audio.ensure_org_dirs(settings.prompts_dir, slugs)
 
 
+def cmd_pager(args: argparse.Namespace) -> int:
+    """The page sender service (docs/PAGING_RECORDINGS.md §2.2)."""
+    import asyncio
+    import logging
+
+    from veyra.core.config import get_settings
+    from veyra.paging.pager import PAGING_FILE, Pager
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    pager = Pager(get_settings().asterisk_config_dir / PAGING_FILE)
+    if args.status:
+        asyncio.run(pager.run(once=True))
+        print(json.dumps(pager.status(), indent=2))
+        return 0
+    logging.getLogger("veyra.pager").info("%s pager started", plain_header())
+    try:
+        asyncio.run(pager.run(once=args.once))
+    except KeyboardInterrupt:
+        return 0
+    return 0
+
+
 def cmd_worker(args: argparse.Namespace) -> int:
     """Background worker: node heartbeat, scheduled update checks, the
     outgoing mail queue, prompt folders."""
@@ -996,6 +1018,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--interval", type=int, default=2)
     s.add_argument("--once", action="store_true")
     s.set_defaults(func=cmd_deployer)
+
+    s = sub.add_parser("pager", help="Run the page sender (speakers and Poly phones in step)")
+    s.add_argument("--once", action="store_true", help="Load the zone table and exit")
+    s.add_argument("--status", action="store_true", help="Print the zone table as JSON and exit")
+    s.set_defaults(func=cmd_pager)
 
     s = sub.add_parser("worker", help="Run the background worker")
     s.add_argument("--interval", type=int, default=30)
