@@ -22,7 +22,7 @@ completed milestones in the order below (see
 | 6 | SIP trunks and routing (inbound/outbound, DIDs, time conditions, loop detection) | 0.7.0 | **Complete, approved 2026-10-13** ([report](milestones/MILESTONE_6_REPORT.md)); verified on dev1 with a software carrier, real carrier pending |
 | 6b | **Veyra Companion** browser extension (Chrome/Edge first; macOS desktop later if needed): sign in with Veyra credentials (MFA included), click-to-dial any number (desk phone rings, then the call is placed), directory lookup, incoming caller ID pop-up, personal speed dials and quick buttons stored in the user's Veyra profile | 0.8.0 | **Complete, approved 2026-10-13** ([report](milestones/MILESTONE_6B_REPORT.md)); owner request 2026-10-12 (replaces a Metaswitch desktop dialler); owner's browser check pending |
 | 7 | Voicemail and IVR (voicemail boxes with PIN and voicemail-to-email, MWI, prompts uploaded or recorded from a phone, IVR menus, email delivery settings) | 0.9.0 | **Complete, approved 2026-10-13** ([report](milestones/MILESTONE_7_REPORT.md)); design and reference [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) |
-| 8 | Ring groups, queues and **call pickup groups** (pick up a ringing call on another phone from your own: group pickup `*8`, directed pickup `**<extension>`, pickup-group membership per extension, BLF-friendly) | 0.10.0 | Owner request 2026-10-13: pickup groups |
+| 8 | Ring groups, queues and **call pickup groups** (pick up a ringing call on another phone from your own: group pickup `*8`, directed pickup `**<extension>`, pickup-group membership per extension, BLF-friendly) | 0.10.0 | **In progress** (started 2026-10-14; owner chose it over a short 6c); design and reference [RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md); owner request 2026-10-13: pickup groups |
 | 9 | Device provisioning and custom templates (HTTPS delivery, hardware validation on Poly VVX 411/450) | 0.11.0 | |
 | 10 | Reporting and monitoring (CDR, dashboards, metrics) | 0.12.0 | |
 | 11 | Module management and independent updates (service runtime, package install, module settings UI) | 0.13.0 | |
@@ -36,5 +36,6 @@ completed milestones in the order below (see
 
 Planned UI areas (shown in navigation as "coming later" with their
 milestone): Extensions (M4), Devices (M9), SIP Trunks (M6), Inbound and
-Outbound Routing (M6), IVR and Voicemail (M7), Ring Groups (M8), Call Queues (M8),
-Pickup Groups (M8), Paging (M8), Call History (M10), Call Recording (M10).
+Outbound Routing (M6), IVR and Voicemail (M7), Ring Groups, Call Queues and Pickup Groups (M8),
+Paging (later; SIP paging is not a life-safety notification system), Call
+History (M10), Call Recording (M10).

@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.10.0-dev — unreleased (Milestone 8)
+
+### Added
+- **Ring groups** (`/ring-groups`, Telephony → Ring Groups): a number from the numbering plan that rings an ordered list of extensions all at once or one after the other, with a ring time, an optional caller-ID prefix shown on the phones, skipping of members already on a call (or call waiting), and a failover destination when nobody answers. Generated `veyra-rg-<slug>` contexts with a loop guard; a `hint` per group so BLF keys follow it. Permissions `groups.read`, `groups.write`.
+- **Call queues** (`/queues`, Telephony → Call Queues): a number that holds callers with music on hold or ringing, an optional announcement on joining and a repeated one while waiting (prompts), position announcements, and distributes them to agents (extensions with a penalty) by strategy (ring all, round robin, least recent, fewest calls, random, linear) with per-attempt ring time, retry pause, wrap-up, maximum wait, maximum callers and whether callers may wait with no agent available; a failover destination for every way a caller leaves unconnected. New managed file `queues.conf` (reload `app_queue.so`), installer stub `/etc/asterisk/queues.conf`, and the `asterisk-moh-opsound-wav` package so the default hold music has files; `verify.sh` checks the stub, the `Queue`/`Pickup`/`PickupChan` applications and the music class.
+- **Call pickup** (`/pickup-groups`, Telephony → Pickup Groups): pickup groups whose members answer each other's ringing calls with `*8` (named call and pickup groups on the endpoints); directed pickup `**<extension>` of any phone in the caller's organization (also for calls ringing through a group or queue); a `hint` per extension so busy lamp fields and BLF pickup work.
+- **Group destinations**: inbound routes (destination and after-hours branch), IVR keys and fallbacks, ring-group failovers and queue failovers can point at a ring group or a queue; IVR direct dialling reaches group and queue numbers; groups and queues in use cannot be deleted (`409 ring_group_in_use`, `409 queue_in_use`). The extension API and page list the groups an extension belongs to; the next-number suggestion and the `409 number_in_use` check cover extensions, ring groups and queues together. Migration `0009`. Design and reference: `docs/RING_GROUPS_QUEUES.md`.
+
 ## 0.9.0 — 2026-10-13 (Milestone 7)
 
 ### Added

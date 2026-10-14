@@ -58,22 +58,27 @@ exten => s,1,NoOp(Veyra ring group Sales (brookfield))
  same => n,GotoIf($[${VEYRA_GROUP_DEPTH} > 6]?toodeep)
  same => n,Set(CALLERID(name)=Sales: ${CALLERID(name)})      ; caller_id_prefix
  same => n,Set(VEYRA_DIAL=)
- same => n,ExecIf($[${VEYRA_RG_SKIP(PJSIP/brookfield-2214)}]?NoOp()
-         :Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/brookfield-2214))  ; one line per member
- ...
- same => n,GotoIf($["${VEYRA_DIAL}"=""]?failover)
+ same => n,GotoIf($["${DEVICE_STATE(PJSIP/brookfield-2214)}" : "(INUSE|BUSY|RINGINUSE)"]?m2)
+ same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/brookfield-2214)  ; one pair per member
+ same => n(m2),GotoIf($["${DEVICE_STATE(PJSIP/brookfield-2215)}" : "(INUSE|BUSY|RINGINUSE)"]?dial)
+ same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/brookfield-2215)
+ same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)
  same => n,Dial(${VEYRA_DIAL:1},20)                           ; ringall
- same => n(failover),NoOp(Veyra ring group Sales: no answer)
+ same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)
+ same => n,Goto(failover)
+ same => n(done),Hangup()
+ same => n(failover),NoOp(Veyra ring group Sales: not answered)
  same => n,<failover destination lines>
- same => n(toodeep),NoOp(Veyra: groups point at each other in a loop)
+ same => n(toodeep),NoOp(Veyra: groups and queues point at each other in a loop)
  same => n,Playback(pbx-invalid)
  same => n,Hangup()
 ```
 
-The busy check is rendered inline (a `GotoIf` on `${DEVICE_STATE(PJSIP/x)}`
-per member, no custom function); `sequential` renders one `Dial` per
-member in order instead of the joined string, each preceded by the same
-check. The depth guard (`__VEYRA_GROUP_DEPTH`, shared with queues) stops
+The busy check is a `GotoIf` on `${DEVICE_STATE(PJSIP/x)}` per member
+(left out when `ring_busy_members` is on); `sequential` renders one `Dial`
+per member in order instead of the joined string, each preceded by the same
+check and followed by the `ANSWER` test, so a call that was answered and
+ended does not ring the next member. The depth guard (`__VEYRA_GROUP_DEPTH`, shared with queues) stops
 groups and queues whose failovers point at each other. `hint` lines make a
 phone's BLF key for the group number light while the group rings.
 
@@ -266,10 +271,10 @@ GET    /extensions/{id}                        gains ring_groups, queues, pickup
 Numbers are validated against the numbering plan and for uniqueness
 across extensions, ring groups and queues under the same advisory lock
 the extension API uses (`409 number_in_use`); `GET /extensions/next-number`
-skips group numbers too. Members must be enabled extensions of the same
-organization; prompts must belong to the organization. `problems` names
-what stops a group from working (no members, a missing failover target, a
-disabled member). Audit: `ring_group.create/update/delete`,
+skips group numbers too. Members must be extensions of the same organization (a disabled one is
+accepted, left out of the engine and flagged); prompts must belong to the
+organization. `problems` names what stops a group from working (no
+members, a missing failover target, a disabled member). Audit: `ring_group.create/update/delete`,
 `queue.create/update/delete`, `pickup_group.create/update/delete`; every
 write raises the Deploy changes flag (pickup groups and members change
 `pjsip.endpoints.conf`).

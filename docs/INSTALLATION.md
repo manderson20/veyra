@@ -159,7 +159,7 @@ a user's page in the UI.
 | `veyra-api` | veyra | Management API behind NGINX |
 | `veyra-worker` | veyra | Heartbeat, update checks, session purge, outgoing mail queue (voicemail notifications), prompt folders |
 | `veyra-deployer` | veyra | Writes generated telephony configuration to `/etc/asterisk/veyra` and reloads Asterisk (only with a telephony engine) |
-| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf` and `voicemail.conf` are Veyra-managed stubs that include the generated files |
+| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf`, `voicemail.conf` and `queues.conf` are Veyra-managed stubs that include the generated files. `asterisk-moh-opsound-wav` provides the hold music call queues play |
 
 `journalctl -u veyra-deployer` shows deployments; `sudo veyra config status`
 summarises the engine and recent revisions.
