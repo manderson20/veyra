@@ -496,7 +496,7 @@ export interface UiColumn {
 export interface UiFormField {
   key: string;
   label: string;
-  type: "text" | "textarea" | "integer" | "boolean" | "choice";
+  type: "text" | "textarea" | "integer" | "boolean" | "choice" | "password";
   required: boolean;
   max_length: number | null;
   choices: string[] | null;

@@ -25,11 +25,18 @@ from sqlalchemy.orm import Session
 from veyra.core import audit
 from veyra.core.db import session_scope
 from veyra.core.deps import require
+from veyra.core.errors import ProblemError
 from veyra.core.events import Event, EventBus
 from veyra.core.models import ModuleConfig, User
+from veyra.core.security.crypto import (
+    InstallationKey,
+    InstallationKeyError,
+    load_installation_key,
+)
 from veyra.core.security.principal import Principal
 
 if TYPE_CHECKING:
+    from veyra.core.config import Settings
     from veyra.modules.manifest import Manifest
 
 HealthStatus = Literal["ok", "degraded", "failed", "unknown"]
@@ -42,12 +49,29 @@ class HealthResult:
     details: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class PeriodicTask:
+    """Background work run by the worker service (module API 1.1)."""
+
+    name: str
+    interval_seconds: int
+    fn: Callable[[], None]
+    last_run: float | None = None
+
+
 class ModuleAPIError(RuntimeError):
     pass
 
 
 class ModuleContext:
-    def __init__(self, manifest: Manifest, module_dir: Path, data_dir: Path, bus: EventBus) -> None:
+    def __init__(
+        self,
+        manifest: Manifest,
+        module_dir: Path,
+        data_dir: Path,
+        bus: EventBus,
+        settings: Settings | None = None,
+    ) -> None:
         self.manifest = manifest
         self.module_id = manifest.id
         self.module_dir = module_dir
@@ -57,6 +81,8 @@ class ModuleContext:
         self.router: APIRouter | None = None
         self.metadata: MetaData | None = None
         self.health_checks: list[Callable[[], HealthResult]] = []
+        self.periodic_tasks: list[PeriodicTask] = []
+        self._settings = settings
         self._own_permissions = {p.key for p in manifest.permissions}
 
     # -- HTTP API --------------------------------------------------------------
@@ -105,6 +131,34 @@ class ModuleContext:
     def add_health_check(self, check: Callable[[], HealthResult]) -> None:
         self.health_checks.append(check)
 
+    # -- background work (module API 1.1) -------------------------------------
+    def add_periodic_task(self, name: str, interval_seconds: int, fn: Callable[[], None]) -> None:
+        """Run ``fn`` about every ``interval_seconds`` (at least 5) in the
+        worker service while the module is enabled. Use ``session()`` inside;
+        exceptions are logged and never stop the worker."""
+        if interval_seconds < 5:
+            raise ModuleAPIError("interval_seconds must be at least 5")
+        self.periodic_tasks.append(PeriodicTask(name, interval_seconds, fn))
+
+    # -- secrets (module API 1.1) ---------------------------------------------
+    def encrypt(self, plaintext: str) -> str:
+        """Encrypt a secret (a device password) with the installation key,
+        bound to this module: other modules cannot decrypt it."""
+        return self._key().encrypt(plaintext, f"module:{self.module_id}")
+
+    def decrypt(self, token: str) -> str:
+        return self._key().decrypt(token, f"module:{self.module_id}")
+
+    def _key(self) -> InstallationKey:
+        from veyra.core.config import get_settings
+
+        try:
+            return load_installation_key(self._settings or get_settings())
+        except InstallationKeyError as e:
+            raise ProblemError(
+                503, "Secrets unavailable", f"The installation key cannot be loaded: {e}"
+            ) from e
+
     # -- configuration ---------------------------------------------------------
     def get_config(self, db: Session, organization_id: uuid.UUID | None = None) -> dict[str, Any]:
         """Effective configuration: manifest defaults overlaid with stored values.
@@ -127,6 +181,14 @@ class ModuleContext:
         """The caller's home organization (used when a request names none)."""
         user = db.get(User, principal.user_id)
         return user.home_organization_id if user else None
+
+    def organization_timezone(self, db: Session, organization_id: uuid.UUID) -> str:
+        """The organization's IANA time zone (module API 1.1), for times
+        administrators type in."""
+        from veyra.core.models import Organization
+
+        org = db.get(Organization, organization_id)
+        return org.timezone if org and org.timezone else "UTC"
 
     # -- audit -----------------------------------------------------------------
     def audit(self, db: Session, principal: Principal | None, action: str, **kwargs: Any) -> None:

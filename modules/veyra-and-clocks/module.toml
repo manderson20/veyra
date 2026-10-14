@@ -1,0 +1,195 @@
+# AND clock messages: text and alerts to Advanced Network Devices clocks and
+# signs, like the vendor's Clockwise software (docs/PAGING_RECORDINGS.md §6).
+manifest_version = 1
+health_check = true
+
+[module]
+id = "veyra.and-clocks"
+name = "AND Clock Messages"
+description = "Send text messages and alerts to Advanced Network Devices (AND) IP clocks and signs: to one clock, a group or all of them, now or at a set time, and with the bells."
+version = "0.1.0"
+author = "Veyra Project"
+license = "AGPL-3.0-or-later"
+
+[compatibility]
+core_api = ">=1.1.0 <2.0.0"
+engines = []
+
+[runtime]
+type = "in_process"
+entrypoint = "backend:module"
+
+[[permissions]]
+key = "and_clocks.read"
+description = "View clocks, messages and the message log"
+default_roles = ["org_admin", "site_admin", "technician", "read_only"]
+
+[[permissions]]
+key = "and_clocks.send"
+description = "Send and schedule clock messages"
+default_roles = ["org_admin", "site_admin"]
+
+[[permissions]]
+key = "and_clocks.write"
+description = "Manage clocks, bell messages and the delivery setup"
+default_roles = ["org_admin"]
+
+[[config]]
+key = "request_timeout_seconds"
+label = "Seconds to wait for a clock to answer"
+type = "integer"
+default = 5
+min = 1
+max = 30
+
+[[config]]
+key = "check_interval_minutes"
+label = "Minutes between reachability checks"
+type = "integer"
+default = 5
+min = 1
+max = 60
+
+[database]
+migrations = "migrations"
+table_prefix = "mod_and_clocks_"
+
+[api]
+prefix = "and-clocks"
+
+[events]
+subscribes = ["bell.rang"]
+publishes = ["and_clocks.message_sent"]
+
+[[ui.nav]]
+label = "Clock Messages"
+view = "messages"
+icon = "clock"
+permission = "and_clocks.read"
+
+[[ui.nav]]
+label = "Clocks"
+view = "clocks"
+icon = "clock"
+permission = "and_clocks.read"
+
+[[ui.nav]]
+label = "Clock Bell Messages"
+view = "bell-messages"
+icon = "megaphone"
+permission = "and_clocks.read"
+
+[[ui.nav]]
+label = "Clock Delivery"
+view = "delivery"
+icon = "settings"
+permission = "and_clocks.write"
+
+[[ui.views]]
+id = "messages"
+title = "Clock messages"
+type = "resource_table"
+description = "Send a message to every clock, a group or one clock, now or at a set time. Deleting a scheduled message cancels it; deleting a sent one removes it from the log."
+endpoint = "messages"
+permission = "and_clocks.read"
+write_permission = "and_clocks.send"
+delete = true
+empty_title = "No messages yet"
+empty_body = "Add the clocks and set up delivery first, then send a short test message to one clock."
+columns = [
+  { key = "text", label = "Message" },
+  { key = "send_to_label", label = "Sent to" },
+  { key = "when", label = "When", format = "datetime" },
+  { key = "status", label = "Status", format = "status" },
+  { key = "result", label = "Result" },
+  { key = "created_by", label = "By" },
+]
+create_form = [
+  { key = "text", label = "Message", type = "textarea", required = true, max_length = 1000, help = "Up to 1,000 characters. AND inline commands such as {color=red} may be used." },
+  { key = "send_to", label = "Send to", type = "text", max_length = 100, help = "Blank or \"all\" for every clock, or the name of a group or of one clock." },
+  { key = "color", label = "Colour", type = "choice", choices = ["default", "red", "green", "yellow", "orange", "gold", "white"] },
+  { key = "seconds", label = "Show for (seconds)", type = "integer", help = "Default 60. 0 keeps the message until another one replaces it." },
+  { key = "priority", label = "Priority", type = "choice", choices = ["normal", "high", "emergency"], help = "A clock showing a higher-priority message ignores lower ones until it ends." },
+  { key = "flashers", label = "Flashers", type = "choice", choices = ["off", "slow", "fast", "on"], help = "For clocks with flasher lights." },
+  { key = "send_at", label = "Send at", type = "text", max_length = 16, help = "Leave blank to send now, or YYYY-MM-DD HH:MM in the organization's time zone." },
+]
+
+[[ui.views]]
+id = "clocks"
+title = "Clocks"
+type = "resource_table"
+description = "The AND clocks and signs that receive messages. Group clocks by building or area to send to them together. Each clock is checked for reachability every few minutes."
+endpoint = "clocks"
+permission = "and_clocks.read"
+write_permission = "and_clocks.write"
+delete = true
+empty_title = "No clocks yet"
+empty_body = "Add each clock by its IP address or host name."
+columns = [
+  { key = "name", label = "Name" },
+  { key = "address", label = "Address" },
+  { key = "group_name", label = "Group" },
+  { key = "model", label = "Model" },
+  { key = "reachability", label = "Reachable", format = "status" },
+  { key = "last_checked_at", label = "Checked", format = "datetime" },
+]
+create_form = [
+  { key = "name", label = "Name", type = "text", required = true, max_length = 100 },
+  { key = "address", label = "Address", type = "text", required = true, max_length = 255, help = "IP address or host name, optionally with :port." },
+  { key = "group_name", label = "Group", type = "text", max_length = 100, help = "For example a building or a wing. Messages can go to a whole group." },
+  { key = "model", label = "Model", type = "text", max_length = 100 },
+]
+
+[[ui.views]]
+id = "bell-messages"
+title = "Bell messages"
+type = "resource_table"
+description = "Show a message on the clocks when a bell schedule rings, for example the calendar event's name (\"Period 2\")."
+endpoint = "bell-messages"
+permission = "and_clocks.read"
+write_permission = "and_clocks.write"
+delete = true
+empty_title = "No bell messages"
+empty_body = "Bells ring as before; add a rule to show text with them."
+columns = [
+  { key = "bell_schedule", label = "Bell schedule" },
+  { key = "text", label = "Text" },
+  { key = "send_to_label", label = "Sent to" },
+  { key = "seconds", label = "Seconds" },
+]
+create_form = [
+  { key = "bell_schedule", label = "Bell schedule", type = "text", required = true, max_length = 100, help = "The bell schedule's name, or * for every schedule." },
+  { key = "text", label = "Text", type = "text", max_length = 200, help = "{summary} is the calendar event's name (the default)." },
+  { key = "send_to", label = "Send to", type = "text", max_length = 100, help = "Blank or \"all\" for every clock, or a group or clock name." },
+  { key = "color", label = "Colour", type = "choice", choices = ["default", "red", "green", "yellow", "orange", "gold", "white"] },
+  { key = "seconds", label = "Show for (seconds)", type = "integer", help = "Default 60." },
+]
+
+[[ui.views]]
+id = "delivery"
+title = "Clock delivery"
+type = "resource_table"
+description = "How Veyra hands a message to a clock: the request the clock's own web page sends when you post a message from it. See the module's README for capturing it. Saving again replaces the setup."
+endpoint = "delivery"
+permission = "and_clocks.write"
+write_permission = "and_clocks.write"
+delete = true
+empty_title = "Delivery is not set up"
+empty_body = "Messages are kept but not sent until the request is described here."
+columns = [
+  { key = "method", label = "Method" },
+  { key = "url_label", label = "Request" },
+  { key = "content_type", label = "Body" },
+  { key = "auth", label = "Sign-in" },
+  { key = "updated_at", label = "Saved", format = "datetime" },
+]
+create_form = [
+  { key = "method", label = "Method", type = "choice", choices = ["POST", "GET"], required = true },
+  { key = "scheme", label = "Protocol", type = "choice", choices = ["http", "https"], help = "https accepts the clock's own certificate." },
+  { key = "path", label = "Path", type = "text", required = true, max_length = 500, help = "The part of the address after the clock's name, for example /path?text={text}." },
+  { key = "content_type", label = "Body type", type = "choice", choices = ["form", "xml", "json", "text", "none"] },
+  { key = "body", label = "Body template", type = "textarea", max_length = 4000, help = "Placeholders: {text} (message with AND inline commands), {plain_text}, {xml} (an IPSpeakerMessage), {color}, {seconds}, {priority}, {flashers}, {password}." },
+  { key = "auth", label = "Sign-in", type = "choice", choices = ["none", "basic", "digest"] },
+  { key = "username", label = "User name", type = "text", max_length = 100 },
+  { key = "password", label = "Clock password", type = "password", max_length = 200, help = "Stored encrypted. Used for sign-in and as {password}." },
+]

@@ -5,7 +5,8 @@ add API endpoints, database tables, permissions, configuration, event
 handlers and UI views without modifying the core.
 
 The reference module is [`modules/veyra-example-notes`](../modules/veyra-example-notes/).
-Copy it to start a new module.
+Copy it to start a new module. [`modules/veyra-and-clocks`](../modules/veyra-and-clocks/)
+is a complete one: periodic tasks, an event subscription, encrypted secrets.
 
 ## 1. Layout
 
@@ -117,6 +118,7 @@ class MyModule:
         ctx.add_router(router)                          # once; needs [api]
         ctx.add_health_check(lambda: HealthResult("ok", "…"))
         ctx.subscribe("organization.created", handler)  # must match events.subscribes
+        ctx.add_periodic_task("sync", 60, sync)         # API 1.1: run by the worker
 
     # optional lifecycle hooks
     def on_install(self, ctx): ...
@@ -141,13 +143,29 @@ module = MyModule()
 | `get_config(db, org_id)` | Manifest defaults overlaid with stored values |
 | `default_organization(db, principal)` | The caller's home organization |
 | `audit(db, principal, action, …)` | Audit events prefixed with the module ID |
+| `add_periodic_task(name, seconds, fn)` | *(1.1)* Background work run by the `veyra-worker` service about every `seconds` (≥ 5) while enabled; open `session()` inside; errors are logged |
+| `encrypt(text)` / `decrypt(token)` | *(1.1)* Secrets (device passwords) encrypted with the installation key and bound to the module |
+| `organization_timezone(db, org_id)` | *(1.1)* The organization's IANA time zone, for times administrators type in |
+
+**Processes.** The API service loads enabled modules with their routes. The
+worker service *(1.1)* loads them too, without routes, checks every minute
+for modules enabled or disabled since, runs their periodic tasks and
+delivers events published in the worker (for example `bell.rang`) to their
+handlers. A handler may therefore run in either process: keep state in the
+database, not in memory.
+
+Core events a module may subscribe to include `organization.created`,
+`extension.*`, `page.*`, `queue.*`, `voicemail.*` and *(1.1)* `bell.rang`
+(`organization_id`, `schedule_id`, `schedule_name`, `summary`, `trigger`,
+`due_at`, `outcome`), published in the worker after each scheduled bell.
 
 **Tenant scoping is the module's responsibility.** Filter every query with
 `principal.organization_ids_with(<permission>)` (it returns `None` for
 platform-wide access), and check `principal.has(<permission>, org_id)`
 before writing. The example module shows the pattern.
 
-`MODULE_API_VERSION` follows semantic versioning. A breaking change to
+`MODULE_API_VERSION` follows semantic versioning (currently 1.1.0; a module
+using the 1.1 additions declares `core_api = ">=1.1.0 <2.0.0"`). A breaking change to
 `ModuleContext` bumps the major version, and modules declare the range
 they support.
 
@@ -195,6 +213,7 @@ veyra modules sign ./my-module --key-file ~/keys/acme-release.key --key-id acme-
 * `sign` writes `SHA256SUMS` (every file) and `SIGNATURE` (Ed25519 over the sums).
 * `--package` builds `<id>-<version>.vmod`, a tar.gz. Extraction rejects absolute paths, `..`, links, devices, more than 5,000 files and more than 200 MB.
 * Administrators trust a key by placing `<key_id>.pub` in `/etc/veyra/trust/official|community|third_party/`. **The directory decides the trust level.**
+* **Modules shipped with a release** (in `modules/`, except `veyra-example-*`) are signed by the installer at every install or upgrade with the server's own key, `bundled-modules` (`/etc/veyra/secrets/bundled-modules.key`, root only; public key in `trust/official/`), because they are part of the release the administrator installed. `verify.sh` reports `modules-signed`.
 * Verification runs at install, enable and every startup. Any modified, added or removed file makes the module fail to load.
 
 | Trust | May run in-process | Notes |
@@ -216,7 +235,7 @@ cross-site scripting and supply-chain risk in the administrative origin.
 Instead, modules declare:
 
 * `ui.nav`: entries in the "Modules" navigation section, hidden from users without the permission.
-* `ui.views` of type `resource_table`: a paginated table backed by `GET <endpoint>` returning `{items,total,limit,offset}`, an optional create form posting JSON to `POST <endpoint>`, and an optional delete action calling `DELETE <endpoint>/<id>`.
+* `ui.views` of type `resource_table`: a paginated table backed by `GET <endpoint>` returning `{items,total,limit,offset}`, an optional create form posting JSON to `POST <endpoint>`, and an optional delete action calling `DELETE <endpoint>/<id>`. Form field types: `text`, `textarea`, `integer`, `boolean`, `choice` and *(1.1)* `password` (masked input; empty fields are sent as `""` and integers as `null`).
 
 More view types (detail forms, settings, charts) will be added as module API
 minor versions.
@@ -229,7 +248,8 @@ minor versions.
 
 ## 9. Not yet available
 
-* Marketplace or catalogue browsing (deliberately out of scope for early milestones).
+* A module catalogue (listing published modules from a GitHub repository) and uploading custom modules in the UI (roadmap row 11).
+* Editing rows in `resource_table` views (delete and add again for now).
 * The service runtime for community and third-party modules (M11).
 * Download and installation of packages through the UI. M0 installs modules found in the module paths.
 * Module settings UI generated from `[[config]]` (M11).

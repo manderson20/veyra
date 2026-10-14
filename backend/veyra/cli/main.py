@@ -827,7 +827,8 @@ def cmd_pager(args: argparse.Namespace) -> int:
 
 def cmd_worker(args: argparse.Namespace) -> int:
     """Background worker: node heartbeat, scheduled update checks, the
-    outgoing mail queue, prompt folders."""
+    outgoing mail queue, prompt folders; on a short tick, calendars and bells
+    and the enabled modules' periodic tasks."""
     import logging
     from datetime import timedelta
 
@@ -836,9 +837,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
     from veyra.core import bootstrap
     from veyra.core.config import get_settings
     from veyra.core.db import session_scope
+    from veyra.core.events import bus
     from veyra.core.models import UpdateCheck, UpdatePolicy
     from veyra.core.models.base import utcnow
     from veyra.core.signing import Keyring
+    from veyra.modules.manager import ModuleManager
     from veyra.updates.checker import check_for_updates
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -847,68 +850,84 @@ def cmd_worker(args: argparse.Namespace) -> int:
     log.info("%s worker started", plain_header())
     last_purge = 0.0
     last_metrics_prune = 0.0
+    last_full = last_module_sync = -1e9
+    # Enabled modules' event handlers and periodic tasks (module API 1.1).
+    modules = ModuleManager(settings, bus)
     while True:
+        now = time.monotonic()
+        if args.once or now - last_full >= args.interval:
+            last_full = now
+            try:
+                with session_scope() as db:
+                    if not bootstrap.setup_required(db):
+                        bootstrap.ensure_local_node(db)
+                    if time.monotonic() - last_purge >= 3600 or args.once:
+                        purged_sessions, purged_tokens = purge_expired(db, settings)
+                        last_purge = time.monotonic()
+                        if purged_sessions or purged_tokens:
+                            log.info(
+                                "Purged %d expired sessions and %d reset tokens",
+                                purged_sessions,
+                                purged_tokens,
+                            )
+                        from veyra.provisioning.serve import prune_requests
+
+                        pruned = prune_requests(db)
+                        if pruned:
+                            log.info("Pruned %d provisioning request log rows", pruned)
+                        from veyra.api.v1.pages import prune_log
+                        from veyra.bells import scheduler
+
+                        pruned_pages = prune_log(db)
+                        if pruned_pages:
+                            log.info("Pruned %d page log rows", pruned_pages)
+                        pruned_rings = scheduler.prune(db)
+                        if pruned_rings:
+                            log.info("Pruned %d bell rings", pruned_rings)
+                    policy = db.get(UpdatePolicy, "veyra_core")
+                    last = db.scalar(
+                        select(UpdateCheck).order_by(UpdateCheck.checked_at.desc()).limit(1)
+                    )
+                    due = (
+                        policy is not None
+                        and policy.check_enabled
+                        and policy.mode != "manual"
+                        and (
+                            last is None
+                            or utcnow() - last.checked_at
+                            >= timedelta(hours=policy.check_interval_hours)
+                        )
+                    )
+                    if due and settings.update_metadata_url:
+                        check = check_for_updates(db, settings, Keyring.load(settings.trust_dir))
+                        log.info("Update check: %s %s", check.outcome, check.message)
+                    process_mail_queue(db, settings, log)
+                    if settings.telephony_engine != "none":
+                        ensure_prompt_dirs(db, settings)
+                        # Dashboard graphs: one reading per iteration (docs/INTERFACE_REWORK.md §2).
+                        from veyra.telephony import get_adapter
+                        from veyra.telephony.metrics import prune, record_sample
+
+                        record_sample(db, get_adapter(settings))
+                        if time.monotonic() - last_metrics_prune >= 3600 or args.once:
+                            prune(db)
+                            last_metrics_prune = time.monotonic()
+            except Exception:
+                log.exception("Worker iteration failed")
+        # Bells and module tasks run on a short tick so a bell rings within a
+        # few seconds of its time (docs/PAGING_RECORDINGS.md §4.2).
         try:
             with session_scope() as db:
-                if not bootstrap.setup_required(db):
-                    bootstrap.ensure_local_node(db)
-                if time.monotonic() - last_purge >= 3600 or args.once:
-                    purged_sessions, purged_tokens = purge_expired(db, settings)
-                    last_purge = time.monotonic()
-                    if purged_sessions or purged_tokens:
-                        log.info(
-                            "Purged %d expired sessions and %d reset tokens",
-                            purged_sessions,
-                            purged_tokens,
-                        )
-                    from veyra.provisioning.serve import prune_requests
-
-                    pruned = prune_requests(db)
-                    if pruned:
-                        log.info("Pruned %d provisioning request log rows", pruned)
-                    from veyra.api.v1.pages import prune_log
-                    from veyra.bells import scheduler
-
-                    pruned_pages = prune_log(db)
-                    if pruned_pages:
-                        log.info("Pruned %d page log rows", pruned_pages)
-                    pruned_rings = scheduler.prune(db)
-                    if pruned_rings:
-                        log.info("Pruned %d bell rings", pruned_rings)
-                policy = db.get(UpdatePolicy, "veyra_core")
-                last = db.scalar(
-                    select(UpdateCheck).order_by(UpdateCheck.checked_at.desc()).limit(1)
-                )
-                due = (
-                    policy is not None
-                    and policy.check_enabled
-                    and policy.mode != "manual"
-                    and (
-                        last is None
-                        or utcnow() - last.checked_at
-                        >= timedelta(hours=policy.check_interval_hours)
-                    )
-                )
-                if due and settings.update_metadata_url:
-                    check = check_for_updates(db, settings, Keyring.load(settings.trust_dir))
-                    log.info("Update check: %s %s", check.outcome, check.message)
-                process_mail_queue(db, settings, log)
                 poll_calendars_and_ring_bells(db, settings, log)
-                if settings.telephony_engine != "none":
-                    ensure_prompt_dirs(db, settings)
-                    # Dashboard graphs: one reading per iteration (docs/INTERFACE_REWORK.md §2).
-                    from veyra.telephony import get_adapter
-                    from veyra.telephony.metrics import prune, record_sample
-
-                    record_sample(db, get_adapter(settings))
-                    if time.monotonic() - last_metrics_prune >= 3600 or args.once:
-                        prune(db)
-                        last_metrics_prune = time.monotonic()
+                if args.once or now - last_module_sync >= 60:
+                    modules.sync_worker(db)
+                    last_module_sync = now
+            modules.run_periodic()
         except Exception:
-            log.exception("Worker iteration failed")
+            log.exception("Worker tick failed")
         if args.once:
             return 0
-        time.sleep(args.interval)
+        time.sleep(args.tick)
 
 
 # ----------------------------------------------------------------- parser
@@ -1060,7 +1079,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_pager)
 
     s = sub.add_parser("worker", help="Run the background worker")
-    s.add_argument("--interval", type=int, default=30)
+    s.add_argument("--interval", type=int, default=30, help="Seconds between housekeeping passes")
+    s.add_argument("--tick", type=int, default=5, help="Seconds between bell and module passes")
     s.add_argument("--once", action="store_true")
     s.set_defaults(func=cmd_worker)
     return p

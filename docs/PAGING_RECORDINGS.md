@@ -231,9 +231,9 @@ whose policies forbid secret addresses.
 summary pattern such as `Bell:*`), `trigger` (`start`, `end`, or both),
 `tolerance_seconds` (default 90: a bell missed by a worker restart is
 still rung within the window, never later), `is_enabled`. `bell_rings`
-logs every ring (event, page, at, outcome). The worker checks every 10
-seconds (its loop interval drops to 10 s, the samplers of 9b keep their
-30 s cadence via their own timer) and rings each event once (unique
+logs every ring (event, page, at, outcome). The worker checks every 5
+seconds (`veyra worker --tick`; housekeeping and the graph samples keep the
+service's `--interval` of 60 s) and rings each event once (unique
 `(schedule_id, event uid, trigger)`).
 
 The Bell Schedules page shows the calendar, the page, the next ten rings
@@ -252,22 +252,36 @@ page lists both kinds; greetings can be uploaded from the library.
 ## 6. AND clock messages (module `veyra.and-clocks`)
 
 The first real module on the framework of Milestone 0, shipped in
-`modules/veyra-and-clocks`, enabled where the devices exist:
+`modules/veyra-and-clocks` (README there: setup and use), installed under
+Modules only where the devices exist:
 
-* **Devices**: the module keeps its own list of clocks (name, address,
-  zone or site, model) and checks reachability.
-* **Messages**: text, duration, priority, colour and flashers when the
-  device has them, to one clock, a zone or all; scheduled or ad hoc; a
-  message log.
-* **Delivery** *(spike)*: AND publishes no inbound API for third parties;
-  the devices accept messages from their own web page, from IPClockWise and
-  from InformaCast-compatible senders. The spike captures the request the
-  clock's web page sends (an HTTP form on the device) and confirms it with
-  AND support (tech@anetd.com) before the module relies on it. The
-  module's "Embeddable control commands" (AN058) are supported for inline
-  formatting.
-* Bells can also send a message ("Period 2") with the page, through a
-  module hook on `bell.rang`.
+* **Clocks**: the module keeps its own list (name, address, group such as a
+  building, model) and checks reachability (TCP to the web port, every few
+  minutes, by the worker).
+* **Messages**: text (up to 1,000 characters), colour, display time,
+  priority (normal 50, high 20, emergency 1 on AND's 1–100 scale) and
+  flashers; to all clocks, a group or one clock; now (sent by the request,
+  result shown at once) or at a set time in the organization's time zone
+  (sent by the worker; more than an hour late = not sent); a log with the
+  result per clock.
+* **Bells**: the bell scheduler publishes `bell.rang` (organization,
+  schedule, event summary); rules by schedule name queue a message
+  (`{summary}` = the event's name, "Period 2") that the worker sends.
+* **Delivery**: AND publishes no inbound API for third parties; the clocks
+  accept messages from their own web page, from Clockwise and from
+  InformaCast. Rather than guess, the module sends the request the clock's
+  web page sends, described once per organization (method, path, body
+  template with placeholders, basic or digest sign-in, password encrypted
+  with the installation key); the README explains capturing it with the
+  browser's developer tools. Formatting uses AND's inline markup (AN049:
+  `{color=red;flashers=FFF}`; "Allow inline text commands" must be on) and
+  `{xml}` gives an AN050 `IPSpeakerMessage` for senders that take XML.
+  Once a capture from real clocks is confirmed, the module will offer it as
+  a ready-made setup.
+* **Framework additions** (module API 1.1): periodic tasks run by the
+  worker, which loads the enabled modules and so receives their events;
+  `encrypt`/`decrypt`; `organization_timezone`; `password` form fields.
+  Release modules are signed by the installer with the server's own key.
 
 ## 7. Permissions, API, interface
 
@@ -318,6 +332,9 @@ listen to multicast), Informacast compatibility.
   the secret iCal address first.
 * 2026-10-14: owner asked for legally usable default sounds and gave the
   door-held-open example → §3.1 (synthesized tones plus CC0 recordings)
+* 2026-10-15: AND clocks delivery is a request template captured from the
+  clock's web page (no public API to rely on); bells run on a 5-second
+  worker tick (they could be up to a minute late with the 60-second pass).
   and §2.6 (webhook with an integration token, dial-in).
 * 2026-10-14: owner raised hold music → §3.2 (managed hold music sets
   from the library, per organization, queue and ring group).

@@ -15,6 +15,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.core.events import Event, bus
 from veyra.core.models import BellRing, BellSchedule, Calendar, CalendarEvent, Page
 from veyra.core.models.base import utcnow
 
@@ -108,6 +109,22 @@ def ring(db: Session, adapter: Any, now: datetime | None = None) -> list[BellRin
             row.detail = {**row.detail, "message": message, "channel": channel}
             db.commit()
             rings.append(row)
+            # Modules react to bells (the AND clocks module shows the event's
+            # name on the clocks: docs/PAGING_RECORDINGS.md §6).
+            bus.publish(
+                Event(
+                    "bell.rang",
+                    {
+                        "organization_id": str(schedule.organization_id),
+                        "schedule_id": str(schedule.id),
+                        "schedule_name": schedule.name,
+                        "summary": ev.summary,
+                        "trigger": trigger,
+                        "due_at": due.isoformat(),
+                        "outcome": row.outcome,
+                    },
+                )
+            )
             log.info(
                 "bell %s: %s at %s -> %s", schedule.name, ev.summary, due.isoformat(), row.outcome
             )
