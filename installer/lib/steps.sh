@@ -52,6 +52,8 @@ do_packages() {
     # ffmpeg decodes MP3 and other compressed uploads for the audio library
     # (docs/PAGING_RECORDINGS.md §3); without it only WAV uploads are accepted.
     pkgs+=(ffmpeg)
+    # nftables: the Veyra firewall's table (docs/FIREWALL_TRUST.md §3).
+    pkgs+=(nftables)
     local missing=()
     local p
     for p in "${pkgs[@]}"; do
@@ -375,7 +377,7 @@ do_telephony() {
     # files shipped by the package are backed up beside them.
     MANAGED_FILE_CHANGED=0
     local stub
-    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf; do
+    for stub in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf logger.conf; do
         install_managed_file "$SCRIPT_DIR/templates/asterisk/$stub" "/etc/asterisk/$stub" 0640 root:asterisk
     done
     stub_changed=$MANAGED_FILE_CHANGED
@@ -438,7 +440,7 @@ do_telephony() {
 
 # Units this installation runs. The deployer only exists with a telephony engine.
 veyra_units() {
-    local units=(veyra-api veyra-worker)
+    local units=(veyra-api veyra-worker veyra-firewall)
     [[ "${TELEPHONY_ENGINE:-none}" != "none" ]] && units+=(veyra-deployer veyra-pager)
     printf '%s\n' "${units[@]}"
 }
@@ -447,6 +449,8 @@ do_services() {
     begin services "Installing and starting Veyra services"
     local unit tmp units=()
     mapfile -t units < <(veyra_units)
+    # Before the units start (it is a ReadWritePaths entry). The firewall service keeps its last ruleset and feed lists here (docs/FIREWALL_TRUST.md §3.3).
+    run install -d -m 0750 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firewall"
     for unit in "${units[@]}"; do
         tmp="$(mktemp)"
         render_template "$SCRIPT_DIR/templates/systemd/$unit.service.in" "$tmp" \
