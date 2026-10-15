@@ -8,6 +8,18 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.18.0 — unreleased (Milestone 12)
+
+### Added
+- **Updates from the interface** (System → Updates; [SOFTWARE_UPDATES.md](docs/SOFTWARE_UPDATES.md)): update source with an optional read-only token and email recipients; download of signed releases checked against the signed size and SHA-256; review with checks; install now or in a maintenance window; progress shown live through the restart (migration `0025`).
+- Policies "download, install on approval" and "install automatically in a maintenance window" for Veyra itself (chosen categories, only when no call is in progress).
+- Root upgrade unit `veyra-upgrade@<version>.service`, startable by the service account through polkit only; it verifies the release again against the official keys and runs the release's own `upgrade.sh`.
+- `veyra release build|add|refresh|sign` for publishing releases (archives include the prebuilt interface and a `REVISION` file).
+- Upgradable operating system packages listed daily (security updates and Asterisk marked; not applied).
+
+### Fixed
+- `uninstall.sh` left the pager and firewall services behind.
+
 ## 0.17.0 — 2026-10-15 (Milestone 11)
 
 ### Added

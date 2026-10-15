@@ -119,3 +119,9 @@ checks OK (`catalog-trust` warns, as expected without a catalog key).
 `httpx` 0.28.1 is now in the release environment and the AND Clock Messages
 module's code loads as the service account; the module is not installed yet
 (the owner retries from the Module Manager).
+
+## Addendum (2026-10-15 05:48 UTC): AND Clock Messages installed
+
+After 0.17.0 the owner installed AND Clock Messages from the Module Manager;
+the worker log shows "Worker loaded module veyra.and-clocks 0.1.0" on every
+start since, so the `httpx` fix works in production.
