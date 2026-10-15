@@ -6,6 +6,14 @@ from veyra.core.models.base import Base
 from veyra.core.models.bells import BellRing, BellSchedule, Calendar, CalendarEvent
 from veyra.core.models.calls import CallLeg, CallRecord, QueueEvent
 from veyra.core.models.catalog import CatalogSource
+from veyra.core.models.central import (
+    CentralCommand,
+    CentralEnrollmentToken,
+    CentralInstance,
+    CentralNonce,
+    CentralPolicy,
+    CentralSample,
+)
 from veyra.core.models.firewall import FirewallBan, FirewallEvent, FirewallFeed, FirewallRule
 from veyra.core.models.groups import (
     CallQueue,
@@ -98,6 +106,12 @@ __all__ = [
     "CallRecording",
     "CallSample",
     "CatalogSource",
+    "CentralCommand",
+    "CentralEnrollmentToken",
+    "CentralInstance",
+    "CentralNonce",
+    "CentralPolicy",
+    "CentralSample",
     "ClusterEvent",
     "ClusterNode",
     "ConfigRevision",

@@ -93,6 +93,8 @@ export const NAV: NavSection[] = [
     { label: "Firewall", href: "/system/firewall/", icon: "shield", permissions: ["firewall.read"], group: "Security" },
     { label: "Sign-in", href: "/system/sign-in/", icon: "key", permissions: ["sso.read"], group: "Security" },
     { label: "Integrations", href: "/system/integrations/", icon: "external", permissions: ["integrations.read", "webhooks.read"], group: "Platform" },
+    { label: "Central console", href: "/system/central/", icon: "server", permissions: ["central.read"], group: "Platform" },
+    { label: "Central management", href: "/system/membership/", icon: "ha", permissions: ["system.settings.read"], group: "Platform" },
     { label: "Settings", href: "/settings/", icon: "settings", group: "Settings" },
   ] },
 ];

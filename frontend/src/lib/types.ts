@@ -2247,3 +2247,115 @@ export interface MultiTenancyStatus {
   shared: string[];
   checks?: MultiTenancyCheck[];
 }
+
+// --- Central management (docs/CENTRAL_MANAGEMENT.md) ---------------------------
+
+export interface CentralConsole {
+  enabled: boolean;
+  fingerprint: string | null;
+  address: string;
+  offline_minutes: number;
+  instances: number;
+}
+
+export interface CentralToken {
+  id: string;
+  label: string | null;
+  policy_id: string | null;
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+}
+
+export interface CentralTokenCreated extends CentralToken {
+  token: string;
+  address: string;
+  fingerprint: string;
+}
+
+export type CentralStatus = "ok" | "degraded" | "failed" | "online" | "offline" | "revoked";
+
+export interface CentralInstanceRow {
+  instance_id: string;
+  label: string | null;
+  name: string;
+  version: string | null;
+  status: CentralStatus;
+  policy_id: string | null;
+  policy_name: string | null;
+  policy_state: string | null;
+  enrolled_at: string;
+  last_seen_at: string | null;
+  last_address: string | null;
+  registered: number | null;
+  active_calls: number | null;
+  extensions: number | null;
+  alerts: number;
+  update_available: string | null;
+}
+
+export interface CentralCommandRow {
+  id: string;
+  kind: string;
+  arguments: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  delivered_at: string | null;
+  completed_at: string | null;
+  outcome: string | null;
+  message: string | null;
+}
+
+export interface CentralInstanceDetail extends CentralInstanceRow {
+  report: Record<string, any> | null;
+  fingerprint: string;
+  revoked_at: string | null;
+  samples: { at: string; registered: number | null; active_calls: number | null; alerts: number | null; status: string }[];
+  commands: CentralCommandRow[];
+}
+
+export interface CentralPolicyDocument {
+  updates?: {
+    policy: { mode: string; maintenance_window?: { days: string[]; start: string; duration_minutes: number } | null; [k: string]: unknown };
+    source_url?: string | null;
+    recipients?: string[] | null;
+  };
+  firewall_allow?: { cidr: string; comment?: string | null }[];
+  alert_recipients?: string[];
+  notice?: string;
+}
+
+export interface CentralPolicy {
+  id: string;
+  name: string;
+  description: string | null;
+  document: CentralPolicyDocument;
+  version: number;
+  is_default: boolean;
+  instances: number;
+  updated_at: string;
+}
+
+export interface CentralMembership {
+  enrolled: boolean;
+  console_url?: string;
+  console_name?: string | null;
+  console_fingerprint?: string | null;
+  fingerprint?: string | null;
+  enrolled_at?: string;
+  last_contact?: string | null;
+  last_attempt?: string | null;
+  last_error?: string | null;
+  revoked?: boolean;
+  accepted?: Record<string, boolean>;
+  policy?: { name: string | null; version: number; results: Record<string, string>; document: CentralPolicyDocument; applied_at: string | null } | null;
+  log?: { at: string; what: string; detail: unknown }[];
+}
+
+export interface CentralNotice {
+  text: string | null;
+  console_name: string | null;
+  managed: Record<string, boolean>;
+}

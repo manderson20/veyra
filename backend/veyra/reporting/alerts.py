@@ -59,6 +59,9 @@ RULES: dict[str, RuleDef] = {
         RuleDef("certificate", "HTTPS certificate expiring", 0, 21, "days"),
         RuleDef("firewall_bans", "Many firewall bans", 0, 20, "bans per hour"),
         RuleDef("phones_unregistered", "Phones unregistered", 15, 20, "% of phones"),
+        # Central console only (docs/CENTRAL_MANAGEMENT.md §6).
+        RuleDef("instance_offline", "Instance not checking in", 0),
+        RuleDef("instance_failed", "Instance unhealthy", 5),
     )
 }
 SERVICES = ("veyra-api", "veyra-deployer", "veyra-pager", "veyra-firewall")
@@ -203,6 +206,40 @@ def check_certificate(days_left: float | None, threshold: int) -> list[Finding]:
             "certificate", "", f"The HTTPS certificate expires in {max(days_left, 0):.0f} days."
         )
     ]
+
+
+def check_central(db: Session, now: datetime) -> list[Finding]:
+    """Instances of this central console that stopped checking in or report
+    a failed health (docs/CENTRAL_MANAGEMENT.md §6)."""
+    from veyra.central import console
+    from veyra.core.models import CentralInstance
+
+    if not console.enabled(db):
+        return []
+    offline = int(console.state(db).get("offline_minutes") or console.DEFAULT_OFFLINE_MINUTES)
+    out: list[Finding] = []
+    for inst in db.scalars(select(CentralInstance).where(CentralInstance.revoked_at.is_(None))):
+        label = inst.label or inst.name
+        status = console.status_of(inst, offline, now)
+        if status == "offline":
+            out.append(
+                Finding(
+                    "instance_offline",
+                    label,
+                    f"{label} has not checked in for more than {offline} minutes.",
+                    {"instance_id": str(inst.instance_id)},
+                )
+            )
+        elif status == "failed":
+            out.append(
+                Finding(
+                    "instance_failed",
+                    label,
+                    f"{label} reports a failed health check.",
+                    {"instance_id": str(inst.instance_id)},
+                )
+            )
+    return out
 
 
 def check_firewall(db: Session, now: datetime, threshold: int) -> list[Finding]:
@@ -351,6 +388,7 @@ def run(db: Session, settings: Any, adapter: Any | None, now: datetime | None = 
         lambda: check_disk([settings.data_dir, settings.log_dir], threshold("disk_space")),
         lambda: check_certificate(certificate_days_left(), threshold("certificate")),
         lambda: check_firewall(db, now, threshold("firewall_bans")),
+        lambda: check_central(db, now),
     ]
     if adapter is not None:
         checks += [
