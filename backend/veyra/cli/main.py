@@ -930,6 +930,87 @@ def cmd_worker(args: argparse.Namespace) -> int:
         time.sleep(args.tick)
 
 
+def cmd_firewall_run(args: argparse.Namespace) -> int:
+    """The firewall service (docs/FIREWALL_TRUST.md §3.3)."""
+    import logging
+
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.core.security.crypto import try_load_installation_key
+    from veyra.firewall.service import FirewallService, NftCommand
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    log = logging.getLogger("veyra.firewall")
+    settings = get_settings()
+    service = FirewallService(settings.data_dir, NftCommand(), try_load_installation_key(settings))
+    log.info("%s firewall started", plain_header())
+    restored = False
+    while True:
+        try:
+            with session_scope() as db:
+                service.tick(db)
+        except Exception:
+            log.exception("Firewall pass failed")
+            if not restored:
+                # Database not reachable yet at boot: keep the last rules.
+                try:
+                    restored = service.restore_last()
+                except Exception:
+                    log.exception("Could not apply the last saved ruleset")
+                restored = True
+        else:
+            restored = True
+        if args.once:
+            return 0
+        time.sleep(args.interval)
+
+
+def cmd_firewall_off(args: argparse.Namespace) -> int:
+    """Console recovery: turn the firewall off and remove the table now."""
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.firewall.service import NftCommand, NftError
+    from veyra.firewall.settings import load_settings, save_settings
+
+    try:
+        with session_scope() as db:
+            fw = load_settings(db)
+            fw.enabled = False
+            fw.pending_confirm = None
+            save_settings(db, fw)
+        print("Firewall turned off in the database.")
+    except Exception as e:  # the table goes anyway
+        print(f"Could not update the database ({e}); removing the table only.", file=sys.stderr)
+    try:
+        NftCommand()._run(["delete", "table", "inet", "veyra"])
+        print("Table inet veyra removed.")
+    except (NftError, OSError) as e:
+        print(f"Table inet veyra not removed: {e}", file=sys.stderr)
+    (get_settings().data_dir / "firewall" / "veyra.nft").unlink(missing_ok=True)
+    return 0
+
+
+def cmd_firewall_status(args: argparse.Namespace) -> int:
+    from veyra.core.db import session_scope
+    from veyra.core.models.base import utcnow
+    from veyra.firewall.service import active_bans
+    from veyra.firewall.settings import load_settings, load_status
+
+    with session_scope() as db:
+        fw = load_settings(db)
+        out = {
+            "enabled": fw.enabled,
+            "policy": fw.policy,
+            "service": load_status(db),
+            "active_bans": [
+                {"address": b.address, "expires_at": b.expires_at.isoformat(), "reason": b.reason}
+                for b in active_bans(db, utcnow())
+            ],
+        }
+    print(json.dumps(out, indent=2))
+    return 0
+
+
 # ----------------------------------------------------------------- parser
 
 
@@ -1077,6 +1158,20 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--once", action="store_true", help="Load the zone table and exit")
     s.add_argument("--status", action="store_true", help="Print the zone table as JSON and exit")
     s.set_defaults(func=cmd_pager)
+
+    fwp = sub.add_parser("firewall", help="Veyra's firewall").add_subparsers(
+        dest="fw_cmd", metavar="<action>", required=True
+    )
+    s = fwp.add_parser("run", help="Run the firewall service (needs CAP_NET_ADMIN)")
+    s.add_argument("--interval", type=int, default=2, help="Seconds between passes")
+    s.add_argument("--once", action="store_true")
+    s.set_defaults(func=cmd_firewall_run)
+    fwp.add_parser(
+        "off", help="Turn the firewall off and remove its table (console recovery)"
+    ).set_defaults(func=cmd_firewall_off)
+    fwp.add_parser("status", help="Settings, service state and active bans").set_defaults(
+        func=cmd_firewall_status
+    )
 
     s = sub.add_parser("worker", help="Run the background worker")
     s.add_argument("--interval", type=int, default=30, help="Seconds between housekeeping passes")

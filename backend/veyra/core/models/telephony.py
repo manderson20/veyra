@@ -82,3 +82,7 @@ class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     last_result: Mapped[str | None] = mapped_column(String(32))
     firmware_reported: Mapped[str | None] = mapped_column(String(64))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Phone trust (docs/FIREWALL_TRUST.md §6.3): the first HTTPS fetch; after
+    # it, plain-HTTP bootstrap is refused until allow_bootstrap is set again.
+    https_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    allow_bootstrap: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
