@@ -3,20 +3,35 @@
 
 import { useState } from "react";
 import { CopyButton } from "@/components/common/CopyButton";
-import { Button, Callout, Card, ConfirmDialog, useToast } from "@/components/ui";
+import { Button, Callout, Card, ConfirmDialog, Switch, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { ProvisioningCredential, ProvisioningCredentialRotated } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
 /** The enrollment credential phones use for their first fetch (docs/DEVICE_PROVISIONING.md §3.2). */
-export function ProvisioningCredentialCard({ organizationId, editable }: { organizationId: string; editable: boolean }) {
+export function ProvisioningCredentialCard({ organizationId, editable, bootstrapIncludesCredential = false }: {
+  organizationId: string;
+  editable: boolean;
+  bootstrapIncludesCredential?: boolean;
+}) {
   const toast = useToast();
   const cred = useApiData<ProvisioningCredential>(`/organizations/${organizationId}/provisioning-credential`);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState<string | null>(null);
+  const [inBootstrap, setInBootstrap] = useState(bootstrapIncludesCredential);
+  const toggleBootstrap = async (value: boolean) => {
+    setInBootstrap(value);
+    try {
+      await api.patch(`/organizations/${organizationId}`, { bootstrap_includes_credential: value });
+      toast.success(value ? "New phones get the credential from the bootstrap" : "New phones need the credential from DHCP or typed in");
+    } catch (err) {
+      setInBootstrap(!value);
+      toast.error("Not saved", errorMessage(err));
+    }
+  };
   const rotate = async () => {
     setBusy(true);
     setError(null);
@@ -45,7 +60,16 @@ export function ProvisioningCredentialCard({ organizationId, editable }: { organ
           <dt>On the phone</dt><dd>Settings → Provisioning Server: type HTTPS, server <span className="mono">{c.url.replace(/^https?:\/\//, "")}</span>, this user name and password. Already-provisioned phones keep working when the credential rotates.</dd>
         </dl>
       ) : <p className="muted">Loading…</p>}
-      {c?.http_enabled ? <Callout tone="warn">Provisioning is also served over plain HTTP on this server; SIP secrets cross the network unencrypted.</Callout> : null}
+      {c?.http_enabled && c.http_mode === "full" ? <Callout tone="warn">Provisioning is also served over plain HTTP on this server; SIP secrets cross the network unencrypted.</Callout> : null}
+      {c?.http_enabled && c.http_mode !== "full" ? (
+        <div className="stack stack--sm">
+          <Callout tone="info" title="Phone trust bootstrap">
+            Over plain HTTP, new phones only receive the Veyra certificate and this server&apos;s HTTPS address; everything else, including SIP passwords, comes over HTTPS. Point DHCP option 66 (and 160 for Poly) on the staging or voice VLAN at <span className="mono">{c.url.replace(/^https:/, "http:")}</span>.
+          </Callout>
+          <Switch label="Include the enrollment credential in the bootstrap" checked={inBootstrap} disabled={!editable} onChange={(e) => toggleBootstrap(e.target.checked)}
+            description="Nothing to type on new phones, but anyone on that network can read the credential. Use it on a staging VLAN and rotate the credential after a batch of phones." />
+        </div>
+      ) : null}
       <ConfirmDialog open={confirm} title={c?.username ? "Rotate the enrollment credential?" : "Create the enrollment credential?"} confirmLabel={c?.username ? "Rotate" : "Create"} busy={busy} error={error} onConfirm={rotate} onCancel={() => { setConfirm(false); setError(null); }}>
         <p>Phones that have not completed their first provisioning will need the new password. Provisioned phones are unaffected.</p>
       </ConfirmDialog>

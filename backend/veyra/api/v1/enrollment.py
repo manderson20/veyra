@@ -58,6 +58,8 @@ class CredentialOut(BaseModel):
     username: str | None
     url: str
     http_enabled: bool
+    # What plain HTTP serves: the trust bootstrap only, or every file.
+    http_mode: str = "bootstrap"
     rotated_at: datetime | None
 
 
@@ -81,6 +83,7 @@ def _out(request: Request, org: Organization) -> CredentialOut:
         username=org.provisioning_user,
         url=provisioning_url(request),
         http_enabled=bool(getattr(settings, "provisioning_http", False)),
+        http_mode=getattr(settings, "provisioning_http_mode", "bootstrap"),
         rotated_at=org.provisioning_secret_changed_at,
     )
 

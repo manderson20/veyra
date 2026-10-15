@@ -149,6 +149,8 @@ export interface Organization {
   is_active: boolean;
   /** Default hold music set of the organization's phones; null = the built-in set. */
   moh_class_id?: string | null;
+  /** The plain-HTTP trust bootstrap also carries the enrollment credential. */
+  bootstrap_includes_credential?: boolean;
   created_at: string;
 }
 
@@ -1459,6 +1461,10 @@ export interface Device {
   last_seen_ip: string | null;
   last_user_agent: string | null;
   last_result: string | null;
+  /** First provisioning over HTTPS (phone trust); null until then. */
+  https_seen_at: string | null;
+  /** The plain-HTTP bootstrap is served to this phone. */
+  allow_bootstrap: boolean;
   credential_user: string;
   problems: string[];
   created_at: string;
@@ -1528,6 +1534,8 @@ export interface ProvisioningCredential {
   username: string | null;
   url: string;
   http_enabled: boolean;
+  /** "bootstrap": plain HTTP serves only the Veyra CA and the HTTPS address. */
+  http_mode?: "bootstrap" | "full";
   rotated_at: string | null;
 }
 
@@ -1676,4 +1684,92 @@ export interface HoldMusicInput {
   description?: string | null;
   tracks?: string[];
   random?: boolean;
+}
+
+// ---------------------------------------------------------------- firewall (docs/FIREWALL_TRUST.md §7)
+
+export type FirewallService = "sip" | "rtp" | "web" | "ssh";
+export type FirewallPolicy = "anywhere" | "allow_list_only";
+
+export interface FirewallPendingConfirm {
+  previous_policy: Record<FirewallService, FirewallPolicy>;
+  deadline: string;
+  by: string;
+}
+
+export interface FirewallSettings {
+  enabled: boolean;
+  policy: Record<FirewallService, FirewallPolicy>;
+  ban_score: number;
+  window_minutes: number;
+  ban_minutes: number;
+  max_ban_days: number;
+  weights: Record<string, number>;
+  ssh_ports: number[];
+  bootstrap_networks: string[];
+  pending_confirm: FirewallPendingConfirm | null;
+}
+
+export interface FirewallStatus {
+  enabled: boolean;
+  service_running: boolean;
+  applied: boolean;
+  error: string | null;
+  sources: Record<string, string | null>;
+  active_bans: number;
+  events_24h: number;
+  bans_24h: number;
+  top_addresses: { address: string; events: number }[];
+  pending_confirm: FirewallPendingConfirm | null;
+  your_address: string | null;
+  your_address_allowed: boolean;
+}
+
+export interface FirewallRule {
+  id: string;
+  action: "allow" | "block";
+  cidr: string;
+  services: FirewallService[];
+  comment: string | null;
+  expires_at: string | null;
+  origin: "manual" | "server" | "sip_local_net" | "trunk";
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface FirewallBan {
+  id: string;
+  address: string;
+  reason: string;
+  source: string;
+  event_count: number;
+  offence: number;
+  banned_at: string;
+  expires_at: string;
+  lifted_at: string | null;
+  lifted_by: string | null;
+}
+
+export interface FirewallEvent {
+  id: string;
+  at: string;
+  address: string;
+  source: "asterisk" | "auth" | "provisioning" | "nginx";
+  kind: string;
+  detail: string | null;
+  count: number;
+  would_ban: boolean;
+}
+
+export interface FirewallFeed {
+  id: string;
+  name: string;
+  kind: "crowdsec" | "list";
+  url: string;
+  has_key: boolean;
+  is_enabled: boolean;
+  last_fetched_at: string | null;
+  last_status: string | null;
+  last_error: string | null;
+  entry_count: number;
 }
