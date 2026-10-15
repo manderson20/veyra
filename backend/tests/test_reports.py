@@ -21,7 +21,7 @@ def _local(dt):
 
 
 def test_calls_report_buckets_in_org_time(admin):
-    org, (a, a_id), (b, b_id), (c, _), trunk = _setup(admin)
+    org, (a, _a_id), (b, _b_id), (c, _), trunk = _setup(admin)
     admin.patch(f"/api/v1/organizations/{org['id']}", json={"timezone": "America/Chicago"})
     # Monday 2026-10-12 14:00 UTC = 09:00 in Chicago (CDT, UTC-5).
     t0 = datetime(2026, 10, 12, 14, 0, tzinfo=UTC)
