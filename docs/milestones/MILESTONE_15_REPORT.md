@@ -1,7 +1,7 @@
 # Milestone 15 Report — Centralized Instance Management
 
 Branch `milestone-15` (from `milestone-14` at 0.20.0). Design:
-[CENTRAL_MANAGEMENT.md](../CENTRAL_MANAGEMENT.md). Status: **complete, awaiting approval** (release 0.21.0).
+[CENTRAL_MANAGEMENT.md](../CENTRAL_MANAGEMENT.md). Status: **approved 2026-10-15, released as 0.21.0.**
 
 ## 1. Scope (roadmap row 15)
 
@@ -136,3 +136,5 @@ Roadmap row 16: high availability.
 
 * 2026-10-15: milestone started with the proposed defaults while the §11
   questions are open.
+* 2026-10-15: approved ("M15 approved, go ahead with 0.21.0"); the §11
+  questions, the browser checks and the two-organization test remain open.
