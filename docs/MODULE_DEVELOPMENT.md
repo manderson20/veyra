@@ -198,12 +198,18 @@ uninstall --purge (type the module id to confirm) ──► tables dropped, row 
 * **Install** checks trust, compatibility and dependencies, runs migrations, registers permissions, and calls `on_install`.
 * **Enable** requires enabled dependencies, loads the code, mounts routes, subscribes to events, and calls `on_enable`.
 * **Disable** is refused while enabled modules depend on this one. It unsubscribes events and returns 404 from the module's routes.
-* **Update** happens when a newer version is placed on disk by the update service. It checks compatibility, runs the new migrations, records the version, and reports `restart_required` because running code is not hot-swapped.
+* **Update** comes from a catalog or an upload ([MODULE_CATALOG.md](MODULE_CATALOG.md)): the new version is verified into the module store, its migrations run, the version is recorded, and `restart_required` is reported because running code is not hot-swapped; "Restart Veyra services" in the Module Manager restarts the units. The previous version stays in the store for **rollback** (refused when the newer version added migrations).
 
 All operations are available in the API (`/api/v1/modules/...`), the UI
 (Module Manager) and the CLI (`veyra modules ...`), and all are audited.
 
 ## 6. Signing, packaging and trust
+
+Publishing to a catalog (signed index plus release assets) is described in
+[MODULE_CATALOG.md](MODULE_CATALOG.md) §2.4 (`veyra catalog add|sign|verify`).
+Settings declared with `[[config]]` get a generated form in the Module
+Manager; `secret` values are stored encrypted for the module and
+`ctx.get_config` returns them decrypted.
 
 ```
 veyra modules keygen acme-release --output-dir ~/keys        # once; keep the .key secret
@@ -248,8 +254,5 @@ minor versions.
 
 ## 9. Not yet available
 
-* A module catalogue (listing published modules from a GitHub repository) and uploading custom modules in the UI (roadmap row 11).
 * Editing rows in `resource_table` views (delete and add again for now).
 * The service runtime for community and third-party modules (M11).
-* Download and installation of packages through the UI. M0 installs modules found in the module paths.
-* Module settings UI generated from `[[config]]` (M11).
