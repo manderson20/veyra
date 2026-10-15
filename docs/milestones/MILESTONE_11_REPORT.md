@@ -1,8 +1,7 @@
 # Milestone 11 Report — Module Catalog and Module Management
 
 Branch `milestone-11` (from `main` at 0.16.0). Design:
-[MODULE_CATALOG.md](../MODULE_CATALOG.md). Status: **built and checked live
-on dev1, awaiting the owner's approval** (to be released as 0.17.0).
+[MODULE_CATALOG.md](../MODULE_CATALOG.md). Status: **approved 2026-10-15, released as 0.17.0.**
 
 ## 1. Scope (roadmap row 11; owner request of 2026-10-14)
 
@@ -108,4 +107,6 @@ Milestone 12 — software update management (0.18.0), or the service runtime
 
 * 2026-10-15: milestone started ("go ahead with M11"); built with the
   proposed defaults while the §9 questions are open.
-* Approval: *pending*.
+* 2026-10-15: approved ("M11 approved, go ahead with 0.17.0"), together
+  with the report that installing the AND module failed; the fix is part of
+  0.17.0.

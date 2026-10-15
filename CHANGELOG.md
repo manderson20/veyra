@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.17.0-dev — unreleased (Milestone 11)
+## 0.17.0 — 2026-10-15 (Milestone 11)
 
 ### Added
 - **Module catalog** (Module Manager → Catalog and Sources; [MODULE_CATALOG.md](docs/MODULE_CATALOG.md)): signed catalog indexes (keys in `/etc/veyra/trust/catalog/`) listing modules, versions and compatibility, checked daily; install and update from a catalog with the download checked against the index's checksum and the package against its publisher signature; modules live in `<data>/module-store`, searched before the release's own modules (migration `0024`).
