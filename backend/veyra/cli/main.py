@@ -884,6 +884,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         pruned_rings = scheduler.prune(db)
                         if pruned_rings:
                             log.info("Pruned %d bell rings", pruned_rings)
+                        from veyra.reporting import cdr
+
+                        pruned_calls = cdr.prune(db)
+                        if pruned_calls:
+                            log.info("Pruned %d calls past the history retention", pruned_calls)
                     policy = db.get(UpdatePolicy, "veyra_core")
                     last = db.scalar(
                         select(UpdateCheck).order_by(UpdateCheck.checked_at.desc()).limit(1)
@@ -919,6 +924,13 @@ def cmd_worker(args: argparse.Namespace) -> int:
         try:
             with session_scope() as db:
                 poll_calendars_and_ring_bells(db, settings, log)
+            if settings.telephony_engine != "none":
+                # Call history (docs/REPORTING.md §3): new CDRs every tick.
+                from veyra.reporting import cdr
+
+                with session_scope() as db:
+                    cdr.process(db)
+            with session_scope() as db:
                 if args.once or now - last_module_sync >= 60:
                     modules.sync_worker(db)
                     last_module_sync = now
