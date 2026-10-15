@@ -196,6 +196,27 @@ polkit rule (`/etc/polkit-1/rules.d/50-veyra-services.rules`) that lets the
 `veyra` account restart Veyra's own units, so new module code can be loaded
 from the Module Manager; Asterisk is never restarted by it.
 
+### Single sign-on
+
+System → Sign-in adds Google Workspace, Microsoft Entra ID or any OpenID
+Connect provider ([INTEGRATIONS.md](INTEGRATIONS.md) §1). The provider needs
+one redirect address, shown in the *Add provider* dialog:
+`https://<server>/api/v1/auth/sso/callback` (built from `VEYRA_PUBLIC_HOST`
+when it is set, otherwise from the address the browser used). For Google:
+
+1. Google Cloud console → APIs & Services → Credentials → *Create OAuth
+   client ID*, type *Web application*; add the redirect address under
+   *Authorized redirect URIs*. On the consent screen choose *Internal*.
+2. Enter the client ID, the secret and your e-mail domain in Veyra, then
+   *Test*.
+3. For silent Companion sign-in on managed Chromebooks: Admin console →
+   Security → API controls → App access control → *Trusted* for this OAuth
+   client, and add `"ssoProvider": "<provider id>"` to the extension policy
+   (Settings → Companion deployment shows the JSON).
+
+The recovery administrator always signs in with a password; with *Require
+single sign-on* on, linked accounts cannot.
+
 ### Firewall recovery from the server console
 
 If a firewall setting locks you out, from the console (or any SSH session

@@ -159,6 +159,21 @@ class AriEventTranslator:
         )
 
 
+LIVE_WEBHOOK_EVENTS = frozenset({"call.ringing", "call.answered"})
+
+
+def _webhook(ce: CallEvent) -> None:
+    """Queue live call webhooks (docs/INTEGRATIONS.md §3.2); never raises."""
+    try:
+        from veyra.core.db import session_scope
+        from veyra.integrations import sources
+
+        with session_scope() as db:
+            sources.call_live(db, ce)
+    except Exception:
+        log.exception("Could not queue a call webhook")
+
+
 class AriEventListener:
     def __init__(self, ari: AriClient, hub: CallEventHub) -> None:
         self.ari = ari
@@ -213,6 +228,8 @@ class AriEventListener:
                             continue
                         for ce in self.translator.translate(event):
                             self.hub.publish(ce)
+                            if ce.type in LIVE_WEBHOOK_EVENTS:
+                                await asyncio.to_thread(_webhook, ce)
             except asyncio.CancelledError:
                 raise
             except Exception as e:

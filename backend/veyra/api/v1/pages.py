@@ -37,6 +37,7 @@ from veyra.core.models import (
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
+from veyra.integrations import webhooks
 from veyra.telephony import routing
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 from veyra.telephony.asterisk.generator import CONTEXT_PAGE_PLAY
@@ -623,6 +624,18 @@ def start_page(
         return False, f"The telephony engine could not start the page: {e}", None
     log.outcome = "started"
     log.detail = {"channel": channel, "audio": recording.slug}
+    webhooks.emit(
+        db,
+        page.organization_id,
+        "page.sent",
+        {
+            "page": {"id": str(page.id), "name": page.name, "number": page.number},
+            "zones": [{"name": z.name, "slug": z.slug} for z in zone_rows],
+            "audio": recording.name,
+            "trigger": trigger,
+            "started_by": actor,
+        },
+    )
     db.commit()
     return True, f"Page “{page.name}” started.", channel
 

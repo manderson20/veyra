@@ -240,4 +240,4 @@ later milestone; it would make the button work without policy.
 
 Firefox and Safari builds, store publication, presence and BLF, call
 control (answer/hang up from the browser), screen pops into other web
-applications, SSO sign-in (Milestone 13).
+applications. SSO sign-in arrived in Milestone 13 ([INTEGRATIONS.md](INTEGRATIONS.md) §1.6).

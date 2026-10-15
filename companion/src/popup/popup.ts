@@ -36,7 +36,12 @@ function clear(): void {
 
 // ------------------------------------------------------------------ sign-in
 
-function renderSignIn(prefill: { serverUrl: string | null; managed?: boolean; error?: string }): void {
+function renderSignIn(prefill: {
+  serverUrl: string | null;
+  managed?: boolean;
+  error?: string;
+  providers?: StateResult["providers"];
+}): void {
   clear();
   const status = el("div");
   const server = el("input", {
@@ -119,7 +124,44 @@ function renderSignIn(prefill: { serverUrl: string | null; managed?: boolean; er
       }
     })();
   });
-  app.append(el("h1", { text: "Sign in to Veyra" }), form);
+  // Single sign-on buttons (docs/INTEGRATIONS.md §1.6) above the password form.
+  const sso = el("div", { class: "sso" });
+  for (const provider of prefill.providers ?? []) {
+    const button = el("button", { type: "button", class: "primary", text: `Sign in with ${provider.name}` });
+    button.addEventListener("click", () => {
+      const origin = serverOrigin(server.value);
+      if (origin === null) {
+        setMessage(status, "error", "Enter the server address as https://host (HTTPS is required).");
+        return;
+      }
+      button.disabled = true;
+      setMessage(status, "info", `Opening ${provider.name}…`);
+      // Ask for the host permission inside the click's user gesture.
+      const permission = chrome.permissions
+        .contains({ origins: [`${origin}/*`] })
+        .then((has) => (has ? true : chrome.permissions.request({ origins: [`${origin}/*`] })));
+      void (async () => {
+        if (!(await permission.catch(() => false))) {
+          button.disabled = false;
+          setMessage(status, "error", `Veyra Companion needs permission to contact ${origin}.`);
+          return;
+        }
+        const result = await sendRequest({ type: "ssoLogin", serverUrl: origin, providerId: provider.id, device });
+        button.disabled = false;
+        if (result.status === "ok") {
+          await refreshState();
+          render();
+        } else if (result.status === "error") {
+          setMessage(status, "error", result.detail);
+        }
+      })();
+    });
+    sso.append(button);
+  }
+  if (prefill.providers?.length) {
+    sso.append(el("p", { class: "muted small", text: "or with a password" }));
+  }
+  app.append(el("h1", { text: "Sign in to Veyra" }), sso, form);
   (prefill.serverUrl ? email : server).focus();
 }
 
@@ -145,7 +187,7 @@ function renderMfa(): void {
   ]);
   back.addEventListener("click", () => {
     pendingChallenge = null;
-    renderSignIn({ serverUrl: state?.serverUrl ?? null, managed: Boolean(state?.managedServerUrl) });
+    renderSignIn({ serverUrl: state?.serverUrl ?? null, managed: Boolean(state?.managedServerUrl), providers: state?.providers });
   });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -172,7 +214,7 @@ function renderMfa(): void {
         setMessage(status, "error", result.detail);
         if (result.code === "challenge_expired") {
           pendingChallenge = null;
-          setTimeout(() => renderSignIn({ serverUrl: state?.serverUrl ?? null, managed: Boolean(state?.managedServerUrl), error: result.detail }), 1200);
+          setTimeout(() => renderSignIn({ serverUrl: state?.serverUrl ?? null, managed: Boolean(state?.managedServerUrl), providers: state?.providers, error: result.detail }), 1200);
         }
       }
     })();
@@ -304,11 +346,14 @@ function renderSignedIn(s: StateResult): void {
       const who = entry.user_display_name && entry.user_display_name !== entry.name
         ? `${entry.name} · ${entry.user_display_name}`
         : entry.name;
+      const group = entry.type === "ring_group" ? "Ring group" : entry.type === "queue" ? "Queue" : null;
       const item = el("li", { title: `Call ${entry.number}` }, [
-        el("span", { class: `reg ${entry.registered ? "on" : ""}`, title: entry.registered ? "Registered" : "Not registered" }),
+        group
+          ? el("span", { class: "reg", title: group })
+          : el("span", { class: `reg ${entry.registered ? "on" : ""}`, title: entry.registered ? "Registered" : "Not registered" }),
         el("div", { class: "main" }, [
           el("div", { class: "primary-text", text: who }),
-          el("div", { class: "secondary", text: `${entry.number} · ${entry.organization}` }),
+          el("div", { class: "secondary", text: `${entry.number} · ${group ?? entry.organization}` }),
         ]),
       ]);
       item.addEventListener("click", () => dialNumber(entry.number));
@@ -408,7 +453,7 @@ function render(): void {
     return;
   }
   if (!state.signedIn) {
-    renderSignIn({ serverUrl: state.serverUrl, managed: Boolean(state.managedServerUrl) });
+    renderSignIn({ serverUrl: state.serverUrl, managed: Boolean(state.managedServerUrl), providers: state.providers });
     return;
   }
   renderSignedIn(state);

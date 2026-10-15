@@ -81,3 +81,6 @@ form { display: flex; flex-direction: column; gap: 10px; }
 .msg.info { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .footer { display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 8px; }
 .hidden { display: none !important; }
+
+.sso { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.sso p { text-align: center; margin: 2px 0 0; }

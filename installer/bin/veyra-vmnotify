@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Asterisk's voicemail "externnotify": called with the mailbox's message
+# counts whenever they change (a new message, or messages read or deleted).
+# It leaves one small file in Veyra's mail queue directory; the worker turns
+# a rising count of new messages into the voicemail.message webhook
+# (docs/INTEGRATIONS.md §3.2). Nothing is sent from here.
+#
+# Usage: veyra-vmnotify CONTEXT MAILBOX NEW OLD URGENT
+# Runs as the asterisk user; the queue directory is 2770 veyra:asterisk.
+set -eu
+dir="${VEYRA_MAILQUEUE_DIR:-/var/lib/veyra/mailqueue}"
+[ "$#" -ge 4 ] || exit 0
+[ -d "$dir" ] || exit 0
+context="$1" mailbox="$2" new="$3" old="$4" urgent="${5:-0}"
+case "$context$mailbox$new$old$urgent" in
+    *[!A-Za-z0-9_.-]*) exit 0 ;;
+esac
+case "$mailbox$new$old$urgent" in
+    *[!0-9]*) exit 0 ;;
+esac
+umask 007
+name="$(date -u +%Y%m%dT%H%M%S)-$$-$(od -An -N4 -tx4 /dev/urandom 2>/dev/null | tr -d ' \n')"
+tmp="$dir/.$name.tmp"
+printf '%s %s %s %s %s\n' "$context" "$mailbox" "$new" "$old" "$urgent" >"$tmp"
+mv -f "$tmp" "$dir/$name.vmevent"

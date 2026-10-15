@@ -117,6 +117,9 @@ class Settings(BaseSettings):
     # Where the installer leaves the packaged extension (zip, signed crx and
     # crx-info.json) for the download routes (docs/COMPANION.md §5).
     companion_dir: Path = Path("/opt/veyra/current/companion")
+    # Extra extension IDs allowed to receive Companion SSO codes, comma separated:
+    # an unpacked development build has its own ID (docs/INTEGRATIONS.md §1.6).
+    companion_dev_extension_ids: str = ""
 
     # --- Updates --------------------------------------------------------------
     update_metadata_url: str = ""

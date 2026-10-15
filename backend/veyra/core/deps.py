@@ -87,6 +87,22 @@ def _token_principal(request: Request, db: Session, settings: Settings, raw: str
     if resolved is None:
         raise unauthorized("The token has expired or was revoked. Sign in again.")
     token, user = resolved
+    if token.kind == api_tokens.KIND_INTEGRATION:
+        from veyra.integrations import tokens as integration_tokens
+
+        integration = integration_tokens.by_token(db, token)
+        if integration is None:
+            raise unauthorized("The token has expired or was revoked.")
+        if not integration_tokens.address_allowed(integration, client_ip(request, settings)):
+            raise ProblemError(
+                403,
+                "Address not allowed",
+                "This integration token may not be used from this address.",
+                code="address_not_allowed",
+            )
+        principal = integration_tokens.principal_for(integration, token)
+        request.state.principal = principal
+        return principal
     if user.must_change_password:
         raise ProblemError(
             403,

@@ -38,7 +38,10 @@ An administrator adds an **identity provider** under System → Sign-in:
 | Enabled | The provider stays saved while it is off. |
 
 The redirect URI that the administrator enters in the provider's console is
-shown on the page: `https://<host>/api/v1/auth/sso/<provider id>/callback`.
+the same for every provider and is shown in the *Add provider* dialog before
+anything is saved: `https://<host>/api/v1/auth/sso/callback` (the state
+names the attempt and therefore the provider). `<host>` is
+`VEYRA_PUBLIC_HOST` when it is set, otherwise the address the browser used.
 
 Several providers can be enabled at once, each with its own button. SAML is
 out of scope: Google and Microsoft both speak OpenID Connect.
@@ -74,7 +77,12 @@ Failures send the person back to the sign-in page with a plain message,
 such as "This Google account is not allowed to sign in" or "No Veyra account
 for this address; ask an administrator". Every success and failure is
 audited (`auth.sso.login`, `auth.sso.failed` with the reason, no tokens),
-and the existing sign-in rate limits apply to `/start` and `/callback`.
+and `/start` has its own sign-in rate limit (the callback needs none: its
+state is single-use and unguessable). The callback answers with a small
+page that continues to `next`, so the strict session cookie is sent with
+the next navigation even though the provider's redirect was cross-site;
+the cookie binding the attempt to the browser is `SameSite=Lax` for the
+same reason.
 
 ### 1.3 Matching accounts
 
@@ -95,7 +103,8 @@ and the existing sign-in rate limits apply to `/start` and `/callback`.
 
 ### 1.4 Password policy with SSO
 
-Organization setting **"Require single sign-on"** (off by default): when it
+Installation setting **"Require single sign-on"** (System → Sign-in, off by
+default; providers are installation-wide too until multi-tenancy): when it
 is on, accounts with an SSO link can no longer sign in with a password (the
 password form says "Use Sign in with Google"), and password reset links are
 not issued for them. The recovery administrator is always exempt. Accounts
@@ -131,12 +140,13 @@ as well:
 
 **No clicks:** with the policy key `ssoProvider` (managed storage, set in the
 Google Admin console alongside `serverUrl`), the extension first tries the
-flow silently (`interactive: false`). For Google it adds
-`login_hint=<the Chrome profile's address>` (from
-`chrome.identity.getProfileUserInfo`, which needs the `identity` and
-`identity.email` permissions) and `prompt=none`. On a managed Chromebook,
-where the person is already signed in to Google, the extension then signs
-in by itself on first start. If the provider needs interaction (first
+flow silently (`interactive: false`, which adds `prompt=none`), at start-up
+and at most once an hour while signed out. The extension needs only the
+`identity` permission, which shows no warning; it does not read the
+profile's address (`identity.email` would add a warning), so Google uses
+the account the browser is signed in to. On a managed Chromebook, where
+the person is already signed in to Google, the extension then signs in by
+itself on first start, listed as "Managed browser" under Connected apps. If the provider needs interaction (first
 consent, or a different account), the silent attempt fails quietly and the
 popup shows the "Sign in with Google" button.
 
@@ -185,7 +195,8 @@ anywhere (directory, reports).
 | `paging.send` | `POST /pages/{id}/send` (the door-alert case) |
 | `calls.read` | Active calls |
 | `calls.originate` | Click-to-dial for a given extension |
-| `call_history.read` | Call history and its CSV export |
+| `calls.history.read` | The call history |
+| `calls.history.export` | The call history as CSV |
 | `directory.read` | The directory (extensions, ring groups, queues) |
 | `reports.read` | Saved reports and their results |
 | `bells.write` | Ring a bell schedule now |
@@ -226,16 +237,20 @@ Webhooks belong to an organization and see only that organization's events.
 | `call.ringing` | An extension starts ringing | extension number and name, caller number and name, call id |
 | `call.answered` | An extension answers | as above |
 | `call.ended` | A call record is written (from the call history import) | direction, from, to, extension(s), DID, trunk, queue/ring group, started, answered, ended, ring and talk seconds, outcome |
-| `voicemail.message` | A new voicemail message is left | box number and name, caller, duration, received (never the audio) |
-| `page.sent` | A page starts | page name and number, zones, how it was started (phone, schedule, interface, integration) |
+| `voicemail.message` | A new voicemail message is left | box number and name, new, old and urgent message counts (from Asterisk's `externnotify`, which carries no caller details; never the audio) |
+| `page.sent` | Veyra starts a recorded page | page name and number, zones, recording, how it was started (`ui`, `api`, `bell`) and by whom; pages dialled from a phone are not reported |
 | `bell.rang` | A bell schedule rings | schedule, calendar event title, page |
-| `alert.raised` / `alert.resolved` | A reporting alert changes state (M10) | rule name, value, threshold |
+| `alert.raised` / `alert.resolved` | A monitoring alert changes state (M10) | rule, title, subject, message, details |
 | `registration.changed` | A phone registers or unregisters | extension, device, address, user agent |
 | `deployment.finished` | A configuration deployment ends | revision, result |
 | `webhook.test` | "Send test" on the page | none |
 
+Alerts and deployments belong to the installation, not an organization:
+every organization with a webhook subscribed to them gets the event.
 Modules can declare more events in their manifest (`events.publishes`,
-M11). An administrator can subscribe to them once the module is enabled.
+M11). An administrator can subscribe to them once the module is enabled;
+the event goes to the organization named by `organization_id` in its
+payload, or to every subscribed organization without one.
 
 ### 3.3 Envelope
 
@@ -292,10 +307,13 @@ Webhook URLs come from administrators, but the requests come from the
 server, so Veyra refuses destinations that would reach inside the server
 itself:
 
-* loopback, link-local (including `169.254.169.254`), multicast, and the
-  server's own addresses are refused, after DNS resolution, for every
-  attempt (the resolved address is pinned for the connection, so DNS
-  rebinding does not help);
+* loopback, link-local (including `169.254.169.254`), multicast,
+  unspecified and reserved addresses, and the addresses the server's own
+  name resolves to, are refused, after DNS resolution, for every attempt
+  (the resolved address is pinned for the connection, so DNS rebinding
+  does not help). This protects what listens on loopback only (the API,
+  PostgreSQL, ARI); the server's LAN address is treated like any host on
+  the network, because what listens there is reachable from it anyway;
 * private networks (RFC 1918, ULA) **are allowed**, because local door
   controllers and screens are the point;
 * the response body is read up to 4 KB, only for the delivery log;
@@ -314,26 +332,29 @@ out of scope (open question §9).
 New permission keys: `sso.read` and `sso.write` (identity providers,
 installation-wide administrators), `integrations.read` and
 `integrations.write` (organization), `webhooks.read` and `webhooks.write`
-(organization). The Administrator role gets all of them; the Organization
-administrator role gets the integration and webhook keys.
+(organization). Platform administrators hold all of them; the Organization
+Administrator role gets the integration and webhook keys.
 
 ```
 GET  /auth/sso/providers                     public: enabled providers for the sign-in page
 GET  /auth/sso/{id}/start                    begins the flow (web or companion)
-GET  /auth/sso/{id}/callback                 provider redirect
+GET  /auth/sso/callback                      provider redirect (one address for all)
 POST /auth/companion/sso                     one-time code + verifier -> Companion token
 
 GET/POST          /identity-providers
-GET/PATCH/DELETE  /identity-providers/{id}
+GET/PUT/DELETE    /identity-providers/{id}
+GET               /identity-providers/redirect-uri   the address for the provider's console
+GET/PUT           /identity-providers/policy         require_sso
 POST              /identity-providers/{id}/test      discovery + JWKS reachable
 GET/DELETE        /users/{id}/identities[/{identity id}]
 
 GET/POST          /integrations
-GET/PATCH/DELETE  /integrations/{id}
+GET               /integrations/scopes
+GET/PUT/DELETE    /integrations/{id}
 POST              /integrations/{id}/rotate          returns the new token once
 
 GET/POST          /webhooks
-GET/PATCH/DELETE  /webhooks/{id}
+GET/PUT/DELETE    /webhooks/{id}
 POST              /webhooks/{id}/test
 POST              /webhooks/{id}/rotate-secret
 GET               /webhooks/{id}/deliveries
@@ -344,12 +365,12 @@ GET               /webhooks/events                    the catalog, including mod
 ## 6. Interface
 
 * **Sign-in page**: one button per enabled provider above the password
-  form. When an organization requires SSO, the password form folds behind
-  "Sign in with a password" for the recovery administrator.
-* **System → Sign-in** (new): the providers, each with its redirect URI to
-  copy, a "Test" button, and the setup steps for Google and Microsoft.
+  form, and the provider's or Veyra's reason when a sign-in is refused.
+* **System → Sign-in** (new): the providers with the redirect URI to copy,
+  a "Test" button, the "Require single sign-on" policy and the setup steps
+  for Google and Microsoft.
 * **Users → user**: a "Sign-in" card with linked identities and "Unlink".
-* **Settings → Integrations** (new page, organization): two tabs.
+* **System → Integrations** (new page): two tabs.
   * **Tokens**: list (name, scopes, last used, expires), create dialog with
     scopes and allowed addresses, token shown once with a copy button and a
     curl example.

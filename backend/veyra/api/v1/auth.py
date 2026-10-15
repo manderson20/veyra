@@ -37,6 +37,7 @@ from veyra.core.security.sessions import (
     load_principal,
     revoke_user_sessions,
 )
+from veyra.integrations import sso
 from veyra.version import __version__
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -309,6 +310,24 @@ def check_credentials(
         db.commit()
         raise failure
 
+    if sso.password_blocked(db, user):
+        audit.record(
+            db,
+            action="auth.login",
+            outcome="denied",
+            actor_user_id=user.id,
+            actor_label=user.email,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={"reason": "sso_required"},
+        )
+        db.commit()
+        raise ProblemError(
+            403,
+            "Single sign-on required",
+            "This account signs in with its organization's sign-in button, not a password.",
+            code="sso_required",
+        )
     if user.password_hash and passwords.needs_rehash(user.password_hash):
         user.password_hash = passwords.hash_password(password)
     user.failed_login_count = 0

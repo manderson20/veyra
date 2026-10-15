@@ -11,6 +11,7 @@ import type {
   MyExtension,
   RecentCall,
 } from "./types";
+import type { SsoProvider } from "./sso";
 
 export interface ErrorResult {
   status: "error";
@@ -25,6 +26,12 @@ export type LoginRequest = {
   password: string;
   device: string;
 };
+export type SsoLoginRequest = {
+  type: "ssoLogin";
+  serverUrl: string;
+  providerId: string;
+  device: string;
+};
 export type VerifyRequest = { type: "verify"; challenge: string; code: string; device: string };
 export type LogoutRequest = { type: "logout" };
 export type DialRequest = { type: "dial"; number: string; extensionId?: string };
@@ -34,6 +41,7 @@ export type StateRequest = { type: "state" };
 
 export type Request =
   | LoginRequest
+  | SsoLoginRequest
   | VerifyRequest
   | LogoutRequest
   | DialRequest
@@ -59,6 +67,8 @@ export interface StateResult {
   serverUrl: string | null;
   /** Set when an administrator preloaded the server through browser policy. */
   managedServerUrl: string | null;
+  /** Sign-in providers of the server, shown as buttons while signed out. */
+  providers: SsoProvider[];
   user: CompanionUser | null;
   extensions: MyExtension[];
   preferences: CompanionPreferences;
@@ -66,7 +76,7 @@ export interface StateResult {
   connection: ConnectionState;
 }
 
-export type ResponseFor<R extends Request> = R extends LoginRequest | VerifyRequest
+export type ResponseFor<R extends Request> = R extends LoginRequest | VerifyRequest | SsoLoginRequest
   ? LoginResult
   : R extends LogoutRequest
     ? LogoutResult

@@ -6,9 +6,9 @@ import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { TotpEnrolment } from "@/components/account/TotpEnrolment";
 import { AuthLayout } from "@/components/AuthLayout";
 import { BrandLogo } from "@/components/Brand";
-import { Button, Callout, LoadingState, TextField } from "@/components/ui";
+import { Button, buttonClass, Callout, LoadingState, TextField } from "@/components/ui";
 import { api, ApiError, errorMessage } from "@/lib/api";
-import type { MfaChallenge, SessionInfo, SetupStatus } from "@/lib/types";
+import type { MfaChallenge, SessionInfo, SetupStatus, SsoProviderPublic } from "@/lib/types";
 import { useSession } from "@/hooks/useSession";
 
 function safeNext(value: string | null): string {
@@ -33,7 +33,16 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
   const [stage, setStage] = useState<Stage>({ kind: "password" });
+  const [providers, setProviders] = useState<SsoProviderPublic[]>([]);
   const next = safeNext(params.get("next"));
+  const ssoError = params.get("sso_error");
+
+  useEffect(() => {
+    api
+      .get<SsoProviderPublic[]>("/auth/sso/providers", undefined, { noRedirect: true })
+      .then(setProviders)
+      .catch(() => setProviders([]));
+  }, []);
 
   const finish = async (s: SessionInfo | undefined) => {
     await refresh();
@@ -118,8 +127,19 @@ function LoginForm() {
       </div>
       <div>
         <h1 className="auth__title">Sign in</h1>
-        <p className="muted">Use your Veyra administrator account.</p>
+        <p className="muted">{providers.length ? "Use your organization's account, or your Veyra password." : "Use your Veyra account."}</p>
       </div>
+      {ssoError ? <Callout tone="danger">{ssoError}</Callout> : null}
+      {providers.length ? (
+        <div className="stack stack--sm">
+          {providers.map((p) => (
+            <a key={p.id} className={buttonClass("secondary", "md", true)} href={`/api/v1/auth/sso/${p.id}/start?next=${encodeURIComponent(next)}`}>
+              Sign in with {p.name}
+            </a>
+          ))}
+          <p className="subtle" style={{ textAlign: "center", margin: 0 }}>or with a password</p>
+        </div>
+      ) : null}
       <form className="stack stack--sm" onSubmit={submit} noValidate={false}>
         <TextField label="Email address" type="email" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
         <TextField label="Password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />

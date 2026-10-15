@@ -106,6 +106,9 @@ def db_ready(settings: Settings) -> Iterator[None]:
     # often than ten times a minute from one address.
     auth_mod._ip_limiter = None
     auth_mod._reset_limiter = None
+    import veyra.api.v1.sso as sso_mod
+
+    sso_mod._limiter = None
     _reset_database(settings.database_url)
     init_engine(settings)
     with session_scope() as db:

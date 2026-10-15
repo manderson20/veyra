@@ -225,6 +225,18 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         "Change what calls are recorded",
         default_roles=("org_admin",),
     ),
+    PermissionDef("sso.read", "View sign-in providers and policy", platform_only=True),
+    PermissionDef("sso.write", "Change sign-in providers and policy", platform_only=True),
+    PermissionDef("integrations.read", "View integration tokens", default_roles=("org_admin",)),
+    PermissionDef(
+        "integrations.write",
+        "Create, change and revoke integration tokens",
+        default_roles=("org_admin",),
+    ),
+    PermissionDef("webhooks.read", "View outgoing webhooks", default_roles=("org_admin",)),
+    PermissionDef(
+        "webhooks.write", "Create and change outgoing webhooks", default_roles=("org_admin",)
+    ),
     PermissionDef(
         "devices.read",
         "View devices",
