@@ -1,8 +1,7 @@
 # Milestone 14 Report — Multi-Tenancy
 
 Branch `milestone-14` (from `milestone-13` at 0.19.0). Design:
-[MULTI_TENANCY.md](../MULTI_TENANCY.md). Status: **complete, awaiting
-owner approval** (to be released as 0.20.0).
+[MULTI_TENANCY.md](../MULTI_TENANCY.md). Status: **approved 2026-10-15, released as 0.20.0.**
 
 ## 1. Scope (roadmap row 14)
 
@@ -99,3 +98,5 @@ Roadmap row 15: centralized instance management (0.21.0).
 
 * 2026-10-15: milestone started ("go ahead with M14"); built with the
   proposed defaults while the §10 questions are open.
+* 2026-10-15: approved ("M14 approved, go ahead with 0.20.0"); the §10
+  questions and the live two-organization test remain open.
