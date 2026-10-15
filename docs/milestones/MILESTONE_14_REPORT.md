@@ -100,3 +100,17 @@ Roadmap row 15: centralized instance management (0.21.0).
   proposed defaults while the §10 questions are open.
 * 2026-10-15: approved ("M14 approved, go ahead with 0.20.0"); the §10
   questions and the live two-organization test remain open.
+
+## Addendum (2026-10-15 15:46 UTC): 0.20.0 on dev1
+
+The owner upgraded dev1 from the M14 test build (0.19.0-782ee5d919) to the
+release build **0.20.0-80aec092b7** from `~/veyra-release` (dry run first,
+then the real run): backups taken, schema current (`0027`), all verify
+checks OK (`catalog-trust` warns, as expected without a catalog key).
+Multi-tenancy stays off.
+
+The owner also confirmed the intended behaviour: organizations never dial
+each other's extensions; one organization reaches another only through its
+external number, like any outside call (out through a trunk and back in on
+the other organization's DID). A future on-net shortcut for such calls was
+offered, not requested.
