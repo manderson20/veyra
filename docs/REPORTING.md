@@ -169,11 +169,11 @@ organization and says:
 The generator evaluates policies into the dialplan: where a matching call
 is about to be bridged (extension dial, ring group, queue, outbound route),
 it calls a `veyra-record` subroutine that plays the announcement once, sets
-`__VEYRA_REC` to a new identifier (the channel's `UNIQUEID`), copies it
+`__VEYRA_CALLREC` to a new identifier (the channel's `UNIQUEID`), copies it
 into `CDR(veyra_rec)` so the call record names the file, and starts
 `MixMonitor(<data>/recordings/<org>/<yyyy>/<mm>/<dd>/<id>.wav,b)` (`b`:
 only the bridged part, no ringing or hold music). Only one recording per
-call: the subroutine returns if `VEYRA_REC` is already set (a transfer
+call: the subroutine returns if `VEYRA_CALLREC` is already set (not `VEYRA_REC`, which the `*95` prompt recording already uses) (a transfer
 keeps recording into the same file).
 
 After the call the worker finds the file through the call's `rec` field,

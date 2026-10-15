@@ -887,6 +887,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         from veyra.reporting import cdr
 
                         pruned_calls = cdr.prune(db)
+                        from veyra.reporting import recordings
+
+                        pruned_recs = recordings.prune(db, settings.recordings_dir)
+                        if pruned_recs:
+                            log.info("Deleted %d recordings past their retention", pruned_recs)
                         if pruned_calls:
                             log.info("Pruned %d calls past the history retention", pruned_calls)
                     policy = db.get(UpdatePolicy, "veyra_core")
@@ -930,6 +935,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     cdr.process(db)
+                # Recordings of finished calls (docs/REPORTING.md §4.2).
+                from veyra.reporting import recordings
+
+                with session_scope() as db:
+                    recordings.process(db, settings.recordings_dir)
             with session_scope() as db:
                 if args.once or now - last_module_sync >= 60:
                     modules.sync_worker(db)

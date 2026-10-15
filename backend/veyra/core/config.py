@@ -171,6 +171,12 @@ class Settings(BaseSettings):
         return self.data_dir / "moh"
 
     @property
+    def recordings_dir(self) -> Path:
+        """Call recordings (docs/REPORTING.md §4): Asterisk writes WAV files to
+        ``incoming/``; the worker converts them into ``<org>/<yyyy>/<mm>/``."""
+        return self.data_dir / "recordings"
+
+    @property
     def mailqueue_dir(self) -> Path:
         """Outgoing messages waiting for the worker (voicemail notifications
         from Asterisk and, later, other notifications)."""
