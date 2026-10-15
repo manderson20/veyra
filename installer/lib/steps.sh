@@ -475,10 +475,13 @@ do_telephony() {
         run usermod -aG asterisk "$VEYRA_USER"
         ok "Added service account '$VEYRA_USER' to group asterisk (effective when the services restart below)"
     fi
+    # Call recordings (docs/REPORTING.md §4.2): Asterisk writes into incoming/,
+    # the worker converts and files them by organization and month.
     run install -d -m 2770 -o "$VEYRA_USER" -g asterisk "$VEYRA_DATA/prompts" \
-        "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" "$VEYRA_DATA/moh"
+        "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" "$VEYRA_DATA/moh" \
+        "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming"
     run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" \
-        "$VEYRA_DATA/moh"
+        "$VEYRA_DATA/moh" "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming"
     # Firmware images uploaded through the API, served by NGINX (www-data reads).
     run install -d -m 0755 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firmware"
     run systemctl enable asterisk

@@ -185,6 +185,30 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin",),
     ),
     PermissionDef(
+        "recordings.read",
+        "Listen to and download call recordings (every playback is audited)",
+        default_roles=("org_admin",),
+    ),
+    PermissionDef(
+        "recordings.read_own",
+        "Listen to recordings of your own calls",
+    ),
+    PermissionDef(
+        "recordings.manage",
+        "Hold, release and delete call recordings",
+        default_roles=("org_admin",),
+    ),
+    PermissionDef(
+        "recording_policies.read",
+        "View what calls are recorded",
+        default_roles=("org_admin", "site_admin", "read_only"),
+    ),
+    PermissionDef(
+        "recording_policies.write",
+        "Change what calls are recorded",
+        default_roles=("org_admin",),
+    ),
+    PermissionDef(
         "devices.read",
         "View devices",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),

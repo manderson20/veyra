@@ -23,7 +23,14 @@ from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError
-from veyra.core.models import CallLeg, CallRecord, Extension, Organization, SipTrunk
+from veyra.core.models import (
+    CallLeg,
+    CallRecord,
+    CallRecording,
+    Extension,
+    Organization,
+    SipTrunk,
+)
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
@@ -82,6 +89,9 @@ class LegOut(BaseModel):
 
 class CallDetailOut(CallOut):
     legs: list[LegOut]
+    # The recording, when one exists and has not been deleted (the caller
+    # still needs recordings.read to hear it).
+    recording_id: uuid.UUID | None = None
 
 
 def _outs(db: Session, rows: list[CallRecord]) -> list[CallOut]:
@@ -355,8 +365,14 @@ def get_call(
         select(CallLeg).where(CallLeg.call_id == call.id).order_by(CallLeg.start)
     ).all()
     base = _outs(db, [call])[0]
+    recording = db.scalar(
+        select(CallRecording.id).where(
+            CallRecording.call_id == call.id, CallRecording.deleted_at.is_(None)
+        )
+    )
     return CallDetailOut(
         **base.model_dump(),
+        recording_id=recording,
         legs=[
             LegOut(
                 start=leg.start,

@@ -187,7 +187,7 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm "$VEYRA_DATA")" == "750 veyra:asterisk" ]] \
         && check data-dir pass "750 veyra:asterisk" \
         || check data-dir fail "$VEYRA_DATA is $(perm "$VEYRA_DATA") (expected 750 veyra:asterisk)"
-    for d in prompts mailqueue mailqueue/failed moh; do
+    for d in prompts mailqueue mailqueue/failed moh recordings recordings/incoming; do
         [[ "$(perm "$VEYRA_DATA/$d")" == "2770 veyra:asterisk" ]] \
             && check "data-dir:$d" pass "2770 veyra:asterisk" \
             || check "data-dir:$d" fail "$VEYRA_DATA/$d is $(perm "$VEYRA_DATA/$d") (expected 2770 veyra:asterisk)"

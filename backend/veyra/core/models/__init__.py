@@ -49,6 +49,7 @@ from veyra.core.models.provisioning import (
     PagingZone,
     ProvisioningRequest,
 )
+from veyra.core.models.recording import CallRecording, RecordingPolicy
 from veyra.core.models.routing import (
     InboundRoute,
     OutboundRoute,
@@ -81,6 +82,7 @@ __all__ = [
     "CallLeg",
     "CallQueue",
     "CallRecord",
+    "CallRecording",
     "CallSample",
     "ClusterEvent",
     "ClusterNode",
@@ -122,6 +124,7 @@ __all__ = [
     "ProvisioningRequest",
     "ProvisioningTemplate",
     "QueueMember",
+    "RecordingPolicy",
     "RingGroup",
     "RingGroupMember",
     "Role",

@@ -113,6 +113,8 @@ DEFAULT_RING_SECONDS = 30
 # the adapter passes the installation's paths (veyra.core.config).
 DEFAULT_PROMPTS_DIR = "/var/lib/veyra/prompts"
 DEFAULT_MOH_DIR = "/var/lib/veyra/moh"
+DEFAULT_RECORDINGS_DIR = "/var/lib/veyra/recordings"
+CONTEXT_RECORD = "veyra-record"
 # Engine class of a hold music set (docs/PAGING_RECORDINGS.md §3.2).
 MOH_CLASS_PREFIX = "veyra-"
 MOH_BUILTIN = "default"
@@ -345,6 +347,7 @@ def generate(
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
     mailqueue_command: str = DEFAULT_MAILQUEUE_COMMAND,
     moh_dir: str = DEFAULT_MOH_DIR,
+    recordings_dir: str = DEFAULT_RECORDINGS_DIR,
 ) -> list[GeneratedFile]:
     sip = SipSettings.model_validate(snapshot.get("sip") or {})
     problems = sip.problems()
@@ -363,6 +366,7 @@ def generate(
         for o in (snapshot.get("organizations") or [])
         if o.get("hold_music")
     }
+    recording = _check_recording(list(snapshot.get("recording") or []))
     return [
         _transports(sip),
         _endpoints(
@@ -373,7 +377,15 @@ def generate(
             org_moh,
         ),
         _trunks(sip, trunks),
-        _dialplan(snapshot, extensions, trunks, boxes, prompts),
+        _dialplan(
+            snapshot,
+            extensions,
+            trunks,
+            boxes,
+            prompts,
+            recording,
+            _path(recordings_dir, "recordings directory"),
+        ),
         _rtp(sip),
         _voicemail(snapshot, boxes, _path(mailqueue_command, "mail queue command")),
         _queues(queues, extensions, prompts, moh),
@@ -728,13 +740,151 @@ def _trunks(sip: SipSettings, trunks: list[dict[str, Any]]) -> GeneratedFile:
     return GeneratedFile(FILE_TRUNKS, "\n".join(lines).rstrip("\n") + "\n", sensitive=sensitive)
 
 
+# ------------------------------------------------------------- recording
+# docs/REPORTING.md §4.2: policies become GosubIf lines in front of the
+# places a call is connected; the subroutine records once per call.
+
+_INBOUND = '"${VEYRA_DID}"!=""'
+_INTERNAL = '"${VEYRA_DID}"=""'
+
+
+def _check_recording(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for p in policies:
+        pid = str(p.get("id") or "")
+        if not re.fullmatch(r"[0-9a-f-]{36}", pid):
+            raise GenerationError(f"recording policy id {pid!r} is not valid")
+        org = _slug(p.get("organization") or "", f"organization of recording policy {pid}")
+        numbers = [str(n) for n in (p.get("extensions") or [])]
+        for n in numbers:
+            if not _NUMBER_RE.match(n):
+                raise GenerationError(f"recording policy {pid}: extension {n!r} is not valid")
+        out.append(
+            {
+                "id": pid,
+                "organization": org,
+                "organization_id": str(p.get("organization_id") or ""),
+                "inbound": bool(p.get("inbound")),
+                "outbound": bool(p.get("outbound")),
+                "internal": bool(p.get("internal")),
+                "all": bool(p.get("all")),
+                "extensions": set(numbers),
+                "endpoints": [
+                    _check_section(str(e), "recorded endpoint") for e in p.get("endpoints") or []
+                ],
+                "ring_groups": {
+                    _slug(g, "recorded ring group") for g in p.get("ring_groups") or []
+                },
+                "queues": {_slug(q, "recorded queue") for q in p.get("queues") or []},
+                "routes": {routing.normalize_did(str(d)) for d in p.get("routes") or []},
+                "announcement": _slug(p["announcement"], "announcement prompt")
+                if p.get("announcement")
+                else "",
+            }
+        )
+    return out
+
+
+def _gosub_record(p: dict[str, Any], cond: str) -> str:
+    ann = f"{p['organization']}/{p['announcement']}" if p["announcement"] else ""
+    return (
+        f" same => n,GosubIf($[{cond}]?{CONTEXT_RECORD},s,1({p['organization']},{p['id']},{ann}))"
+    )
+
+
+def _caller_in(endpoints: list[str]) -> str:
+    return '${REGEX("^(' + "|".join(re.escape(e) for e in endpoints) + ')$" ${CHANNEL(endpoint)})}'
+
+
+def _record_for_extension(
+    recording: list[dict[str, Any]], ext: dict[str, Any], prompts_dir: str
+) -> list[str]:
+    org, number = str(ext.get("organization") or ""), str(ext["number"])
+    out = []
+    for p in recording:
+        if p["organization"] != org:
+            continue
+        chosen = number in p["extensions"]
+        # "All inbound" is recorded where the call enters (the inbound route).
+        if p["inbound"] and not p["all"] and chosen:
+            out.append(_gosub_record(p, _INBOUND))
+        if p["internal"] and (p["all"] or chosen):
+            out.append(_gosub_record(p, _INTERNAL))
+        elif p["internal"] and p["endpoints"]:
+            # A chosen phone calling this one.
+            out.append(_gosub_record(p, f"{_INTERNAL} & {_caller_in(p['endpoints'])}"))
+    return out
+
+
+def _record_for_group(
+    recording: list[dict[str, Any]], org: str, kind: str, slug: str, prompts_dir: str
+) -> list[str]:
+    out = []
+    for p in recording:
+        if p["organization"] != org:
+            continue
+        chosen = slug in p[kind]
+        if p["inbound"] and not p["all"] and chosen:
+            out.append(_gosub_record(p, _INBOUND))
+        if p["internal"] and (p["all"] or chosen):
+            out.append(_gosub_record(p, _INTERNAL))
+    return out
+
+
+def _record_inbound(
+    recording: list[dict[str, Any]], route: dict[str, Any], prompts_dir: str
+) -> list[str]:
+    org_id = str(route.get("organization") or "")
+    did = str(route.get("did") or "")
+    return [
+        _gosub_record(p, "1")
+        for p in recording
+        if p["inbound"] and p["organization_id"] == org_id and (p["all"] or did in p["routes"])
+    ]
+
+
+def _record_outbound(recording: list[dict[str, Any]], prompts_dir: str) -> list[str]:
+    out = []
+    for p in recording:
+        if not p["outbound"]:
+            continue
+        cond = f'"${{VEYRA_ORG}}"="{p["organization"]}"'
+        if not p["all"]:
+            if not p["endpoints"]:
+                continue
+            cond += f" & {_caller_in(p['endpoints'])}"
+        out.append(_gosub_record(p, cond))
+    return out
+
+
+def _record_context(recordings_dir: str, prompts_dir: str) -> list[str]:
+    """ARG1 organization, ARG2 policy, ARG3 announcement (``<org>/<slug>``)."""
+    return [
+        "",
+        f"[{CONTEXT_RECORD}]",
+        "; Record a call once (docs/REPORTING.md §4.2); the worker converts the file.",
+        'exten => s,1,GotoIf($["${VEYRA_CALLREC}"!=""]?done)',
+        " same => n,Set(__VEYRA_CALLREC=${UNIQUEID})",
+        " same => n,Set(CDR(veyra_rec)=${VEYRA_CALLREC})",
+        ' same => n,GotoIf($["${ARG3}"=""]?start)',
+        f" same => n,Playback({prompts_dir}/${{ARG3}})",
+        f" same => n(start),MixMonitor({recordings_dir}/incoming/"
+        "${VEYRA_CALLREC}--${ARG2}.wav,b)",
+        " same => n(done),Return()",
+        "",
+    ]
+
+
 def _dialplan(
     snapshot: dict[str, Any],
     extensions: list[dict[str, Any]],
     trunks: list[dict[str, Any]],
     boxes: dict[str, dict[str, Any]] | None = None,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
+    recording: list[dict[str, Any]] | None = None,
+    recordings_dir: str = DEFAULT_RECORDINGS_DIR,
 ) -> GeneratedFile:
+    recording = recording or []
     name = _check_value(str(snapshot.get("installation", {}).get("name") or "Veyra"), "name")
     outbound = list(snapshot.get("outbound_routes") or [])
     inbound = list(snapshot.get("inbound_routes") or [])
@@ -829,9 +979,11 @@ def _dialplan(
         box = boxes.get(number)
         # The hint lets busy lamp fields follow the phone (RING_GROUPS_QUEUES.md §4.2).
         lines.append(f"exten => {number},hint,PJSIP/{endpoint}")
+        rec = _record_for_extension(recording, ext, prompts_dir)
         if box is None:
             lines += [
                 f"exten => {number},1,NoOp(Veyra extension {number})",
+                *rec,
                 f" same => n,Dial(PJSIP/{endpoint},{DEFAULT_RING_SECONDS})",
                 " same => n,Hangup()",
             ]
@@ -840,6 +992,7 @@ def _dialplan(
             # to the busy greeting (docs/VOICEMAIL_IVR.md §3.2).
             lines += [
                 f"exten => {number},1,NoOp(Veyra extension {number})",
+                *rec,
                 f" same => n,Dial(PJSIP/{endpoint},{int(box['ring_seconds'])})",
                 ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
                 f" same => n,VoiceMail({number}@{VOICEMAIL_CONTEXT},u)",
@@ -883,16 +1036,26 @@ def _dialplan(
         "",
     ]
     lines += _paging_contexts(snapshot.get("paging") or {}, prompts_dir)
-    lines += _outbound_contexts(outbound, trunk_info)
-    lines += _inbound_contexts(inbound, conditions, trunk_slugs)
+    lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir)
+    lines += _inbound_contexts(inbound, conditions, trunk_slugs, recording, prompts_dir)
     lines += _ivr_contexts(menus, prompts_dir)
-    lines += _ring_group_contexts(ring_groups, _check_moh(list(snapshot.get("hold_music") or [])))
-    lines += _queue_contexts(queues, prompts_dir)
+    lines += _ring_group_contexts(
+        ring_groups,
+        _check_moh(list(snapshot.get("hold_music") or [])),
+        recording,
+        prompts_dir,
+    )
+    lines += _queue_contexts(queues, prompts_dir, recording)
+    if recording:
+        lines += _record_context(recordings_dir, prompts_dir)
     return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
 
 
 def _outbound_contexts(
-    routes: list[dict[str, Any]], trunks: dict[str, dict[str, Any]]
+    routes: list[dict[str, Any]],
+    trunks: dict[str, dict[str, Any]],
+    recording: list[dict[str, Any]] | None = None,
+    prompts_dir: str = DEFAULT_PROMPTS_DIR,
 ) -> list[str]:
     """``veyra-outbound`` and one ``veyra-out-<slug>`` per route, emergency
     routes first (docs/TRUNKS_ROUTING.md §4, §6, §7)."""
@@ -931,6 +1094,7 @@ def _outbound_contexts(
             lines += [
                 f"exten => {exten},1,NoOp(Veyra outbound route {slug})",
                 f" same => n,Set(__VEYRA_ROUTE={slug})",
+                *_record_outbound(recording or [], prompts_dir),
             ]
             if emergency:
                 # The extension's emergency caller ID wins over the route's
@@ -994,7 +1158,11 @@ def _outbound_contexts(
 
 
 def _inbound_contexts(
-    routes: list[dict[str, Any]], conditions: dict[str, dict[str, Any]], trunk_slugs: list[str]
+    routes: list[dict[str, Any]],
+    conditions: dict[str, dict[str, Any]],
+    trunk_slugs: list[str],
+    recording: list[dict[str, Any]] | None = None,
+    prompts_dir: str = DEFAULT_PROMPTS_DIR,
 ) -> list[str]:
     """``veyra-from-trunk`` (shared DIDs), one ``veyra-from-trunk-<slug>`` per
     trunk (its restricted DIDs, then the shared ones, then its fallback), and
@@ -1026,6 +1194,7 @@ def _inbound_contexts(
             f"exten => {did},1,NoOp(Veyra inbound {did} via ${{VEYRA_TRUNK}})",
             " same => n,Set(__VEYRA_HOPS=1)",
             f" same => n,Set(__VEYRA_DID={did})",
+            *_record_inbound(recording or [], r, prompts_dir),
         ]
         out += _destination_lines(r, conditions)
         for alias in routing.did_aliases(did):
@@ -1249,7 +1418,10 @@ def _group_epilogue(what: str, name: str, failover: Any) -> list[str]:
 
 
 def _ring_group_contexts(
-    groups: list[dict[str, Any]], moh: dict[str, dict[str, Any]] | None = None
+    groups: list[dict[str, Any]],
+    moh: dict[str, dict[str, Any]] | None = None,
+    recording: list[dict[str, Any]] | None = None,
+    prompts_dir: str = DEFAULT_PROMPTS_DIR,
 ) -> list[str]:
     """One ``veyra-rg-<slug>`` per enabled ring group (docs/RING_GROUPS_QUEUES.md §2)."""
     lines: list[str] = []
@@ -1281,6 +1453,7 @@ def _ring_group_contexts(
             moh_class = _moh_class(g.get("hold_music"), moh or {}, f"ring group {slug}")
             dial_opts = f",m({moh_class})"
         lines += _group_prologue(f"{CONTEXT_RING_GROUP_PREFIX}{slug}", "ring group", name, org)
+        lines += _record_for_group(recording or [], org, "ring_groups", slug, prompts_dir)
         prefix = g.get("caller_id_prefix")
         if prefix:
             lines.append(
@@ -1327,7 +1500,11 @@ def _ring_group_contexts(
     return lines
 
 
-def _queue_contexts(queues: list[dict[str, Any]], prompts_dir: str) -> list[str]:
+def _queue_contexts(
+    queues: list[dict[str, Any]],
+    prompts_dir: str,
+    recording: list[dict[str, Any]] | None = None,
+) -> list[str]:
     """One ``veyra-queue-<slug>`` per enabled queue (docs/RING_GROUPS_QUEUES.md §3)."""
     lines: list[str] = []
     seen: set[str] = set()
@@ -1345,6 +1522,7 @@ def _queue_contexts(queues: list[dict[str, Any]], prompts_dir: str) -> list[str]
         if wait and not 30 <= wait <= 3600:
             raise GenerationError(f"queue {slug}: maximum wait {wait} is out of range")
         lines += _group_prologue(f"{CONTEXT_QUEUE_PREFIX}{slug}", "queue", name, org)
+        lines += _record_for_group(recording or [], org, "queues", slug, prompts_dir)
         lines.append(" same => n,Answer()")
         announcement = q.get("announcement_prompt")
         if announcement:

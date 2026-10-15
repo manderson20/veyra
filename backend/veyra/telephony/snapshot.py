@@ -45,6 +45,7 @@ from veyra.core.models import (
     PickupGroupMember,
     Prompt,
     QueueMember,
+    RecordingPolicy,
     RingGroup,
     RingGroupMember,
     SipTrunk,
@@ -58,7 +59,7 @@ from veyra.telephony import moh
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 9
+SNAPSHOT_VERSION = 10
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -207,7 +208,62 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         **groups,
         **_routing(db, key, active, extensions, targets),
         "paging": _paging(db, active, org_slug, ext_by_id),
+        "recording": _recording(db, active, org_slug, ext_by_id, ring_groups, queues),
     }
+
+
+def _recording(
+    db: Session,
+    active: set[Any],
+    org_slug: dict[Any, str],
+    ext_by_id: dict[Any, Extension],
+    ring_groups: list[RingGroup],
+    queues: list[CallQueue],
+) -> list[dict[str, Any]]:
+    """Enabled recording policies of active organizations (docs/REPORTING.md
+    §4), with their targets as the generator names them."""
+    prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
+    routes = {r.id: r for r in db.scalars(select(InboundRoute)).all()}
+    group_slug = {g.id: g.slug for g in ring_groups}
+    queue_slug = {q.id: q.slug for q in queues}
+    out = []
+    policies = db.scalars(
+        select(RecordingPolicy)
+        .where(RecordingPolicy.is_enabled.is_(True))
+        .order_by(RecordingPolicy.name)
+    ).all()
+    for pol in policies:
+        if pol.organization_id not in active:
+            continue
+        if not (pol.inbound or pol.outbound or pol.internal):
+            continue
+        prompt = prompts.get(pol.announcement_prompt_id) if pol.announcement_prompt_id else None
+        out.append(
+            {
+                "id": str(pol.id),
+                "organization": org_slug.get(pol.organization_id, ""),
+                "organization_id": str(pol.organization_id),
+                "inbound": pol.inbound,
+                "outbound": pol.outbound,
+                "internal": pol.internal,
+                "all": pol.scope == "all",
+                "extensions": sorted(
+                    ext_by_id[i].number for i in pol.extension_ids or [] if i in ext_by_id
+                ),
+                "endpoints": sorted(
+                    ext_by_id[i].endpoint_name for i in pol.extension_ids or [] if i in ext_by_id
+                ),
+                "ring_groups": sorted(
+                    group_slug[i] for i in pol.ring_group_ids or [] if i in group_slug
+                ),
+                "queues": sorted(queue_slug[i] for i in pol.queue_ids or [] if i in queue_slug),
+                "routes": sorted(routes[i].did for i in pol.inbound_route_ids or [] if i in routes),
+                "announcement": prompt.slug
+                if prompt is not None and prompt.organization_id == pol.organization_id
+                else None,
+            }
+        )
+    return out
 
 
 PAGING_BASE_PORT = 40000
