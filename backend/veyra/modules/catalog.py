@@ -374,3 +374,13 @@ def _restart_result(db: Any, value: dict[str, Any]) -> None:
         db.add(SystemSetting(key=RESTART_RESULT_KEY, value=value))
     else:
         result.value = value
+
+
+def confirm_restart(db: Any) -> None:
+    """At worker start: a restart that was "started" has finished."""
+    from veyra.core.models import SystemSetting
+    from veyra.core.models.base import utcnow
+
+    row = db.get(SystemSetting, RESTART_RESULT_KEY)
+    if row is not None and isinstance(row.value, dict) and row.value.get("state") == "started":
+        row.value = {**row.value, "state": "done", "ok": True, "finished_at": utcnow().isoformat()}
