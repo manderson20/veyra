@@ -10,6 +10,7 @@
  * extension page imports at run time (the pages import types only). */
 
 import { readManaged } from "./lib/managed";
+import { challengeOf, newVerifier, parseRedirect, startUrl, type SsoProvider } from "./lib/sso";
 import { ApiError, SignedOut, VeyraClient, describeError, normalizeServerUrl } from "./lib/api";
 import { isCallEvent, parseStreamEvent, type ListenerState } from "./lib/events";
 import type {
@@ -212,6 +213,81 @@ async function handleLogin(
   }
 }
 
+/**
+ * Sign in through one of the server's identity providers (docs/INTEGRATIONS.md
+ * §1.6). With `interactive` false nothing is shown: it works when the browser
+ * profile is already signed in to the provider (a managed Chromebook) and the
+ * server's OAuth client is trusted, and fails quietly otherwise.
+ */
+async function handleSsoLogin(
+  serverUrl: string,
+  providerId: string,
+  device: string,
+  interactive: boolean,
+): Promise<LoginResult> {
+  const origin = normalizeServerUrl(serverUrl);
+  if (origin === null) {
+    return { status: "error", code: "bad_server_url", detail: "Enter the server address as https://host." };
+  }
+  if (!(await hostPermissionGranted(origin)) && !(interactive && (await ensureHostPermission(origin)))) {
+    return {
+      status: "error",
+      code: "permission_denied",
+      detail: `Veyra Companion needs permission to contact ${origin}.`,
+    };
+  }
+  const redirect = chrome.identity.getRedirectURL("sso");
+  const verifier = newVerifier();
+  const url = startUrl(origin, providerId, redirect, await challengeOf(verifier), !interactive);
+  let responseUrl: string | undefined;
+  try {
+    responseUrl = await chrome.identity.launchWebAuthFlow({ url, interactive });
+  } catch (error) {
+    log("web auth flow ended", error);
+    return { status: "error", code: "cancelled", detail: "Sign-in was cancelled." };
+  }
+  const outcome = parseRedirect(responseUrl ?? "", redirect);
+  if ("error" in outcome) {
+    return { status: "error", code: outcome.error, detail: outcome.message };
+  }
+  await setStored({ serverUrl: origin });
+  try {
+    const session = await new VeyraClient(origin, null).post<CompanionSession>("/api/v1/auth/companion/sso", {
+      code: outcome.code,
+      code_verifier: verifier,
+      device,
+    });
+    await completeSignIn(origin, session);
+    return { status: "ok" };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+const SILENT_RETRY_MS = 60 * 60 * 1000;
+let lastSilentAttempt = 0;
+
+/** Managed installs with `ssoProvider`: sign in by themselves, at most hourly. */
+async function silentSignIn(): Promise<void> {
+  const managed = await readManaged();
+  if (!managed.serverUrl || !managed.ssoProvider) return;
+  const stored = await getStored();
+  if (stored.token || Date.now() - lastSilentAttempt < SILENT_RETRY_MS) return;
+  lastSilentAttempt = Date.now();
+  // device.ts is imported by the popup; this bundle stays self-contained.
+  const result = await handleSsoLogin(managed.serverUrl, managed.ssoProvider, "Managed browser", false);
+  log("silent sign-in", result.status === "ok" ? "ok" : result);
+}
+
+async function providersOf(origin: string | null): Promise<SsoProvider[]> {
+  if (!origin || !(await hostPermissionGranted(origin))) return [];
+  try {
+    return await new VeyraClient(origin, null).get<SsoProvider[]>("/api/v1/auth/sso/providers");
+  } catch {
+    return [];
+  }
+}
+
 async function handleVerify(challenge: string, code: string, device: string): Promise<LoginResult> {
   const serverUrl = await getStoredKey("serverUrl");
   if (!serverUrl) {
@@ -336,11 +412,13 @@ async function handleState(): Promise<StateResult> {
   const stored = await getStored();
   const managed = await readManaged();
   const signedIn = Boolean(stored.serverUrl && stored.token);
+  const serverUrl = stored.serverUrl ?? managed.serverUrl ?? null;
   return {
     status: "ok",
     signedIn,
-    serverUrl: stored.serverUrl ?? managed.serverUrl ?? null,
+    serverUrl,
     managedServerUrl: managed.serverUrl,
+    providers: signedIn ? [] : await providersOf(serverUrl ? normalizeServerUrl(serverUrl) : null),
     user: signedIn ? (stored.user ?? null) : null,
     extensions: signedIn ? (stored.extensions ?? []) : [],
     preferences: preferencesOf(stored),
@@ -682,16 +760,16 @@ async function applyManagedConfig(): Promise<void> {
 }
 
 chrome.storage.managed?.onChanged?.addListener(() => {
-  void applyManagedConfig();
+  void applyManagedConfig().then(silentSignIn);
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  void applyManagedConfig();
+  void applyManagedConfig().then(silentSignIn);
   void startup();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void applyManagedConfig();
+  void applyManagedConfig().then(silentSignIn);
   void startup();
 });
 
@@ -753,6 +831,8 @@ async function dispatch(request: Request): Promise<Response> {
   switch (request.type) {
     case "login":
       return handleLogin(request.serverUrl, request.email, request.password, request.device);
+    case "ssoLogin":
+      return handleSsoLogin(request.serverUrl, request.providerId, request.device, true);
     case "verify":
       return handleVerify(request.challenge, request.code, request.device);
     case "logout":

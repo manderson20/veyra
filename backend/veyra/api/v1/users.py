@@ -34,6 +34,8 @@ from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security import api_tokens, mfa, password_reset, passwords
 from veyra.core.security.principal import Principal
 from veyra.core.security.sessions import active_sessions, revoke_user_sessions
+from veyra.integrations import sso
+from veyra.integrations.tokens import SERVICE_AUTH_SOURCE
 
 router = APIRouter(tags=["users"])
 
@@ -41,7 +43,8 @@ router = APIRouter(tags=["users"])
 def _user_scope(principal: Principal, permission: str) -> Select[User]:
     """Platform grants see everyone; organization grants see users whose home
     organization (or any role assignment) is in one of their organizations."""
-    stmt = select(User)
+    # Integration service accounts (docs/INTEGRATIONS.md §2.1) are not people.
+    stmt = select(User).where(User.auth_source != SERVICE_AUTH_SOURCE)
     orgs = principal.organization_ids_with(permission)
     if orgs is None:
         return stmt
@@ -353,7 +356,9 @@ def create_password_reset_link(
         )
     if not user.is_active:
         raise conflict("The account is disabled. Enable it before resetting the password.")
-    if user.auth_source != "local" and not user.is_recovery_admin:
+    if (user.auth_source != "local" and not user.is_recovery_admin) or sso.password_blocked(
+        db, user
+    ):
         raise conflict("This account signs in through an external identity provider.")
     token, row = password_reset.issue_reset_token(
         db, user, settings, issued_by=principal.label, issued_from_ip=ctx.ip

@@ -2,7 +2,7 @@
 "use client";
 
 import { Badge, Callout, Card, ErrorState, LoadingState, useToast } from "@/components/ui";
-import type { CompanionInfo } from "@/lib/types";
+import type { CompanionInfo, SsoProviderPublic } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
 /**
@@ -13,6 +13,7 @@ import { useApiData } from "@/hooks/useApiData";
  */
 export function CompanionDeploymentCard() {
   const info = useApiData<CompanionInfo>("/companion/info");
+  const providers = useApiData<SsoProviderPublic[]>("/auth/sso/providers");
   const toast = useToast();
   const copy = async (label: string, value: string) => {
     try {
@@ -24,7 +25,10 @@ export function CompanionDeploymentCard() {
   };
   const d = info.data;
   const origin = typeof window !== "undefined" ? window.location.origin : "https://…";
-  const policy = JSON.stringify({ serverUrl: origin }, null, 2);
+  // With a sign-in provider, the extension signs in through it by itself
+  // (silently on managed Chrome: docs/INTEGRATIONS.md §1.6).
+  const sso = providers.data?.[0];
+  const policy = JSON.stringify(sso ? { serverUrl: origin, ssoProvider: sso.id } : { serverUrl: origin }, null, 2);
 
   return (
     <Card title="Companion extension deployment" subtitle="Push the Veyra Companion to users' browsers without anyone installing it by hand.">
@@ -70,7 +74,7 @@ export function CompanionDeploymentCard() {
               <li>Devices → Chrome → Apps &amp; extensions → Users &amp; browsers; pick the organizational unit.</li>
               <li>Click the + button → <em>Add Chrome app or extension by ID</em> → <em>From a custom URL</em>; paste the Extension ID and the Update URL.</li>
               <li>Set the installation policy to <em>Force install</em> (or <em>Force install + pin to toolbar</em>). The extension then appears for every user in that unit, with the server&apos;s host permission granted.</li>
-              <li>Under <em>Policy for extensions</em> paste the JSON above, so the server address is preloaded and locked; users only sign in.</li>
+              <li>Under <em>Policy for extensions</em> paste the JSON above, so the server address is preloaded and locked; users only sign in.{sso ? <> With <span className="mono">ssoProvider</span> set, the extension signs in with {sso.name} by itself on a managed Chromebook (mark Veyra&apos;s OAuth client as trusted: System → Sign-in).</> : null}</li>
               <li>Optional: to let users click <em>Add to Chrome</em> from their account page instead, add the install-source pattern under Chrome → Settings → Users &amp; browsers → <em>Extension install sources</em> (policy ExtensionInstallSources).</li>
             </ol>
             <p className="subtle">

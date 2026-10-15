@@ -30,6 +30,7 @@ from veyra.core.models import (
     SystemSetting,
 )
 from veyra.core.models.base import utcnow
+from veyra.integrations import sources, webhooks
 
 log = logging.getLogger("veyra.reporting")
 
@@ -334,8 +335,14 @@ def fold(call: CallRecord, legs: list[CallLeg], d: Directory, now: datetime) -> 
     call.is_final = call.ended_at is not None and now - call.ended_at >= SETTLE
 
 
-def ingest(db: Session, lines: Iterable[str], now: datetime | None = None) -> int:
-    """Store new legs and refold their calls; returns the number of legs."""
+def ingest(
+    db: Session,
+    lines: Iterable[str],
+    now: datetime | None = None,
+    finished: list[CallRecord] | None = None,
+) -> int:
+    """Store new legs and refold their calls; returns the number of legs. Calls
+    that became complete are added to ``finished``."""
     now = now or utcnow()
     cdrs = [c for c in (parse_line(line) for line in lines) if c is not None]
     if not cdrs:
@@ -372,11 +379,16 @@ def ingest(db: Session, lines: Iterable[str], now: datetime | None = None) -> in
     db.flush()
     for call in touched.values():
         legs = list(db.scalars(select(CallLeg).where(CallLeg.call_id == call.id)))
+        was_final = call.is_final
         fold(call, legs, d, now)
+        if finished is not None and call.is_final and not was_final:
+            finished.append(call)
     return len(cdrs)
 
 
-def settle(db: Session, now: datetime | None = None) -> int:
+def settle(
+    db: Session, now: datetime | None = None, finished: list[CallRecord] | None = None
+) -> int:
     """Mark calls complete once their legs stopped arriving."""
     now = now or utcnow()
     calls = db.scalars(
@@ -384,6 +396,8 @@ def settle(db: Session, now: datetime | None = None) -> int:
     ).all()
     for c in calls:
         c.is_final = True
+        if finished is not None:
+            finished.append(c)
     return len(calls)
 
 
@@ -406,8 +420,13 @@ def prune(db: Session, now: datetime | None = None) -> int:
 def process(db: Session, reader: CdrReader | None = None) -> int:
     """One worker pass: read, ingest, settle."""
     lines = (reader or CdrReader()).read(db)
-    n = ingest(db, lines)
-    settle(db)
+    finished: list[CallRecord] = []
+    n = ingest(db, lines, finished=finished)
+    settle(db, finished=finished)
+    # Outgoing webhooks (docs/INTEGRATIONS.md §3.2): one call.ended per call.
+    if finished and webhooks.subscribed(db, "call.ended"):
+        for call in finished:
+            sources.call_ended(db, call)
     if n:
         log.info("Call history: %d CDRs read", n)
     return n

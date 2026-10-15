@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from veyra.core.events import Event, bus
 from veyra.core.models import BellRing, BellSchedule, Calendar, CalendarEvent, Page
 from veyra.core.models.base import utcnow
+from veyra.integrations import webhooks
 
 log = logging.getLogger("veyra.bells")
 
@@ -107,6 +108,18 @@ def ring(db: Session, adapter: Any, now: datetime | None = None) -> list[BellRin
             )
             row.outcome = "started" if started else "failed"
             row.detail = {**row.detail, "message": message, "channel": channel}
+            webhooks.emit(
+                db,
+                schedule.organization_id,
+                "bell.rang",
+                {
+                    "schedule": {"id": str(schedule.id), "name": schedule.name},
+                    "event": ev.summary,
+                    "due_at": due.isoformat(),
+                    "page": {"id": str(page.id), "name": page.name},
+                    "outcome": row.outcome,
+                },
+            )
             db.commit()
             rings.append(row)
             # Modules react to bells (the AND clocks module shows the event's

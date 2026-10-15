@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { ConnectedAppsCard } from "@/components/account/ConnectedAppsCard";
 import { SessionsTable } from "@/components/account/SessionsTable";
+import { UserIdentitiesCard } from "@/components/integrations/UserIdentitiesCard";
 import {
   Badge,
   Button,
@@ -218,6 +219,7 @@ function UserView() {
           />
         </Card>
       ) : null}
+      <UserIdentitiesCard userId={u.id} editable={editable} />
       {editable && !isSelf ? <UserSessionsCard user={u} /> : null}
       {editable && !isSelf ? (
         <ConnectedAppsCard listPath={`/users/${u.id}/tokens`} revokeAllPath={`/users/${u.id}/tokens`} revokeOne={false} title="Connected apps (Companion)" showDownload={false} />

@@ -74,7 +74,7 @@ export interface CompanionChallenge {
 }
 
 export interface DirectoryEntry {
-  type: "extension";
+  type: "extension" | "ring_group" | "queue";
   id: string;
   number: string;
   name: string;

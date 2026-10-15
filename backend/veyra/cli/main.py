@@ -791,6 +791,25 @@ def poll_calendars_and_ring_bells(db: Any, settings: Any, log: Any) -> None:
         log.exception("Bell scheduler pass failed")
 
 
+def deliver_webhooks(settings: Any, log: Any) -> None:
+    from veyra.core.db import session_scope
+    from veyra.core.security.crypto import try_load_installation_key
+    from veyra.integrations import sources, webhooks
+
+    try:
+        with session_scope() as db:
+            sources.voicemail_notifications(db, settings.mailqueue_dir)
+        key = try_load_installation_key(settings)
+        if key is None:
+            return
+        with session_scope() as db:
+            sent = webhooks.deliver_due(db, lambda enc: key.decrypt(enc, webhooks.SECRET_PURPOSE))
+            if sent:
+                log.info("Webhooks: %d delivery attempt(s)", sent)
+    except Exception:
+        log.exception("Webhook pass failed")
+
+
 def ensure_prompt_dirs(db: Any, settings: Any) -> None:
     """Every active organization gets its prompt folder and ``incoming``
     sub-folder, so ``*95`` recordings from phones have a place to land before
@@ -861,6 +880,9 @@ def cmd_worker(args: argparse.Namespace) -> int:
     last_full = last_module_sync = -1e9
     # Enabled modules' event handlers and periodic tasks (module API 1.1).
     modules = ModuleManager(settings, bus)
+    from veyra.integrations import sources as webhook_sources
+
+    webhook_sources.subscribe(bus)
     while True:
         now = time.monotonic()
         if args.once or now - last_full >= args.interval:
@@ -905,6 +927,10 @@ def cmd_worker(args: argparse.Namespace) -> int:
                             log.info("Deleted %d recordings past their retention", pruned_recs)
                         if pruned_calls:
                             log.info("Pruned %d calls past the history retention", pruned_calls)
+                        from veyra.integrations import sso, webhooks
+
+                        sso.prune(db)
+                        webhooks.prune(db)
                     policy = db.get(UpdatePolicy, "veyra_core")
                     last = db.scalar(
                         select(UpdateCheck).order_by(UpdateCheck.checked_at.desc()).limit(1)
@@ -967,6 +993,10 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         from veyra.telephony.metrics import prune, record_sample
 
                         record_sample(db, get_adapter(settings))
+                        # Phone registrations for webhooks (docs/INTEGRATIONS.md §3.2).
+                        from veyra.integrations import sources as webhook_sources
+
+                        webhook_sources.registrations(db, get_adapter(settings))
                         if time.monotonic() - last_metrics_prune >= 3600 or args.once:
                             prune(db)
                             last_metrics_prune = time.monotonic()
@@ -993,6 +1023,9 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     queue_log.process(db)
+            # Outgoing webhooks (docs/INTEGRATIONS.md §3.5): voicemail
+            # notifications in, due deliveries out.
+            deliver_webhooks(settings, log)
             with session_scope() as db:
                 if args.once or now - last_module_sync >= 60:
                     modules.sync_worker(db)

@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Directory lookup for every signed-in user (docs/COMPANION.md §4): the
-enabled extensions, and the people they belong to, in the organizations the
-caller holds ``directory.read`` in."""
+enabled extensions, the people they belong to, and the ring groups and queues
+(docs/INTEGRATIONS.md §4), in the organizations the caller holds
+``directory.read`` in."""
 
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 from veyra.api.v1.extensions import _registrations
 from veyra.core.db import get_db
 from veyra.core.deps import require
-from veyra.core.models import Extension, Organization, User
+from veyra.core.models import CallQueue, Extension, Organization, RingGroup, User
 from veyra.core.security.principal import Principal
 
 router = APIRouter(prefix="/directory", tags=["directory"])
@@ -24,7 +25,7 @@ LIMIT = 50
 
 
 class DirectoryEntry(BaseModel):
-    type: str = "extension"
+    type: str = "extension"  # extension | ring_group | queue
     id: uuid.UUID
     number: str
     name: str
@@ -82,4 +83,39 @@ def directory(
         )
         for e, o, u in rows[:LIMIT]
     ]
-    return DirectoryOut(results=results, total=len(rows[:LIMIT]))
+    # Ring groups and queues (docs/INTEGRATIONS.md §4), after the people.
+    room = LIMIT - len(results)
+    groups: list[tuple[type[RingGroup] | type[CallQueue], str]] = [
+        (RingGroup, "ring_group"),
+        (CallQueue, "queue"),
+    ]
+    for model, kind in groups:
+        if room <= 0:
+            break
+        gstmt = (
+            select(model.id, model.number, model.name, Organization.name)
+            .join(Organization, Organization.id == model.organization_id)
+            .where(Organization.is_active.is_(True), model.is_enabled.is_(True))
+        )
+        if orgs is not None:
+            gstmt = gstmt.where(model.organization_id.in_(orgs or {uuid.UUID(int=0)}))
+        if q and q.strip():
+            like = f"%{q.strip()}%"
+            gstmt = gstmt.where(or_(model.number.ilike(like), model.name.ilike(like)))
+        for gid, number, name, org_name in db.execute(
+            gstmt.order_by(model.number).limit(room)
+        ).all():
+            results.append(
+                DirectoryEntry(
+                    type=kind,
+                    id=gid,
+                    number=number,
+                    name=name,
+                    organization=org_name,
+                    user_display_name=None,
+                    user_email=None,
+                    registered=None,
+                )
+            )
+        room = LIMIT - len(results)
+    return DirectoryOut(results=results, total=len(results))

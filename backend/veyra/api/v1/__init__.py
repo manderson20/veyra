@@ -24,6 +24,7 @@ from veyra.api.v1 import (
     firmware,
     ha,
     hold_music,
+    integrations,
     ivr,
     me,
     module_catalog,
@@ -43,12 +44,14 @@ from veyra.api.v1 import (
     setup,
     sites,
     smtp,
+    sso,
     system,
     telephony,
     trunks,
     updates,
     users,
     voicemail,
+    webhooks,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -56,6 +59,7 @@ for r in (
     auth,
     auth_mfa,
     auth_companion,
+    sso,
     setup,
     system,
     organizations,
@@ -98,6 +102,8 @@ for r in (
     directory,
     events,
     companion,
+    integrations,
+    webhooks,
 ):
     api_router.include_router(r.router)
 api_router.include_router(reports.saved_router)

@@ -105,6 +105,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.telephony = get_adapter(settings)
     app.state.templates = TemplateCatalog.from_paths(settings.template_paths)
     app.state.callevents = CallEventHub()
+    # Module events to outgoing webhooks (docs/INTEGRATIONS.md §3.2).
+    from veyra.integrations import sources as webhook_sources
+
+    webhook_sources.subscribe(bus)
     app.state.modules.app = app
 
     @app.middleware("http")

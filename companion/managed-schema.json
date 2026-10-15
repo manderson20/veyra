@@ -8,6 +8,10 @@
     "dialPrefix": {
       "type": "string",
       "description": "Default outside-line prefix for new users (digits)."
+    },
+    "ssoProvider": {
+      "type": "string",
+      "description": "Sign in through this Veyra sign-in provider (its id, from System > Sign-in). On a managed Chromebook the extension then signs in by itself."
     }
   }
 }

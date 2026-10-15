@@ -28,6 +28,14 @@ from veyra.core.models.identity import (
     UserPreference,
     UserSession,
 )
+from veyra.core.models.integrations import (
+    IdentityProvider,
+    Integration,
+    SsoRequest,
+    UserIdentity,
+    Webhook,
+    WebhookDelivery,
+)
 from veyra.core.models.metrics import CallSample
 from veyra.core.models.paging import Page, PageLog, PageMember, PageZone, PagingZoneMember
 from veyra.core.models.platform import (
@@ -103,9 +111,11 @@ __all__ = [
     "FirewallFeed",
     "FirewallRule",
     "FirmwareImage",
+    "IdentityProvider",
     "InboundRoute",
     "Installation",
     "InstalledModule",
+    "Integration",
     "IvrEntry",
     "IvrMenu",
     "MfaMethod",
@@ -140,14 +150,18 @@ __all__ = [
     "SavedReport",
     "SipTrunk",
     "Site",
+    "SsoRequest",
     "SystemSetting",
     "TimeCondition",
     "UpdateCheck",
     "UpdateHistory",
     "UpdatePolicy",
     "User",
+    "UserIdentity",
     "UserPreference",
     "UserSession",
     "VoicemailBox",
     "VoicemailBoxMember",
+    "Webhook",
+    "WebhookDelivery",
 ]

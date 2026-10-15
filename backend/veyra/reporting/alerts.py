@@ -225,6 +225,22 @@ def check_firewall(db: Session, now: datetime, threshold: int) -> list[Finding]:
 # --------------------------------------------------------------- evaluate
 
 
+def _webhook(db: Session, event: str, a: Alert) -> None:
+    from veyra.integrations import webhooks
+
+    webhooks.emit_all(
+        db,
+        event,
+        {
+            "rule": a.rule,
+            "title": RULES[a.rule].title if a.rule in RULES else a.rule,
+            "subject": a.subject,
+            "message": a.message,
+            "details": a.details,
+        },
+    )
+
+
 def evaluate(
     db: Session,
     findings: list[Finding],
@@ -258,6 +274,7 @@ def evaluate(
         if a.state == "pending" and now - a.first_seen_at >= timedelta(minutes=rule.delay_minutes):
             a.state, a.raised_at = "raised", now
             notify(rule, a, "raised")
+            _webhook(db, "alert.raised", a)
             a.last_notified_at = now
         elif (
             a.state == "raised" and a.last_notified_at and now - a.last_notified_at >= REMIND_AFTER
@@ -271,6 +288,7 @@ def evaluate(
             db.delete(a)  # it went away before anyone needed to know
             continue
         a.state, a.cleared_at = "cleared", now
+        _webhook(db, "alert.resolved", a)
         cleared_rule = rules.get(a.rule)
         if cleared_rule is not None and cleared_rule.is_enabled:
             notify(cleared_rule, a, "cleared")

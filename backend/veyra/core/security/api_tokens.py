@@ -22,18 +22,22 @@ from veyra.core.models.base import utcnow
 from veyra.core.security import tokens
 
 TOKEN_PREFIX = "vyc_"  # noqa: S105 (a public prefix, not a secret)
+# Integration tokens (docs/INTEGRATIONS.md §2): an organization's, not a person's;
+# no idle expiry, only the integration's own expiry date.
+INTEGRATION_PREFIX = "vyi_"
 KIND_COMPANION = "companion"
+KIND_INTEGRATION = "integration"
 # What a companion token may do, whatever the user's roles allow beyond it.
 COMPANION_SCOPES: tuple[str, ...] = ("calls.originate", "calls.read", "directory.read", "me")
 _TOUCH_INTERVAL = timedelta(seconds=60)
 
 
-def new_token() -> str:
-    return TOKEN_PREFIX + secrets.token_urlsafe(32)
+def new_token(prefix: str = TOKEN_PREFIX) -> str:
+    return prefix + secrets.token_urlsafe(32)
 
 
 def looks_like_token(value: str) -> bool:
-    return value.startswith(TOKEN_PREFIX) and 40 <= len(value) <= 80
+    return value.startswith((TOKEN_PREFIX, INTEGRATION_PREFIX)) and 40 <= len(value) <= 80
 
 
 def issue(
@@ -88,6 +92,12 @@ def resolve(
     token, user = row
     if token.revoked_at is not None or token.expires_at <= now or not user.is_active:
         return None
+    if token.kind == KIND_INTEGRATION:
+        if token.last_used_at is None or now - token.last_used_at >= _TOUCH_INTERVAL:
+            token.last_used_at = now
+            token.last_used_ip = ip
+            db.commit()
+        return token, user
     hard_limit = token.created_at + timedelta(days=settings.companion_token_max_days)
     if hard_limit <= now:
         return None

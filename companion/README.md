@@ -40,7 +40,11 @@ and an update manifest (`/api/v1/companion/update.xml`). Settings → Companion
 extension deployment in the web interface lists the extension ID, the update
 URL and the Admin Console steps (force-install from a custom URL, policy JSON
 `{"serverUrl": "https://<server>"}` to preload the server). See
-`docs/COMPANION.md` §5.1.
+`docs/COMPANION.md` §5.1. With a sign-in provider (System → Sign-in), add
+`"ssoProvider": "<provider id>"`: the extension then signs in through the
+provider by itself on a managed Chromebook (`docs/INTEGRATIONS.md` §1.6).
+An unpacked development build has its own extension ID; list it in
+`VEYRA_COMPANION_DEV_EXTENSION_IDS` on the server to use single sign-on.
 
 ## Load unpacked
 

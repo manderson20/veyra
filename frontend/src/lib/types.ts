@@ -2100,3 +2100,129 @@ export interface ModuleConfigField {
   choices?: string[] | null;
   scope?: "installation" | "organization";
 }
+
+// --- Integrations (docs/INTEGRATIONS.md) ------------------------------------
+
+export interface SsoProviderPublic {
+  id: string;
+  kind: "google" | "microsoft" | "oidc";
+  name: string;
+}
+
+export type JitRole = "standard_user" | "read_only" | "technician" | "site_admin" | "org_admin";
+
+export interface IdentityProviderOut {
+  id: string;
+  kind: "google" | "microsoft" | "oidc";
+  name: string;
+  issuer: string;
+  client_id: string;
+  has_secret: boolean;
+  allowed_domains: string[];
+  organization_id: string;
+  create_accounts: boolean;
+  default_role_key: JitRole;
+  enabled: boolean;
+  redirect_uri: string;
+  linked_users: number;
+  metadata_fetched_at: string | null;
+  created_at: string;
+}
+
+export interface IdentityProviderInput {
+  kind: "google" | "microsoft" | "oidc";
+  name: string;
+  issuer?: string | null;
+  client_id: string;
+  client_secret?: string | null;
+  allowed_domains: string[];
+  organization_id: string;
+  create_accounts: boolean;
+  default_role_key: JitRole;
+  enabled: boolean;
+}
+
+export interface ProviderTestOut {
+  ok: boolean;
+  message: string;
+  authorization_endpoint: string | null;
+  keys: number;
+}
+
+export interface UserIdentityOut {
+  id: string;
+  provider_id: string;
+  provider_name: string;
+  email: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface IntegrationScope {
+  key: string;
+  description: string;
+}
+
+export interface IntegrationOut {
+  id: string;
+  organization_id: string;
+  name: string;
+  scopes: string[];
+  allowed_networks: string[];
+  expires_at: string | null;
+  expired: boolean;
+  token_prefix: string;
+  last_used_at: string | null;
+  last_used_ip: string | null;
+  created_at: string;
+  created_by: string;
+}
+
+export interface IntegrationTokenOut extends IntegrationOut {
+  token: string;
+}
+
+export interface WebhookEventDef {
+  name: string;
+  group: string;
+  description: string;
+  live: boolean;
+  module: string | null;
+}
+
+export interface WebhookOut {
+  id: string;
+  organization_id: string;
+  name: string;
+  url: string;
+  allow_http: boolean;
+  events: string[];
+  enabled: boolean;
+  disabled_reason: string | null;
+  failing_since: string | null;
+  last_delivery_at: string | null;
+  last_status: "delivered" | "failed" | null;
+  pending: number;
+  created_at: string;
+  created_by: string;
+}
+
+export interface WebhookSecretOut extends WebhookOut {
+  secret: string;
+}
+
+export interface WebhookDeliveryOut {
+  id: string;
+  event: string;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  max_attempts: number;
+  created_at: string;
+  next_attempt_at: string;
+  delivered_at: string | null;
+  response_code: number | null;
+  duration_ms: number | null;
+  error: string | null;
+  response_excerpt: string | null;
+  payload: Record<string, unknown>;
+}

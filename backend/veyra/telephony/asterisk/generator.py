@@ -14,6 +14,7 @@ dialplan change never touches SIP registrations and vice versa.
 from __future__ import annotations
 
 import json
+import posixpath
 import re
 from typing import Any
 
@@ -1675,6 +1676,8 @@ def _voicemail(
         "message ${VM_MSGNUM} from ${VM_CALLERID}, received ${VM_DATE}, "
         "${VM_DUR} long.\\n\\nThis message was sent by Veyra.",
         f"mailcmd={mailqueue_command}",
+        # New-message counts for the voicemail.message webhook (docs/INTEGRATIONS.md §3.2).
+        f"externnotify={posixpath.join(posixpath.dirname(mailqueue_command), 'veyra-vmnotify')}",
         "",
         "[zonemessages]",
     ]

@@ -441,3 +441,15 @@ class Deployer:
             target_id=rev.id,
             details={"sequence": rev.sequence, "engine": rev.engine, **details},
         )
+        from veyra.integrations import webhooks
+
+        webhooks.emit_all(
+            db,
+            "deployment.finished",
+            {
+                "revision": rev.sequence,
+                "engine": rev.engine,
+                "result": outcome,
+                "error": details.get("error"),
+            },
+        )
