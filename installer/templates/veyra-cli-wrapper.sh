@@ -15,5 +15,20 @@ if [[ "$(id -u)" -ne 0 ]]; then
     echo "veyra: run with sudo (for example: sudo veyra status)" >&2
     exit 1
 fi
-# shellcheck disable=SC2016  # expanded by the inner shell
-exec runuser -u veyra -- bash -c 'set -a; . "$0"; set +a; exec "$1" "${@:2}"' "$ENV_FILE" "$VEYRA_BIN" "$@"
+as_veyra() {
+    # shellcheck disable=SC2016  # expanded by the inner shell
+    runuser -u veyra -- bash -c 'set -a; . "$0"; set +a; exec "$1" "${@:2}"' "$ENV_FILE" "$VEYRA_BIN" "$@"
+}
+# Firewall console recovery (docs/INSTALLATION.md): the database part runs as
+# the service account; removing the nftables table needs root, and must work
+# even when the database or the firewall service is down.
+if [[ "${1:-}" == "firewall" && "${2:-}" == "off" ]]; then
+    as_veyra firewall off --database-only || echo "veyra: the database was not updated; removing the table anyway" >&2
+    if nft delete table inet veyra 2>/dev/null; then
+        echo "Table inet veyra removed."
+    else
+        echo "Table inet veyra was not present."
+    fi
+    exit 0
+fi
+as_veyra "$@"
