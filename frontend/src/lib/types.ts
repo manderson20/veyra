@@ -1886,3 +1886,93 @@ export interface AlertItem {
   cleared_at: string | null;
   notify_error: string | null;
 }
+
+// ---------------------------------------------------------------- report builder (docs/REPORT_BUILDER.md)
+
+export type ReportGroup =
+  | "day" | "week" | "month" | "hour" | "weekday" | "direction" | "outcome" | "answered_by"
+  | "called_extension" | "calling_extension" | "did" | "trunk" | "queue" | "ring_group" | "caller";
+export type ReportMeasure =
+  | "calls" | "answered" | "missed" | "voicemail" | "answer_rate" | "avg_ring" | "total_ring"
+  | "avg_talk" | "total_talk" | "within_sl";
+export type ReportPeriodKind =
+  | "today" | "yesterday" | "last_7_days" | "last_30_days" | "this_week" | "last_week"
+  | "this_month" | "last_month" | "this_year" | "custom";
+
+export interface ReportFilters {
+  directions: CallDirection[];
+  outcomes: CallOutcome[];
+  extension_ids: string[];
+  dids: string[];
+  trunk_ids: string[];
+  queues: string[];
+  ring_groups: string[];
+  caller_contains: string | null;
+  min_talk_seconds: number | null;
+  business_hours: "any" | "inside" | "outside";
+  time_condition_id: string | null;
+}
+
+export interface ReportDefinition {
+  organization_id: string | null;
+  group_by: ReportGroup[];
+  measures: ReportMeasure[];
+  filters: ReportFilters;
+  period: { kind: ReportPeriodKind; from_date: string | null; to_date: string | null };
+  show_as: "table" | "bars" | "line";
+  sort_by: string | null;
+  sort_desc: boolean;
+  limit: number;
+  sl_seconds: number;
+}
+
+export interface ReportColumn {
+  key: string;
+  label: string;
+  kind: "group" | "measure";
+  unit?: "count" | "percent" | "seconds";
+}
+
+export interface ReportResult {
+  columns: ReportColumn[];
+  rows: ({ group: { key: string | null; label: string }[] } & Record<string, unknown>)[];
+  totals: Record<string, number>;
+  truncated: boolean;
+  period: { from: string; to: string; label: string; timezone: string };
+}
+
+export interface ReportOptions {
+  extensions: { id: string; label: string }[];
+  dids: string[];
+  trunks: { id: string; label: string }[];
+  queues: { id: string; label: string }[];
+  ring_groups: { id: string; label: string }[];
+  time_conditions: { id: string; label: string }[];
+  groups: Record<ReportGroup, string>;
+  measures: Record<ReportMeasure, { label: string; unit: string }>;
+}
+
+export interface ReportSchedule {
+  frequency: "daily" | "weekly" | "monthly";
+  hour: number;
+  weekday: number;
+  day: number;
+  recipients: string[];
+}
+
+export interface SavedReport {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  definition: ReportDefinition;
+  owner_user_id: string | null;
+  shared: boolean;
+  schedule: ReportSchedule | null;
+  next_run_at: string | null;
+  last_sent_at: string | null;
+  last_error: string | null;
+  can_edit: boolean;
+  created_at: string;
+  updated_at: string;
+}

@@ -79,6 +79,8 @@ export interface ApiOptions {
   /** Do not redirect to the sign-in page on 401 (used by the session probe). */
   noRedirect?: boolean;
   signal?: AbortSignal;
+  /** Return the body as text (CSV downloads) instead of parsing JSON. */
+  raw?: boolean;
 }
 
 export interface ApiDeps {
@@ -165,6 +167,7 @@ export function createApi(deps: ApiDeps = defaultDeps) {
     }
     if (res.status === 204) return undefined as T;
     const text = await res.text();
+    if (opts.raw) return text as T;
     return (text ? JSON.parse(text) : undefined) as T;
   }
 
