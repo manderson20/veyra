@@ -526,6 +526,17 @@ do_services() {
     begin services "Installing and starting Veyra services"
     local unit tmp units=()
     mapfile -t units < <(veyra_units)
+    # Modules from a catalog or uploaded (docs/MODULE_CATALOG.md §3), and the
+    # keys trusted to sign module catalogs.
+    run install -d -m 0750 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/module-store"
+    run install -d -m 0755 -o root -g root "$VEYRA_ETC/trust/catalog"
+    # Restart of Veyra's units from the interface (polkit; Veyra units only).
+    if [[ -d /etc/polkit-1/rules.d ]]; then
+        install_managed_file "$SCRIPT_DIR/templates/polkit/50-veyra-services.rules" \
+            /etc/polkit-1/rules.d/50-veyra-services.rules 0644 root:root
+    else
+        warn "polkit is not installed: Veyra's services cannot be restarted from the web interface"
+    fi
     # Before the units start (it is a ReadWritePaths entry). The firewall service keeps its last ruleset and feed lists here (docs/FIREWALL_TRUST.md §3.3).
     run install -d -m 0750 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firewall"
     for unit in "${units[@]}"; do
