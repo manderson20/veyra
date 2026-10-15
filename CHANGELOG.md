@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.19.0 — unreleased (Milestone 13)
+## 0.19.0 — 2026-10-15 (Milestone 13)
 
 ### Added
 - **Single sign-on** (System → Sign-in; [INTEGRATIONS.md](docs/INTEGRATIONS.md) §1): Google Workspace, Microsoft Entra ID or any OpenID Connect provider, with PKCE, nonce and signature checks (RS256/ES256), allowed domains (Google's hosted domain too), linking of existing accounts on first use, optional account creation with a chosen role, and "Require single sign-on" (the recovery administrator always keeps the password). One redirect address for every provider (migration `0026`).

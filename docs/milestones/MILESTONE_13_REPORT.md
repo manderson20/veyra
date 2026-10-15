@@ -1,8 +1,7 @@
 # Milestone 13 Report — Integrations
 
 Branch `milestone-13` (from `milestone-12` at 0.18.0). Design:
-[INTEGRATIONS.md](../INTEGRATIONS.md). Status: **complete, awaiting
-owner approval** (to be released as 0.19.0).
+[INTEGRATIONS.md](../INTEGRATIONS.md). Status: **approved 2026-10-15, released as 0.19.0.**
 
 ## 1. Scope (roadmap row 13)
 
@@ -105,3 +104,5 @@ community modules come first.
 
 * 2026-10-15: milestone started ("go ahead with M13"); built with the
   proposed defaults while the §9 questions are open.
+* 2026-10-15: approved ("M13 approved, go ahead with 0.19.0"); the §9
+  questions remain open.
