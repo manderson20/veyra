@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.17.0-dev — unreleased (Milestone 11)
+
+### Added
+- **Module catalog** (Module Manager → Catalog and Sources; [MODULE_CATALOG.md](docs/MODULE_CATALOG.md)): signed catalog indexes (keys in `/etc/veyra/trust/catalog/`) listing modules, versions and compatibility, checked daily; install and update from a catalog with the download checked against the index's checksum and the package against its publisher signature; modules live in `<data>/module-store`, searched before the release's own modules (migration `0024`).
+- **Upload** of `.vmod` packages from the interface, with the same checks.
+- **Rollback** to the previous version (refused when the newer version changed the module's database).
+- **Module settings** generated from a module's `[[config]]` fields; secrets stored encrypted.
+- **Restart Veyra services** from the interface after a module update (polkit rule for the service account, Veyra's units only; Asterisk is not restarted).
+- `veyra catalog add|sign|verify` for publishing a catalog.
+
 ## 0.16.0 — 2026-10-15 (Milestone 10b)
 
 ### Added

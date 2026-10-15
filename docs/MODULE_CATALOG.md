@@ -98,10 +98,11 @@ the owner**, offline or as GitHub Action secrets (open question §9).
 
 ## 3. Using the catalog in Veyra
 
-* **Catalog sources** (System → Modules → Catalog sources): a list of index
-  URLs, by default the Veyra catalog; each fetched by the worker once a day
-  and on demand, verified, and cached in the database (so the page works
-  offline).
+* **Catalog sources** (Module Manager → Sources): a list of index URLs; the
+  dialog suggests the Veyra catalog's address, but nothing is added until an
+  administrator does (and a catalog is used only once its key is trusted).
+  Each source is fetched by the worker once a day and on demand, verified,
+  and cached in the database (so the page works offline).
 * **Modules → Catalog**: every module with its latest compatible version,
   publisher, trust level (once downloaded: from its signature), what it
   needs (core API, dependencies) and release notes; *Install* or *Update*.
@@ -169,7 +170,7 @@ POST /modules/upload                      multipart .vmod
 POST /modules/{id}/update                 {version}
 POST /modules/{id}/rollback
 GET/PUT /modules/{id}/config              (?organization_id=)
-POST /system/restart-services             (modules.manage; worker restarts the units)
+POST /modules/restart-services            (modules.manage; the worker restarts the units)
 ```
 
 ## 8. Installer
@@ -204,4 +205,7 @@ installed, updated, rolled back; services restarted from the interface.
 
 ## 11. Decisions
 
-* 2026-10-15: milestone started on the owner's "go ahead with M11".
+* 2026-10-15: milestone started on the owner's "go ahead with M11"; built
+  with the proposed defaults of §9 while the questions are open (no keys are
+  created for the owner: Veyra uses a catalog only after its public key is
+  placed in `/etc/veyra/trust/catalog/`).

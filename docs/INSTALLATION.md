@@ -185,6 +185,17 @@ The reset link is valid for 24 hours and can be used once; the account is
 signed out everywhere when it is used. Administrators can do the same from
 a user's page in the UI.
 
+### Modules from a catalog
+
+A module catalog is used only when its index is signed by a key in
+`/etc/veyra/trust/catalog/` (one `<key-id>.pub` per catalog key, readable by
+all). Packages must also be signed by a publisher key in
+`/etc/veyra/trust/official/` (or `community`/`third_party`). Installed and
+updated modules live in `/var/lib/veyra/module-store`. The installer adds a
+polkit rule (`/etc/polkit-1/rules.d/50-veyra-services.rules`) that lets the
+`veyra` account restart Veyra's own units, so new module code can be loaded
+from the Module Manager; Asterisk is never restarted by it.
+
 ### Firewall recovery from the server console
 
 If a firewall setting locks you out, from the console (or any SSH session
