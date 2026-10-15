@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.16.0-dev — unreleased (Milestone 10b)
+## 0.16.0 — 2026-10-15 (Milestone 10b)
 
 ### Added
 - **Report builder** (Telephony → Reports → Build; [REPORT_BUILDER.md](docs/REPORT_BUILDER.md)): group calls by one or two of day, week, month, hour, weekday, direction, outcome, answering, called or calling extension, DID, trunk, queue, ring group or caller; measure calls, answered, missed, voicemail, answer rate, average and total ring and talk time, answered within a service level; filter by period (relative periods in the organization's time zone), direction, outcome, extensions, DIDs, trunks, queues, ring groups, caller, talk time and **business hours** from a time condition; show as a table, bars or a line; export CSV.

@@ -1,8 +1,7 @@
 # Milestone 10b Report — Report Builder
 
 Branch `milestone-10b` (from `main` at 0.15.0). Design:
-[REPORT_BUILDER.md](../REPORT_BUILDER.md). Status: **built and checked live
-on dev1, awaiting the owner's approval** (to be released as 0.16.0).
+[REPORT_BUILDER.md](../REPORT_BUILDER.md). Status: **approved 2026-10-15, released as 0.16.0.**
 
 ## 1. Scope (owner request of 2026-10-15)
 
@@ -83,4 +82,5 @@ module catalog (0.17.0).
 
 * 2026-10-15: report builder with scheduled email requested and placed
   before Milestone 11.
-* Approval: *pending*.
+* 2026-10-15: approved ("M10b approved, go ahead with 0.16.0"); released
+  as 0.16.0.
