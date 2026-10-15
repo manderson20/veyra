@@ -25,9 +25,9 @@ describe("navigation filtering", () => {
     expect(hrefs).not.toContain("/organizations/");
     expect(hrefs).not.toContain("/modules/");
     expect(nav.find((s) => s.id === "provisioning")).toBeUndefined();
-    // Planned features and Settings need no permission
+    // Settings needs no permission; every planned page has been built (M10).
     expect(hrefs).toContain("/settings/");
-    expect(hrefs.some((h) => h.startsWith("/planned/"))).toBe(true);
+    expect(hrefs.some((h) => h.startsWith("/planned/"))).toBe(false);
     // Extensions is a real page now and needs its permission
     expect(hrefs).not.toContain("/extensions/");
     const withExt = buildNav({ permissions: ["extensions.read"], isPlatformAdmin: false });
@@ -50,7 +50,6 @@ describe("navigation filtering", () => {
     const trunkHrefs = trunksOnly.flatMap((s) => s.items.map((i) => i.href));
     expect(trunkHrefs).toContain("/trunks/");
     expect(trunkHrefs).not.toContain("/routing/inbound/");
-    expect(trunksOnly.find((s) => s.id === "telephony")?.items.some((i) => i.planned)).toBe(true);
   });
 
   it("adds module navigation only with the module permission", () => {
@@ -95,7 +94,7 @@ describe("flyout columns", () => {
     const telephony = all.find((s) => s.id === "telephony")!;
     const groups = groupItems(telephony.items);
     expect(groups.map((g) => g.label)).toEqual([
-      "Phones and calls", "Routing", "Call handling", "Audio", "Paging and bells", "History and reports", "Coming later",
+      "Phones and calls", "Routing", "Call handling", "Audio", "Paging and bells", "History and reports",
     ]);
     expect(groups.flatMap((g) => g.items)).toHaveLength(telephony.items.length);
     // Single-page categories are direct links in the rail and need no column.

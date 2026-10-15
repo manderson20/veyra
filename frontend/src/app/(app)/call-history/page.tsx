@@ -19,6 +19,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { clock, DIRECTION, OUTCOME, party } from "@/components/calls/format";
+import { RecordingPlayer } from "@/components/calls/RecordingPlayer";
 import { API_BASE } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { CallHistoryDetail, CallHistoryItem, Page } from "@/lib/types";
@@ -47,6 +48,8 @@ function rangeQuery(range: string, from: string, to: string, anchor: number): { 
 }
 
 function CallDetail({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const { can } = useSession();
+  const canListen = can("recordings.read") || can("recordings.read_own");
   const detail = useApiData<CallHistoryDetail>(id ? `/calls/history/${id}` : null);
   const c = detail.data;
   return (
@@ -63,6 +66,12 @@ function CallDetail({ id, onClose }: { id: string | null; onClose: () => void })
             <dt>Talking</dt><dd>{clock(c.talk_seconds)}</dd>
             <dt>Organization</dt><dd>{c.organization_name ?? "—"}</dd>
           </dl>
+          {c.recording_id && canListen ? (
+            <div>
+              <p className="field__label" style={{ marginBottom: 6 }}>Recording</p>
+              <RecordingPlayer id={c.recording_id} />
+            </div>
+          ) : null}
           <div>
             <p className="field__label" style={{ marginBottom: 6 }}>Legs ({c.legs.length})</p>
             <ol className="list-plain">
