@@ -202,6 +202,23 @@ else
 fi
 # Modules shipped with the release are signed with this server's key
 # (docs/MODULE_DEVELOPMENT.md §6); the example module is unsigned on purpose.
+# --- certificate authority (docs/FIREWALL_TRUST.md §6.2)
+if [[ -s "$VEYRA_ETC/tls/ca.crt" ]]; then
+    if openssl verify -CAfile "$VEYRA_ETC/tls/ca.crt" "$VEYRA_ETC/tls/veyra.crt" >/dev/null 2>&1; then
+        check tls-ca pass "the HTTPS certificate is issued by the Veyra CA"
+    else
+        check tls-ca pass "the administrator's own certificate is in use (phones need its CA)"
+    fi
+    [[ "$(perm "$VEYRA_ETC/tls/ca.key")" == "600 root:root" ]] \
+        && check tls-ca-key pass "600 root:root" \
+        || check tls-ca-key fail "$VEYRA_ETC/tls/ca.key is $(perm "$VEYRA_ETC/tls/ca.key") (expected 600 root:root)"
+    cmp -s "$VEYRA_ETC/tls/ca.crt" "$VEYRA_ETC/veyra-ca.crt" \
+        && check tls-ca-public pass "public copy for the provisioning bootstrap is current" \
+        || check tls-ca-public fail "$VEYRA_ETC/veyra-ca.crt differs from the CA (re-run upgrade.sh); phones cannot be bootstrapped"
+else
+    check tls-ca warn "no Veyra CA yet (re-run upgrade.sh); phones cannot be bootstrapped to HTTPS"
+fi
+
 # --- firewall (docs/FIREWALL_TRUST.md §8)
 [[ "$(perm "$VEYRA_DATA/firewall")" == "750 veyra:veyra" ]] \
     && check firewall-dir pass "750 veyra:veyra" \

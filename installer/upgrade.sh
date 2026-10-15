@@ -124,6 +124,7 @@ if ! run /usr/local/bin/veyra db upgrade; then
 fi
 ok "Database schema is current"
 
+do_tls
 do_telephony
 do_services
 do_nginx
