@@ -84,3 +84,10 @@ module catalog (0.17.0).
   before Milestone 11.
 * 2026-10-15: approved ("M10b approved, go ahead with 0.16.0"); released
   as 0.16.0.
+
+## Addendum (2026-10-15 04:17 UTC): 0.16.0 on dev1
+
+The owner upgraded dev1 from `~/veyra-release` to the release build
+**0.16.0-b6934fec2a**: backups taken, schema current (0023), CA and
+certificate kept, Asterisk unchanged, all five Veyra services running, all
+verify checks OK. This build includes the CSV units fix from the live check.
