@@ -3,7 +3,7 @@
 
 from veyra.core.models.base import Base
 from veyra.core.models.bells import BellRing, BellSchedule, Calendar, CalendarEvent
-from veyra.core.models.calls import CallLeg, CallRecord
+from veyra.core.models.calls import CallLeg, CallRecord, QueueEvent
 from veyra.core.models.firewall import FirewallBan, FirewallEvent, FirewallFeed, FirewallRule
 from veyra.core.models.groups import (
     CallQueue,
@@ -123,6 +123,7 @@ __all__ = [
     "Prompt",
     "ProvisioningRequest",
     "ProvisioningTemplate",
+    "QueueEvent",
     "QueueMember",
     "RecordingPolicy",
     "RingGroup",

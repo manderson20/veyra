@@ -84,3 +84,21 @@ class CallLeg(UUIDPrimaryKey, Base):
     duration: Mapped[int] = mapped_column(Integer, default=0)
     billsec: Mapped[int] = mapped_column(Integer, default=0)
     rec: Mapped[str] = mapped_column(String(64), default="")
+
+
+class QueueEvent(UUIDPrimaryKey, Base):
+    """One line of Asterisk's queue_log for queue reports (docs/REPORTING.md
+    §5.1): ENTERQUEUE, CONNECT, ABANDON, EXITWITHTIMEOUT, COMPLETE*…"""
+
+    __tablename__ = "queue_events"
+    __table_args__ = (Index("ix_queue_events_queue_at", "queue", "at"),)
+
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    callid: Mapped[str] = mapped_column(String(64), index=True)
+    # The queue's slug (Asterisk name veyra-<slug> without the prefix).
+    queue: Mapped[str] = mapped_column(String(80))
+    agent: Mapped[str] = mapped_column(String(128), default="")
+    event: Mapped[str] = mapped_column(String(32))
+    data1: Mapped[str] = mapped_column(String(64), default="")
+    data2: Mapped[str] = mapped_column(String(64), default="")
+    data3: Mapped[str] = mapped_column(String(64), default="")

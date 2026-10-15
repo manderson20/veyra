@@ -153,17 +153,19 @@ def split_clid(clid: str) -> tuple[str | None, str | None]:
 
 
 class CdrReader:
-    """New complete lines of the CDR file since the stored cursor."""
+    """New complete lines of an append-only file since the cursor stored in
+    ``system_settings`` under ``key`` (the CDR file, the queue log)."""
 
-    def __init__(self, path: Path = CDR_FILE) -> None:
+    def __init__(self, path: Path = CDR_FILE, key: str = CURSOR_KEY) -> None:
         self.path = path
+        self.key = key
 
     def read(self, db: Session, max_bytes: int = 8 * 1024 * 1024) -> list[str]:
         try:
             st = self.path.stat()
         except OSError:
             return []
-        row = db.get(SystemSetting, CURSOR_KEY)
+        row = db.get(SystemSetting, self.key)
         cursor: dict[str, Any] = dict(row.value) if row and isinstance(row.value, dict) else {}
         pos = int(cursor.get("offset", 0))
         if cursor.get("inode") != st.st_ino or st.st_size < pos:
@@ -176,7 +178,7 @@ class CdrReader:
         end = data.rfind(b"\n") + 1
         value = {"inode": st.st_ino, "offset": pos + end}
         if row is None:
-            db.add(SystemSetting(key=CURSOR_KEY, value=value))
+            db.add(SystemSetting(key=self.key, value=value))
         else:
             row.value = value
         db.flush()
