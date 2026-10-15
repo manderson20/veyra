@@ -138,3 +138,12 @@ Roadmap row 16: high availability.
   questions are open.
 * 2026-10-15: approved ("M15 approved, go ahead with 0.21.0"); the §11
   questions, the browser checks and the two-organization test remain open.
+
+## Addendum (2026-10-15 19:52 UTC): 0.21.0 on dev1
+
+The owner upgraded dev1 from the M15 test build (0.20.0-1b62de19a6) to the
+release build **0.21.0-e5a12c6466** from `~/veyra-release` (dry run first,
+then the real run): backups taken, schema current (`0028`), all verify
+checks OK (`catalog-trust` warns, as expected without a catalog key). The
+central console is off; dev1 is not enrolled anywhere. This build includes
+the `/central/notice` fix from §3.
