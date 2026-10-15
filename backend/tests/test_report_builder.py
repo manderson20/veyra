@@ -217,6 +217,15 @@ def test_groupings_measures_filters(admin):
         },
     ).text
     assert csv_text.splitlines()[0] == "Direction,Calls" and csv_text.splitlines()[-1] == "Total,4"
+    units = admin.post(
+        f"{RUN}.csv",
+        json={
+            "organization_id": org["id"],
+            "period": period,
+            "measures": ["avg_talk", "answer_rate"],
+        },
+    ).text
+    assert units.splitlines()[0] == "Average talk (seconds),Answer rate (%)"
     opts = admin.get("/api/v1/reports/options", params={"organization_id": org["id"]}).json()
     assert opts["dids"] == ["5735550100"] and opts["time_conditions"][0]["label"] == "School hours"
 

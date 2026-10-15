@@ -467,7 +467,8 @@ def run(
 def to_csv(result: dict[str, Any]) -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow([c["label"] for c in result["columns"]])
+    unit = {"seconds": " (seconds)", "percent": " (%)"}
+    w.writerow([c["label"] + unit.get(c.get("unit", ""), "") for c in result["columns"]])
     groups = [c for c in result["columns"] if c["kind"] == "group"]
     measures = [c for c in result["columns"] if c["kind"] == "measure"]
     for row in result["rows"]:
