@@ -1824,4 +1824,50 @@ export interface CallLegItem {
 
 export interface CallHistoryDetail extends CallHistoryItem {
   legs: CallLegItem[];
+  /** The call's recording (listening needs recordings.read). */
+  recording_id: string | null;
+}
+
+// ---------------------------------------------------------------- call recording (docs/REPORTING.md §4)
+
+export interface RecordingPolicy {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  is_enabled: boolean;
+  inbound: boolean;
+  outbound: boolean;
+  internal: boolean;
+  scope: "all" | "selected";
+  extension_ids: string[];
+  ring_group_ids: string[];
+  queue_ids: string[];
+  inbound_route_ids: string[];
+  announcement_prompt_id: string | null;
+  retention_days: number;
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type RecordingPolicyInput = Omit<RecordingPolicy, "id" | "organization_name" | "problems" | "created_at" | "updated_at">;
+
+export interface CallRecordingItem {
+  id: string;
+  organization_id: string | null;
+  call_id: string | null;
+  policy_name: string | null;
+  started_at: string | null;
+  direction: CallDirection | null;
+  from_number: string | null;
+  from_name: string | null;
+  to_number: string | null;
+  duration_seconds: number;
+  size_bytes: number;
+  created_at: string;
+  delete_after: string | null;
+  held: boolean;
+  held_by: string | null;
+  deleted_at: string | null;
 }
