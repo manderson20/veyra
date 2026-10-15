@@ -27,6 +27,7 @@ import { formatDateTime, formatRelative } from "@/lib/format";
 import { browserTimeZone, timeZones } from "@/lib/timezones";
 import type {
   AvailableUpdate,
+  CentralNotice,
   MaintenanceWindow,
   Page,
   SystemPackages,
@@ -84,6 +85,7 @@ export default function UpdatesPage() {
   const packages = useApiData<SystemPackages>("/updates/system-packages");
   const [histOffset, setHistOffset] = useState(0);
   const history = useApiData<Page<UpdateHistoryItem>>("/updates/history", { limit: 10, offset: histOffset });
+  const central = useApiData<CentralNotice>("/central/notice");
   const [checking, setChecking] = useState(false);
   const [review, setReview] = useState<string | null>(null);
   const manage = can("updates.manage");
@@ -142,6 +144,12 @@ export default function UpdatesPage() {
         description="Veyra releases are signed. They are downloaded and verified here, and installed when you approve them or inside your maintenance window."
         actions={manage ? <Button icon="refresh" onClick={checkNow} loading={checking}>Check now</Button> : null}
       />
+
+      {central.data?.managed.updates ? (
+        <Callout tone="info" title="Managed by the central console">
+          {central.data.console_name ?? "The central console"} sets the update policy, source and recipients of this installation; changes made here are replaced at its next check-in. Under System → Central management you can take the update policy back.
+        </Callout>
+      ) : null}
 
       <InstallProgress active={installing} onFinished={() => { available.reload(); history.reload(); }} />
 
