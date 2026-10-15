@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.14.0-dev — unreleased (Milestone 9d)
+## 0.14.0 — 2026-10-15 (Milestone 9d)
 
 ### Added
 - **Firewall** (System → Firewall; [FIREWALL_TRUST.md](docs/FIREWALL_TRUST.md)): Veyra's own nftables table `inet veyra`, applied by the new `veyra-firewall` service (CAP_NET_ADMIN only) and never touching other tables. Automatic timed bans from Asterisk security events (unknown accounts, wrong SIP passwords), failed sign-ins and second factors, refused provisioning and NGINX rate limiting, scored per address over a window and doubling on repeat offences; a **permanent allow list** (this server, the SIP local networks and trunk addresses automatically, plus your own entries) that is checked first and never banned, with "would have been banned" events to find misconfigured phones; manual blocks per service and with expiry; per-service "allow list only" policy with confirm-or-revert after 60 s; blocklist feeds (CrowdSec local API as a bouncer, or HTTPS address lists); refusal of changes that would cut off the administrator (`firewall_self_block`). Off after installation and upgrade. Console recovery: `sudo veyra firewall off` (migration `0018`).
