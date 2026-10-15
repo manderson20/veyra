@@ -215,10 +215,23 @@ def update(
     )
 
 
+def _uninstall(
+    request: Request, db: Session, mgr: ModuleManager, module_id: str, purge: bool
+) -> None:
+    mgr.uninstall(db, get_engine(), module_id, purge=purge)
+    if purge:
+        # Copies from a catalog or an upload go with the data
+        # (docs/MODULE_CATALOG.md §3).
+        from veyra.modules.catalog import Store
+
+        Store(request.app.state.settings.module_store_dir).remove(module_id)
+
+
 @router.post("/{module_id}/uninstall", summary="Uninstall a module")
 def uninstall(
     module_id: str,
     body: UninstallIn,
+    request: Request,
     principal: Principal = Depends(require("modules.manage")),
     db: Session = Depends(get_db),
     mgr: ModuleManager = Depends(manager),
@@ -237,6 +250,6 @@ def uninstall(
         principal,
         db,
         ctx,
-        lambda: mgr.uninstall(db, get_engine(), module_id, purge=body.purge_data),
+        lambda: _uninstall(request, db, mgr, module_id, body.purge_data),
         details={"purge_data": body.purge_data},
     )

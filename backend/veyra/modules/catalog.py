@@ -260,6 +260,8 @@ class Store:
         return dest
 
     def _prune(self, module_id: str, keep_version: str | None) -> None:
+        if not self.versions.is_dir():
+            return
         for d in list(self.versions.iterdir()):
             m = _manifest_or_none(d)
             if m is not None and m.id == module_id and m.module.version != keep_version:
@@ -326,7 +328,11 @@ def refresh_due(db: Any, trust_dir: Path) -> int:
 def run_restart_request(db: Any, run: Any = None) -> bool:
     """Restart Veyra's units when an administrator asked for it
     (docs/MODULE_CATALOG.md §4). The polkit rule lets the service account
-    restart exactly these units; Asterisk is not touched."""
+    restart exactly these units; Asterisk is not touched.
+
+    The request is removed and committed *before* systemctl runs: the worker
+    is one of the units, systemd stops it right away, and an uncommitted
+    removal would make every new worker restart everything again."""
     import subprocess
 
     from veyra.core.models import SystemSetting
@@ -336,21 +342,35 @@ def run_restart_request(db: Any, run: Any = None) -> bool:
     if row is None:
         return False
     db.delete(row)
+    _restart_result(db, {"at": utcnow().isoformat(), "ok": None, "error": None, "state": "started"})
+    db.commit()
     cmd = ["systemctl", "restart", "--no-block", *VEYRA_UNITS]
     if run is None:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)  # noqa: S603
     else:
         res = run(cmd)
     ok = getattr(res, "returncode", 1) == 0
-    value = {
-        "at": utcnow().isoformat(),
-        "ok": ok,
-        "error": None if ok else (getattr(res, "stderr", "") or "systemctl failed").strip()[:500],
-    }
+    # Usually not reached when it worked: systemd stops this worker first.
+    _restart_result(
+        db,
+        {
+            "at": utcnow().isoformat(),
+            "ok": ok,
+            "error": None
+            if ok
+            else (getattr(res, "stderr", "") or "systemctl failed").strip()[:500],
+            "state": "done" if ok else "failed",
+        },
+    )
+    db.commit()
+    return ok
+
+
+def _restart_result(db: Any, value: dict[str, Any]) -> None:
+    from veyra.core.models import SystemSetting
+
     result = db.get(SystemSetting, RESTART_RESULT_KEY)
     if result is None:
         db.add(SystemSetting(key=RESTART_RESULT_KEY, value=value))
     else:
         result.value = value
-    db.commit()
-    return ok
