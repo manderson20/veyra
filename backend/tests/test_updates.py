@@ -95,5 +95,7 @@ def test_policy_rules():
             "timezone": "America/Chicago",
         },
     )
-    assert availability_problem(Component.VEYRA_CORE, auto) is not None
+    # Milestone 12: Veyra itself installs in a window; modules only notify.
+    assert availability_problem(Component.VEYRA_CORE, auto) is None
+    assert availability_problem(Component.MODULES, auto) is not None
     assert availability_problem(Component.OPERATING_SYSTEM, ok) is not None

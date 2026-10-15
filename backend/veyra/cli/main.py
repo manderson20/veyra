@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -323,7 +324,7 @@ def cmd_updates_record(args: argparse.Namespace) -> int:
                 started_at=utcnow(),
                 finished_at=utcnow(),
                 outcome=args.outcome,
-                initiated_by="upgrade.sh",
+                initiated_by=args.initiated_by,
                 backup_ref=args.backup_ref,
             )
         )
@@ -331,7 +332,7 @@ def cmd_updates_record(args: argparse.Namespace) -> int:
             db,
             action="updates.applied",
             actor_type="system",
-            actor_label="upgrade.sh",
+            actor_label=args.initiated_by,
             target_type=args.component,
             target_id=args.target,
             outcome="success" if args.outcome == "success" else "failure",
@@ -938,6 +939,22 @@ def cmd_worker(args: argparse.Namespace) -> int:
                     module_catalog.refresh_due(db, settings.trust_dir)
                     db.commit()
                     module_catalog.run_restart_request(db)
+                    # Veyra releases: finish, download, approve by policy and
+                    # start the root upgrade unit (docs/SOFTWARE_UPDATES.md).
+                    from veyra.updates import manager as update_manager
+
+                    def calls_in_progress() -> int | None:
+                        if settings.telephony_engine == "none":
+                            return 0
+                        from veyra.configmgmt.service import active_call_count
+                        from veyra.telephony import get_adapter
+
+                        return active_call_count(get_adapter(settings))
+
+                    update_manager.refresh_system_packages(db)
+                    update_manager.process(
+                        db, settings, Keyring.load(settings.trust_dir), calls_in_progress
+                    )
                     # Scheduled report emails (docs/REPORT_BUILDER.md §3).
                     from veyra.reporting import schedule as report_schedule
 
@@ -1162,6 +1179,68 @@ def cmd_catalog_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_release_build(args: argparse.Namespace) -> int:
+    from veyra.updates.release import ReleaseError, build
+
+    try:
+        dest = build(Path(args.source).resolve(), Path(args.out), allow_dirty=args.allow_dirty)
+    except ReleaseError as e:
+        print(f"Cannot build: {e}", file=sys.stderr)
+        return 1
+    print(f"Built {dest} ({dest.stat().st_size // 1024} KB)")
+    return 0
+
+
+def cmd_release_add(args: argparse.Namespace) -> int:
+    from veyra.updates.release import ReleaseError, add
+
+    try:
+        entry = add(
+            Path(args.metadata),
+            Path(args.artifact),
+            url=args.url,
+            channel=args.channel,
+            category=args.category,
+            notes=args.notes,
+            impact=args.impact,
+            min_from=args.min_from,
+            expiry_days=args.expires_days,
+        )
+    except (ReleaseError, ValueError, OSError) as e:
+        print(f"Cannot add: {e}", file=sys.stderr)
+        return 1
+    print(f"Added {entry['version']} to {args.metadata}; sign it next (veyra release sign).")
+    return 0
+
+
+def cmd_release_refresh(args: argparse.Namespace) -> int:
+    from veyra.updates.release import refresh
+
+    doc = refresh(Path(args.metadata), args.expires_days)
+    print(f"Sequence {doc['sequence']}, expires {doc['expires_at']}; sign it next.")
+    return 0
+
+
+def cmd_release_sign(args: argparse.Namespace) -> int:
+    from veyra.core.signing import sign
+
+    path = Path(args.metadata)
+    Path(str(path) + ".sig").write_text(
+        sign(path.read_bytes(), Path(args.key_file).read_text(), args.key_id)
+    )
+    print(f"Signed {path} with {args.key_id}: {path}.sig")
+    return 0
+
+
+def cmd_updates_run(args: argparse.Namespace) -> int:
+    from veyra.updates.runner import main as run
+
+    if os.geteuid() != 0:
+        print("veyra updates run must run as root (veyra-upgrade@.service).", file=sys.stderr)
+        return 1
+    return run([args.version])
+
+
 # ----------------------------------------------------------------- parser
 
 
@@ -1245,6 +1324,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.set_defaults(func=cmd_catalog_verify)
 
+    rel = sub.add_parser(
+        "release", help="Build and sign Veyra releases (docs/SOFTWARE_UPDATES.md §1)"
+    ).add_subparsers(dest="release_cmd", metavar="<action>", required=True)
+    s = rel.add_parser("build", help="Build veyra-<version>.tar.gz from a clean checkout")
+    s.add_argument("--source", default=".", help="Repository checkout (default: .)")
+    s.add_argument("--out", required=True, help="Output directory")
+    s.add_argument("--allow-dirty", action="store_true", help=argparse.SUPPRESS)
+    s.set_defaults(func=cmd_release_build)
+    s = rel.add_parser("add", help="Add a built release to the update metadata")
+    s.add_argument("artifact")
+    s.add_argument("--url", required=True, help="Where servers will download the artifact")
+    s.add_argument("--metadata", required=True, help="Path of the metadata (e.g. stable.json)")
+    s.add_argument("--channel", choices=["stable", "beta", "development"], default="stable")
+    s.add_argument("--category", choices=["security", "bugfix", "feature"], required=True)
+    s.add_argument("--notes", default="", help="Release notes")
+    s.add_argument("--impact", default="", help="Expected service impact")
+    s.add_argument("--min-from", default=None, help="Oldest version that may upgrade directly")
+    s.add_argument("--expires-days", type=int, default=30)
+    s.set_defaults(func=cmd_release_add)
+    s = rel.add_parser("refresh", help="New sequence and expiry without a release")
+    s.add_argument("metadata")
+    s.add_argument("--expires-days", type=int, default=30)
+    s.set_defaults(func=cmd_release_refresh)
+    s = rel.add_parser("sign", help="Sign the metadata with the official key (writes .sig)")
+    s.add_argument("metadata")
+    s.add_argument("--key-file", required=True)
+    s.add_argument("--key-id", required=True)
+    s.set_defaults(func=cmd_release_sign)
+
     tpl = sub.add_parser("templates", help="Provisioning templates").add_subparsers(
         dest="tpl_cmd", metavar="<action>"
     )
@@ -1268,7 +1376,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--to-version", required=True)
     s.add_argument("--outcome", choices=["success", "failed"], required=True)
     s.add_argument("--backup-ref")
+    s.add_argument("--initiated-by", default="upgrade.sh")
     s.set_defaults(func=cmd_updates_record)
+    s = upd.add_parser(
+        "run",
+        help="Install a downloaded, signed release (root; used by veyra-upgrade@.service)",
+    )
+    s.add_argument("version")
+    s.set_defaults(func=cmd_updates_run)
 
     usr = sub.add_parser("users", help="User account recovery").add_subparsers(
         dest="usr_cmd", metavar="<action>"

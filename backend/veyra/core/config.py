@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     config_dir: Path = Path("/etc/veyra")
     data_dir: Path = Path("/var/lib/veyra")
     log_dir: Path = Path("/var/log/veyra")
+    # Written only by the root upgrade runner (docs/SOFTWARE_UPDATES.md §3.2);
+    # the service account reads its status file.
+    upgrade_dir: Path = Path("/var/lib/veyra-upgrade")
     module_paths: Annotated[list[Path], NoDecode] = Field(
         default_factory=lambda: [Path("/opt/veyra/modules")]
     )
@@ -152,6 +155,11 @@ class Settings(BaseSettings):
     @property
     def trust_dir(self) -> Path:
         return self.config_dir / "trust"
+
+    @property
+    def updates_dir(self) -> Path:
+        """Downloaded Veyra releases (docs/SOFTWARE_UPDATES.md §2)."""
+        return self.data_dir / "updates"
 
     @property
     def firmware_dir(self) -> Path:

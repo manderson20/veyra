@@ -60,6 +60,7 @@ def make_settings(database_url: str, tmp_path: Path, **overrides: object) -> Set
         "config_dir": tmp_path / "etc",
         "data_dir": tmp_path / "data",
         "log_dir": tmp_path / "log",
+        "upgrade_dir": tmp_path / "upgrade",
         "module_paths": [REPO / "modules"],
         "template_paths": [REPO / "provisioning" / "templates"],
         "cookie_secure": False,

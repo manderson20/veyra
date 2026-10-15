@@ -12,9 +12,9 @@ also states what is implemented today.
 | Signed update metadata format and verification (signature, expiry, rollback protection, official key only) | Implemented (M0) |
 | Update check (UI "Check now", `veyra updates check`, worker schedule) | Implemented (M0); **no update source is published yet**, so checks report "not configured" |
 | Available updates and update history | Implemented (M0) |
-| Core upgrade from a source tree: backup → migrate → verify, with rollback if a migration fails (`installer/upgrade.sh`) | Implemented (M0); **not yet exercised end to end on a server** (M1) |
+| Core upgrade from a source tree: backup → migrate → verify, with rollback if a migration fails (`installer/upgrade.sh`) | Implemented (M0); used for every upgrade since M1 |
 | Module update from files on disk (`POST /modules/{id}/update`) | Implemented (M0) |
-| Download, approve, apply from the UI; maintenance windows; unattended installation | **Not available** until tested (M12). The API refuses these modes with an explanation. |
+| Download, approve, apply from the UI; maintenance windows; unattended installation; release signing | Implemented (M12) for Veyra itself: [SOFTWARE_UPDATES.md](SOFTWARE_UPDATES.md) |
 | HA-aware coordinated updates | M16 |
 
 ## 2. Components and policies

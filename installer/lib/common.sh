@@ -92,6 +92,18 @@ require_root() {
 
 # ---------------------------------------------------------------- versions
 # version_ge A B  → true when A >= B (dotted numeric versions)
+# The commit of a source tree: from git in a checkout, or from the REVISION
+# file of a release archive (docs/SOFTWARE_UPDATES.md §1.1).
+source_revision() {
+    local dir="$1" rev=""
+    if [[ -e "$dir/.git" ]] && rev="$(git -C "$dir" rev-parse --short=10 HEAD 2>/dev/null)"; then
+        git -C "$dir" diff --quiet HEAD -- . 2>/dev/null || rev="${rev}-dirty"
+    elif [[ -s "$dir/REVISION" ]]; then
+        rev="$(tr -cd '0-9a-f' <"$dir/REVISION" | head -c 40)"
+    fi
+    printf '%s' "${rev:-local}"
+}
+
 version_ge() {
     [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
 }

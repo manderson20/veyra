@@ -50,10 +50,7 @@ done
 
 VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$SOURCE_DIR/backend/veyra/version.py")"
 [[ -n "$VERSION" ]] || die "Cannot determine the Veyra version from $SOURCE_DIR"
-REVISION="$(git -C "$SOURCE_DIR" rev-parse --short=10 HEAD 2>/dev/null || echo local)"
-if [[ "$REVISION" != "local" ]] && ! git -C "$SOURCE_DIR" diff --quiet HEAD -- . 2>/dev/null; then
-    REVISION="${REVISION}-dirty"
-fi
+REVISION="$(source_revision "$SOURCE_DIR")"
 RELEASE_NAME="${VERSION}-${REVISION}"
 RELEASE_DIR="$VEYRA_PREFIX/releases/$RELEASE_NAME"
 TELEPHONY_ENGINE="asterisk"

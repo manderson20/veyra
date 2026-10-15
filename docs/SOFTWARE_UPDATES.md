@@ -83,25 +83,30 @@ installer adds:
 
 * `veyra-upgrade@.service`: a oneshot **root** unit; the instance is the
   version (`veyra-upgrade@0.18.0.service`), and it runs
-  `/usr/local/sbin/veyra-upgrade-run <version>`.
+  `veyra updates run <version>` from the installed release (root-owned).
 * A polkit rule (added to M11's) letting the `veyra` account **start**
   `veyra-upgrade@*.service` and nothing else.
 
-`veyra-upgrade-run` (root):
+The runner (`veyra.updates.runner`, root):
 
 1. reads `<data>/updates/<version>/` but **trusts none of it blindly**:
    it re-verifies the stored metadata against the official keys in
    `/etc/veyra/trust/official/` (root-owned), checks the version is the one
    asked for and newer than the installed one, and checks the artifact's
    SHA-256 and size;
-2. copies and unpacks the artifact into a root-only directory
-   (`/var/lib/veyra-upgrade/<version>`, 0700), so the service account cannot
-   change it between the check and the run;
+2. copies the artifact into a root-only directory
+   (`/var/lib/veyra-upgrade/work/<version>`, 0700), checks size and SHA-256
+   on that copy (so the service account cannot change it between the check
+   and the run; files are opened without following links), and unpacks it
+   refusing absolute paths, `..`, links leaving the tree and special files;
+   the unpacked version must equal the signed one;
 3. runs **that release's own** `installer/upgrade.sh --yes`, exactly as an
    administrator does today (backups, migrations, verify, recovery on
    failure, `veyra updates record`);
-4. writes progress to `<data>/updates/status.json` (step, time, outcome,
-   log tail) so the interface can show it while the API restarts.
+4. writes progress to `/var/lib/veyra-upgrade/status.json` (root-owned,
+   0640 group veyra: step, time, outcome, last 40 lines; the full log is
+   `/var/log/veyra/upgrade-run-<version>-<time>.log`) and records a failure in
+   the update history (`upgrade.sh` records successes).
 
 A compromised service account can therefore only start an upgrade to a
 release the official key signed, never run its own code as root.
@@ -115,9 +120,11 @@ another upgrade is running.
 
 ### 3.4 During and after
 
-The interface shows the progress page; the API restarts during the
-upgrade, so the page polls `status.json` through a small read-only
-endpoint that answers from the file and reconnects when the new API is up.
+The Updates page shows the progress (step and installer output) by polling
+`GET /updates/status` every 3 seconds; while the API restarts the requests
+fail and the page says "Veyra is restarting" and keeps polling. The new
+worker finishes the update's state from the status file and sends the
+email.
 History records the outcome and the log; failures keep the previous
 release running (or print the recovery steps when the database was
 already migrated, as today).
@@ -148,21 +155,28 @@ drops calls"). Applying them stays with the administrator
 ## 7. API
 
 ```
-GET/PUT  /updates/source                      metadata URL, token (write-only), last result
-POST     /updates/{id}/download
-POST     /updates/{id}/approve                 {when: "now" | "window"}
-POST     /updates/{id}/cancel                  (before it starts)
-GET      /updates/status                       status.json (works while the API restarts: served by NGINX from the file)
-GET      /updates/system-packages              apt summary
+GET/PUT  /updates/source                         metadata URL, token (write-only), email recipients
+GET      /updates/available/{id}                 notes, impact, size, checks, window
+POST     /updates/available/{id}/download        download and verify
+POST     /updates/available/{id}/approve         {when: "now" | "window"}
+POST     /updates/available/{id}/cancel          withdraw an approval before it starts
+GET      /updates/status                         installed version and the runner's status.json
+GET      /updates/system-packages                apt summary
 ```
+
+The update source in the interface overrides `VEYRA_UPDATE_METADATA_URL`
+of veyra.env; the token is encrypted with the installation key (purpose
+`updates:source-token`), sent as `Authorization: Bearer` only to the source
+itself (not to redirect targets), and never returned.
 
 ## 8. Installer
 
-`veyra-upgrade@.service`, `/usr/local/sbin/veyra-upgrade-run`, the polkit
-rule extended, `<data>/updates` (0750 veyra) and `/var/lib/veyra-upgrade`
-(0700 root); NGINX serves `status.json` read-only at
-`/api/v1/updates/status` so it answers during the API restart. `verify.sh`:
-`upgrade-unit`, `update-source` (configured or not).
+`veyra-upgrade@.service`, the polkit rule extended (start of
+`veyra-upgrade@<version>.service` only), `<data>/updates` (0750 veyra) and
+`/var/lib/veyra-upgrade` (0750 root:veyra; its `work/` 0700). Release
+archives carry a `REVISION` file that install.sh and upgrade.sh use when
+there is no git checkout. `verify.sh`: `upgrade-unit`. uninstall.sh removes
+the unit and the polkit rule.
 
 ## 9. Open questions for the owner
 
@@ -190,4 +204,13 @@ from the interface, history and email; a refused tampered artifact.
 
 ## 11. Decisions
 
-* 2026-10-15: milestone started on the owner's "go ahead with M12".
+* 2026-10-15: milestone started on the owner's "go ahead with M12"; built
+  with the proposed defaults of §9 while the questions are open (both
+  hosting options work; no keys are created for the owner: Veyra accepts
+  releases only once the official public key is in
+  `/etc/veyra/trust/official/`).
+* Status during the restart: polled through the API (which may be briefly
+  unreachable) instead of an unauthenticated NGINX file, since the log tail
+  can contain server details.
+* Policies: download and window modes apply to Veyra itself only; modules
+  keep updating from the module catalog (notify only).

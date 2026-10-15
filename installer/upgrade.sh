@@ -44,10 +44,7 @@ require_root
 OLD_VERSION="$(state_get version)"
 OLD_RELEASE_DIR="$(readlink -f "$VEYRA_PREFIX/current")"
 VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$SOURCE_DIR/backend/veyra/version.py")"
-REVISION="$(git -C "$SOURCE_DIR" rev-parse --short=10 HEAD 2>/dev/null || echo local)"
-if [[ "$REVISION" != "local" ]] && ! git -C "$SOURCE_DIR" diff --quiet HEAD -- . 2>/dev/null; then
-    REVISION="${REVISION}-dirty"
-fi
+REVISION="$(source_revision "$SOURCE_DIR")"
 RELEASE_NAME="${VERSION}-${REVISION}"
 RELEASE_DIR="$VEYRA_PREFIX/releases/$RELEASE_NAME"
 TELEPHONY_ENGINE="$(sed -n 's/^VEYRA_TELEPHONY_ENGINE=//p' "$VEYRA_ETC/veyra.env")"
@@ -148,7 +145,7 @@ state_set upgrade_status "complete"
 state_set upgraded_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 [[ "$DRY_RUN" == "1" ]] || /usr/local/bin/veyra updates record --component veyra_core --target veyra \
     --from-version "$OLD_VERSION" --to-version "$VERSION" --outcome success \
-    --backup-ref "$DB_BACKUP" || warn "Could not record the upgrade in the update history"
+    --backup-ref "$DB_BACKUP" --initiated-by "${VEYRA_UPGRADE_INITIATED_BY:-upgrade.sh}" || warn "Could not record the upgrade in the update history"
 
 begin prune "Removing old releases (keeping $KEEP_RELEASES)"
 mapfile -t releases < <(find "$VEYRA_PREFIX/releases" -mindepth 1 -maxdepth 1 -type d \
