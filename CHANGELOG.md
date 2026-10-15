@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.20.0 — unreleased (Milestone 14)
+## 0.20.0 — 2026-10-15 (Milestone 14)
 
 ### Added
 - **Multi-tenancy** ([MULTI_TENANCY.md](docs/MULTI_TENANCY.md)): every organization gets an engine namespace (its own phone, feature, paging, outbound, IVR, ring group and queue contexts, voicemail context, queue names, hold music classes and folders, pickup group names). The organization that existed before keeps exactly today's names; a dev1 comparison produced byte-identical files (migration `0027`).
