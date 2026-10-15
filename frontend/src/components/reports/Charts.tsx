@@ -29,13 +29,16 @@ function TableToggle({ children, caption }: { children: ReactNode; caption: stri
 }
 
 /** Stacked bars over days (one bar per row of `data`). */
-export function StackedBars<T extends Record<string, number | string>>({ data, series, xKey, xLabel, caption, height = 180 }: {
+export function StackedBars<T extends Record<string, number | string>>({ data, series, xKey, xLabel, caption, height = 180, unit = "", xHeader = "Day" }: {
   data: T[];
   series: StackSeries[];
   xKey: keyof T & string;
   xLabel: (x: string) => string;
   caption: string;
   height?: number;
+  /** After "max N" on the axis, e.g. " per day". */
+  unit?: string;
+  xHeader?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const width = 640;
@@ -95,14 +98,14 @@ export function StackedBars<T extends Record<string, number | string>>({ data, s
       </div>
       <div className="chart__axis" aria-hidden="true">
         <span>{data.length ? xLabel(String(data[0]![xKey])) : ""}</span>
-        <span>max {max} per day</span>
+        <span>max {max}{unit}</span>
         <span>{data.length ? xLabel(String(data[data.length - 1]![xKey])) : ""}</span>
       </div>
       <div className="chart__legend">
         {series.map((s) => <span key={s.key} className="chart__legend-item"><span className="chart__swatch" style={{ background: s.color }} />{s.label}</span>)}
       </div>
       <TableToggle caption={caption}>
-        <thead><tr><th scope="col">Day</th>{series.map((s) => <th key={s.key} scope="col">{s.label}</th>)}<th scope="col">Total</th></tr></thead>
+        <thead><tr><th scope="col">{xHeader}</th>{series.map((s) => <th key={s.key} scope="col">{s.label}</th>)}<th scope="col">Total</th></tr></thead>
         <tbody>{data.map((d, i) => <tr key={String(d[xKey])}><td>{xLabel(String(d[xKey]))}</td>{series.map((s) => <td key={s.key}>{Number(d[s.key] ?? 0)}</td>)}<td>{totals[i]}</td></tr>)}</tbody>
       </TableToggle>
     </div>
@@ -137,6 +140,69 @@ export function HourGrid({ grid, caption }: { grid: number[][]; caption: string 
       <TableToggle caption={caption}>
         <thead><tr><th scope="col">Day</th>{Array.from({ length: 24 }, (_, h) => <th key={h} scope="col">{h}</th>)}</tr></thead>
         <tbody>{grid.map((row, d) => <tr key={d}><th scope="row">{WEEKDAYS[d]}</th>{row.map((n, h) => <td key={h}>{n || ""}</td>)}</tr>)}</tbody>
+      </TableToggle>
+    </div>
+  );
+}
+
+/** Lines over categories (one line per series); same rules as StackedBars. */
+export function LineChart<T extends Record<string, number | string>>({ data, series, xKey, xLabel, caption, height = 180 }: {
+  data: T[];
+  series: StackSeries[];
+  xKey: keyof T & string;
+  xLabel: (x: string) => string;
+  caption: string;
+  height?: number;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const width = 640;
+  const pad = { top: 10, bottom: 6, side: 8 };
+  const max = Math.max(1, ...data.flatMap((d) => series.map((s) => Number(d[s.key] ?? 0))));
+  const plotH = height - pad.top - pad.bottom;
+  const x = (i: number) => (data.length <= 1 ? width / 2 : pad.side + (i * (width - 2 * pad.side)) / (data.length - 1));
+  const y = (v: number) => pad.top + plotH - (v / max) * plotH;
+  const hovered = hover !== null ? data[hover] : null;
+  return (
+    <div className="chart">
+      <div style={{ position: "relative" }}>
+        <svg viewBox={`0 0 ${width} ${height}`} className="chart__svg" style={{ height }} role="img" aria-label={caption} preserveAspectRatio="none"
+          onMouseLeave={() => setHover(null)}>
+          {[0.25, 0.5, 0.75, 1].map((f) => <line key={f} x1={0} x2={width} y1={y(max * f)} y2={y(max * f)} className="chart__grid" />)}
+          {hover !== null ? <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={height - pad.bottom} className="chart__cursor" /> : null}
+          {series.map((s) => (
+            <g key={s.key}>
+              <polyline fill="none" stroke={s.color} strokeWidth={2} vectorEffect="non-scaling-stroke"
+                points={data.map((d, i) => `${x(i)},${y(Number(d[s.key] ?? 0))}`).join(" ")} />
+              {hover !== null ? <circle cx={x(hover)} cy={y(Number(data[hover]![s.key] ?? 0))} r={4} fill={s.color} stroke="var(--surface)" strokeWidth={2} /> : null}
+            </g>
+          ))}
+          {data.map((d, i) => (
+            <rect key={String(d[xKey])} x={x(i) - width / Math.max(2, data.length) / 2} y={0} width={width / Math.max(2, data.length)} height={height}
+              fill="transparent" onMouseEnter={() => setHover(i)} />
+          ))}
+        </svg>
+        {hovered ? (
+          <div className="chart-tip" style={{ left: `${Math.min(80, Math.max(0, (x(hover!) / width) * 100))}%` }} role="status">
+            <strong>{xLabel(String(hovered[xKey]))}</strong>
+            {series.map((s) => (
+              <span key={s.key} className="chart__legend-item"><span className="chart__swatch" style={{ background: s.color }} />{s.label} <strong>{Number(hovered[s.key] ?? 0)}</strong></span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="chart__axis" aria-hidden="true">
+        <span>{data.length ? xLabel(String(data[0]![xKey])) : ""}</span>
+        <span>max {max}</span>
+        <span>{data.length ? xLabel(String(data[data.length - 1]![xKey])) : ""}</span>
+      </div>
+      {series.length > 1 ? (
+        <div className="chart__legend">
+          {series.map((s) => <span key={s.key} className="chart__legend-item"><span className="chart__swatch" style={{ background: s.color }} />{s.label}</span>)}
+        </div>
+      ) : null}
+      <TableToggle caption={caption}>
+        <thead><tr><th scope="col">{" "}</th>{series.map((s) => <th key={s.key} scope="col">{s.label}</th>)}</tr></thead>
+        <tbody>{data.map((d) => <tr key={String(d[xKey])}><td>{xLabel(String(d[xKey]))}</td>{series.map((s) => <td key={s.key}>{Number(d[s.key] ?? 0)}</td>)}</tr>)}</tbody>
       </TableToggle>
     </div>
   );
