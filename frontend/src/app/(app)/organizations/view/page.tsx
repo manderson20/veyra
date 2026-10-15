@@ -104,7 +104,7 @@ function OrganizationView() {
             <Callout tone="neutral">Sites are managed under Directory → Sites.</Callout>
           </div>
         </Card>
-        {can("devices.read") ? <ProvisioningCredentialCard organizationId={o.id} editable={can("devices.write")} /> : null}
+        {can("devices.read") ? <ProvisioningCredentialCard organizationId={o.id} editable={can("devices.write") && can("organizations.write")} bootstrapIncludesCredential={o.bootstrap_includes_credential ?? false} /> : null}
       </div>
     </div>
   );

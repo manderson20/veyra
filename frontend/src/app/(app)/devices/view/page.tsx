@@ -54,6 +54,7 @@ function DeviceView() {
   const [preview, setPreview] = useState<DevicePreview | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [notifyBusy, setNotifyBusy] = useState<string | null>(null);
+  const [bootstrapBusy, setBootstrapBusy] = useState(false);
   const orgId = device.data?.organization_id ?? "";
   const profiles = useApiData<Page<DeviceProfile>>(orgId ? "/device-profiles" : null, { organization_id: orgId, limit: 200 });
   const extensions = useApiData<Page<Extension>>(orgId ? "/extensions" : null, { organization_id: orgId, limit: 500 });
@@ -105,6 +106,17 @@ function DeviceView() {
       setPreview({ template_key: null, files: [], error: errorMessage(err), error_code: null });
     } finally {
       setPreviewBusy(false);
+    }
+  };
+  const allowBootstrap = async () => {
+    setBootstrapBusy(true);
+    try {
+      device.setData(await api.post<Device>(`/devices/${d.id}/allow-bootstrap`));
+      toast.success("Bootstrap allowed", "The phone can fetch the Veyra certificate over plain HTTP again.");
+    } catch (err) {
+      toast.error("Not changed", errorMessage(err));
+    } finally {
+      setBootstrapBusy(false);
     }
   };
   const notify = async (action: "check_config" | "reboot") => {
@@ -223,7 +235,16 @@ function DeviceView() {
               <dt>Phone reports</dt><dd>{d.last_user_agent ?? "—"}</dd>
               <dt>Template</dt><dd className="mono">{d.template_key ?? "—"}</dd>
               <dt>Credential user</dt><dd><span className="mono">{d.credential_user}</span> <span className="subtle">(set on the phone by its first configuration)</span></dd>
+              <dt>Trust</dt><dd>{d.https_seen_at
+                ? <><Badge tone="ok">Trusted, HTTPS</Badge> <span className="subtle">since {formatDateTime(d.https_seen_at)}</span></>
+                : <span className="subtle">Not provisioned over HTTPS yet{d.allow_bootstrap ? "; the plain-HTTP bootstrap is allowed" : ""}</span>}</dd>
             </dl>
+            {editable && !d.allow_bootstrap ? (
+              <div className="stack stack--sm" style={{ marginTop: 12 }}>
+                <p className="subtle">After a factory reset the phone no longer trusts Veyra and needs the plain-HTTP bootstrap once more.</p>
+                <div><Button icon="refresh" loading={bootstrapBusy} onClick={allowBootstrap}>Allow bootstrap again</Button></div>
+              </div>
+            ) : null}
           </Card>
           <Card title="Firmware">
             <dl className="dl">
