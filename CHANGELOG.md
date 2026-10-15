@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.15.0-dev — unreleased (Milestone 10)
+## 0.15.0 — 2026-10-15 (Milestone 10)
 
 ### Added
 - **Call history** (Telephony → Call History; [REPORTING.md](docs/REPORTING.md) §3): every call with direction, who called, who answered, ring and talk time and the outcome (answered, missed, busy, voicemail, abandoned, failed), searchable by number, name, extension, period, direction and outcome, with the legs behind each call and CSV export; **Recent calls** on everyone's account page (`/me/calls`). Asterisk writes one CSV line per call record through a managed `cdr_custom.conf` (`cdr.conf` now logs unanswered calls); the worker reads it every few seconds and folds the legs into calls; kept 400 days (migration `0019`).

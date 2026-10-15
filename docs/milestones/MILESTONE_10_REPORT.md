@@ -1,8 +1,7 @@
 # Milestone 10 Report — Reporting and Monitoring
 
 Branch `milestone-10` (from `main` at 0.14.0). Design:
-[REPORTING.md](../REPORTING.md). Status: **built and checked live on dev1,
-awaiting the owner's approval** (to be released as 0.15.0).
+[REPORTING.md](../REPORTING.md). Status: **approved 2026-10-15, released as 0.15.0.**
 
 ## 1. Scope (roadmap row 10)
 
@@ -121,4 +120,6 @@ owner's online module catalog on GitHub (0.16.0), per the roadmap.
 ## 8. Owner decisions
 
 * 2026-10-15: milestone started on the owner's "proceed" after 0.14.0.
-* Approval: *pending*.
+* 2026-10-15: approved ("M10 approved, go ahead with 0.15.0"); released
+  as 0.15.0. The §12 questions, the browser check and the hardware checks
+  stay open (§6).
