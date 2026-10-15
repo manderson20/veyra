@@ -4,8 +4,10 @@
 
 It registers one extension over UDP (digest authentication), answers the
 engine's OPTIONS pings so the contact qualifies, rings on INVITE and answers
-after a delay with a PCMU/PCMA SDP, and acknowledges BYE and CANCEL. It sends
-no media. Standard library only; run it on the server itself:
+after a delay with a PCMU/PCMA SDP, and acknowledges BYE and CANCEL. With
+``--tone`` it sends a 440 Hz tone as PCMU while a call is up (for testing
+call recording); otherwise no media. Standard library only; run it on the
+server itself:
 
     python3 -I tools/fakephone.py --user <endpoint-name> --password <sip-secret>
 
@@ -15,6 +17,9 @@ The endpoint name and SIP secret are on the extension page (or in
 
 import argparse
 import hashlib
+import math
+import struct
+import threading
 import random
 import re
 import socket
@@ -47,6 +52,9 @@ ap.add_argument(
 )
 ap.add_argument(
     "--hangup-after", type=float, default=0, help="end the placed call after N seconds"
+)
+ap.add_argument(
+    "--tone", action="store_true", help="send a 440 Hz tone while a call is up"
 )
 args = ap.parse_args()
 
@@ -190,11 +198,49 @@ def reply(req, code, reason, extra="", body=""):
     sock.sendto(msg.encode(), last_peer)
 
 
+def _ulaw(sample):
+    """16-bit linear PCM to G.711 mu-law."""
+    sign = 0x80 if sample < 0 else 0
+    sample = min(abs(sample), 32635) + 132
+    exponent = 7
+    for exp, limit in enumerate((256, 512, 1024, 2048, 4096, 8192, 16384, 32768)):
+        if sample < limit:
+            exponent = exp
+            break
+    mantissa = (sample >> (exponent + 3)) & 0x0F
+    return ~(sign | (exponent << 4) | mantissa) & 0xFF
+
+
+TONE = bytes(_ulaw(int(8000 * math.sin(2 * math.pi * 440 * n / 8000))) for n in range(8000))
+media = {"target": None, "on": False}
+
+
+def remote_media(sdp_text):
+    ip = re.search(r"^c=IN IP4 (\S+)", sdp_text, re.M)
+    port = re.search(r"^m=audio (\d+)", sdp_text, re.M)
+    return (ip.group(1), int(port.group(1))) if ip and port else None
+
+
+def rtp_sender():
+    rtp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rtp.bind((LOCAL_IP, rtp_port))
+    seq, ts, ssrc, offset = random.randrange(65536), random.randrange(2**32), random.randrange(2**32), 0
+    while True:
+        if media["on"] and media["target"]:
+            payload = (TONE + TONE)[offset : offset + 160]
+            offset = (offset + 160) % len(TONE)
+            rtp.sendto(struct.pack("!BBHII", 0x80, 0, seq & 0xFFFF, ts & 0xFFFFFFFF, ssrc) + payload, media["target"])
+            seq, ts = seq + 1, ts + 160
+        time.sleep(0.02)
+
+
 to_tag = uuid.uuid4().hex[:10]
 last_peer = SERVER
 pending_invite = None
 answer_at = None
 rtp_port = random.randrange(20000, 30000, 2)
+if args.tone:
+    threading.Thread(target=rtp_sender, daemon=True).start()
 if not args.no_register:
     register()
 next_register = time.time() + args.expires * 0.8
@@ -224,6 +270,7 @@ while True:
     ):
         ack_or_bye("BYE", call["remote_to"])
         call["state"] = "ended"
+        media["on"] = False
         log("BYE sent: placed call ENDED")
     try:
         data, last_peer = sock.recvfrom(65535)
@@ -244,6 +291,7 @@ while True:
                 if call.get("state") != "up":
                     call["state"] = "up"
                     call["started"] = now
+                    media["target"], media["on"] = remote_media(msg), args.tone
                     log("placed call ANSWERED (200 OK, ACK sent)")
             elif code in (401, 407) and not call.get("authed"):
                 call["remote_to"] = hdr(msg, "To")
@@ -292,11 +340,14 @@ while True:
         reply(msg, 100, "Trying")
         reply(msg, 180, "Ringing", f"Contact: {contact}\r\n")
         pending_invite, answer_at = msg, now + args.answer_after
+        media["target"] = remote_media(msg)
     elif method == "ACK":
         log("ACK received: call is UP")
+        media["on"] = args.tone
     elif method == "BYE":
         reply(msg, 200, "OK")
         log("BYE received: call ENDED")
+        media["on"] = False
         pending_invite = None
         if call:
             call["state"] = "ended"
