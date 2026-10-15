@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.21.0 — unreleased (Milestone 15)
+## 0.21.0 — 2026-10-15 (Milestone 15)
 
 ### Added
 - **Central management** ([CENTRAL_MANAGEMENT.md](docs/CENTRAL_MANAGEMENT.md)): any installation can act as a **central console** (System → Central console) for other Veyra installations. Instances enroll with a one-time token and the console's fingerprint (optionally a CA certificate for a self-signed console) and check in every minute over HTTPS with Ed25519-signed messages, nonces and timestamps; the console never connects to an instance (migration `0028`).
