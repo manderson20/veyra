@@ -146,3 +146,10 @@ hides them. Fixed on branch `chart-scroll-fix` from `main` as **0.13.2**
 **0.13.2-19227668b8**: CA and certificate kept, all verify checks OK.
 `sudo veyra firewall off` now reports "Firewall turned off in the
 database. Table inet veyra was not present." (exit 0) with the new wrapper.
+
+## Addendum (2026-10-15 02:13 UTC): 0.14.0 on dev1
+
+The owner upgraded dev1 from `~/veyra-release` to the release build
+**0.14.0-76aa5397d5**: backups taken, schema current (0018), CA and
+certificate kept, Asterisk unchanged, all five Veyra services running, all
+verify checks OK, firewall off.
