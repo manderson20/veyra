@@ -110,7 +110,10 @@ class ModuleManager:
     # ------------------------------------------------------------- discovery
     def discover(self) -> dict[str, Candidate]:
         found: dict[str, Candidate] = {}
-        for base in self.settings.module_paths:
+        # Catalog and uploaded modules first, so a newer store version of a
+        # module that also ships with the release wins (docs/MODULE_CATALOG.md §3).
+        bases = [self.settings.module_store_dir / "active", *self.settings.module_paths]
+        for base in bases:
             if not base.is_dir():
                 continue
             for d in sorted(p for p in base.iterdir() if p.is_dir() and not p.name.startswith(".")):

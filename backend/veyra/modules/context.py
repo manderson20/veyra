@@ -29,6 +29,7 @@ from veyra.core.errors import ProblemError
 from veyra.core.events import Event, EventBus
 from veyra.core.models import ModuleConfig, User
 from veyra.core.security.crypto import (
+    DecryptionError,
     InstallationKey,
     InstallationKeyError,
     load_installation_key,
@@ -175,6 +176,14 @@ class ModuleContext:
             )
             if row:
                 values.update(row.config)
+        # Secrets are stored encrypted for this module (the settings API).
+        for f in self.manifest.config:
+            if f.type == "secret" and values.get(f.key):
+                try:
+                    values[f.key] = self.decrypt(str(values[f.key]))
+                except DecryptionError:
+                    self.log.warning("Setting %s cannot be decrypted", f.key)
+                    values[f.key] = None
         return values
 
     def default_organization(self, db: Session, principal: Principal) -> uuid.UUID | None:
