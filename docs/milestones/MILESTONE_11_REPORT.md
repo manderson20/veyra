@@ -42,7 +42,7 @@ module updates.
 | Suite | Result |
 |---|---|
 | Backend ruff / mypy | Clean / no issues (164 files) |
-| Backend pytest | **365 passed** (M11 added 5 test functions with a real signed catalog served on loopback: signature and tampering, HTTPS rule, install, update, rollback and the migration guard, upload, refusal of older versions, settings validation, purge removing store copies, checksum mismatch, a source without a trusted key, the restart request committed before systemctl and marked done by the next worker, and `catalog add` checksums) |
+| Backend pytest | **367 passed** (incl. the dependency check and the unloadable-module refusal added after the owner's report); before that, **365 passed** (M11 added 5 test functions with a real signed catalog served on loopback: signature and tampering, HTTPS rule, install, update, rollback and the migration guard, upload, refusal of older versions, settings validation, purge removing store copies, checksum mismatch, a source without a trusted key, the restart request committed before systemctl and marked done by the next worker, and `catalog add` checksums) |
 | `alembic check` | No drift (migration `0024`) |
 | Frontend lint / typecheck / vitest / build | Clean / clean / **39 passed** / passed |
 | Installer library tests | **46 passed** |
@@ -59,6 +59,19 @@ module updates.
 | **Bug found** | The restart request was removed in the same transaction as the `systemctl` call; systemd stopped the worker (one of the units) before it committed, so every new worker restarted everything again: a **restart loop**, stopped after about 20 seconds by deleting the request. Fixed (45ec4de): the request is committed away before the restart starts; tested from a second session. After the upgrade: one restart, stable for 75 seconds |
 | Rollback | Back to 0.1.1; 0.1.2 kept in `versions/` |
 | Cleanup | Module disabled and uninstalled with its data, store emptied, source deleted, test keys, local server and helper files removed; services restarted once (stable) |
+
+### Owner's report after the live check (2026-10-15 04:55 UTC)
+
+Installing **AND Clock Messages** from Module Manager failed with an error
+500: `ModuleNotFoundError: No module named 'httpx'`. The module's clock
+delivery uses `httpx`, which was in `requirements-dev.txt` only, so tests
+and the live check (which put `httpx` on a temporary path for its test
+client) passed while production lacked it. Fixed before the release:
+`httpx==0.28.1` is a runtime dependency; `test_module_dependencies.py`
+fails when a bundled module imports a library that is not in
+`requirements.txt` (checked to catch exactly this import); and a module
+whose code cannot load is now refused with a 409 naming the error, without
+leaving anything half-installed.
 
 ## 4. Not verified
 

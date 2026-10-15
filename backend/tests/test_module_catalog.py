@@ -263,3 +263,19 @@ def test_catalog_add_keeps_checksums_honest(tmp_path):
         v["sha256"] == hashlib.sha256(Path(pkg).read_bytes()).hexdigest()
         and v["size"] == Path(pkg).stat().st_size
     )
+
+
+def test_module_whose_code_cannot_load_is_refused_clearly(admin, app):
+    """A missing library gave a server error (the AND clocks module in
+    production); now the install is refused with the reason. The broken copy
+    in the store shadows the release's copy of the example module."""
+    src = app.state.settings.module_store_dir / "active" / "veyra-example-notes"
+    shutil.copytree(
+        REPO / "modules" / "veyra-example-notes", src, ignore=shutil.ignore_patterns("__pycache__")
+    )
+    init = src / "backend" / "__init__.py"
+    init.write_text(init.read_text() + "\nimport library_that_is_not_installed  # noqa\n")
+    r = admin.post(f"/api/v1/modules/{MOD}/install")
+    assert r.status_code == 409, r.text
+    detail = r.json()["detail"]
+    assert "cannot be loaded" in detail and "library_that_is_not_installed" in detail

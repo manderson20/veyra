@@ -498,9 +498,17 @@ class ModuleManager:
             spec.loader.exec_module(package)
             target = importlib.import_module(".".join([pkg_name, *rest])) if rest else package
             entry = getattr(target, attr)
-        except Exception:
+        except ModuleError:
             self._purge_python(pkg_name)
             raise
+        except Exception as e:
+            # A missing library, a syntax error, a wrong entrypoint: a clear
+            # refusal instead of a server error (found with the AND clocks
+            # module, which needed httpx in production).
+            self._purge_python(pkg_name)
+            raise ModuleError(
+                f"The code of module {manifest.id} cannot be loaded: {type(e).__name__}: {e}"
+            ) from e
         data_dir = self.settings.data_dir / "modules" / manifest.id
         ctx = ModuleContext(manifest, path, data_dir, self.bus, self.settings)
         entry.register(ctx)
