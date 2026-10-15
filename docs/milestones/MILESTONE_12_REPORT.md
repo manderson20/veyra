@@ -1,8 +1,7 @@
 # Milestone 12 Report — Software Update Management
 
 Branch `milestone-12` (from `milestone-11` at 0.17.0). Design:
-[SOFTWARE_UPDATES.md](../SOFTWARE_UPDATES.md). Status: **complete, awaiting
-owner approval** (to be released as 0.18.0).
+[SOFTWARE_UPDATES.md](../SOFTWARE_UPDATES.md). Status: **approved 2026-10-15, released as 0.18.0.**
 
 ## 1. Scope (roadmap row 12)
 
@@ -115,3 +114,5 @@ community modules are wanted soon).
 
 * 2026-10-15: milestone started ("go ahead with M12"); built with the
   proposed defaults while the §9 questions are open.
+* 2026-10-15: approved ("M12 approved, go ahead with 0.18.0"); the §9
+  questions remain open.
