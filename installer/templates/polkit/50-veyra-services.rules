@@ -1,0 +1,16 @@
+// Managed by Veyra installer
+// The veyra service account may restart Veyra's own services, and nothing
+// else, so new module code can take effect from the web interface
+// (docs/MODULE_CATALOG.md §4). Asterisk and the rest of the system are
+// unaffected.
+polkit.addRule(function (action, subject) {
+    if (action.id !== "org.freedesktop.systemd1.manage-units" || subject.user !== "veyra") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var units = ["veyra-api.service", "veyra-worker.service", "veyra-deployer.service",
+                 "veyra-pager.service", "veyra-firewall.service"];
+    if (units.indexOf(action.lookup("unit")) >= 0 && action.lookup("verb") === "restart") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

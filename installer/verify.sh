@@ -236,6 +236,20 @@ else
     check tls-ca warn "no Veyra CA yet (re-run upgrade.sh); phones cannot be bootstrapped to HTTPS"
 fi
 
+# --- module catalog (docs/MODULE_CATALOG.md §8)
+[[ "$(perm "$VEYRA_DATA/module-store")" == "750 veyra:veyra" ]] \
+    && check module-store pass "750 veyra:veyra" \
+    || check module-store fail "$VEYRA_DATA/module-store is $(perm "$VEYRA_DATA/module-store") (expected 750 veyra:veyra)"
+catalog_keys=("$VEYRA_ETC"/trust/catalog/*.pub)
+if [[ -e "${catalog_keys[0]}" ]]; then
+    check catalog-trust pass "${#catalog_keys[@]} catalog key(s) trusted"
+else
+    check catalog-trust warn "no catalog key in $VEYRA_ETC/trust/catalog/: module catalogs cannot be used yet"
+fi
+grep -qs "Managed by Veyra" /etc/polkit-1/rules.d/50-veyra-services.rules \
+    && check services-restart pass "Veyra's services can be restarted from the interface" \
+    || check services-restart warn "polkit rule missing: restart Veyra's services on the server after module updates"
+
 # --- firewall (docs/FIREWALL_TRUST.md §8)
 [[ "$(perm "$VEYRA_DATA/firewall")" == "750 veyra:veyra" ]] \
     && check firewall-dir pass "750 veyra:veyra" \
