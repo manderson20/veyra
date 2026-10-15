@@ -127,7 +127,14 @@ class ModuleManager:
                     manifest, errors = None, e.errors
                 cand = Candidate(d, manifest, verification, errors)
                 if cand.module_id in found:
-                    log.warning("Duplicate module %s at %s ignored", cand.module_id, d)
+                    # Expected when the store holds a newer copy of a module
+                    # that also ships with the release.
+                    log.debug(
+                        "Module %s at %s is shadowed by %s",
+                        cand.module_id,
+                        d,
+                        found[cand.module_id].path,
+                    )
                     continue
                 found[cand.module_id] = cand
         return found

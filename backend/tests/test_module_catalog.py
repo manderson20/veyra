@@ -182,6 +182,14 @@ def test_install_update_rollback_and_settings(admin, app, tmp_path, served):
     with session_scope() as db:
         assert db.query(ModuleConfig).one().config == {"max_notes_per_organization": 42}
 
+    # Uninstalling with its data also removes the store copies.
+    assert admin.post(f"/api/v1/modules/{MOD}/disable").status_code == 200
+    r = admin.post(
+        f"/api/v1/modules/{MOD}/uninstall", json={"purge_data": True, "confirm_module_id": MOD}
+    )
+    assert r.status_code == 200, r.text
+    assert store.active_dir(MOD) is None and store.previous(MOD) is None
+
 
 def test_checksum_mismatch_and_bad_sources(admin, app, tmp_path, served):
     root, base, _, _ = _catalog(app, tmp_path, served, versions=("0.2.0",))
@@ -212,8 +220,17 @@ def test_restart_request(admin):
         returncode = 0
         stderr = ""
 
+    def run(cmd):
+        # systemd stops the worker as soon as the restart starts: by then the
+        # request must already be gone from the database (no restart loop).
+        with session_scope() as other:
+            assert other.get(SystemSetting, catalog.RESTART_KEY) is None
+            assert other.get(SystemSetting, catalog.RESTART_RESULT_KEY).value["state"] == "started"
+        calls.append(cmd)
+        return Done()
+
     with session_scope() as db:
-        assert catalog.run_restart_request(db, run=lambda cmd: calls.append(cmd) or Done())
+        assert catalog.run_restart_request(db, run=run)
     assert calls == [["systemctl", "restart", "--no-block", *catalog.VEYRA_UNITS]]
     with session_scope() as db:
         assert db.get(SystemSetting, catalog.RESTART_KEY) is None
