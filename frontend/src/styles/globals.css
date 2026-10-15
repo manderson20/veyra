@@ -446,6 +446,15 @@ a.rail__button:hover { color: #fff; }
 .chart__legend-item { display: inline-flex; align-items: center; gap: var(--space-2); }
 .chart__swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .chart__empty { margin: 0; }
+.chart-tip {
+  position: absolute; top: 4px; transform: translateX(-10%); z-index: 2; pointer-events: none;
+  display: flex; flex-direction: column; gap: 2px; padding: var(--space-2) var(--space-3);
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,.15)); font-size: var(--text-sm); white-space: nowrap;
+}
+.hourgrid { display: grid; grid-template-columns: 2.5em repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; }
+.hourgrid__cell { aspect-ratio: 1; border-radius: 2px; min-height: 10px; }
+.hourgrid__hour, .hourgrid__day { font-size: var(--text-xs, 0.75rem); color: var(--text-muted); font-family: var(--font-mono); }
 .range-picker { display: inline-flex; gap: 2px; }
 .range-picker button { font-size: var(--text-xs); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; }
 .range-picker button[aria-pressed="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }

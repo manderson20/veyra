@@ -56,6 +56,13 @@
   color-scheme: light;
   --bg: #f5f7fb;
   --surface: #ffffff;
+  /* Chart series (categorical, fixed order; validated with the dataviz
+     validator against --surface: inbound, outbound, internal). */
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  /* Sequential (one hue) for magnitude, e.g. the busiest-hours grid. */
+  --viz-seq: #2a78d6;
   --surface-2: #f0f3f8;
   --surface-3: #e6ebf2;
   --border: #d9e0ea;
@@ -106,6 +113,10 @@
   color-scheme: dark;
   --bg: #050f1d;
   --surface: #0b1d33;
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-seq: #3987e5;
   --surface-2: #10253f;
   --surface-3: #16304f;
   --border: #1f3756;
