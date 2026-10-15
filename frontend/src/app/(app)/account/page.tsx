@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { NewPasswordFields, passwordsMatch } from "@/components/account/PasswordFields";
 import { ConnectedAppsCard } from "@/components/account/ConnectedAppsCard";
+import { MyCallsCard } from "@/components/account/MyCallsCard";
 import { MyVoicemailCard } from "@/components/account/MyVoicemailCard";
 import { SessionsTable } from "@/components/account/SessionsTable";
 import { TwoFactorCard } from "@/components/account/TwoFactorCard";
@@ -55,6 +56,7 @@ function AccountPage() {
       </div>
       <TwoFactorCard />
       <MyVoicemailCard />
+      <MyCallsCard />
       <SessionsCard />
       <ConnectedAppsCard />
     </div>
