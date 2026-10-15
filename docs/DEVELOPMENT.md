@@ -120,9 +120,12 @@ sed -i 's/^__version__ = .*/__version__ = "0.5.0-dev"/' backend/veyra/version.py
 
 `tools/fakephone.py` is a standard-library SIP user agent that registers an
 extension against the local engine, answers qualify pings and incoming
-calls (after a configurable delay), and honours BYE. It sends no audio. It
-exercises registration badges, Active Calls, click-to-dial and deploy-when-
-idle from the server alone:
+calls (after a configurable delay), and honours BYE. It sends no audio
+unless `--tone` is given (a 440 Hz PCMU tone while a call is up, for call
+recording; M10). Use a fresh `--local-port` per run: a stale registration of
+the same contact expiring mid-test drops the new one. It exercises
+registration badges, Active Calls, click-to-dial, deploy-when-idle and call
+recording from the server alone:
 
 ```bash
 python3 -I tools/fakephone.py --user <endpoint-name> --password <sip-secret> \

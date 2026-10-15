@@ -119,7 +119,7 @@ def process(
             wav.unlink(missing_ok=True)  # converted before, the delete failed
             continue
         if st.st_size <= EMPTY_WAV_BYTES:
-            log.info("Recording %s is empty (the call never connected); discarded", ref)
+            log.info("Recording %s has no audio; discarded", ref)
             wav.unlink(missing_ok=True)
             continue
         policy = db.get(RecordingPolicy, policy_id)
