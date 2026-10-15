@@ -1,8 +1,7 @@
 # Milestone 9d Report — Firewall and Phone Trust
 
 Branch `milestone-9d` (from `main` at 0.13.0, with 0.13.1 merged). Design:
-[FIREWALL_TRUST.md](../FIREWALL_TRUST.md). Status: **built and checked
-live on dev1, awaiting the owner's approval** (to be released as 0.14.0).
+[FIREWALL_TRUST.md](../FIREWALL_TRUST.md). Status: **approved 2026-10-15, released as 0.14.0.**
 
 ## 1. Scope (owner requests of 2026-10-14)
 
@@ -133,7 +132,9 @@ and metrics (0.15.0), per the roadmap.
   provisioning.
 * 2026-10-15: flyouts split into columns by group (released as 0.13.1
   before this milestone).
-* Approval: *pending*.
+* 2026-10-15: approved ("9d approved, go ahead with 0.14.0"); released as
+  0.14.0. The browser CA, the local networks, the §11 questions and the
+  VVX bootstrap check stay open (§6).
 
 ## Addendum (2026-10-15 02:09 UTC): 0.13.2 and the recovery fix on dev1
 
