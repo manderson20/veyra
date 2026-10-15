@@ -51,15 +51,22 @@ veyra.csv => "v1",${CSV_QUOTE(${CDR(uniqueid)})},${CSV_QUOTE(${CDR(linkedid)})},
   ${CSV_QUOTE(${CDR(disposition)})},${CSV_QUOTE(${CDR(src)})},${CSV_QUOTE(${CDR(clid)})},
   ${CSV_QUOTE(${CDR(dst)})},${CSV_QUOTE(${CDR(dcontext)})},${CSV_QUOTE(${CDR(channel)})},
   ${CSV_QUOTE(${CDR(dstchannel)})},${CSV_QUOTE(${CDR(lastapp)})},
-  ${CSV_QUOTE(${VEYRA_ORG})},${CSV_QUOTE(${VEYRA_DIR})},${CSV_QUOTE(${VEYRA_ROUTE})},
-  ${CSV_QUOTE(${VEYRA_DID})},${CSV_QUOTE(${VEYRA_REC})}
+  ${CSV_QUOTE(${CDR(veyra_org)})},${CSV_QUOTE(${CDR(veyra_dir)})},
+  ${CSV_QUOTE(${CDR(veyra_route)})},${CSV_QUOTE(${CDR(veyra_did)})},
+  ${CSV_QUOTE(${CDR(veyra_rec)})}
 ```
 
 Checked on dev1 (Asterisk 22.5, 2026-10-15): `CSV_QUOTE` and `FILTER`
 exist, there is no JSON encoding function (only `JSON_DECODE`), so CSV it
 is; the `v1` tag lets the format change later without misreading old
-lines. *(spike: confirm that `cdr_custom` evaluates channel variables such
-as `VEYRA_ORG` for each leg in simple mode.)*
+lines.
+
+Measured on dev1 with a temporary mapping and a runtime test context
+(both removed afterwards): `cdr_custom` does **not** see channel variables
+(`${VEYRA_ORG}` was empty on every leg), only **CDR variables**, and a CDR
+variable appears only on the CDR of the channel that set it (and the
+bridge CDR forked from it). Every leg carries the same `linkedid`. Hence
+§3.2.
 
 Why a file and not `cdr_pgsql`: Asterisk would need a database password,
 and CDRs written while PostgreSQL is down (an upgrade, a restart) would be
@@ -72,8 +79,13 @@ read).
 
 ### 3.2 Marking calls in the dialplan
 
-The generator sets inherited variables where a call enters Veyra's
-dialplan, so every leg carries them:
+The generator sets inherited channel variables where a call enters
+Veyra's dialplan (so they follow the call through Local channels, groups
+and queues) **and** copies them into the channel's CDR with
+`Set(CDR(veyra_org)=${VEYRA_ORG})` and the like at the top of every Veyra
+context a channel enters (one `GoSub(veyra-cdr-mark)` line), because only
+CDR variables reach the CSV (§3.1). The worker takes, per `linkedid`, the
+first non-empty value of each field across the legs:
 
 * `__VEYRA_ORG=<slug>` on every entry: phones (the endpoint's
   organization), inbound routes (the route's), pages and features.
