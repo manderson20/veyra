@@ -225,6 +225,12 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         "Change what calls are recorded",
         default_roles=("org_admin",),
     ),
+    PermissionDef("central.read", "View the central console and its instances", platform_only=True),
+    PermissionDef(
+        "central.write",
+        "Run the central console: enroll, revoke, policies, commands",
+        platform_only=True,
+    ),
     PermissionDef("sso.read", "View sign-in providers and policy", platform_only=True),
     PermissionDef("sso.write", "Change sign-in providers and policy", platform_only=True),
     PermissionDef("integrations.read", "View integration tokens", default_roles=("org_admin",)),

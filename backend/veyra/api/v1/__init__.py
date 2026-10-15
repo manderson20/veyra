@@ -13,6 +13,7 @@ from veyra.api.v1 import (
     calendars,
     call_history,
     calls,
+    central,
     companion,
     device_profiles,
     devices,
@@ -104,6 +105,7 @@ for r in (
     companion,
     integrations,
     webhooks,
+    central,
 ):
     api_router.include_router(r.router)
 api_router.include_router(reports.saved_router)

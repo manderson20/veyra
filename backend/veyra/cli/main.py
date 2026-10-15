@@ -791,6 +791,31 @@ def poll_calendars_and_ring_bells(db: Any, settings: Any, log: Any) -> None:
         log.exception("Bell scheduler pass failed")
 
 
+def central_pass(settings: Any, log: Any) -> None:
+    """Check in with the central console when due; as a console, expire
+    commands and prune nonces and samples."""
+    from veyra.central import console, member
+    from veyra.core.db import session_scope
+    from veyra.core.security.crypto import try_load_installation_key
+
+    try:
+        key = try_load_installation_key(settings)
+        if key is None:
+            return
+        with session_scope() as db:
+            if member.due(db):
+                from veyra.telephony import get_adapter
+
+                adapter = get_adapter(settings) if settings.telephony_engine != "none" else None
+                state = member.check_in(db, settings, key, adapter)
+                if state.get("last_error"):
+                    log.warning("Central console check-in: %s", state["last_error"])
+            if console.enabled(db):
+                console.expire_and_prune(db)
+    except Exception:
+        log.exception("Central management pass failed")
+
+
 def deliver_webhooks(settings: Any, log: Any) -> None:
     from veyra.core.db import session_scope
     from veyra.core.security.crypto import try_load_installation_key
@@ -1026,6 +1051,8 @@ def cmd_worker(args: argparse.Namespace) -> int:
             # Outgoing webhooks (docs/INTEGRATIONS.md §3.5): voicemail
             # notifications in, due deliveries out.
             deliver_webhooks(settings, log)
+            # Central management (docs/CENTRAL_MANAGEMENT.md §3).
+            central_pass(settings, log)
             with session_scope() as db:
                 if args.once or now - last_module_sync >= 60:
                     modules.sync_worker(db)
