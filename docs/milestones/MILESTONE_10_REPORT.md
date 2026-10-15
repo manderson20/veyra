@@ -1,0 +1,124 @@
+# Milestone 10 Report — Reporting and Monitoring
+
+Branch `milestone-10` (from `main` at 0.14.0). Design:
+[REPORTING.md](../REPORTING.md). Status: **built and checked live on dev1,
+awaiting the owner's approval** (to be released as 0.15.0).
+
+## 1. Scope (roadmap row 10)
+
+Call detail records with search and export, call recording, reports and
+dashboards, monitoring and metrics; the two pages shown as "coming later"
+since Milestone 4 (Call History, Call Recording).
+
+## 2. Results
+
+* **Call history** (Telephony → Call History): every call with direction
+  (internal, inbound, outbound), from, to, the DID, who answered, ring and
+  talk time and the outcome (answered, missed, busy, voicemail, abandoned,
+  failed); search by number, name or extension, period, organization,
+  direction and outcome; the legs behind each call; CSV export (audited).
+  **Recent calls** on every user's account page. Kept 400 days.
+  * How: a managed `cdr_custom.conf` makes Asterisk write one CSV line per
+    call record (`cdr.conf` now logs unanswered calls); the worker reads
+    the new lines every 5 seconds (cursor kept in the database, rotation
+    followed) and folds the legs of each `linkedid` into one call,
+    resolving organization and direction from the phone and trunk names.
+    Asterisk needs no database password and nothing is lost while the
+    database restarts.
+* **Call recording** (Telephony → Call Recording): off until a policy
+  enables it. A policy chooses directions, every call or chosen phones,
+  ring groups, queues and DIDs, an announcement and the retention. Policies
+  are generated into the dialplan in front of every place a call is
+  connected; the recording starts when the call is bridged (no ringing or
+  hold music) and only once per call. After the call the worker converts
+  the file to Ogg Opus (about 7 MB per hour), files it by organization and
+  month and links it to the call; recordings without audio are discarded.
+  Playing and downloading in the browser are audited; recordings can be
+  held against deletion and are deleted after their retention.
+* **Reports** (Telephony → Reports): totals, calls per day by direction,
+  the busiest hours by weekday (in the organization's time zone), ring and
+  talk time, inbound answered within 20 s, extensions (answered, missed,
+  talk time), trunks, and queues from Asterisk's queue log (callers,
+  answered, hung up waiting, average wait, service level, who answered).
+  Chart colours are new tokens validated for colour-blind readers in light
+  and dark mode; every chart has a table view.
+* **Alerts** (System → Alerts): the telephony engine, trunks, Veyra's
+  services, disk space, the HTTPS certificate, firewall attack spikes and
+  unregistered phones. An alert is raised after its delay, emailed when
+  raised, daily while it lasts and when cleared; rules can be switched,
+  tuned and given recipients. The dashboard shows **Calls today** and
+  **Alerts**.
+* **Prometheus metrics** at `/api/v1/metrics` for a token with
+  `metrics.read`.
+* Migrations `0019` (calls), `0020` (recording), `0021` (queue events),
+  `0022` (alerts). No page is "coming later" any more.
+
+## 3. Testing (final tree, 2026-10-15)
+
+| Suite | Result |
+|---|---|
+| Backend ruff / mypy | Clean / no issues (158 files) |
+| Backend pytest | **356 passed** (M10 added 14: the CDR line format incl. quoting and caller names, folding internal, inbound ring group, outbound busy, voicemail, missed and unknown calls, the file cursor and rotation, retention, search, detail, export and own calls; recording policies in the generated dialplan, validation, conversion with real `ffmpeg`, empty files, playback audit, own-call visibility, hold and retention; reports in the organization's time zone, the queue log and queue statistics; alert life cycle, checks, rules API and metrics text) |
+| `alembic check` | No drift (migrations `0019`-`0022`, upgrade and downgrade) |
+| Frontend lint / typecheck / vitest / build | Clean / clean / **36 passed** / passed |
+| Installer library tests | **46 passed** |
+| Chart palette | Dataviz validator: light and dark, all-pairs CVD and normal-vision checks pass; one light contrast warning (aqua) covered by the table views |
+| **Owner's `upgrade.sh` on dev1** | 0.14.0-76aa5397d5 → 0.14.0-ee7085386c (02:32 UTC, call history: `cdr.conf`/`cdr_custom.conf` managed, Asterisk reloaded) → **0.14.0-5a2bddb4c7** (03:08 UTC, schema `0022`, recordings directories, all verify checks OK incl. `cdr-custom`, `cdr-file`, `data-dir:recordings`) |
+
+### Live checks on dev1 (2026-10-15 02:33–03:14 UTC)
+
+| Check | Result |
+|---|---|
+| Before the build | Asterisk 22 has `CSV_QUOTE` but no JSON encoder; `cdr_custom` sees CDR variables but not channel variables (temporary mapping and runtime context, both removed): design §3.1-3.2 |
+| Call history | `*43` from a Local channel: 2 CSV lines → 1 call (internal, answered, 4 s talk, 2 legs), final after 60 s |
+| Recording, dialplan | Two temporary extensions (passwords generated by the test script) and an "internal, every call" policy: deployed revision 26 shows the `GosubIf` before the dial and the `[veyra-record]` subroutine |
+| Recording, no audio | A call between two simulated phones without media: 44-byte WAV, call recorded as answered with 6 s talk and the recording reference, the empty file discarded |
+| Recording, with audio | `tools/fakephone.py --tone` (new): 8 s call → 127 KB WAV → **15.9 KB Ogg Opus**, 8 s, mean −11 dB, filed under `<org>/2026/10/`, linked to the call, deletion date from the policy, WAV removed |
+| Alerts | Seven rules created on the first pass; nothing raised (healthy server); the certificate probe reads 825 days, the service checks see the units as active from the service account |
+| Cleanup | Test extensions and policy removed, revision 27 deployed; the test recording deletes itself after its one-day retention; the test calls stay in the history |
+
+## 4. Not verified
+
+* Calls through a **real trunk** and **real handsets** (no phone or
+  carrier is registered on dev1): inbound DIDs, outbound calls, the
+  announcement before an inbound recording.
+* Queue reports with real queue calls (the queue log parser is tested
+  with sample lines; dev1's queue log only has start and reload lines).
+* Alert emails end to end (dev1 has no SMTP settings; the mail queue path
+  is the one voicemail already uses).
+* `/api/v1/metrics` with a real API token and Prometheus.
+* The new pages in a browser (no browser on the server): Reports' charts,
+  Call Recording, Alerts, Call History's player.
+
+## 5. Known limitations
+
+* Recording is decided when the call is connected; a call transferred to
+  a recorded phone after connecting is not recorded from that point.
+* Recordings are not encrypted at rest (as voicemail); the server's disk is
+  the boundary.
+* The backup alert waits for scheduled backups (M12/M17).
+* Reports cover at most 400 days per request; queue statistics count
+  queue log events, so a caller who re-enters a queue counts twice.
+
+## 6. Open items
+
+* **Owner: the six questions of [REPORTING.md](../REPORTING.md) §12**:
+  whether and what to record (and the announcement), retention of history
+  and recordings, who may listen, alert recipients, Prometheus, which
+  reports matter most.
+* **Owner: browser check** of Telephony → Reports, Call Recording and Call
+  History, and System → Alerts; set alert recipients once SMTP is
+  configured (System → Settings).
+* From 9d and earlier: the CA in your browser, dev1's local networks, the
+  firewall questions, the VVX bootstrap test, the AND clock and Poly
+  captures, the handset checks of Milestones 5, 7, 8 and 9.
+
+## 7. Next milestone
+
+Milestone 11 — module management and independent updates, with the
+owner's online module catalog on GitHub (0.16.0), per the roadmap.
+
+## 8. Owner decisions
+
+* 2026-10-15: milestone started on the owner's "proceed" after 0.14.0.
+* Approval: *pending*.
