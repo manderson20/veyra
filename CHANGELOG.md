@@ -8,6 +8,23 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.20.0 — unreleased (Milestone 14)
+
+### Added
+- **Multi-tenancy** ([MULTI_TENANCY.md](docs/MULTI_TENANCY.md)): every organization gets an engine namespace (its own phone, feature, paging, outbound, IVR, ring group and queue contexts, voicemail context, queue names, hold music classes and folders, pickup group names). The organization that existed before keeps exactly today's names; a dev1 comparison produced byte-identical files (migration `0027`).
+- An **isolation verifier** reads every generated `extensions.conf`, `pjsip.endpoints.conf` and `queues.conf` and refuses a revision in which one organization's phones or contexts reach another's phones, contexts, voicemail or queues.
+- System → Settings → **Multi-tenancy**: turning it on runs the checks against your configuration plus a test copy of your organization; a second active organization needs it (`409 multi_tenancy_disabled`); turning it off needs one active organization.
+- Outbound routes can belong to one organization ("Used by"); routes without one serve every organization.
+- A paging zone that shares its multicast address with another organization's zone is flagged.
+
+### Changed
+- Numbers (extensions, ring groups, queues, paging zones, pages, shared inboxes) are unique per organization instead of across the installation; `/extensions/next-number` takes `organization_id`.
+- With multi-tenancy on, the dashboard call graphs and the active-call and registration counts are for platform administrators only.
+- The call history and queue reports read queue and ring group names in any namespace.
+
+### Fixed
+- Settings still listed single sign-on under "Coming later".
+
 ## 0.19.0 — 2026-10-15 (Milestone 13)
 
 ### Added

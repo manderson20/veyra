@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from veyra.api.v1 import group_helpers as helpers
 from veyra.api.v1.group_helpers import MemberOut
 from veyra.configmgmt import service as configmgmt
-from veyra.core import audit
+from veyra.core import audit, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import conflict, forbidden, not_found
@@ -40,7 +40,6 @@ from veyra.core.security.principal import Principal
 from veyra.integrations import webhooks
 from veyra.telephony import routing
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
-from veyra.telephony.asterisk.generator import CONTEXT_PAGE_PLAY
 
 router = APIRouter(prefix="/pages", tags=["paging"])
 
@@ -446,7 +445,7 @@ def create_page(
     _check_audio(db, org.id, body.audio_id)
     helpers.load_members(db, org.id, body.members, "members")
     if body.number:
-        helpers.check_number(db, body.number, "page", None)
+        helpers.check_number(db, body.number, "page", None, org.id)
     page = PageModel(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -498,7 +497,7 @@ def update_page(
     details: dict[str, Any] = {}
     if "number" in changes and changes["number"] != page.number:
         if changes["number"]:
-            helpers.check_number(db, changes["number"], "page", page.id)
+            helpers.check_number(db, changes["number"], "page", page.id, page.organization_id)
         details["number"] = {"from": page.number, "to": changes["number"]}
         page.number = changes["number"]
     if "audio_id" in changes and changes["audio_id"] != page.audio_id:
@@ -608,14 +607,15 @@ def start_page(
         log.detail = {"reason": "disabled"}
         db.commit()
         return False, "The page is disabled.", None
+    play_context = tenancy.names_of(db, page.organization_id).page_play
     try:
         if Capability.CLICK_TO_DIAL not in adapter.capabilities():
             raise NotSupported("the engine cannot originate calls")
         channel = adapter.originate(
-            f"play-{page.slug}@{CONTEXT_PAGE_PLAY}",
+            f"play-{page.slug}@{play_context}",
             page.slug,
             caller_id="Veyra page",
-            context=CONTEXT_PAGE_PLAY,
+            context=play_context,
             timeout=15,
         )
     except (EngineUnavailable, NotSupported) as e:

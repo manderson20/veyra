@@ -81,6 +81,9 @@ class OrganizationOut(ORM):
     is_active: bool
     moh_class_id: uuid.UUID | None = None
     bootstrap_includes_credential: bool = False
+    # Prefix of the organization's engine names; empty: today's names
+    # (docs/MULTI_TENANCY.md §2).
+    engine_namespace: str = ""
     created_at: datetime
 
 

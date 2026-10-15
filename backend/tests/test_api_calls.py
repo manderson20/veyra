@@ -3,7 +3,7 @@
 
 from datetime import timedelta
 
-from conftest import ADMIN_PASSWORD, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
 from fake_adapter import FakeAdapter
 from fastapi.testclient import TestClient
 
@@ -97,6 +97,7 @@ def test_registration_status_in_extension_responses(admin, app, tmp_path):
 def test_active_calls_are_scoped(admin, app, tmp_path):
     adapter, _, _ = _fake(app, tmp_path)
     a = _org(admin)["id"]
+    enable_multi_tenancy()
     b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
     ea = _create(admin, a, "1001", "Alpha desk")
     eb = _create(admin, b, "2001", "Beta desk")

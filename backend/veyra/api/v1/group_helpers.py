@@ -86,14 +86,19 @@ def unique_slug(db: Session, model: Any, name: str) -> str:
     return slug
 
 
-def check_number(db: Session, number: str, kind: str, exclude: uuid.UUID | None) -> None:
-    """The number must fit the numbering plan and be free across extensions,
-    ring groups and queues (``409 number_in_use``)."""
+def check_number(
+    db: Session, number: str, kind: str, exclude: uuid.UUID | None, organization_id: uuid.UUID
+) -> None:
+    """The number must fit the numbering plan and be free across the
+    organization's extensions, groups, queues, paging and shared inboxes
+    (``409 number_in_use``; numbers are per organization)."""
     plan = load_numbering_plan(db)
     problems = plan.check_number(number)
     if problems:
         raise validation("number", " ".join(problems), code="number_not_in_plan")
-    owner = number_owner(db, number, exclude=(kind, exclude) if exclude else None)
+    owner = number_owner(
+        db, number, organization_id=organization_id, exclude=(kind, exclude) if exclude else None
+    )
     if owner is not None:
         raise ProblemError(
             409,

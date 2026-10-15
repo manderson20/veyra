@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import Integer, and_, case, cast, func, select
 from sqlalchemy.orm import Session
 
+from veyra.core import tenancy
 from veyra.core.models import (
     CallQueue,
     CallRecord,
@@ -22,6 +23,7 @@ from veyra.core.models import (
     SipTrunk,
 )
 from veyra.reporting.cdr import endpoint_of
+from veyra.telephony.asterisk.names import Names
 
 SERVICE_LEVEL_SECONDS = 20
 MISSED = ("missed", "abandoned")
@@ -232,7 +234,10 @@ def queues_report(
         stmt = stmt.where(CallQueue.organization_id.in_(org_ids or {uuid.UUID(int=0)}))
     if organization_id is not None:
         stmt = stmt.where(CallQueue.organization_id == organization_id)
-    queues = {q.slug: q for q in db.scalars(stmt)}
+    spaces = tenancy.namespaces(db)
+    queues = {
+        Names(spaces.get(q.organization_id, "")).queue_key(q.slug): q for q in db.scalars(stmt)
+    }
     if not queues:
         return []
     wait = cast(func.nullif(QueueEvent.data1, ""), Integer)

@@ -2,7 +2,7 @@
 """Milestone 6 API: trunks, inbound and outbound routes, time conditions,
 scoping, pending-change flag and the deployed configuration."""
 
-from conftest import ADMIN_PASSWORD, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
 from fake_adapter import FakeAdapter
 from fastapi.testclient import TestClient
 
@@ -432,6 +432,7 @@ def test_outbound_routes_order_warnings_and_trunk_links(admin):
 
 def test_org_admin_scope_for_routing_and_trunks(admin, app):
     a = _org(admin)["id"]
+    enable_multi_tenancy()
     b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
     ext_a = _ext(admin, a, "1001", "Alpha phone")
     ext_b = _ext(admin, b, "2001", "Beta phone")

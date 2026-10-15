@@ -18,12 +18,12 @@ from sqlalchemy.orm import Session
 from veyra.core.models import QueueEvent
 from veyra.core.models.base import utcnow
 from veyra.reporting.cdr import CdrReader, retention_days
+from veyra.telephony.asterisk.names import queue_key_of
 
 log = logging.getLogger("veyra.reporting")
 
 QUEUE_LOG = Path("/var/log/asterisk/queue_log")
 CURSOR_KEY = "queue_log.cursor"
-QUEUE_PREFIX = "veyra-"
 EVENTS = {
     "ENTERQUEUE",
     "CONNECT",
@@ -43,7 +43,8 @@ def parse_line(line: str) -> QueueEvent | None:
     if len(parts) < 5:
         return None
     epoch, callid, queue, agent, event = parts[:5]
-    if event not in EVENTS or not queue.startswith(QUEUE_PREFIX):
+    key = queue_key_of(queue)
+    if event not in EVENTS or key is None:
         return None
     try:
         at = datetime.fromtimestamp(int(epoch), UTC)
@@ -54,7 +55,7 @@ def parse_line(line: str) -> QueueEvent | None:
         id=uuid.uuid4(),
         at=at,
         callid=callid[:64],
-        queue=queue[len(QUEUE_PREFIX) :][:80],
+        queue=key[:80],
         agent=agent[:128] if agent != "NONE" else "",
         event=event,
         data1=data[0][:64],

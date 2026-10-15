@@ -10,6 +10,7 @@ import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import type { OutboundRoute, TrunkPage } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
@@ -23,6 +24,7 @@ function OutboundRouteView() {
   const route = useApiData<OutboundRoute>(id ? `/routing/outbound/${encodeURIComponent(id)}` : null);
   const editable = can("trunks.write");
   const trunks = useApiData<TrunkPage>(editable ? "/trunks" : null);
+  const { organizations } = useOrganizationOptions();
   const [draft, setDraft] = useState<OutboundRouteDraft>(EMPTY_OUTBOUND_ROUTE);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -88,7 +90,7 @@ function OutboundRouteView() {
       <div className="grid grid--2" style={{ alignItems: "start", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)" }}>
         <Card title="Route" subtitle={editable ? undefined : "You can view but not change this route."}>
           <form className="stack stack--sm" onSubmit={save}>
-            <OutboundRouteFields draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} errors={errors.fields} trunks={trunkOptions} disabled={!editable} />
+            <OutboundRouteFields draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} errors={errors.fields} trunks={trunkOptions} disabled={!editable} organizations={organizations} />
             {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
             {editable ? <div className="form-actions"><Button onClick={() => setDraft(outboundRouteDraft(r))} disabled={!dirty || busy}>Discard</Button><Button variant="primary" type="submit" loading={busy} disabled={!dirty || !outboundRouteValid(draft)}>Save changes</Button></div> : null}
           </form>

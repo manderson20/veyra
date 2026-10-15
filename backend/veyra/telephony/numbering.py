@@ -148,8 +148,10 @@ def save_numbering_plan(db: Session, plan: NumberingPlan, updated_by: Any = None
 # --- the shared number space --------------------------------------------------
 
 
-def used_numbers(db: Session) -> set[str]:
-    """Every number taken by an extension, a ring group or a queue."""
+def used_numbers(db: Session, organization_id: Any = None) -> set[str]:
+    """Every number taken by an extension, a ring group, a queue, a paging zone,
+    a page or a shared inbox of the organization (numbers are per
+    organization: docs/MULTI_TENANCY.md §3); all organizations when None."""
     from sqlalchemy import select
 
     from veyra.core.models import (
@@ -170,11 +172,20 @@ def used_numbers(db: Session) -> set[str]:
         Page.number,
         VoicemailBox.number,
     ):
-        used |= {n for n in db.scalars(select(column)).all() if n}
+        stmt = select(column)
+        if organization_id is not None:
+            stmt = stmt.where(column.class_.organization_id == organization_id)
+        used |= {n for n in db.scalars(stmt).all() if n}
     return used
 
 
-def number_owner(db: Session, number: str, *, exclude: tuple[str, Any] | None = None) -> str | None:
+def number_owner(
+    db: Session,
+    number: str,
+    *,
+    organization_id: Any,
+    exclude: tuple[str, Any] | None = None,
+) -> str | None:
     """What already uses ``number``: ``"extension"``, ``"ring group"``,
     ``"queue"``, ``"paging zone"`` or ``"page"``; None when it is free. Takes
     the advisory lock that serialises concurrent creations of the same number
@@ -192,7 +203,8 @@ def number_owner(db: Session, number: str, *, exclude: tuple[str, Any] | None = 
     )
 
     db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"veyra.extension:{number}"}
+        text("SELECT pg_advisory_xact_lock(hashtext(:k))"),
+        {"k": f"veyra.number:{organization_id}:{number}"},
     )
     for kind, model in (
         ("extension", Extension),
@@ -202,7 +214,9 @@ def number_owner(db: Session, number: str, *, exclude: tuple[str, Any] | None = 
         ("page", Page),
         ("shared inbox", VoicemailBox),
     ):
-        stmt = select(model.id).where(model.number == number)
+        stmt = select(model.id).where(
+            model.number == number, model.organization_id == organization_id
+        )
         if exclude is not None and exclude[0] == kind:
             stmt = stmt.where(model.id != exclude[1])
         if db.scalar(stmt) is not None:

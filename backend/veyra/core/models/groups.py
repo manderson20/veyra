@@ -36,14 +36,18 @@ class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     """A number that rings several extensions. Context ``veyra-rg-<slug>``."""
 
     __tablename__ = "ring_groups"
-    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name"),
+        # Numbers are per organization (docs/MULTI_TENANCY.md §3).
+        UniqueConstraint("organization_id", "number"),
+    )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
     )
     name: Mapped[str] = mapped_column(String(100))
     slug: Mapped[str] = mapped_column(String(40), unique=True)
-    number: Mapped[str] = mapped_column(String(32), unique=True)
+    number: Mapped[str] = mapped_column(String(32))
     description: Mapped[str | None] = mapped_column(Text)
     # ``ringall`` (every member at once) or ``sequential`` (in order).
     strategy: Mapped[str] = mapped_column(String(16), default="ringall")
@@ -88,14 +92,17 @@ class CallQueue(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     ``queues.conf``, context ``veyra-queue-<slug>``."""
 
     __tablename__ = "call_queues"
-    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name"),
+        UniqueConstraint("organization_id", "number"),
+    )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
     )
     name: Mapped[str] = mapped_column(String(100))
     slug: Mapped[str] = mapped_column(String(40), unique=True)
-    number: Mapped[str] = mapped_column(String(32), unique=True)
+    number: Mapped[str] = mapped_column(String(32))
     description: Mapped[str | None] = mapped_column(Text)
     strategy: Mapped[str] = mapped_column(String(16), default="ringall")
     member_timeout: Mapped[int] = mapped_column(Integer, default=15)

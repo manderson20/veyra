@@ -875,6 +875,9 @@ class OutboundRouteIn(BaseModel):
     patterns: list[PatternIn] = Field(min_length=1, max_length=50)
     trunk_ids: list[uuid.UUID] = Field(min_length=1, max_length=20)
     caller_id_number: str | None = Field(None, max_length=32)
+    # Only this organization's phones use the route; none: every organization
+    # (docs/MULTI_TENANCY.md §4).
+    organization_id: uuid.UUID | None = None
 
     @field_validator("name")
     @classmethod
@@ -928,6 +931,7 @@ class OutboundRoutePatch(BaseModel):
     patterns: list[PatternIn] | None = Field(None, min_length=1, max_length=50)
     trunk_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=20)
     caller_id_number: str | None = Field(None, max_length=32)
+    organization_id: uuid.UUID | None = None
 
 
 class RouteTrunkOut(BaseModel):
@@ -949,6 +953,7 @@ class OutboundRouteOut(BaseModel):
     examples: list[str]
     trunks: list[RouteTrunkOut]
     caller_id_number: str | None
+    organization_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -1001,11 +1006,17 @@ def _or_outs(db: Session, rows: list[OutboundRoute]) -> list[OutboundRouteOut]:
                 for t in by_route.get(r.id, [])
             ],
             caller_id_number=r.caller_id_number,
+            organization_id=r.organization_id,
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
         for r in rows
     ]
+
+
+def _check_route_org(db: Session, organization_id: uuid.UUID | None) -> None:
+    if organization_id is not None and db.get(Organization, organization_id) is None:
+        raise _validation("organization_id", "organization not found")
 
 
 def _ordered_routes(db: Session) -> list[OutboundRoute]:
@@ -1101,6 +1112,7 @@ def create_outbound(
 ) -> OutboundRouteOut:
     if db.scalar(select(OutboundRoute.id).where(OutboundRoute.name == body.name)) is not None:
         raise conflict(f"An outbound route named {body.name!r} already exists.", "name_in_use")
+    _check_route_org(db, body.organization_id)
     position = (db.scalar(select(func.max(OutboundRoute.position))) or 0) + 1
     route = OutboundRoute(
         id=uuid.uuid4(),
@@ -1112,6 +1124,7 @@ def create_outbound(
         is_enabled=body.is_enabled,
         patterns=[p.model_dump() for p in body.patterns],
         caller_id_number=body.caller_id_number,
+        organization_id=body.organization_id,
     )
     db.add(route)
     db.flush()
@@ -1201,6 +1214,7 @@ def update_outbound(
         "patterns": route.patterns,
         "trunk_ids": [t.id for t in _route_trunks(db, [route])[route.id]],
         "caller_id_number": route.caller_id_number,
+        "organization_id": route.organization_id,
     }
     try:
         validated = OutboundRouteIn.model_validate({**current, **changes})
@@ -1213,10 +1227,13 @@ def update_outbound(
     if "description" in changes and validated.description != route.description:
         route.description = (validated.description or "").strip() or None
         details["description"] = True
-    for field in ("is_emergency", "is_enabled", "caller_id_number"):
+    if "organization_id" in changes:
+        _check_route_org(db, validated.organization_id)
+    for field in ("is_emergency", "is_enabled", "caller_id_number", "organization_id"):
         if field in changes and getattr(validated, field) != getattr(route, field):
-            setattr(route, field, getattr(validated, field))
-            details[field] = getattr(validated, field)
+            value = getattr(validated, field)
+            setattr(route, field, value)
+            details[field] = str(value) if isinstance(value, uuid.UUID) else value
     if "patterns" in changes:
         patterns = [p.model_dump() for p in validated.patterns]
         if patterns != route.patterns:

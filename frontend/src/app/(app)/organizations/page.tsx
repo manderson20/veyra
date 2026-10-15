@@ -22,7 +22,7 @@ import {
 import { api } from "@/lib/api";
 import { formatDateTime, slugify } from "@/lib/format";
 import { browserTimeZone, timeZones } from "@/lib/timezones";
-import type { Organization, Page } from "@/lib/types";
+import type { MultiTenancyStatus, Organization, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useSession } from "@/hooks/useSession";
@@ -47,9 +47,11 @@ export default function OrganizationsPage() {
   }, [q]);
 
   const list = useApiData<Page<Organization>>("/organizations", { q: debounced, limit: LIMIT, offset });
+  const mt = useApiData<MultiTenancyStatus>(can("system.settings.read") ? "/system/multi-tenancy" : null);
   const columns: Column<Organization>[] = [
     { key: "name", header: "Name", render: (o) => <span className="table__primary">{o.name}</span> },
     { key: "slug", header: "Short name", render: (o) => <span className="mono">{o.slug}</span> },
+    ...(can("system.settings.read") ? [{ key: "ns", header: "Engine names", render: (o: Organization) => <span className="mono subtle">{o.engine_namespace ? `veyra_${o.engine_namespace}-…` : "veyra-… (original)"}</span> }] : []),
     { key: "tz", header: "Time zone", render: (o) => o.timezone },
     { key: "status", header: "Status", render: (o) => <Badge tone={o.is_active ? "ok" : "neutral"}>{o.is_active ? "Active" : "Inactive"}</Badge> },
     { key: "created", header: "Created", render: (o) => <span className="subtle nowrap">{formatDateTime(o.created_at)}</span> },
@@ -62,6 +64,13 @@ export default function OrganizationsPage() {
         description="The school districts, municipalities and businesses served by this installation."
         actions={can("organizations.write") ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New organization</Button> : null}
       />
+      {mt.data && !mt.data.enabled ? (
+        mt.data.active_organizations > 1 ? (
+          <Callout tone="warn" title="Several organizations without isolation">Their phones can reach each other. Turn multi-tenancy on under System → Settings.</Callout>
+        ) : can("organizations.write") ? (
+          <Callout tone="info">A second organization needs multi-tenancy (System → Settings), which keeps the organizations&apos; phones, numbers and voicemail apart.</Callout>
+        ) : null
+      ) : null}
       <Card flush>
         <div className="table-toolbar">
           <SearchInput value={q} onChange={setQ} placeholder="Search by name or short name" label="Search organizations" />

@@ -335,5 +335,6 @@ broken; deleting a box or a menu that something points at is refused.
   while delivery is misconfigured and are given up after a day.
 * A recording abandoned on the phone (hang-up before `1`) stays in the
   incoming folder until it is discarded on the Prompts page.
-* One voicemail context (`veyra`) for the whole installation until
-  Milestone 14 gives each tenant its own.
+* One voicemail context per organization since Milestone 14: `veyra` for
+  the original organization, `veyra_<namespace>` for the others
+  ([MULTI_TENANCY.md](MULTI_TENANCY.md) §2).

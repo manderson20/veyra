@@ -4,6 +4,7 @@
 import { CompanionDeploymentCard } from "@/components/account/CompanionDeploymentCard";
 import { EmailDeliveryCard } from "@/components/account/EmailDeliveryCard";
 import { MfaPolicyCard } from "@/components/account/MfaPolicyCard";
+import { MultiTenancyCard } from "@/components/organizations/MultiTenancyCard";
 import { useThemePreference } from "@/components/ThemeToggle";
 import { Badge, Card, ErrorState, LoadingState, PageHeader } from "@/components/ui";
 import type { ThemePreference } from "@/lib/theme";
@@ -58,10 +59,11 @@ export default function SettingsPage() {
       {can("system.settings.read") ? <EmailDeliveryCard editable={can("system.settings.write")} /> : null}
       {can("system.settings.read") ? <MfaPolicyCard editable={can("system.settings.write")} /> : null}
       {can("system.settings.read") ? <CompanionDeploymentCard /> : null}
+      {can("system.settings.read") ? <MultiTenancyCard editable={can("system.settings.write")} /> : null}
       <Card title="Coming later">
         <p className="muted">
-          Network, backup, single sign-on (Google Workspace, Microsoft Entra ID, OIDC, LDAP) and branding settings
-          are delivered in later milestones. They are not shown here until they work.
+          Network, backup and branding settings are delivered in later milestones. They are not shown here until they
+          work. Single sign-on is under System → Sign-in.
         </p>
       </Card>
     </div>

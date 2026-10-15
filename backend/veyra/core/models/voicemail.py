@@ -22,6 +22,7 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     generated ``voicemail.conf``, which is therefore a sensitive file."""
 
     __tablename__ = "voicemail_boxes"
+    __table_args__ = (UniqueConstraint("organization_id", "number"),)
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
@@ -31,7 +32,7 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="CASCADE"), unique=True
     )
-    number: Mapped[str | None] = mapped_column(String(32), unique=True)
+    number: Mapped[str | None] = mapped_column(String(32))
     name: Mapped[str | None] = mapped_column(String(100))
     pin_ciphertext: Mapped[str] = mapped_column(Text)
     # Where messages are delivered; empty = no email.

@@ -19,6 +19,7 @@ from veyra.api.v1 import destinations, hold_music
 from veyra.api.v1 import group_helpers as helpers
 from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
 from veyra.api.v1.group_helpers import READ, WRITE, MemberOut
+from veyra.core import tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import conflict, not_found
@@ -27,6 +28,7 @@ from veyra.core.models import RingGroup, RingGroupMember
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
+from veyra.telephony.asterisk.names import Names
 
 router = APIRouter(prefix="/ring-groups", tags=["ring-groups"])
 
@@ -140,6 +142,11 @@ def _members(db: Session, group_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[Rin
 
 
 def _outs(db: Session, rows: list[RingGroup]) -> list[RingGroupOut]:
+    spaces = tenancy.namespaces(db)
+
+    def names_of(org_id: uuid.UUID) -> Names:
+        return Names(spaces.get(org_id, ""))
+
     if not rows:
         return []
     orgs = helpers.org_names(db, {r.organization_id for r in rows})
@@ -183,7 +190,7 @@ def _outs(db: Session, rows: list[RingGroup]) -> list[RingGroupOut]:
                 organization_name=orgs.get(r.organization_id, ""),
                 name=r.name,
                 slug=r.slug,
-                context=f"veyra-rg-{r.slug}",
+                context=names_of(r.organization_id).ring_group(r.slug),
                 number=r.number,
                 description=r.description,
                 strategy=r.strategy,
@@ -223,7 +230,7 @@ def _set_members(db: Session, group: RingGroup, extension_ids: list[uuid.UUID]) 
 
 
 def _check(db: Session, org_id: uuid.UUID, body: RingGroupIn, self_id: uuid.UUID | None) -> None:
-    helpers.check_number(db, body.number, "ring group", self_id)
+    helpers.check_number(db, body.number, "ring group", self_id, org_id)
     helpers.load_members(db, org_id, body.members, "members")
     hold_music.check_set(db, org_id, body.moh_class_id, "moh_class_id")
     check_destination(

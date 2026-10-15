@@ -18,10 +18,10 @@ property of extensions.
 
 Ring groups and queues take a **number from the numbering plan**
 ([EXTENSIONS.md](EXTENSIONS.md)): same length and range as extensions,
-unique across extensions, ring groups and queues of the installation
-(one dialplan context until Milestone 14). Users dial them from a phone,
+unique across the organization's extensions, ring groups and queues
+(per organization since Milestone 14). Users dial them from a phone,
 IVR direct dialling reaches them, and the Companion directory lists them
-later (Milestone 13). Everything reaches Asterisk through a generated and
+(since Milestone 13). Everything reaches Asterisk through a generated and
 deployed revision ([TELEPHONY_ENGINE.md](TELEPHONY_ENGINE.md) §4); new in
 this milestone is a generated `queues.conf` and the stub that includes it.
 
@@ -351,5 +351,6 @@ answer and dialling `*8` and `**<ext>` from another.
   pickup group; an organization that wants pickup limited to groups should
   not publish `**` on its phones.
 * Paging and intercom are not part of this milestone.
-* One dialplan context for the installation until Milestone 14: group and
-  queue numbers are unique across organizations like extension numbers.
+* Since Milestone 14 group and queue numbers are unique per organization,
+  like extension numbers, and each organization has its own contexts
+  ([MULTI_TENANCY.md](MULTI_TENANCY.md)).

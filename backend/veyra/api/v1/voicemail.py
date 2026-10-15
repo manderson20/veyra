@@ -369,7 +369,7 @@ def create_box(
             raise _validation("name", "enter a name")
         if not (body.number or "").strip():
             raise _validation("number", "enter a number from the numbering plan")
-        helpers.check_number(db, (body.number or "").strip(), "shared inbox", None)
+        helpers.check_number(db, (body.number or "").strip(), "shared inbox", None, org.id)
         helpers.load_members(db, org.id, body.members, "members")
         key = installation_key(request)
         if body.delete_after_email and not body.email:
@@ -488,7 +488,9 @@ def update_box(
     details: dict[str, Any] = {}
     if box.extension_id is None:
         if changes.get("number") and changes["number"].strip() != box.number:
-            helpers.check_number(db, changes["number"].strip(), "shared inbox", box.id)
+            helpers.check_number(
+                db, changes["number"].strip(), "shared inbox", box.id, box.organization_id
+            )
             details["number"] = {"from": box.number, "to": changes["number"].strip()}
             box.number = changes["number"].strip()
         if changes.get("name") and changes["name"].strip() != box.name:

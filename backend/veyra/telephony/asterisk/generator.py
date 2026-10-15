@@ -20,6 +20,8 @@ from typing import Any
 
 from veyra.telephony import routing
 from veyra.telephony.adapter import GeneratedFile
+from veyra.telephony.asterisk import names as engine_names
+from veyra.telephony.asterisk.names import Names
 from veyra.telephony.settings import SipSettings
 
 HEADER = (
@@ -208,7 +210,7 @@ def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
     zones = list(paging.get("zones") or [])
     pages = list(paging.get("pages") or [])
     lines = [
-        f"[{CONTEXT_PAGING}]",
+        f"[{engine_names.current().paging}]",
         "; Paging zones and pages dialled from phones (docs/PAGING_RECORDINGS.md §2.3).",
     ]
     seen: set[str] = set()
@@ -252,8 +254,8 @@ def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
         elif p.get("audio"):
             # A recorded page: start the play leg and let the caller go.
             lines += [
-                f" same => n,Originate(Local/play-{slug}@{CONTEXT_PAGE_PLAY},exten,"
-                f"{CONTEXT_PAGE_PLAY},{slug},1,,a)",
+                f" same => n,Originate(Local/play-{slug}@{engine_names.current().page_play},exten,"
+                f"{engine_names.current().page_play},{slug},1,,a)",
                 " same => n,Playback(beep)",
             ]
         else:
@@ -268,7 +270,7 @@ def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
         ]
     lines += [
         "",
-        f"[{CONTEXT_PAGE_PLAY}]",
+        f"[{engine_names.current().page_play}]",
         "; Recorded pages: the far leg plays the recording into the Page().",
     ]
     for p in pages:
@@ -354,6 +356,39 @@ def generate(
     problems = sip.problems()
     if problems:
         raise GenerationError("; ".join(problems))
+    mapping = {
+        str(o.get("slug") or ""): str(o.get("namespace") or "")
+        for o in snapshot.get("organizations") or []
+    }
+    with engine_names.namespaces(mapping):
+        files = _generate(
+            snapshot,
+            sip,
+            prompts_dir=prompts_dir,
+            mailqueue_command=mailqueue_command,
+            moh_dir=moh_dir,
+            recordings_dir=recordings_dir,
+        )
+    # Prove the organizations cannot reach each other (docs/MULTI_TENANCY.md §5).
+    strict = bool((snapshot.get("installation") or {}).get("multi_tenancy_enabled"))
+    if len(set(mapping.values())) > 1 or strict:
+        from veyra.telephony.asterisk import isolation
+
+        problems = isolation.verify(files, strict=strict)
+        if problems:
+            raise GenerationError("isolation check failed: " + "; ".join(problems[:10]))
+    return files
+
+
+def _generate(
+    snapshot: dict[str, Any],
+    sip: SipSettings,
+    *,
+    prompts_dir: str,
+    mailqueue_command: str,
+    moh_dir: str,
+    recordings_dir: str,
+) -> list[GeneratedFile]:
     extensions = list(snapshot.get("extensions") or [])
     trunks = list(snapshot.get("trunks") or [])
     boxes = _check_boxes(list(snapshot.get("voicemail_boxes") or []), extensions)
@@ -363,7 +398,9 @@ def generate(
     _check_group_numbers(extensions, ring_groups, queues)
     moh = _check_moh(list(snapshot.get("hold_music") or []))
     org_moh = {
-        str(o["slug"]): _moh_class(o.get("hold_music"), moh, f"organization {o['slug']}")
+        str(o["slug"]): _moh_class(
+            o.get("hold_music"), moh, f"organization {o['slug']}", str(o["slug"])
+        )
         for o in (snapshot.get("organizations") or [])
         if o.get("hold_music")
     }
@@ -373,7 +410,7 @@ def generate(
         _endpoints(
             sip,
             extensions,
-            set(boxes),
+            {k for k, b in boxes.items() if not b.get("shared")},
             dict(snapshot.get("shared_mailboxes") or {}),
             org_moh,
         ),
@@ -396,45 +433,55 @@ def generate(
     ]
 
 
-def _check_moh(sets: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Hold music sets by slug (docs/PAGING_RECORDINGS.md §3.2)."""
-    out: dict[str, dict[str, Any]] = {}
+MohSets = dict[tuple[str, str], dict[str, Any]]
+
+
+def _check_moh(sets: list[dict[str, Any]]) -> MohSets:
+    """Hold music sets by (organization, slug) (docs/PAGING_RECORDINGS.md §3.2)."""
+    out: MohSets = {}
     for m in sets:
         slug = _slug(str(m.get("slug") or ""), "hold music slug")
-        if slug in out:
+        org = str(m.get("organization") or "")
+        if (org, slug) in out:
             raise GenerationError(f"duplicate hold music slug {slug!r}")
         for f in m.get("files") or []:
             if not _FILE_RE.match(str(f)):
                 raise GenerationError(f"hold music set {slug}: file name {f!r} is not valid")
-        out[slug] = m
+        out[(org, slug)] = m
     return out
 
 
-def _moh_class(slug: Any, moh: dict[str, dict[str, Any]], what: str) -> str:
-    """The engine class for a set slug; the built-in class when none."""
+def _moh_class(slug: Any, moh: MohSets, what: str, org: str = "") -> str:
+    """The engine class for a set slug of ``org``; the built-in class when none."""
     if not slug:
         return MOH_BUILTIN
     slug = _slug(str(slug), f"hold music of {what}")
-    if slug not in moh:
-        raise GenerationError(f"{what}: hold music set {slug!r} is not in the snapshot")
-    return f"{MOH_CLASS_PREFIX}{slug}"
+    if (org, slug) not in moh:
+        # Snapshots before Milestone 14 do not always say whose set it is.
+        matches = [k for k in moh if k[1] == slug]
+        if len(matches) != 1 or (org and matches[0][0] not in ("", org)):
+            raise GenerationError(f"{what}: hold music set {slug!r} is not in the snapshot")
+        org = matches[0][0]
+    return engine_names.for_org(org).moh_class(slug)
 
 
-def _moh_conf(moh: dict[str, dict[str, Any]], moh_dir: str) -> GeneratedFile:
+def _moh_conf(moh: MohSets, moh_dir: str) -> GeneratedFile:
     """``musiconhold.conf``: one ``[veyra-<slug>]`` files class per set. The
     track list is written as a comment so a changed set changes the file and
     the deployer reloads ``res_musiconhold.so`` (which rescans the
     directories); the installer's stub keeps the built-in ``default``."""
     lines = [HEADER, "; Hold music sets (docs/PAGING_RECORDINGS.md §3.2).", ""]
-    for slug, m in sorted(moh.items()):
+    ordered = sorted(moh.items(), key=lambda kv: engine_names.for_org(kv[0][0]).moh_class(kv[0][1]))
+    for (owner, slug), m in ordered:
         name = _check_value(str(m.get("name") or slug), "hold music name")
         org = _slug(str(m.get("organization") or ""), f"organization of hold music {slug}")
         files = [str(f) for f in (m.get("files") or [])]
+        n = engine_names.for_org(owner)
         lines += [
-            f"[{MOH_CLASS_PREFIX}{slug}]",
+            f"[{n.moh_class(slug)}]",
             f"; {name} ({org}); tracks: {', '.join(files) or 'none'}",
             "mode=files",
-            f"directory={moh_dir}/{slug}",
+            f"directory={moh_dir}/{n.moh_dir(slug)}",
             f"sort={'random' if m.get('random') else 'alpha'}",
             "",
         ]
@@ -487,10 +534,11 @@ def _bind(address: str, port: int) -> str:
 def _endpoints(
     sip: SipSettings,
     extensions: list[dict[str, Any]],
-    mailboxes: set[str] | None = None,
+    mailboxes: set[tuple[str, str]] | None = None,
     shared_mailboxes: dict[str, list[str]] | None = None,
     org_moh: dict[str, str] | None = None,
 ) -> GeneratedFile:
+    """``mailboxes`` holds (organization, number) of the extensions' own boxes."""
     allow = ",".join(sip.codecs)
     mailboxes = mailboxes or set()
     lines = [
@@ -522,7 +570,7 @@ def _endpoints(
         "",
     ]
     seen: set[str] = set()
-    numbers: set[str] = set()
+    numbers: set[tuple[str, str]] = set()
     sensitive = False
     for ext in extensions:
         name = _check_section(str(ext["endpoint_name"]), "endpoint name")
@@ -532,11 +580,13 @@ def _endpoints(
         number = str(ext["number"])
         if not _NUMBER_RE.match(number):
             raise GenerationError(f"extension number {number!r} is not valid")
-        # One dialplan context for the whole installation until Milestone 14,
-        # so a number can only be dialled to one endpoint.
-        if number in numbers:
+        org_slug = str(ext.get("organization") or "")
+        n = engine_names.for_org(org_slug)
+        # Numbers are unique within an engine namespace (one phone context
+        # each; docs/MULTI_TENANCY.md §3).
+        if (n.ns, number) in numbers:
             raise GenerationError(f"extension number {number} is used more than once")
-        numbers.add(number)
+        numbers.add((n.ns, number))
         secret = ext.get("secret")
         if not secret:
             raise GenerationError(f"endpoint {name!r} has no SIP secret")
@@ -556,19 +606,24 @@ def _endpoints(
         # about, its own mailbox (docs/VOICEMAIL_IVR.md §3.2).
         # Own box plus the shared inboxes the phone's lamp follows
         # (docs/PAGING_RECORDINGS.md §5).
-        boxes_of_phone = ([number] if number in mailboxes else []) + [
-            _check_value(str(n), "shared inbox number")
-            for n in (shared_mailboxes or {}).get(number, [])
+        shared = ext.get("shared_mailboxes")
+        if shared is None:
+            shared = (shared_mailboxes or {}).get(number, [])
+        boxes_of_phone = ([number] if (org_slug, number) in mailboxes else []) + [
+            _check_value(str(b), "shared inbox number") for b in shared
         ]
         mwi = (
-            [f"mailboxes={','.join(f'{n}@{VOICEMAIL_CONTEXT}' for n in boxes_of_phone)}"]
+            [f"mailboxes={','.join(f'{b}@{n.voicemail}' for b in boxes_of_phone)}"]
             if boxes_of_phone
             else []
         )
         # Pickup groups (docs/RING_GROUPS_QUEUES.md §4): the phone can be
         # picked up by, and can pick up, every member of its groups.
         groups = ",".join(
-            sorted(_slug(g, f"pickup group of {number}") for g in (ext.get("pickup_groups") or []))
+            sorted(
+                n.pickup_group(_slug(g, f"pickup group of {number}"))
+                for g in (ext.get("pickup_groups") or [])
+            )
         )
         pickup = [f"named_call_group={groups}", f"named_pickup_group={groups}"] if groups else []
         # Several phones may carry one extension (docs/DEVICE_PROVISIONING.md §2).
@@ -583,6 +638,7 @@ def _endpoints(
         lines += [
             f"; {org} {number}",
             f"[{name}](veyra-endpoint)",
+            *([f"context={n.internal}"] if n.ns else []),
             f"auth={name}",
             f"aors={name}",
             f'callerid="{cid_name}" <{cid_num}>',
@@ -880,11 +936,14 @@ def _dialplan(
     snapshot: dict[str, Any],
     extensions: list[dict[str, Any]],
     trunks: list[dict[str, Any]],
-    boxes: dict[str, dict[str, Any]] | None = None,
+    boxes: Boxes | None = None,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
     recording: list[dict[str, Any]] | None = None,
     recordings_dir: str = DEFAULT_RECORDINGS_DIR,
 ) -> GeneratedFile:
+    """``extensions.conf``. Each engine namespace gets its own contexts
+    (docs/MULTI_TENANCY.md §2); the sections keep their order, so an
+    installation with one namespace is written exactly as before."""
     recording = recording or []
     name = _check_value(str(snapshot.get("installation", {}).get("name") or "Veyra"), "name")
     outbound = list(snapshot.get("outbound_routes") or [])
@@ -896,6 +955,12 @@ def _dialplan(
     conditions = {str(c["key"]): c for c in (snapshot.get("time_conditions") or [])}
     trunk_slugs = [_check_section(str(t["slug"]), "trunk slug") for t in trunks]
     trunk_info = {str(t["slug"]): t for t in trunks}
+    paging = snapshot.get("paging") or {}
+    spaces = _namespaces(snapshot)
+
+    def mine(items: list[dict[str, Any]], ns: str) -> list[dict[str, Any]]:
+        return [i for i in items if engine_names.for_org(str(i.get("organization") or "")).ns == ns]
+
     lines = [
         HEADER,
         "[general]",
@@ -906,7 +971,70 @@ def _dialplan(
         "[globals]",
         f"VEYRA_INSTALLATION={name}",
         "",
-        f"[{CONTEXT_FEATURES}]",
+    ]
+    for ns in spaces:
+        with engine_names.using(Names(ns)):
+            lines += _features(mine(extensions, ns), prompts_dir)
+    for ns in spaces:
+        with engine_names.using(Names(ns)):
+            lines += _internal(
+                mine(extensions, ns),
+                {k: b for k, b in boxes.items() if engine_names.for_org(k[0]).ns == ns},
+                mine(ring_groups, ns),
+                mine(queues, ns),
+                recording,
+                prompts_dir,
+            )
+    lines += [
+        f"[{CONTEXT_INVALID}]",
+        "exten => _[0-9*#+].,1,NoOp(Veyra: no such extension ${EXTEN})",
+        " same => n,Playback(pbx-invalid)",
+        " same => n,Hangup()",
+        "",
+    ]
+    for ns in spaces:
+        with engine_names.using(Names(ns)):
+            part = {
+                **paging,
+                "zones": mine(list(paging.get("zones") or []), ns),
+                "pages": mine(list(paging.get("pages") or []), ns),
+            }
+            lines += _paging_contexts(part, prompts_dir)
+    lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir, spaces)
+    lines += _inbound_contexts(inbound, conditions, trunk_slugs, recording, prompts_dir)
+    for ns in spaces:
+        with engine_names.using(Names(ns)):
+            lines += _ivr_contexts(mine(menus, ns), prompts_dir)
+    moh = _check_moh(list(snapshot.get("hold_music") or []))
+    for ns in spaces:
+        with engine_names.using(Names(ns)):
+            lines += _ring_group_contexts(mine(ring_groups, ns), moh, recording, prompts_dir)
+    for ns in spaces:
+        with engine_names.using(Names(ns)):
+            lines += _queue_contexts(mine(queues, ns), prompts_dir, recording)
+    if recording:
+        lines += _record_context(recordings_dir, prompts_dir)
+    return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
+
+
+def _namespaces(snapshot: dict[str, Any]) -> list[str]:
+    """The engine namespaces in use, today's (empty) one first."""
+    found = {
+        engine_names.for_org(str(o.get("slug") or "")).ns
+        for o in snapshot.get("organizations") or []
+    }
+    for key in ("extensions", "ring_groups", "queues", "ivr_menus", "voicemail_boxes"):
+        for item in snapshot.get(key) or []:
+            found.add(engine_names.for_org(str(item.get("organization") or "")).ns)
+    found.add(engine_names.LEGACY)
+    return sorted(found, key=lambda ns: (ns != engine_names.LEGACY, ns))
+
+
+def _features(extensions: list[dict[str, Any]], prompts_dir: str) -> list[str]:
+    """Feature codes of one namespace; ``**<ext>`` reaches only its phones."""
+    n = engine_names.current()
+    lines = [
+        f"[{n.features}]",
         "; *43 echo test, *60 speaking clock: always available for phone checks.",
         "exten => *43,1,NoOp(Veyra echo test)",
         " same => n,Answer()",
@@ -922,11 +1050,11 @@ def _dialplan(
         "; *97 own voicemail box, *98 any box (mailbox and PIN asked).",
         "exten => *97,1,NoOp(Veyra voicemail for ${CALLERID(num)})",
         " same => n,Answer()",
-        f" same => n,VoiceMailMain(${{CALLERID(num)}}@{VOICEMAIL_CONTEXT})",
+        f" same => n,VoiceMailMain(${{CALLERID(num)}}@{n.voicemail})",
         " same => n,Hangup()",
         "exten => *98,1,NoOp(Veyra voicemail, any box)",
         " same => n,Answer()",
-        f" same => n,VoiceMailMain(@{VOICEMAIL_CONTEXT})",
+        f" same => n,VoiceMailMain(@{n.voicemail})",
         " same => n,Hangup()",
         "; *95 records a prompt from the phone into the organization's incoming",
         "; folder; it is named and adopted on the Prompts page (VOICEMAIL_IVR.md §4).",
@@ -964,20 +1092,34 @@ def _dialplan(
             " same => n(denied),Playback(pbx-invalid)",
             " same => n,Hangup()",
         ]
-    lines += [
-        "",
-        f"[{CONTEXT_INTERNAL}]",
+    lines.append("")
+    return lines
+
+
+def _internal(
+    extensions: list[dict[str, Any]],
+    boxes: Boxes,
+    ring_groups: list[dict[str, Any]],
+    queues: list[dict[str, Any]],
+    recording: list[dict[str, Any]],
+    prompts_dir: str,
+) -> list[str]:
+    """The phone context of one namespace."""
+    n = engine_names.current()
+    by_number = {number: b for (_org, number), b in boxes.items()}
+    lines = [
+        f"[{n.internal}]",
         "; Extensions first; then feature codes, outbound routes and the catch-all",
         "; (includes are searched in order, after this context's own entries).",
-        f"include => {CONTEXT_FEATURES}",
-        f"include => {CONTEXT_PAGING}",
-        f"include => {CONTEXT_OUTBOUND}",
+        f"include => {n.features}",
+        f"include => {n.paging}",
+        f"include => {n.outbound}",
         f"include => {CONTEXT_INVALID}",
     ]
     for ext in extensions:
         number = str(ext["number"])
         endpoint = str(ext["endpoint_name"])
-        box = boxes.get(number)
+        box = by_number.get(number) if not (by_number.get(number) or {}).get("shared") else None
         # The hint lets busy lamp fields follow the phone (RING_GROUPS_QUEUES.md §4.2).
         lines.append(f"exten => {number},hint,PJSIP/{endpoint}")
         rec = _record_for_extension(recording, ext, prompts_dir)
@@ -996,17 +1138,17 @@ def _dialplan(
                 *rec,
                 f" same => n,Dial(PJSIP/{endpoint},{int(box['ring_seconds'])})",
                 ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
-                f" same => n,VoiceMail({number}@{VOICEMAIL_CONTEXT},u)",
+                f" same => n,VoiceMail({number}@{n.voicemail},u)",
                 " same => n,Hangup()",
-                f" same => n(busy),VoiceMail({number}@{VOICEMAIL_CONTEXT},b)",
+                f" same => n(busy),VoiceMail({number}@{n.voicemail},b)",
                 " same => n,Hangup()",
             ]
-    for number, b in sorted(boxes.items(), key=lambda kv: (len(kv[0]), kv[0])):
+    for number, b in sorted(by_number.items(), key=lambda kv: (len(kv[0]), kv[0])):
         if not b.get("shared"):
             continue
         lines += [
             f"exten => {number},1,NoOp(Veyra shared inbox {number})",
-            f" same => n,VoiceMail({number}@{VOICEMAIL_CONTEXT},u)",
+            f" same => n,VoiceMail({number}@{n.voicemail},u)",
             " same => n,Hangup()",
         ]
     for g in ring_groups:
@@ -1018,7 +1160,7 @@ def _dialplan(
             lines.append(f"exten => {number},hint," + "&".join(f"PJSIP/{m}" for m in members))
         lines += [
             f"exten => {number},1,NoOp(Veyra ring group {name})",
-            f" same => n,Goto({CONTEXT_RING_GROUP_PREFIX}{slug},s,1)",
+            f" same => n,Goto({n.ring_group(slug)},s,1)",
         ]
     for q in queues:
         slug = _slug(q["slug"], "queue slug")
@@ -1026,30 +1168,10 @@ def _dialplan(
         name = _check_value(str(q.get("name") or slug), "queue name")
         lines += [
             f"exten => {number},1,NoOp(Veyra queue {name})",
-            f" same => n,Goto({CONTEXT_QUEUE_PREFIX}{slug},s,1)",
+            f" same => n,Goto({n.queue_context(slug)},s,1)",
         ]
-    lines += [
-        "",
-        f"[{CONTEXT_INVALID}]",
-        "exten => _[0-9*#+].,1,NoOp(Veyra: no such extension ${EXTEN})",
-        " same => n,Playback(pbx-invalid)",
-        " same => n,Hangup()",
-        "",
-    ]
-    lines += _paging_contexts(snapshot.get("paging") or {}, prompts_dir)
-    lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir)
-    lines += _inbound_contexts(inbound, conditions, trunk_slugs, recording, prompts_dir)
-    lines += _ivr_contexts(menus, prompts_dir)
-    lines += _ring_group_contexts(
-        ring_groups,
-        _check_moh(list(snapshot.get("hold_music") or [])),
-        recording,
-        prompts_dir,
-    )
-    lines += _queue_contexts(queues, prompts_dir, recording)
-    if recording:
-        lines += _record_context(recordings_dir, prompts_dir)
-    return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
+    lines.append("")
+    return lines
 
 
 def _outbound_contexts(
@@ -1057,9 +1179,12 @@ def _outbound_contexts(
     trunks: dict[str, dict[str, Any]],
     recording: list[dict[str, Any]] | None = None,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
+    spaces: list[str] | None = None,
 ) -> list[str]:
-    """``veyra-outbound`` and one ``veyra-out-<slug>`` per route, emergency
-    routes first (docs/TRUNKS_ROUTING.md §4, §6, §7)."""
+    """``veyra-outbound`` of each namespace and one shared ``veyra-out-<slug>``
+    per route, emergency routes first (docs/TRUNKS_ROUTING.md §4, §6, §7). A
+    route of one organization is included only in that organization's
+    outbound context (docs/MULTI_TENANCY.md §4)."""
     ordered = sorted(routes, key=lambda r: not bool(r.get("is_emergency")))
     slugs: list[str] = []
     for r in ordered:
@@ -1067,9 +1192,18 @@ def _outbound_contexts(
         if slug in slugs:
             raise GenerationError(f"duplicate outbound route slug {slug!r}")
         slugs.append(slug)
-    lines = [f"[{CONTEXT_OUTBOUND}]", "; Routes in evaluation order; emergency routes first."]
-    lines += [f"include => {CONTEXT_OUT_PREFIX}{slug}" for slug in slugs]
-    lines.append("")
+    lines: list[str] = []
+    for ns in spaces if spaces is not None else [engine_names.LEGACY]:
+        lines += [
+            f"[{Names(ns).outbound}]",
+            "; Routes in evaluation order; emergency routes first.",
+        ]
+        lines += [
+            f"include => {CONTEXT_OUT_PREFIX}{slug}"
+            for r, slug in zip(ordered, slugs, strict=True)
+            if not r.get("organization") or engine_names.for_org(str(r["organization"])).ns == ns
+        ]
+        lines.append("")
     for r, slug in zip(ordered, slugs, strict=True):
         emergency = bool(r.get("is_emergency"))
         route_trunks = [str(t) for t in (r.get("trunks") or []) if str(t) in trunks]
@@ -1237,6 +1371,12 @@ def _inbound_contexts(
 
 
 def _destination_lines(r: dict[str, Any], conditions: dict[str, dict[str, Any]]) -> list[str]:
+    """An inbound route's destination, in the names of the route's organization."""
+    with engine_names.using(engine_names.for_org(str(r.get("organization_slug") or ""))):
+        return _destination_lines_of(r, conditions)
+
+
+def _destination_lines_of(r: dict[str, Any], conditions: dict[str, dict[str, Any]]) -> list[str]:
     out = []
     prefix = r.get("caller_id_prefix")
     if prefix:
@@ -1280,23 +1420,26 @@ def _goto(dest: Any) -> list[str]:
         return [" same => n,Playback(vm-goodbye)", " same => n,Hangup()"]
     if kind == "ivr":
         slug = _slug(dest.get("ivr"), "IVR menu slug")
-        return [f" same => n,Goto({CONTEXT_IVR_PREFIX}{slug},s,1)", " same => n,Hangup()"]
+        return [f" same => n,Goto({engine_names.current().ivr(slug)},s,1)", " same => n,Hangup()"]
     if kind == "ring_group":
         slug = _slug(dest.get("ring_group"), "ring group slug")
-        return [f" same => n,Goto({CONTEXT_RING_GROUP_PREFIX}{slug},s,1)", " same => n,Hangup()"]
+        ctx = engine_names.current().ring_group(slug)
+        return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
     if kind == "queue":
         slug = _slug(dest.get("queue"), "queue slug")
-        return [f" same => n,Goto({CONTEXT_QUEUE_PREFIX}{slug},s,1)", " same => n,Hangup()"]
+        ctx = engine_names.current().queue_context(slug)
+        return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
     if kind in ("extension", "voicemail"):
         number = str(dest.get("number") or "")
         if not _NUMBER_RE.match(number):
             raise GenerationError(f"destination number {number!r} is not valid")
         if kind == "voicemail":
             return [
-                f" same => n,VoiceMail({number}@{VOICEMAIL_CONTEXT},u)",
+                f" same => n,VoiceMail({number}@{engine_names.current().voicemail},u)",
                 " same => n,Hangup()",
             ]
-        return [f" same => n,Goto({CONTEXT_INTERNAL},{number},1)", " same => n,Hangup()"]
+        internal = engine_names.current().internal
+        return [f" same => n,Goto({internal},{number},1)", " same => n,Hangup()"]
     return [
         " same => n,NoOp(Veyra: the destination no longer exists)",
         " same => n,Congestion(5)",
@@ -1315,7 +1458,7 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
         seen.add(slug)
         name = _check_value(str(m.get("name") or slug), "IVR menu name")
         org = _slug(m.get("organization") or "", f"organization of IVR menu {slug}")
-        ctx = f"{CONTEXT_IVR_PREFIX}{slug}"
+        ctx = engine_names.current().ivr(slug)
         timeout = min(max(int(m.get("timeout_seconds") or 5), 1), 30)
         retries = min(max(int(m.get("max_retries") or 3), 1), 9)
         prompt = m.get("prompt")
@@ -1363,7 +1506,8 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
                     raise GenerationError(f"IVR menu {slug}: extension {number!r} is not valid")
                 if number in digits:
                     continue  # the key wins
-                lines.append(f"exten => {number},1,Goto({CONTEXT_INTERNAL},{number},1)")
+                internal = engine_names.current().internal
+                lines.append(f"exten => {number},1,Goto({internal},{number},1)")
         # An invalid key is answered with the invalid prompt and the menu is
         # replayed; a timeout replays the menu without a prompt.
         for exten, label, dest in (
@@ -1387,16 +1531,23 @@ def _check_group_numbers(
     ring_groups: list[dict[str, Any]],
     queues: list[dict[str, Any]],
 ) -> None:
-    """Ring group and queue numbers share the extension number space."""
-    taken = {str(e["number"]): "extension" for e in extensions}
+    """Ring group and queue numbers share the extension number space of their
+    engine namespace (docs/MULTI_TENANCY.md §3)."""
+
+    def key(item: dict[str, Any], number: str) -> tuple[str, str]:
+        return (engine_names.for_org(str(item.get("organization") or "")).ns, number)
+
+    taken = {key(e, str(e["number"])): "extension" for e in extensions}
     for what, items in (("ring group", ring_groups), ("queue", queues)):
         for item in items:
             number = str(item.get("number") or "")
             if not _NUMBER_RE.match(number):
                 raise GenerationError(f"{what} number {number!r} is not valid")
-            if number in taken:
-                raise GenerationError(f"number {number} is used by a {taken[number]} and a {what}")
-            taken[number] = what
+            if key(item, number) in taken:
+                raise GenerationError(
+                    f"number {number} is used by a {taken[key(item, number)]} and a {what}"
+                )
+            taken[key(item, number)] = what
 
 
 def _group_prologue(ctx: str, what: str, name: str, org: str) -> list[str]:
@@ -1420,7 +1571,7 @@ def _group_epilogue(what: str, name: str, failover: Any) -> list[str]:
 
 def _ring_group_contexts(
     groups: list[dict[str, Any]],
-    moh: dict[str, dict[str, Any]] | None = None,
+    moh: MohSets | None = None,
     recording: list[dict[str, Any]] | None = None,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
 ) -> list[str]:
@@ -1451,9 +1602,10 @@ def _ring_group_contexts(
         # Callers hear ringing, or the group's (or built-in) hold music set.
         dial_opts = ""
         if music == "default":
-            moh_class = _moh_class(g.get("hold_music"), moh or {}, f"ring group {slug}")
+            moh_class = _moh_class(g.get("hold_music"), moh or {}, f"ring group {slug}", org)
             dial_opts = f",m({moh_class})"
-        lines += _group_prologue(f"{CONTEXT_RING_GROUP_PREFIX}{slug}", "ring group", name, org)
+        ctx = engine_names.current().ring_group(slug)
+        lines += _group_prologue(ctx, "ring group", name, org)
         lines += _record_for_group(recording or [], org, "ring_groups", slug, prompts_dir)
         prefix = g.get("caller_id_prefix")
         if prefix:
@@ -1522,7 +1674,7 @@ def _queue_contexts(
         wait = int(q.get("max_wait_seconds") or 0)
         if wait and not 30 <= wait <= 3600:
             raise GenerationError(f"queue {slug}: maximum wait {wait} is out of range")
-        lines += _group_prologue(f"{CONTEXT_QUEUE_PREFIX}{slug}", "queue", name, org)
+        lines += _group_prologue(engine_names.current().queue_context(slug), "queue", name, org)
         lines += _record_for_group(recording or [], org, "queues", slug, prompts_dir)
         lines.append(" same => n,Answer()")
         announcement = q.get("announcement_prompt")
@@ -1533,7 +1685,7 @@ def _queue_contexts(
         options = "tr" if music == "ring" else "t"
         timeout = str(wait) if wait else ""
         lines += [
-            f" same => n,Queue({QUEUE_NAME_PREFIX}{slug},{options},,,{timeout})",
+            f" same => n,Queue({engine_names.current().queue(slug)},{options},,,{timeout})",
             f" same => n,NoOp(Veyra queue {name} left with ${{QUEUESTATUS}})",
             " same => n,Goto(failover)",
         ]
@@ -1546,11 +1698,12 @@ def _queues(
     queues: list[dict[str, Any]],
     extensions: list[dict[str, Any]],
     prompts_dir: str,
-    moh: dict[str, dict[str, Any]] | None = None,
+    moh: MohSets | None = None,
 ) -> GeneratedFile:
     """``queues.conf`` (docs/RING_GROUPS_QUEUES.md §3): one section per
     enabled queue with static members; reloaded with ``app_queue.so``."""
     endpoints = {str(e["endpoint_name"]) for e in extensions}
+    endpoint_org = {str(e["endpoint_name"]): str(e.get("organization") or "") for e in extensions}
     lines = [
         HEADER,
         "[general]",
@@ -1563,11 +1716,12 @@ def _queues(
     seen: set[str] = set()
     for q in queues:
         slug = _slug(q["slug"], "queue slug")
-        if slug in seen:
-            raise GenerationError(f"duplicate queue slug {slug!r}")
-        seen.add(slug)
-        name = _check_value(str(q.get("name") or slug), "queue name")
         org = _slug(q.get("organization") or "", f"organization of queue {slug}")
+        n = engine_names.for_org(org)
+        if n.queue(slug) in seen:
+            raise GenerationError(f"duplicate queue slug {slug!r}")
+        seen.add(n.queue(slug))
+        name = _check_value(str(q.get("name") or slug), "queue name")
         strategy = str(q.get("strategy") or "ringall")
         if strategy not in QUEUE_STRATEGIES:
             raise GenerationError(f"queue {slug}: unknown strategy {strategy!r}")
@@ -1590,7 +1744,7 @@ def _queues(
         empty = "yes" if q.get("join_when_empty") else "strict"
         position = "yes" if q.get("announce_position") else "no"
         lines += [
-            f"[{QUEUE_NAME_PREFIX}{slug}]",
+            f"[{n.queue(slug)}]",
             f"; {name} ({org})",
             f"strategy={strategy}",
             f"timeout={timeout}",
@@ -1600,7 +1754,7 @@ def _queues(
             "ringinuse=no",
             f"joinempty={empty}",
             f"leavewhenempty={'no' if q.get('join_when_empty') else 'strict'}",
-            f"musicclass={_moh_class(q.get('hold_music'), moh or {}, f'queue {slug}')}",
+            f"musicclass={_moh_class(q.get('hold_music'), moh or {}, f'queue {slug}', org)}",
             f"announce-position={position}",
             f"announce-frequency={freq if q.get('announce_position') else 0}",
             "announce-holdtime=no",
@@ -1613,8 +1767,8 @@ def _queues(
             ]
         for m in q.get("members") or []:
             endpoint = _check_section(str(m["endpoint_name"]), "endpoint name")
-            if endpoint not in endpoints:
-                continue
+            if endpoint not in endpoints or endpoint_org.get(endpoint) != org:
+                continue  # gone, or (never) another organization's phone
             penalty = int(m.get("penalty") or 0)
             if not 0 <= penalty <= 9:
                 raise GenerationError(f"queue {slug}: penalty {penalty} is out of range")
@@ -1624,32 +1778,39 @@ def _queues(
     return GeneratedFile(FILE_QUEUES, "\n".join(lines).rstrip("\n") + "\n")
 
 
-def _check_boxes(
-    boxes: list[dict[str, Any]], extensions: list[dict[str, Any]]
-) -> dict[str, dict[str, Any]]:
-    """Voicemail boxes by extension number; only boxes of listed extensions."""
-    numbers = {str(e["number"]) for e in extensions}
-    out: dict[str, dict[str, Any]] = {}
+Boxes = dict[tuple[str, str], dict[str, Any]]
+
+
+def _check_boxes(boxes: list[dict[str, Any]], extensions: list[dict[str, Any]]) -> Boxes:
+    """Voicemail boxes by (organization, number); only boxes of listed
+    extensions and shared inboxes. Numbers are unique per engine namespace."""
+
+    def key(org: str, number: str) -> tuple[str, str]:
+        return (engine_names.for_org(org).ns, number)
+
+    numbers = {key(str(e.get("organization") or ""), str(e["number"])) for e in extensions}
+    out: Boxes = {}
+    seen: set[tuple[str, str]] = set()
     for b in boxes:
         number = str(b.get("number") or "")
+        org = str(b.get("organization") or "")
         if not _NUMBER_RE.match(number):
             raise GenerationError(f"voicemail box number {number!r} is not valid")
-        if number not in numbers and not b.get("shared"):
+        if key(org, number) not in numbers and not b.get("shared"):
             continue
-        if b.get("shared") and number in numbers:
+        if b.get("shared") and key(org, number) in numbers:
             raise GenerationError(f"shared inbox {number} uses an extension's number")
-        if number in out:
+        if key(org, number) in seen:
             raise GenerationError(f"extension {number} has more than one voicemail box")
+        seen.add(key(org, number))
         ring = int(b.get("ring_seconds") or 20)
         if not 5 <= ring <= 120:
             raise GenerationError(f"voicemail box {number}: ring time {ring} is out of range")
-        out[number] = b
+        out[(org, number)] = b
     return out
 
 
-def _voicemail(
-    snapshot: dict[str, Any], boxes: dict[str, dict[str, Any]], mailqueue_command: str
-) -> GeneratedFile:
+def _voicemail(snapshot: dict[str, Any], boxes: Boxes, mailqueue_command: str) -> GeneratedFile:
     """``voicemail.conf`` (docs/VOICEMAIL_IVR.md §3.2). Sensitive: it carries
     PINs in clear. Email addresses are only rendered when delivery is enabled,
     so messages are never deleted after an email that cannot be sent."""
@@ -1688,14 +1849,27 @@ def _voicemail(
         zones.setdefault(org, tz)
     for org in sorted(zones):
         lines.append(f"{org}={zones[org]}|'vm-received' Q 'digits/at' IMp")
-    lines += ["", f"[{VOICEMAIL_CONTEXT}]"]
     sensitive = False
-    for number in sorted(boxes, key=lambda n: (len(n), n)):
-        b = boxes[number]
+    # One voicemail context per engine namespace (docs/MULTI_TENANCY.md §2).
+    contexts: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for (owner, number), b in boxes.items():
+        contexts.setdefault(engine_names.for_org(owner).voicemail, []).append((number, b))
+    if not contexts:
+        contexts[Names().voicemail] = []
+    for ctx in sorted(contexts, key=lambda c: (c != Names().voicemail, c)):
+        lines += ["", f"[{ctx}]"]
+        lines += _box_lines(contexts[ctx], delivery)
+        sensitive = sensitive or bool(contexts[ctx])
+    lines.append("")
+    return GeneratedFile(FILE_VOICEMAIL, "\n".join(lines).rstrip("\n") + "\n", sensitive=sensitive)
+
+
+def _box_lines(entries: list[tuple[str, dict[str, Any]]], delivery: bool) -> list[str]:
+    lines: list[str] = []
+    for number, b in sorted(entries, key=lambda kv: (len(kv[0]), kv[0])):
         pin = str(b.get("pin") or "")
         if not _PIN_RE.match(pin):
             raise GenerationError(f"voicemail box {number}: the PIN must be 4 to 10 digits")
-        sensitive = True
         name = _display(b.get("name")) or f"Extension {number}"
         email = ""
         delete = "no"
@@ -1711,8 +1885,7 @@ def _voicemail(
             f"{number} => {pin},{name},{email},,"
             f"attach={attach}|delete={delete}|tz={org}|saycid=yes|envelope=yes"
         )
-    lines.append("")
-    return GeneratedFile(FILE_VOICEMAIL, "\n".join(lines).rstrip("\n") + "\n", sensitive=sensitive)
+    return lines
 
 
 def _rtp(sip: SipSettings) -> GeneratedFile:

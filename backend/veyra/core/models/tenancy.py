@@ -39,6 +39,10 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     slug: Mapped[str] = mapped_column(String(63), unique=True)
     name: Mapped[str] = mapped_column(String(200))
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    # Prefix of the organization's engine names (docs/MULTI_TENANCY.md §2):
+    # empty for the organization that predates Milestone 14, so its names
+    # stay as they were; set once and never changed.
+    engine_namespace: Mapped[str] = mapped_column(String(16), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Default hold music set of the organization's phones
     # (docs/PAGING_RECORDINGS.md §3.2); none = the engine's built-in class.

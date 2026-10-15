@@ -4,6 +4,7 @@ the phone-facing provisioning server (docs/DEVICE_PROVISIONING.md §3, §4)."""
 
 import base64
 
+from conftest import enable_multi_tenancy
 from fastapi.testclient import TestClient
 
 from veyra.provisioning.facts import dst_rules
@@ -287,6 +288,7 @@ def test_provisioning_server_authenticates_logs_and_serves(admin, app):
     assert anon.get(f"{PROV}/veyra-0004f2aabbcc.cfg", headers=org_auth).status_code == 401
     assert anon.get(f"{PROV}/veyra-0004f2aabbcc.cfg", headers=dev_auth).status_code == 200
     # A technician of another organization's credential cannot reach this device.
+    enable_multi_tenancy()
     other_org = admin.post("/api/v1/organizations", json={"name": "Other", "slug": "other"}).json()
     other_cred = admin.post(
         f"/api/v1/organizations/{other_org['id']}/provisioning-credential/rotate"

@@ -1,5 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, complete_setup, csrf_headers, login
+from conftest import (
+    ADMIN_EMAIL,
+    ADMIN_PASSWORD,
+    complete_setup,
+    csrf_headers,
+    enable_multi_tenancy,
+    login,
+)
 
 from veyra.core import bootstrap
 from veyra.core.db import session_scope
@@ -104,6 +111,7 @@ def test_ip_rate_limit(client):
 
 def test_csrf_required_for_mutations(admin):
     token = admin.headers.pop("X-CSRF-Token")
+    enable_multi_tenancy()
     r = admin.post("/api/v1/organizations", json={"name": "N", "slug": "n"})
     assert r.status_code == 403 and r.json()["code"] == "csrf_failed"
     r = admin.post(

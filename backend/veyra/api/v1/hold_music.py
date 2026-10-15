@@ -26,6 +26,7 @@ from veyra.core.models import CallQueue, MohClass, MohClassTrack, Organization, 
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import moh
+from veyra.telephony.asterisk.names import Names
 
 router = APIRouter(prefix="/hold-music", tags=["hold-music"])
 
@@ -83,6 +84,11 @@ class MohOut(BaseModel):
     problems: list[str]
     created_at: datetime
     updated_at: datetime
+
+
+def _dir_name(org: Organization | None, slug: str) -> str:
+    """The set's folder below the hold music directory (docs/MULTI_TENANCY.md §2)."""
+    return Names(org.engine_namespace if org else "").moh_dir(slug)
 
 
 def moh_dir(request: Request) -> Path:
@@ -160,7 +166,7 @@ def _outs(request: Request, db: Session, rows: list[MohClass]) -> list[MohOut]:
                 organization_name=org.name if org else "",
                 name=r.name,
                 slug=r.slug,
-                class_name=f"veyra-{r.slug}",
+                class_name=Names(org.engine_namespace if org else "").moh_class(r.slug),
                 description=r.description,
                 random=r.random,
                 tracks=track_outs,
@@ -244,7 +250,7 @@ def sync_files(request: Request, db: Session, cls: MohClass) -> None:
         if t.prompt_id in prompts
     ]
     try:
-        moh.sync_class(moh_dir(request), cls.slug, sources)
+        moh.sync_class(moh_dir(request), _dir_name(org, cls.slug), sources)
     except moh.MohError as e:
         raise ProblemError(503, "Hold music storage unavailable", str(e), code="moh_storage") from e
 
@@ -402,9 +408,9 @@ def delete_set(
             code="hold_music_in_use",
         )
     _record(db, ctx, principal, "hold_music.delete", cls, {"name": cls.name, "slug": cls.slug})
-    slug = cls.slug
+    folder = _dir_name(db.get(Organization, cls.organization_id), cls.slug)
     db.delete(cls)
     db.commit()
-    moh.remove_class(moh_dir(request), slug)
+    moh.remove_class(moh_dir(request), folder)
     bus.publish(Event("hold_music.deleted", {"id": str(class_id)}))
     return Response(status_code=204)

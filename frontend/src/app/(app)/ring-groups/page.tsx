@@ -100,7 +100,7 @@ function CreateDialog({ open, onClose, onCreated }: { open: boolean; onClose: ()
   const [number, setNumber] = useState("");
   const [busy, setBusy] = useState(false);
   const effectiveOrg = org || (organizations.length === 1 ? organizations[0]!.id : "");
-  const suggestion = useApiData<NextNumber>(open ? "/extensions/next-number" : null);
+  const suggestion = useApiData<NextNumber>(open && effectiveOrg ? "/extensions/next-number" : null, { organization_id: effectiveOrg || undefined });
 
   useOnChange(open, () => {
     if (open) {

@@ -146,7 +146,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
   const suggest = async () => {
     setSuggesting(true);
     try {
-      const n = await api.get<NextNumber>("/extensions/next-number");
+      const n = await api.get<NextNumber>("/extensions/next-number", { organization_id: org || undefined });
       setPlan(n.plan);
       if (n.number) setNumber(n.number);
       else if (n.message) toast.error("No free number", n.message);

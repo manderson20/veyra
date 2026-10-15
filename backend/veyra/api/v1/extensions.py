@@ -362,15 +362,25 @@ def _validation(field: str, message: str, code: str = "validation_failed") -> Pr
     )
 
 
-def _check_number(db: Session, plan: NumberingPlan, number: str, exclude: uuid.UUID | None) -> None:
+def _check_number(
+    db: Session,
+    plan: NumberingPlan,
+    number: str,
+    exclude: uuid.UUID | None,
+    organization_id: uuid.UUID,
+) -> None:
     problems = plan.check_number(number)
     if problems:
         raise _validation("number", " ".join(problems), code="number_not_in_plan")
-    # Numbers are unique across extensions, ring groups and queues of the
-    # installation while everything shares one dialplan context
-    # (docs/EXTENSIONS.md §2); number_owner takes the advisory lock that
-    # serialises concurrent creations of the same number.
-    owner = number_owner(db, number, exclude=("extension", exclude) if exclude else None)
+    # Numbers are unique across the organization's extensions, groups and
+    # queues (docs/MULTI_TENANCY.md §3); number_owner takes the advisory lock
+    # that serialises concurrent creations of the same number.
+    owner = number_owner(
+        db,
+        number,
+        organization_id=organization_id,
+        exclude=("extension", exclude) if exclude else None,
+    )
     if owner is not None:
         raise ProblemError(
             409,
@@ -487,6 +497,9 @@ def list_extensions(
 )
 def next_number(
     after: str | None = Query(None, max_length=32, pattern=r"^[0-9]*$"),
+    organization_id: uuid.UUID | None = Query(
+        None, description="Numbers are per organization; default: your home organization"
+    ),
     principal: Principal = Depends(require("extensions.read")),
     db: Session = Depends(get_db),
 ) -> NextNumberOut:
@@ -494,7 +507,13 @@ def next_number(
     problems = plan.problems()
     if problems:
         return NextNumberOut(number=None, plan=plan.describe(), message=" ".join(problems))
-    number = plan.next_available(used_numbers(db), after=after or None)
+    org_id = organization_id
+    if org_id is None:
+        user = db.get(User, principal.user_id)
+        org_id = user.home_organization_id if user is not None else None
+    if org_id is not None and not principal.has("extensions.read", org_id):
+        raise not_found("Organization")
+    number = plan.next_available(used_numbers(db, org_id), after=after or None)
     return NextNumberOut(
         number=number,
         plan=plan.describe(),
@@ -518,7 +537,7 @@ def create_extension(
     if not org.is_active:
         raise conflict("The organization is inactive.", code="organization_inactive")
     key = installation_key(request)
-    _check_number(db, load_numbering_plan(db), body.number, exclude=None)
+    _check_number(db, load_numbering_plan(db), body.number, None, org.id)
     _check_user(db, body.user_id, body.organization_id)
     ext = Extension(
         id=uuid.uuid4(),
@@ -586,7 +605,7 @@ def update_extension(
     if "number" in changes and changes["number"] != ext.number:
         org = db.get(Organization, ext.organization_id)
         assert org is not None
-        _check_number(db, load_numbering_plan(db), changes["number"], exclude=ext.id)
+        _check_number(db, load_numbering_plan(db), changes["number"], ext.id, org.id)
         details["number_from"] = ext.number
         ext.number = changes["number"]
         # The endpoint name follows the number: phones registered with the
