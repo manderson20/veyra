@@ -15,9 +15,13 @@ import {
   LoadingState,
   PageHeader,
   StatusBadge,
+  TabPanel,
+  Tabs,
   toStatus,
   useToast,
 } from "@/components/ui";
+import { CatalogSources, ModuleCatalog, ModuleUpload } from "@/components/modules/ModuleCatalog";
+import { ModuleSettings, RestartBanner } from "@/components/modules/ModuleSettings";
 import { api, errorMessage } from "@/lib/api";
 import type { ModuleInfo, ModuleList } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -52,6 +56,8 @@ export default function ModulesPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const manage = can("modules.manage");
+  const [tab, setTab] = useState("installed");
+  const [settingsFor, setSettingsFor] = useState<ModuleInfo | null>(null);
 
   const run = async () => {
     if (!pending) return;
@@ -85,11 +91,17 @@ export default function ModulesPage() {
         description="Install, enable and update the functional modules that extend Veyra."
         actions={<Button icon="refresh" onClick={list.reload} loading={list.loading && !!list.data}>Refresh</Button>}
       />
-      <Callout tone="info">
-        Modules are found in the configured module directories. Only modules signed by an official key run inside Veyra;
-        community and third-party modules will run as isolated services in a later release. Browsing a module catalog is planned.
-      </Callout>
-      {list.error ? (
+      <RestartBanner needed={(list.data?.items ?? []).filter((m) => m.restart_required).map((m) => m.name ?? m.module_id)} />
+      <Tabs idBase="mods" active={tab} onChange={setTab} tabs={[
+        { id: "installed", label: "Installed" },
+        { id: "catalog", label: "Catalog" },
+        ...(manage ? [{ id: "upload", label: "Upload" }] : []),
+        { id: "sources", label: "Sources" },
+      ]} />
+      <TabPanel idBase="mods" id="catalog" active={tab}><ModuleCatalog manage={manage} onChanged={list.reload} /></TabPanel>
+      <TabPanel idBase="mods" id="upload" active={tab}><ModuleUpload onChanged={() => { list.reload(); void refresh(); }} /></TabPanel>
+      <TabPanel idBase="mods" id="sources" active={tab}><CatalogSources manage={manage} onChanged={list.reload} /></TabPanel>
+      {tab !== "installed" ? null : list.error ? (
         <Card><ErrorState title="Could not load modules" error={list.error} onRetry={list.reload} /></Card>
       ) : !list.data ? (
         <Card><LoadingState /></Card>
@@ -98,12 +110,13 @@ export default function ModulesPage() {
       ) : (
         <div className="stack stack--sm">
           {list.data.items.map((m) => (
-            <ModuleCard key={m.module_id} m={m} manage={manage} onAction={(a) => open(m, a)} />
+            <ModuleCard key={m.module_id} m={m} manage={manage} onAction={(a) => open(m, a)} onSettings={() => setSettingsFor(m)} />
           ))}
-          <p className="subtle">Module API version {list.data.module_api_version}</p>
+          <p className="subtle">Module API version {list.data.module_api_version}. Only modules signed by an official key run inside Veyra; community and third-party modules need the isolated service runtime (planned).</p>
         </div>
       )}
 
+      <ModuleSettings moduleId={settingsFor?.module_id ?? null} name={settingsFor?.name ?? settingsFor?.module_id ?? ""} onClose={() => setSettingsFor(null)} />
       <ConfirmDialog
         open={pending !== null}
         title={pending ? `${ACTION_META[pending.action].label} ${pending.module.name ?? pending.module.module_id}?` : ""}
@@ -118,7 +131,7 @@ export default function ModulesPage() {
         {pending?.action === "install" ? <p>The module&apos;s database tables are created and its permissions are registered. It stays disabled until you enable it.</p> : null}
         {pending?.action === "enable" ? <p>The module&apos;s features and navigation become available to users with its permissions.</p> : null}
         {pending?.action === "disable" ? <p>The module stops serving requests. Its data and settings are kept.</p> : null}
-        {pending?.action === "update" ? <p>Database migrations for version {pending.module.available_version} run now. Restart the Veyra API service afterwards to load the new code.</p> : null}
+        {pending?.action === "update" ? <p>Database migrations for version {pending.module.available_version} run now. The new code runs after Veyra&apos;s services restart (the button appears above).</p> : null}
         {pending?.action === "uninstall" ? (
           <>
             <p>By default the module&apos;s data is kept so it can be reinstalled later.</p>
@@ -131,7 +144,7 @@ export default function ModulesPage() {
   );
 }
 
-function ModuleCard({ m, manage, onAction }: { m: ModuleInfo; manage: boolean; onAction: (a: Action) => void }) {
+function ModuleCard({ m, manage, onAction, onSettings }: { m: ModuleInfo; manage: boolean; onAction: (a: Action) => void; onSettings: () => void }) {
   const state = MODULE_STATE[m.state] ?? { label: m.state, tone: "neutral" as const };
   const trust = TRUST[m.trust_level] ?? { label: m.trust_level, tone: "neutral" as const, icon: "puzzle" };
   const actions = manage ? actionsFor(m) : [];
@@ -155,8 +168,9 @@ function ModuleCard({ m, manage, onAction }: { m: ModuleInfo; manage: boolean; o
             {m.license ? ` · ${m.license}` : ""}
           </p>
         </div>
-        {actions.length ? (
+        {actions.length || (manage && m.state !== "available" && m.state !== "removed") ? (
           <div className="row">
+            {manage && m.state !== "available" && m.state !== "removed" ? <Button size="sm" icon="settings" onClick={onSettings}>Settings</Button> : null}
             {actions.map((a) => (
               <Button key={a} size="sm" variant={a === "enable" || a === "install" || a === "update" ? "primary" : "secondary"} onClick={() => onAction(a)}>
                 {ACTION_META[a].label}
@@ -166,7 +180,7 @@ function ModuleCard({ m, manage, onAction }: { m: ModuleInfo; manage: boolean; o
         ) : null}
       </div>
       <div className="stack stack--sm" style={{ marginTop: 12 }}>
-        {m.restart_required ? <Callout tone="warn">Restart the Veyra API service to load the new version of this module.</Callout> : null}
+        {m.restart_required ? <Callout tone="warn">The new version runs after Veyra&apos;s services restart (button at the top).</Callout> : null}
         {m.last_error ? <Callout tone="danger" title="Last error">{m.last_error}</Callout> : null}
         {m.problems.length ? (
           <Callout tone={m.state === "enabled" ? "warn" : "danger"} title="Compatibility or trust problems">

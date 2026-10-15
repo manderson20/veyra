@@ -1976,3 +1976,58 @@ export interface SavedReport {
   created_at: string;
   updated_at: string;
 }
+
+// ---------------------------------------------------------------- module catalog (docs/MODULE_CATALOG.md)
+
+export interface CatalogVersionItem {
+  version: string;
+  core_api: string;
+  url: string;
+  sha256: string;
+  size: number;
+  released: string | null;
+  notes: string | null;
+  source: string;
+  compatible: boolean;
+  problem: string | null;
+}
+
+export interface CatalogModuleItem {
+  id: string;
+  name: string;
+  summary: string | null;
+  publisher: string | null;
+  homepage: string | null;
+  source: string;
+  installed_version: string | null;
+  state: string;
+  latest_compatible: string | null;
+  update_available: boolean;
+  versions: CatalogVersionItem[];
+}
+
+export interface CatalogSourceItem {
+  id: string;
+  name: string;
+  url: string;
+  is_enabled: boolean;
+  signed_by: string | null;
+  modules: number;
+  last_fetched_at: string | null;
+  last_status: string | null;
+  last_error: string | null;
+}
+
+export interface ModuleConfigField {
+  key: string;
+  label: string;
+  type: "string" | "integer" | "boolean" | "choice" | "secret";
+  help?: string | null;
+  default?: unknown;
+  required?: boolean;
+  min?: number | null;
+  max?: number | null;
+  max_length?: number | null;
+  choices?: string[] | null;
+  scope?: "installation" | "organization";
+}
