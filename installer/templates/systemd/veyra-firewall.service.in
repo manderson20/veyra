@@ -1,0 +1,47 @@
+# Veyra firewall (docs/FIREWALL_TRUST.md §3.3): applies the nftables table
+# "inet veyra" from the database and bans attackers. It runs as the service
+# account with CAP_NET_ADMIN only; it never touches other tables. It reads the
+# Asterisk security log (group asterisk) and NGINX's error log (group adm).
+[Unit]
+Description=Veyra firewall (nftables table inet veyra, automatic bans)
+Documentation=file://@VEYRA_PREFIX@/current/docs/FIREWALL_TRUST.md
+After=network-online.target nftables.service postgresql.service
+Wants=network-online.target
+Before=asterisk.service nginx.service
+
+[Service]
+Type=exec
+User=veyra
+Group=veyra
+SupplementaryGroups=asterisk adm
+EnvironmentFile=@VEYRA_ETC@/veyra.env
+WorkingDirectory=@VEYRA_PREFIX@/current/backend
+ExecStart=@VEYRA_PREFIX@/current/backend/.venv/bin/veyra firewall run
+Restart=always
+RestartSec=3
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+# Netlink: nft and "ip -j addr".
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ReadWritePaths=@VEYRA_DATA@/firewall @VEYRA_LOG_DIR@
+
+[Install]
+WantedBy=multi-user.target

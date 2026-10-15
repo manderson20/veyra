@@ -30,7 +30,7 @@ ENGINE="$(sed -n 's/^VEYRA_TELEPHONY_ENGINE=//p' "$VEYRA_ETC/veyra.env" 2>/dev/n
 perm() { stat -c '%a %U:%G' "$1" 2>/dev/null || echo missing; }
 
 # --- services
-services=(postgresql veyra-api veyra-worker nginx)
+services=(postgresql veyra-api veyra-worker veyra-firewall nginx)
 [[ "$ENGINE" == "asterisk" ]] && services+=(asterisk veyra-deployer veyra-pager)
 for svc in "${services[@]}"; do
     if systemctl is-active --quiet "$svc"; then
@@ -115,7 +115,7 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm /etc/asterisk/veyra)" == "2750 veyra:asterisk" ]] \
         && check engine-include-dir pass "2750 veyra:asterisk" \
         || check engine-include-dir fail "/etc/asterisk/veyra is $(perm /etc/asterisk/veyra) (expected 2750 veyra:asterisk)"
-    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf; do
+    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf logger.conf; do
         grep -qs "Managed by Veyra" "/etc/asterisk/$f" \
             && check "engine-stub:$f" pass "Veyra-managed" \
             || check "engine-stub:$f" fail "/etc/asterisk/$f is not the Veyra-managed stub"
@@ -160,6 +160,12 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     else
         check engine-moh fail "music-on-hold class 'default' is not loaded (install asterisk-moh-opsound-wav, then: sudo asterisk -rx 'module unload res_musiconhold.so' && sudo asterisk -rx 'module load res_musiconhold.so'); queue callers would wait in silence"
     fi
+    # The firewall reads Asterisk's security events (docs/FIREWALL_TRUST.md §4.1).
+    if asterisk -rx "logger show channels" 2>/dev/null | grep -q "security.log.*SECURITY"; then
+        check security-log pass "Asterisk security events are logged to /var/log/asterisk/security.log"
+    else
+        check security-log fail "the Asterisk security log channel is not active (sudo asterisk -rx 'logger reload'); SIP attacks are not detected"
+    fi
     # Directories shared with Asterisk (Milestone 7): prompts and the mail queue.
     [[ "$(perm "$VEYRA_DATA")" == "750 veyra:asterisk" ]] \
         && check data-dir pass "750 veyra:asterisk" \
@@ -196,6 +202,22 @@ else
 fi
 # Modules shipped with the release are signed with this server's key
 # (docs/MODULE_DEVELOPMENT.md §6); the example module is unsigned on purpose.
+# --- firewall (docs/FIREWALL_TRUST.md §8)
+[[ "$(perm "$VEYRA_DATA/firewall")" == "750 veyra:veyra" ]] \
+    && check firewall-dir pass "750 veyra:veyra" \
+    || check firewall-dir fail "$VEYRA_DATA/firewall is $(perm "$VEYRA_DATA/firewall") (expected 750 veyra:veyra)"
+if fw="$(/usr/local/bin/veyra firewall status 2>/dev/null)"; then
+    if python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("enabled") else 1)' <<<"$fw"; then
+        nft list table inet veyra >/dev/null 2>&1 \
+            && check firewall-table pass "on; table inet veyra applied" \
+            || check firewall-table fail "the firewall is on but table inet veyra is missing (journalctl -u veyra-firewall)"
+    else
+        check firewall-table pass "off (System > Firewall turns it on)"
+    fi
+else
+    check firewall-table warn "could not read the firewall settings (veyra firewall status)"
+fi
+
 if out="$(/usr/local/bin/veyra modules list 2>&1)"; then
     unsigned="$(awk 'NR > 1 && $1 !~ /^veyra\.example-/ && $NF != "official" {print $1}' <<<"$out" | paste -sd' ')"
     [[ -z "$unsigned" ]] && check modules-signed pass "bundled modules verified" \
