@@ -63,7 +63,7 @@ the owner's upgrade of dev1 and approval** (to be released as 0.13.0).
 | Frontend lint / typecheck / vitest / build | Clean / clean / **34 passed** / passed |
 | Installer library tests | **45 passed** |
 | Module signing | Key generation, signing and verification as `official` checked with the CLI |
-| **Owner's `upgrade.sh` on dev1** | 0.12.0-cb76120267 (schema `0015`) — the commits for shared inboxes, hold music and the clock module (`0016`, `0017`, signing) are **not yet on dev1** |
+| **Owner's `upgrade.sh` on dev1** | 0.12.0-cb76120267 → **0.12.0-82f5a0263d** (2026-10-15 00:13 UTC): migrations to `0017`, `musiconhold.conf` stub installed (original backed up), module signing key created and 1 module signed, all verify checks OK incl. `modules-signed` and `data-dir:moh`. Afterwards: `veyra modules list` shows `veyra.and-clocks` available with trust `official`; Asterisk still has the built-in `default` hold music class; worker restarted cleanly |
 
 ## 4. Not verified
 
@@ -85,9 +85,8 @@ the owner's upgrade of dev1 and approval** (to be released as 0.13.0).
 
 ## 6. Open items
 
-* **Owner: upgrade dev1** from `~/veyra` (`sudo installer/upgrade.sh
-  --yes`) and paste the output: migrations `0016`/`0017`, the
-  `musiconhold.conf` stub, and the new `modules-signed` check.
+* Owner: try the new pages on dev1 (shared inbox, hold music set,
+  install AND Clock Messages under Modules and add a clock).
 * **Owner: AND clock capture.** On a clock's web page, with the browser's
   developer tools on the Network tab, send a test message and note the
   request (method, path, body, sign-in); steps in
