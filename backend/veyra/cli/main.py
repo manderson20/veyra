@@ -848,6 +848,13 @@ def cmd_worker(args: argparse.Namespace) -> int:
     log = logging.getLogger("veyra.worker")
     settings = get_settings()
     log.info("%s worker started", plain_header())
+    try:
+        from veyra.modules import catalog as module_catalog
+
+        with session_scope() as db:
+            module_catalog.confirm_restart(db)
+    except Exception:
+        log.exception("Could not record the finished restart")
     last_purge = 0.0
     last_metrics_prune = 0.0
     last_full = last_module_sync = -1e9

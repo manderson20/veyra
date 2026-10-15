@@ -236,6 +236,8 @@ def test_restart_request(admin):
         assert db.get(SystemSetting, catalog.RESTART_KEY) is None
         assert db.get(SystemSetting, catalog.RESTART_RESULT_KEY).value["ok"] is True
         assert catalog.run_restart_request(db, run=lambda cmd: Done()) is False  # nothing asked
+        catalog.confirm_restart(db)  # the new worker
+        assert db.get(SystemSetting, catalog.RESTART_RESULT_KEY).value["state"] == "done"
 
 
 def test_catalog_add_keeps_checksums_honest(tmp_path):
