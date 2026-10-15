@@ -1773,3 +1773,55 @@ export interface FirewallFeed {
   last_error: string | null;
   entry_count: number;
 }
+
+// ---------------------------------------------------------------- call history (docs/REPORTING.md §3)
+
+export type CallDirection = "internal" | "inbound" | "outbound";
+export type CallOutcome = "answered" | "missed" | "busy" | "failed" | "voicemail" | "abandoned";
+
+export interface CallExtensionRef {
+  id: string;
+  number: string;
+  display_name: string;
+}
+
+export interface CallHistoryItem {
+  id: string;
+  organization_id: string | null;
+  organization_name: string | null;
+  direction: CallDirection;
+  outcome: CallOutcome;
+  from_number: string | null;
+  from_name: string | null;
+  to_number: string | null;
+  did: string | null;
+  from_extension: CallExtensionRef | null;
+  to_extension: CallExtensionRef | null;
+  answered_by: CallExtensionRef | null;
+  trunk_name: string | null;
+  started_at: string;
+  answered_at: string | null;
+  ended_at: string | null;
+  ring_seconds: number;
+  talk_seconds: number;
+  leg_count: number;
+  recorded: boolean;
+  in_progress: boolean;
+}
+
+export interface CallLegItem {
+  start: string;
+  answer: string | null;
+  end: string | null;
+  channel: string;
+  dstchannel: string;
+  src: string;
+  dst: string;
+  lastapp: string;
+  disposition: string;
+  billsec: number;
+}
+
+export interface CallHistoryDetail extends CallHistoryItem {
+  legs: CallLegItem[];
+}

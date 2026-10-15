@@ -95,7 +95,7 @@ describe("flyout columns", () => {
     const telephony = all.find((s) => s.id === "telephony")!;
     const groups = groupItems(telephony.items);
     expect(groups.map((g) => g.label)).toEqual([
-      "Phones and calls", "Routing", "Call handling", "Audio", "Paging and bells", "Coming later",
+      "Phones and calls", "Routing", "Call handling", "Audio", "Paging and bells", "History and reports", "Coming later",
     ]);
     expect(groups.flatMap((g) => g.items)).toHaveLength(telephony.items.length);
     // Single-page categories are direct links in the rail and need no column.

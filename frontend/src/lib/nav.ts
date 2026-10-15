@@ -35,8 +35,6 @@ export interface PlannedFeature {
 }
 
 export const PLANNED_FEATURES: PlannedFeature[] = [
-  { key: "call-history", label: "Call History", icon: "history", milestone: 10,
-    summary: "Searchable call detail records with filtering and CSV export, respecting tenant permissions." },
   { key: "recording", label: "Call Recording", icon: "record", milestone: 10,
     summary: "Policy-based call recording with retention rules and permission-controlled playback." },
 ];
@@ -72,6 +70,7 @@ export const NAV: NavSection[] = [
     { label: "Pages", href: "/paging/", icon: "megaphone", permissions: ["paging.read"], group: "Paging and bells" },
     { label: "Calendars", href: "/calendars/", icon: "clock", permissions: ["bells.read"], group: "Paging and bells" },
     { label: "Bell Schedules", href: "/bells/", icon: "clock", permissions: ["bells.read"], group: "Paging and bells" },
+    { label: "Call History", href: "/call-history/", icon: "history", permissions: ["calls.history.read"], group: "History and reports" },
     ...PLANNED_FEATURES.map((f) => ({
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone }, group: "Coming later",
     })),
