@@ -118,3 +118,12 @@ The owner upgraded dev1 from `~/veyra-release` to **0.13.0-73ca5e104f**:
 backups taken, schema current (0017), Asterisk unchanged, all four Veyra
 services and the pager running, bundled module signed and verified, all
 verify checks OK, old releases pruned to three.
+
+## Addendum (2026-10-15 01:37 UTC): 0.13.1
+
+Patch release at the owner's request: navigation flyouts split into
+columns by group (branch `nav-columns`, 0659688). The first upgrade attempt
+stopped in preflight because the LAN's DNS servers were unreachable
+(nothing changed); after they came back the owner upgraded dev1 to
+**0.13.1-065968866c**: backups taken, schema current (0017), Asterisk
+unchanged, all verify checks OK.
