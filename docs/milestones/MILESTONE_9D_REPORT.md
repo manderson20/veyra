@@ -90,8 +90,6 @@ live on dev1, awaiting the owner's approval** (to be released as 0.14.0).
   Poly parameter names come from the UC Software administrator guide.
 * CrowdSec against a real CrowdSec installation (the decision stream
   format is covered by tests).
-* `sudo veyra firewall off` end to end with the new CLI flag: dev1 still
-  runs cfee0d7; the next upgrade installs 764cdac.
 
 ## 5. Known limitations
 
@@ -136,3 +134,14 @@ and metrics (0.15.0), per the roadmap.
 * 2026-10-15: flyouts split into columns by group (released as 0.13.1
   before this milestone).
 * Approval: *pending*.
+
+## Addendum (2026-10-15 02:09 UTC): 0.13.2 and the recovery fix on dev1
+
+The owner reported that the Overview page scrolled past its end and took
+the menu with it. Cause: the charts' hidden data tables (for screen
+readers) kept their full height because tables ignore the clipping that
+hides them. Fixed on branch `chart-scroll-fix` from `main` as **0.13.2**
+(2890c02) and merged here. The owner upgraded dev1 from this branch to
+**0.13.2-19227668b8**: CA and certificate kept, all verify checks OK.
+`sudo veyra firewall off` now reports "Firewall turned off in the
+database. Table inet veyra was not present." (exit 0) with the new wrapper.
