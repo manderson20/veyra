@@ -70,6 +70,7 @@ export const NAV: NavSection[] = [
     { label: "Bell Schedules", href: "/bells/", icon: "clock", permissions: ["bells.read"], group: "Paging and bells" },
     { label: "Call History", href: "/call-history/", icon: "history", permissions: ["calls.history.read"], group: "History and reports" },
     { label: "Call Recording", href: "/recording/", icon: "record", permissions: ["recordings.read", "recordings.read_own", "recording_policies.read"], group: "History and reports" },
+    { label: "Reports", href: "/reports/", icon: "activity", permissions: ["reports.read"], group: "History and reports" },
     ...PLANNED_FEATURES.map((f) => ({
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone }, group: "Coming later",
     })),
