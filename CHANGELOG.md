@@ -18,6 +18,10 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 - **Restart Veyra services** from the interface after a module update (polkit rule for the service account, Veyra's units only; Asterisk is not restarted).
 - `veyra catalog add|sign|verify` for publishing a catalog.
 
+### Fixed
+- **Installing the AND Clock Messages module failed in production** (error 500): it uses the `httpx` library, which was only installed for development. `httpx` is now a production dependency, a test checks every bundled module's imports against `requirements.txt`, and a module whose code cannot load is refused with the reason instead of a server error (owner report).
+- A restart requested from the interface could restart Veyra's services in a loop (found in the live check before release).
+
 ## 0.16.0 — 2026-10-15 (Milestone 10b)
 
 ### Added
