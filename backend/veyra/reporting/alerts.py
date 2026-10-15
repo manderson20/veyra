@@ -1,0 +1,348 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Monitoring alerts (docs/REPORTING.md §6.1).
+
+Every worker pass the checks report what is wrong right now; an alert is
+*pending* when first seen, *raised* (and emailed) once it has lasted the
+rule's delay, reminded every 24 hours, and *cleared* (emailed once) when it
+is gone. Built-in rules only; administrators switch and tune them."""
+
+from __future__ import annotations
+
+import logging
+import shutil
+import socket
+import ssl
+import subprocess
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from veyra.core import mail
+from veyra.core.models import (
+    Alert,
+    AlertRule,
+    Device,
+    Extension,
+    FirewallBan,
+    Installation,
+    SipTrunk,
+)
+from veyra.core.models.base import utcnow
+
+log = logging.getLogger("veyra.alerts")
+
+REMIND_AFTER = timedelta(hours=24)
+
+
+@dataclass(frozen=True)
+class RuleDef:
+    key: str
+    title: str
+    delay_minutes: int
+    threshold: int | None = None
+    unit: str = ""
+
+
+RULES: dict[str, RuleDef] = {
+    r.key: r
+    for r in (
+        RuleDef("engine_down", "Telephony engine down", 2),
+        RuleDef("trunk_down", "Trunk down", 5),
+        RuleDef("service_down", "Veyra service not running", 2),
+        RuleDef("disk_space", "Disk space low", 5, 10, "% free"),
+        RuleDef("certificate", "HTTPS certificate expiring", 0, 21, "days"),
+        RuleDef("firewall_bans", "Many firewall bans", 0, 20, "bans per hour"),
+        RuleDef("phones_unregistered", "Phones unregistered", 15, 20, "% of phones"),
+    )
+}
+SERVICES = ("veyra-api", "veyra-deployer", "veyra-pager", "veyra-firewall")
+
+
+@dataclass(frozen=True)
+class Finding:
+    rule: str
+    subject: str
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+
+def ensure_rules(db: Session) -> dict[str, AlertRule]:
+    rows = {r.key: r for r in db.scalars(select(AlertRule))}
+    for key, d in RULES.items():
+        if key not in rows:
+            rows[key] = AlertRule(
+                key=key,
+                is_enabled=True,
+                delay_minutes=d.delay_minutes,
+                threshold=d.threshold,
+                recipients=[],
+            )
+            db.add(rows[key])
+    db.flush()
+    return rows
+
+
+# ------------------------------------------------------------------ checks
+
+
+def check_engine(adapter: Any) -> list[Finding]:
+    state = adapter.health().state
+    if state == "running":
+        return []
+    return [Finding("engine_down", "", f"The telephony engine is {state.replace('_', ' ')}.")]
+
+
+def check_trunks(db: Session, adapter: Any) -> list[Finding]:
+    live = {s.endpoint: s.registered for s in adapter.endpoint_statuses()}
+    out = []
+    for t in db.scalars(select(SipTrunk).where(SipTrunk.is_enabled.is_(True))):
+        name = f"trunk-{t.slug}"
+        if t.qualify_frequency and name in live and not live[name]:
+            out.append(
+                Finding("trunk_down", t.slug, f"Trunk {t.name} is not reachable or not registered.")
+            )
+    return out
+
+
+def check_phones(db: Session, adapter: Any, threshold: int) -> list[Finding]:
+    """Extensions that have provisioned phones and are not registered."""
+    with_devices = select(Device.primary_extension_id).where(
+        Device.is_enabled.is_(True), Device.primary_extension_id.is_not(None)
+    )
+    exts = db.scalars(
+        select(Extension).where(Extension.is_enabled.is_(True), Extension.id.in_(with_devices))
+    ).all()
+    if not exts:
+        return []
+    live = {s.endpoint: s.registered for s in adapter.endpoint_statuses()}
+    down = [e for e in exts if not live.get(e.endpoint_name, False)]
+    share = 100 * len(down) / len(exts)
+    if share <= threshold:
+        return []
+    return [
+        Finding(
+            "phones_unregistered",
+            "",
+            f"{len(down)} of {len(exts)} provisioned phones are not registered.",
+            {"numbers": sorted(e.number for e in down)[:50]},
+        )
+    ]
+
+
+def unit_active(unit: str) -> bool:
+    try:
+        res = subprocess.run(  # noqa: S603
+            ["systemctl", "is-active", "--quiet", unit],  # noqa: S607
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True  # cannot tell: do not cry wolf
+    return res.returncode == 0
+
+
+def check_services(units: tuple[str, ...], active: Callable[[str], bool]) -> list[Finding]:
+    return [
+        Finding("service_down", u, f"The {u} service is not running (journalctl -u {u}).")
+        for u in units
+        if not active(u)
+    ]
+
+
+def check_disk(paths: list[Path], threshold: int) -> list[Finding]:
+    out = []
+    for p in paths:
+        try:
+            usage = shutil.disk_usage(p)
+        except OSError:
+            continue
+        free = 100 * usage.free / usage.total if usage.total else 100
+        if free < threshold:
+            out.append(
+                Finding(
+                    "disk_space",
+                    str(p),
+                    f"Only {free:.0f}% free on the volume of {p}.",
+                    {"free_percent": round(free, 1)},
+                )
+            )
+    return out
+
+
+def certificate_days_left(host: str = "127.0.0.1", port: int = 443) -> float | None:
+    from cryptography import x509
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with (
+            socket.create_connection((host, port), timeout=5) as sock,
+            ctx.wrap_socket(sock) as tls,
+        ):
+            der = tls.getpeercert(binary_form=True)
+    except OSError:
+        return None
+    if not der:
+        return None
+    cert = x509.load_der_x509_certificate(der)
+    return (cert.not_valid_after_utc - utcnow()).total_seconds() / 86400
+
+
+def check_certificate(days_left: float | None, threshold: int) -> list[Finding]:
+    if days_left is None or days_left >= threshold:
+        return []
+    return [
+        Finding(
+            "certificate", "", f"The HTTPS certificate expires in {max(days_left, 0):.0f} days."
+        )
+    ]
+
+
+def check_firewall(db: Session, now: datetime, threshold: int) -> list[Finding]:
+    n = db.scalar(
+        select(func.count())
+        .select_from(FirewallBan)
+        .where(FirewallBan.banned_at > now - timedelta(hours=1))
+    )
+    if not n or n <= threshold:
+        return []
+    return [
+        Finding(
+            "firewall_bans",
+            "",
+            f"{n} addresses were banned in the last hour: an attack may be under way.",
+        )
+    ]
+
+
+# --------------------------------------------------------------- evaluate
+
+
+def evaluate(
+    db: Session,
+    findings: list[Finding],
+    notify: Callable[[AlertRule, Alert, str], None],
+    now: datetime | None = None,
+) -> None:
+    now = now or utcnow()
+    rules = ensure_rules(db)
+    current = {
+        (f.rule, f.subject): f for f in findings if rules.get(f.rule) and rules[f.rule].is_enabled
+    }
+    open_alerts = {
+        (a.rule, a.subject): a
+        for a in db.scalars(select(Alert).where(Alert.state.in_(("pending", "raised"))))
+    }
+    for key, f in current.items():
+        rule = rules[f.rule]
+        a = open_alerts.get(key)
+        if a is None:
+            a = Alert(
+                id=uuid.uuid4(),
+                rule=f.rule,
+                subject=f.subject,
+                state="pending",
+                message=f.message,
+                details=f.details,
+                first_seen_at=now,
+            )
+            db.add(a)
+        a.message, a.details = f.message, f.details
+        if a.state == "pending" and now - a.first_seen_at >= timedelta(minutes=rule.delay_minutes):
+            a.state, a.raised_at = "raised", now
+            notify(rule, a, "raised")
+            a.last_notified_at = now
+        elif (
+            a.state == "raised" and a.last_notified_at and now - a.last_notified_at >= REMIND_AFTER
+        ):
+            notify(rule, a, "reminder")
+            a.last_notified_at = now
+    for key, a in open_alerts.items():
+        if key in current:
+            continue
+        if a.state == "pending":
+            db.delete(a)  # it went away before anyone needed to know
+            continue
+        a.state, a.cleared_at = "cleared", now
+        cleared_rule = rules.get(a.rule)
+        if cleared_rule is not None and cleared_rule.is_enabled:
+            notify(cleared_rule, a, "cleared")
+    db.flush()
+
+
+def mail_notifier(db: Session, queue_dir: Path) -> Callable[[AlertRule, Alert, str], None]:
+    """Email through the outgoing mail queue (docs/VOICEMAIL_IVR.md §2)."""
+    smtp = mail.load_smtp_settings(db)
+    inst = db.scalar(select(Installation))
+    name = inst.name if inst else "Veyra"
+    address, from_name = mail.sender(smtp, name)
+
+    def notify(rule: AlertRule, alert: Alert, what: str) -> None:
+        if not rule.recipients:
+            return
+        if not smtp.enabled:
+            alert.notify_error = "Email delivery is off (System → Settings → Email)."
+            return
+        title = RULES[rule.key].title if rule.key in RULES else rule.key
+        prefix = {"raised": "ALERT", "reminder": "STILL", "cleared": "CLEARED"}[what]
+        subject = f"[{name}] {prefix}: {title}" + (f" ({alert.subject})" if alert.subject else "")
+        text = (
+            f"{alert.message}\n\n"
+            + (
+                f"First seen {alert.first_seen_at:%Y-%m-%d %H:%M} UTC.\n"
+                if what != "cleared"
+                else f"Cleared {alert.cleared_at:%Y-%m-%d %H:%M} UTC.\n"
+            )
+            + "\nSee System → Alerts in Veyra.\n"
+        )
+        try:
+            for to in rule.recipients:
+                msg = mail.compose(
+                    from_address=address, from_name=from_name, to=to, subject=subject, text=text
+                )
+                mail.enqueue(queue_dir, msg.as_bytes())
+            alert.notify_error = None
+        except Exception as e:
+            alert.notify_error = str(e)[:500]
+            log.warning("Alert email not queued: %s", e)
+
+    return notify
+
+
+def run(db: Session, settings: Any, adapter: Any | None, now: datetime | None = None) -> None:
+    """One evaluation pass for the worker."""
+    now = now or utcnow()
+    rules = ensure_rules(db)
+
+    def threshold(key: str) -> int:
+        r = rules[key]
+        return r.threshold if r.threshold is not None else (RULES[key].threshold or 0)
+
+    findings: list[Finding] = []
+    checks: list[Callable[[], list[Finding]]] = [
+        lambda: check_services(
+            SERVICES if adapter is not None else ("veyra-api", "veyra-firewall"), unit_active
+        ),
+        lambda: check_disk([settings.data_dir, settings.log_dir], threshold("disk_space")),
+        lambda: check_certificate(certificate_days_left(), threshold("certificate")),
+        lambda: check_firewall(db, now, threshold("firewall_bans")),
+    ]
+    if adapter is not None:
+        checks += [
+            lambda: check_engine(adapter),
+            lambda: check_trunks(db, adapter),
+            lambda: check_phones(db, adapter, threshold("phones_unregistered")),
+        ]
+    for check in checks:
+        try:
+            findings += check()
+        except Exception:
+            log.exception("Alert check failed")
+    evaluate(db, findings, mail_notifier(db, settings.mailqueue_dir), now)

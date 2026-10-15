@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """All core ORM models. Import this package so metadata is complete."""
 
+from veyra.core.models.alerts import Alert, AlertRule
 from veyra.core.models.base import Base
 from veyra.core.models.bells import BellRing, BellSchedule, Calendar, CalendarEvent
 from veyra.core.models.calls import CallLeg, CallRecord, QueueEvent
@@ -70,6 +71,8 @@ from veyra.core.models.voicemail import (
 )
 
 __all__ = [
+    "Alert",
+    "AlertRule",
     "ApiToken",
     "AuditEvent",
     "AvailableUpdate",
