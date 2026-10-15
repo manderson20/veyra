@@ -185,6 +185,13 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin",),
     ),
     PermissionDef(
+        "alerts.read",
+        "View monitoring alerts",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef("alerts.write", "Change alert rules and recipients", platform_only=True),
+    PermissionDef("metrics.read", "Read Prometheus metrics (API token scope)", platform_only=True),
+    PermissionDef(
         "reports.read",
         "View call reports",
         default_roles=("org_admin", "site_admin", "read_only"),

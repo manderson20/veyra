@@ -4,6 +4,7 @@
 from fastapi import APIRouter
 
 from veyra.api.v1 import (
+    alerts,
     audit,
     auth,
     auth_companion,
@@ -63,6 +64,7 @@ for r in (
     updates,
     ha,
     audit,
+    alerts,
     provisioning,
     telephony,
     extensions,

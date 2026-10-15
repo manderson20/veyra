@@ -914,6 +914,16 @@ def cmd_worker(args: argparse.Namespace) -> int:
                     if due and settings.update_metadata_url:
                         check = check_for_updates(db, settings, Keyring.load(settings.trust_dir))
                         log.info("Update check: %s %s", check.outcome, check.message)
+                    # Monitoring (docs/REPORTING.md §6.1) before the mail queue,
+                    # so a raised alert's email leaves in the same pass.
+                    from veyra.reporting import alerts
+                    from veyra.telephony import get_adapter
+
+                    alerts.run(
+                        db,
+                        settings,
+                        get_adapter(settings) if settings.telephony_engine != "none" else None,
+                    )
                     process_mail_queue(db, settings, log)
                     if settings.telephony_engine != "none":
                         ensure_prompt_dirs(db, settings)
