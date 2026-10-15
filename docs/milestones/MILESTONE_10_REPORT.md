@@ -123,3 +123,10 @@ owner's online module catalog on GitHub (0.16.0), per the roadmap.
 * 2026-10-15: approved ("M10 approved, go ahead with 0.15.0"); released
   as 0.15.0. The §12 questions, the browser check and the hardware checks
   stay open (§6).
+
+## Addendum (2026-10-15 03:49 UTC): 0.15.0 on dev1
+
+The owner upgraded dev1 from `~/veyra-release` to the release build
+**0.15.0-9c90a914c0**: backups taken, schema current (0022), CA and
+certificate kept, Asterisk unchanged, all five Veyra services running, all
+verify checks OK.
