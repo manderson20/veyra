@@ -924,6 +924,13 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         settings,
                         get_adapter(settings) if settings.telephony_engine != "none" else None,
                     )
+                    # Module catalogs once a day; service restarts asked for in
+                    # the interface (docs/MODULE_CATALOG.md §3-4).
+                    from veyra.modules import catalog as module_catalog
+
+                    module_catalog.refresh_due(db, settings.trust_dir)
+                    db.commit()
+                    module_catalog.run_restart_request(db)
                     # Scheduled report emails (docs/REPORT_BUILDER.md §3).
                     from veyra.reporting import schedule as report_schedule
 
@@ -1058,6 +1065,96 @@ def cmd_firewall_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_catalog_add(args: argparse.Namespace) -> int:
+    """Add (or replace) a package version in a catalog index (docs/MODULE_CATALOG.md §2.4)."""
+    import hashlib
+    from datetime import UTC, date, datetime
+
+    from veyra.modules.manifest import load_manifest
+    from veyra.modules.packages import extract_package
+
+    pkg = Path(args.package)
+    data = pkg.read_bytes()
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        manifest = load_manifest(extract_package(data, Path(tmp)))
+    index_path = Path(args.index)
+    index = (
+        json.loads(index_path.read_text())
+        if index_path.exists()
+        else {"catalog_version": 1, "name": args.name, "modules": []}
+    )
+    entry = next((m for m in index["modules"] if m["id"] == manifest.id), None)
+    if entry is None:
+        entry = {
+            "id": manifest.id,
+            "name": manifest.module.name,
+            "summary": manifest.module.description,
+            "publisher": manifest.module.author,
+            "homepage": manifest.module.homepage,
+            "versions": [],
+        }
+        index["modules"].append(entry)
+    entry["versions"] = [v for v in entry["versions"] if v["version"] != manifest.module.version]
+    entry["versions"].insert(
+        0,
+        {
+            "version": manifest.module.version,
+            "core_api": manifest.compatibility.core_api,
+            "url": args.url,
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "size": len(data),
+            "released": date.today().isoformat(),
+            "notes": args.notes,
+        },
+    )
+    index["modules"].sort(key=lambda m: m["id"])
+    index["generated_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    from veyra.modules.catalog import CatalogIndex
+
+    CatalogIndex.model_validate(index)  # never write an index Veyra would refuse
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(json.dumps(index, indent=2) + "\n")
+    print(f"{manifest.id} {manifest.module.version} added to {index_path}")
+    print("Sign the index again: veyra catalog sign")
+    return 0
+
+
+def cmd_catalog_sign(args: argparse.Namespace) -> int:
+    from veyra.core.signing import sign
+
+    index = Path(args.index)
+    sig = sign(index.read_bytes(), Path(args.key_file).read_text(), args.key_id)
+    Path(str(index) + ".sig").write_text(sig)
+    print(f"Signed {index} with {args.key_id}: {index}.sig")
+    return 0
+
+
+def cmd_catalog_verify(args: argparse.Namespace) -> int:
+    from veyra.core.config import get_settings
+    from veyra.modules import catalog
+
+    keyring = catalog.catalog_keyring(
+        Path(args.trust_dir) if args.trust_dir else get_settings().trust_dir
+    )
+    try:
+        if args.index.startswith(("https://", "http://")):
+            index, key_id = catalog.fetch_index(args.index, keyring)
+        else:
+            path = Path(args.index)
+            index, key_id = catalog.parse_index(
+                path.read_bytes(), Path(str(path) + ".sig").read_text(), keyring
+            )
+    except (catalog.CatalogError, OSError) as e:
+        print(f"NOT VALID: {e}", file=sys.stderr)
+        return 1
+    print(f"Valid, signed by {key_id}: {len(index.modules)} module(s)")
+    for m in index.modules:
+        print(f"  {m.id}: " + ", ".join(v.version for v in m.versions))
+    return 0
+
+
 # ----------------------------------------------------------------- parser
 
 
@@ -1114,6 +1211,32 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--key-id", required=True)
     s.add_argument("--package", metavar="OUTPUT_DIR", help="Also build a .vmod package")
     s.set_defaults(func=cmd_modules_sign)
+
+    cat = sub.add_parser(
+        "catalog", help="Publish a module catalog (docs/MODULE_CATALOG.md)"
+    ).add_subparsers(dest="catalog_cmd", metavar="<action>", required=True)
+    s = cat.add_parser("add", help="Add a signed .vmod package to an index.json")
+    s.add_argument("package")
+    s.add_argument(
+        "--url", required=True, help="Where the package will be downloaded (a GitHub release asset)"
+    )
+    s.add_argument("--index", required=True, help="Path of index.json (created when missing)")
+    s.add_argument("--name", default="Veyra modules", help="Catalog name for a new index")
+    s.add_argument("--notes", default=None, help="Release notes for this version")
+    s.set_defaults(func=cmd_catalog_add)
+    s = cat.add_parser("sign", help="Sign index.json with the catalog key (writes index.json.sig)")
+    s.add_argument("index")
+    s.add_argument("--key-file", required=True)
+    s.add_argument("--key-id", required=True)
+    s.set_defaults(func=cmd_catalog_sign)
+    s = cat.add_parser(
+        "verify", help="Check a local or online index against the trusted catalog keys"
+    )
+    s.add_argument("index", help="Path or URL of index.json")
+    s.add_argument(
+        "--trust-dir", default=None, help="Trust directory (default: the installation's)"
+    )
+    s.set_defaults(func=cmd_catalog_verify)
 
     tpl = sub.add_parser("templates", help="Provisioning templates").add_subparsers(
         dest="tpl_cmd", metavar="<action>"

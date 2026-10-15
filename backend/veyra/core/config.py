@@ -171,6 +171,12 @@ class Settings(BaseSettings):
         return self.data_dir / "moh"
 
     @property
+    def module_store_dir(self) -> Path:
+        """Modules installed from a catalog or uploaded (docs/MODULE_CATALOG.md
+        §3): ``active/`` is searched before the release's modules."""
+        return self.data_dir / "module-store"
+
+    @property
     def recordings_dir(self) -> Path:
         """Call recordings (docs/REPORTING.md §4): Asterisk writes WAV files to
         ``incoming/``; the worker converts them into ``<org>/<yyyy>/<mm>/``."""
