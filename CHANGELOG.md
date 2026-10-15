@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.13.0-dev — unreleased (Milestone 9c)
+## 0.13.0 — 2026-10-15 (Milestone 9c)
 
 ### Added
 - **AND Clock Messages module** (`veyra.and-clocks`, Modules → install; [modules/veyra-and-clocks](modules/veyra-and-clocks/README.md), [PAGING_RECORDINGS.md](docs/PAGING_RECORDINGS.md) §6): the first real module. Text messages to Advanced Network Devices clocks and signs, like AND's Clockwise: to all clocks, a group or one clock; colour, flashers, priority and display time with AND's inline markup; sent now or at a set time; a message log; reachability checks; messages shown with bells (`{summary}` = the calendar event's name). The clock's own web request is described once under Clock Delivery (method, path, body template, sign-in; the password is encrypted). Permissions `and_clocks.read`/`send`/`write`.

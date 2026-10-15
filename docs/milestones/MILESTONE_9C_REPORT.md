@@ -1,8 +1,7 @@
 # Milestone 9c Report — Paging and Recordings
 
 Branch `milestone-9c` (from `main` at 0.12.0). Design:
-[PAGING_RECORDINGS.md](../PAGING_RECORDINGS.md). Status: **built, awaiting
-the owner's upgrade of dev1 and approval** (to be released as 0.13.0).
+[PAGING_RECORDINGS.md](../PAGING_RECORDINGS.md). Status: **approved 2026-10-15, released as 0.13.0.**
 
 ## 1. Scope (owner requests of 2026-10-14)
 
@@ -110,3 +109,5 @@ order".
   installed or uninstalled.
 * 2026-10-15: voicemail transcription discussed as a concept only
   (on-server speech recognition preferred for privacy; not scheduled).
+* 2026-10-15: approved ("resume"); released as 0.13.0. The AND clock and
+  Poly captures stay open (§6) and are applied as patch releases.
