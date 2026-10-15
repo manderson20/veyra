@@ -1871,3 +1871,18 @@ export interface CallRecordingItem {
   held_by: string | null;
   deleted_at: string | null;
 }
+
+// ---------------------------------------------------------------- monitoring (docs/REPORTING.md §6)
+
+export interface AlertItem {
+  id: string;
+  rule: string;
+  title: string;
+  subject: string;
+  state: "pending" | "raised" | "cleared";
+  message: string;
+  first_seen_at: string;
+  raised_at: string | null;
+  cleared_at: string | null;
+  notify_error: string | null;
+}

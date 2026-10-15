@@ -82,13 +82,14 @@ export const NAV: NavSection[] = [
     { label: "Firmware", href: "/firmware/", icon: "update", permissions: ["provisioning.read"], group: "Configuration" },
   ] },
   { id: "modules", label: "Modules", icon: "modules", description: "Pages added by installed modules.", items: [] },
-  { id: "system", label: "System", icon: "settings", description: "Health, the telephony engine, high availability, the firewall, updates, modules, audit and settings.", items: [
+  { id: "system", label: "System", icon: "settings", description: "Health, alerts, the telephony engine, high availability, the firewall, updates, modules, audit and settings.", items: [
     { label: "Health", href: "/system/health/", icon: "health", permissions: ["system.health.read"], group: "Status" },
     { label: "Telephony Engine", href: "/system/telephony/", icon: "server", permissions: ["config.read"], group: "Platform" },
     { label: "High Availability", href: "/system/ha/", icon: "ha", permissions: ["ha.read"], group: "Platform" },
     { label: "Updates", href: "/updates/", icon: "update", permissions: ["updates.read"], group: "Software" },
     { label: "Module Manager", href: "/modules/", icon: "modules", permissions: ["modules.read"], group: "Software" },
     { label: "Audit Log", href: "/audit/", icon: "audit", permissions: ["audit.read"], group: "Status" },
+    { label: "Alerts", href: "/system/alerts/", icon: "alert", permissions: ["alerts.read"], group: "Status" },
     { label: "Firewall", href: "/system/firewall/", icon: "shield", permissions: ["firewall.read"], group: "Security" },
     { label: "Settings", href: "/settings/", icon: "settings", group: "Settings" },
   ] },

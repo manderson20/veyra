@@ -21,6 +21,7 @@ import { formatBytes, formatDuration, formatPercent, formatRelative } from "@/li
 import type { AuditEvent, AvailableUpdate, CallMetrics, MetricsRange, Page, SystemHealth } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
+import { TodayCards } from "@/components/reports/TodayCards";
 
 const REFRESH_MS = 30_000;
 
@@ -167,6 +168,7 @@ export default function Dashboard() {
         </>
       )}
 
+      <TodayCards />
       {can("audit.read") ? (
         <Card title="Recent activity" flush actions={<Link href="/audit/" className="subtle">View audit log</Link>}>
           {audit.error ? (
