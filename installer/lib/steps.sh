@@ -313,23 +313,95 @@ do_migrate() {
     ok "Database schema is current"
 }
 
+# The Veyra CA (docs/FIREWALL_TRUST.md §6.2) signs the server certificate so
+# phones can trust it after the provisioning bootstrap installs the CA. The CA
+# key stays root-only; public copies go where the API (bootstrap) and NGINX
+# (/downloads/veyra-ca.crt) read them. A certificate the administrator
+# installed (anything not issued by Veyra) is never replaced.
 do_tls() {
-    begin tls "Preparing the HTTPS certificate"
-    if [[ -s "$VEYRA_ETC/tls/veyra.crt" && -s "$VEYRA_ETC/tls/veyra.key" ]]; then
-        ok "Existing certificate kept ($VEYRA_ETC/tls/veyra.crt)"
-        return
-    fi
-    local host fqdn san addr
+    begin tls "Preparing the certificate authority and the HTTPS certificate"
+    local dir="$VEYRA_ETC/tls" host fqdn san addr subject issuer cnf
     host="$(hostname -s)"; fqdn="$(hostname -f 2>/dev/null || echo "$host")"
-    san="DNS:$host,DNS:localhost,IP:127.0.0.1"
-    [[ "$fqdn" != "$host" ]] && san="DNS:$host,DNS:$fqdn,DNS:localhost,IP:127.0.0.1"
+    local names=("$host" localhost)
+    [[ "$fqdn" != "$host" ]] && names+=("$fqdn")
+    [[ -n "${VEYRA_PUBLIC_HOST:-}" && " ${names[*]} " != *" $VEYRA_PUBLIC_HOST "* ]] && names+=("$VEYRA_PUBLIC_HOST")
+    if [[ -s "$dir/ca.key" && -s "$dir/ca.crt" ]]; then
+        ok "Certificate authority exists (kept)"
+    else
+        cnf="$(mktemp)"
+        {
+            echo "[req]"; echo "distinguished_name = dn"; echo "[dn]"
+            echo "[ca]"
+            echo "basicConstraints = critical, CA:TRUE, pathlen:0"
+            echo "keyUsage = critical, keyCertSign, cRLSign"
+            echo "subjectKeyIdentifier = hash"
+            # Only this server's host names: a CA installed on phones and
+            # browsers cannot vouch for anyone else (IP addresses are not
+            # constrained so phones may use the address).
+            printf 'nameConstraints = critical'
+            for n in "${names[@]}"; do printf ', permitted;DNS:%s' "$n"; done
+            echo
+        } >"$cnf"
+        run openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 \
+            -subj "/CN=Veyra local CA ($fqdn)/O=Veyra local CA" -config "$cnf" -extensions ca \
+            -keyout "$dir/ca.key" -out "$dir/ca.crt"
+        rm -f "$cnf"
+        run chmod 0600 "$dir/ca.key"
+        run chmod 0644 "$dir/ca.crt"
+        ok "Created the Veyra certificate authority ($dir/ca.crt, 10 years)"
+    fi
+    run install -m 0644 -o root -g "$VEYRA_USER" "$dir/ca.crt" "$VEYRA_ETC/veyra-ca.crt"
+    run install -m 0644 -o root -g root "$dir/ca.crt" "$VEYRA_PREFIX/veyra-ca.crt"
+
+    local reissue=0
+    if [[ -s "$dir/veyra.crt" && -s "$dir/veyra.key" ]]; then
+        subject="$(openssl x509 -in "$dir/veyra.crt" -noout -subject 2>/dev/null || true)"
+        issuer="$(openssl x509 -in "$dir/veyra.crt" -noout -issuer 2>/dev/null || true)"
+        if [[ "$subject" == *"Veyra (self-signed)"* ]]; then
+            info "Replacing Veyra's self-signed certificate with one issued by the Veyra CA"
+            reissue=1
+        elif [[ "$issuer" == *"Veyra local CA"* ]]; then
+            if ! openssl x509 -in "$dir/veyra.crt" -noout -checkend $((30 * 86400)) >/dev/null 2>&1; then
+                info "The certificate expires within 30 days; renewing it"
+                reissue=1
+            else
+                ok "Certificate issued by the Veyra CA kept ($dir/veyra.crt)"
+            fi
+        else
+            ok "Administrator's certificate kept ($dir/veyra.crt); phones need its CA or a public one"
+        fi
+    else
+        reissue=1
+    fi
+    (( reissue )) || return 0
+    san=""
+    for n in "${names[@]}"; do san+="${san:+,}DNS:$n"; done
+    san+=",IP:127.0.0.1"
     for addr in $(host_addresses); do san+=",IP:$addr"; done
-    run openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 825 \
-        -subj "/CN=$fqdn/O=Veyra (self-signed)" -addext "subjectAltName=$san" \
-        -keyout "$VEYRA_ETC/tls/veyra.key" -out "$VEYRA_ETC/tls/veyra.crt"
-    run chmod 0600 "$VEYRA_ETC/tls/veyra.key"
-    run chmod 0644 "$VEYRA_ETC/tls/veyra.crt"
-    warn "A self-signed certificate was created. Browsers will warn until it is replaced (docs/INSTALLATION.md#tls)."
+    cnf="$(mktemp)"
+    {
+        echo "basicConstraints = critical, CA:FALSE"
+        echo "keyUsage = critical, digitalSignature"
+        echo "extendedKeyUsage = serverAuth"
+        echo "subjectAltName = $san"
+        echo "authorityKeyIdentifier = keyid"
+    } >"$cnf"
+    [[ -s "$dir/veyra.crt" ]] && run cp -a "$dir/veyra.crt" "$dir/veyra.crt.veyra-backup-$(date +%Y%m%d%H%M%S)"
+    run openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+        -subj "/CN=$fqdn/O=Veyra" -keyout "$dir/veyra.key.new" -out "$dir/veyra.csr"
+    run openssl x509 -req -in "$dir/veyra.csr" -CA "$dir/ca.crt" -CAkey "$dir/ca.key" -CAcreateserial \
+        -days 825 -sha256 -extfile "$cnf" -out "$dir/veyra.crt.new"
+    rm -f "$cnf" "$dir/veyra.csr"
+    # The certificate followed by the CA, so clients get the whole chain.
+    if [[ "$DRY_RUN" != "1" ]]; then
+        cat "$dir/veyra.crt.new" "$dir/ca.crt" >"$dir/veyra.crt.chain"
+        mv -f "$dir/veyra.crt.chain" "$dir/veyra.crt"
+        mv -f "$dir/veyra.key.new" "$dir/veyra.key"
+        rm -f "$dir/veyra.crt.new"
+    fi
+    run chmod 0600 "$dir/veyra.key"
+    run chmod 0644 "$dir/veyra.crt"
+    ok "HTTPS certificate issued by the Veyra CA (825 days). Install veyra-ca.crt in browsers to remove the warning (docs/INSTALLATION.md#tls)."
 }
 
 do_telephony() {

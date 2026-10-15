@@ -103,6 +103,15 @@ server {
         default_type application/x-chrome-extension;
     }
 
+    # The Veyra CA certificate (docs/FIREWALL_TRUST.md §6.2): install it in
+    # browsers (or push it with Google Admin) to trust this server.
+    location = /downloads/veyra-ca.crt {
+        alias @VEYRA_PREFIX@/veyra-ca.crt;
+        types { }
+        default_type application/x-x509-ca-cert;
+        add_header Content-Disposition 'attachment; filename="veyra-ca.crt"';
+    }
+
     # NGINX's mime.types has no entry for the web manifest.
     location = /manifest.webmanifest {
         types { }
