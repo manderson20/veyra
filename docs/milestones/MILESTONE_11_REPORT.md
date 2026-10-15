@@ -110,3 +110,12 @@ Milestone 12 — software update management (0.18.0), or the service runtime
 * 2026-10-15: approved ("M11 approved, go ahead with 0.17.0"), together
   with the report that installing the AND module failed; the fix is part of
   0.17.0.
+
+## Addendum (2026-10-15 05:15 UTC): 0.17.0 on dev1
+
+The owner upgraded dev1 from `~/veyra-release` to the release build
+**0.17.0-10da4ffcad**: backups taken, schema current (0024), all verify
+checks OK (`catalog-trust` warns, as expected without a catalog key).
+`httpx` 0.28.1 is now in the release environment and the AND Clock Messages
+module's code loads as the service account; the module is not installed yet
+(the owner retries from the Module Manager).
