@@ -18,6 +18,15 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 - The installer replaces Veyra's own **self-signed certificate** with one issued by the Veyra CA at the next upgrade (an administrator's certificate is kept); browsers warn until `veyra-ca.crt` is installed. The TLS step now also runs on upgrades and renews Veyra-issued certificates within 30 days of expiry.
 - `logger.conf` is Veyra-managed (the package's channels plus `security.log`); `VEYRA_PROVISIONING_HTTP_MODE=full` keeps the old plain-HTTP behaviour.
 
+## 0.13.2 — 2026-10-15
+
+### Fixed
+
+- **Overview page scrolled past its end and took the menu with it**: the
+  charts' hidden data tables (for screen readers) kept their full height,
+  one row per sample, because tables ignore the clipping that hides them;
+  they are now clipped inside a hidden block (owner report).
+
 ## 0.13.1 — 2026-10-15
 
 ### Changed
