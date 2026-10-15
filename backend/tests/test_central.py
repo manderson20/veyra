@@ -272,6 +272,8 @@ def test_console_offline_keeps_settings_and_alerts(routed, app, monkeypatch):
     )
     assert _enroll(admin, _token(admin)).status_code == 200
     _check_in(app)
+    # Only the sections the policy sets are managed by the console.
+    assert admin.get("/api/v1/central/notice").json()["managed"] == {"notice": True}
     # The console goes away: the instance records the error and keeps its settings.
     monkeypatch.setattr(
         protocol,
