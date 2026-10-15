@@ -827,12 +827,14 @@ def get_notice(
     db: Session = Depends(get_db), principal: Principal = Depends(current_principal)
 ) -> dict[str, Any]:
     m = member.membership(db)
+    # Managed: the console's policy sets the section and this installation accepts it.
+    document = (m.get("policy") or {}).get("document") or {}
     return {
         "text": central_policy.notice(db),
         "console_name": m.get("console_name"),
         "managed": {
             k: v
             for k, v in {**member.DEFAULT_ACCEPTED, **(m.get("accepted") or {})}.items()
-            if m.get("console_url") and v and k in central_policy.SECTIONS
+            if m.get("console_url") and v and k in central_policy.SECTIONS and k in document
         },
     }
