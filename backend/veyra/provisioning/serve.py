@@ -24,7 +24,7 @@ from veyra.core.db import get_db
 from veyra.core.models import Device, Organization, ProvisioningRequest
 from veyra.core.models.base import utcnow
 from veyra.core.security.crypto import DecryptionError, InstallationKey, try_load_installation_key
-from veyra.provisioning import facts
+from veyra.provisioning import bootstrap, facts
 from veyra.provisioning.spec import TemplateError
 
 log = logging.getLogger("veyra.provisioning")
@@ -159,12 +159,104 @@ def _scheme(request: Request) -> str:
     return (request.headers.get("x-forwarded-proto") or request.url.scheme or "https").lower()
 
 
+def _client(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:45]
+    return request.client.host if request.client else None
+
+
+def _bootstrap(
+    filename: str, request: Request, db: Session, key: InstallationKey | None
+) -> Response:
+    """Plain HTTP: the trust bootstrap only (docs/FIREWALL_TRUST.md §6.3)."""
+    settings = request.app.state.settings
+    no_store = {"Cache-Control": "no-store"}
+    mac = _mac_of(filename)
+    if not bootstrap.client_allowed(_client(request), bootstrap.bootstrap_networks(db)):
+        _log(db, request, filename=filename, mac=mac, result="bootstrap_network", status=403)
+        return Response(status_code=403, headers=no_store)
+    if filename == "000000000000.cfg":
+        _log(db, request, filename=filename, mac=None, result="ok", status=200)
+        return Response(EMPTY_MASTER, media_type="application/xml", headers=no_store)
+    device = bootstrap.find_device(db, mac)
+    is_master = mac is not None and filename.lower() == f"{mac}.cfg"
+    is_config = mac is not None and filename.lower() == f"{bootstrap.BOOTSTRAP_PREFIX}{mac}.cfg"
+    org_id = device.organization_id if device else None
+    if not (is_master or is_config) or not bootstrap.is_poly(
+        request.headers.get("user-agent"), device
+    ):
+        _log(
+            db,
+            request,
+            filename=filename,
+            mac=mac,
+            result="bootstrap_only",
+            status=404,
+            organization_id=org_id,
+            device=device,
+        )
+        return Response(status_code=404, headers=no_store)
+    if device is not None and (not device.is_enabled or not device.allow_bootstrap):
+        # Downgrade protection: a phone that already provisioned over HTTPS
+        # is not sent back to the bootstrap until "Allow bootstrap again".
+        _log(
+            db,
+            request,
+            filename=filename,
+            mac=mac,
+            result="bootstrap_refused",
+            status=403,
+            organization_id=org_id,
+            device=device,
+        )
+        return Response(status_code=403, headers=no_store)
+    ca = bootstrap.ca_certificate(settings.config_dir)
+    if ca is None:
+        log.warning(
+            "bootstrap requested but %s is missing", settings.config_dir / bootstrap.CA_FILE
+        )
+        _log(
+            db,
+            request,
+            filename=filename,
+            mac=mac,
+            result="no_ca",
+            status=503,
+            organization_id=org_id,
+            device=device,
+        )
+        return Response(status_code=503, headers=no_store)
+    assert mac is not None
+    if is_master:
+        content = bootstrap.poly_master(mac)
+    else:
+        host = (settings.public_host or request.headers.get("host") or "").split(":")[0]
+        cred = bootstrap.enrollment_credential(db, key, device)
+        content = bootstrap.poly_config(
+            ca, f"{host}/provisioning/", *(cred if cred else (None, None))
+        )
+    _log(
+        db,
+        request,
+        filename=filename,
+        mac=mac,
+        result="bootstrap",
+        status=200,
+        organization_id=org_id,
+        device=device,
+    )
+    return Response(content, media_type="application/xml", headers=no_store)
+
+
 @router.get("/{filename}")
 def get_file(filename: str, request: Request, db: Session = Depends(get_db)) -> Response:
     settings = request.app.state.settings
     key = try_load_installation_key(settings)
     if not _FILENAME_RE.match(filename):
         return Response(status_code=404, headers={"Cache-Control": "no-store"})
+    if _scheme(request) == "http" and settings.provisioning_http_mode == "bootstrap":
+        return _bootstrap(filename, request, db, key)
     cred = authenticate(db, key, request.headers.get("authorization"))
     mac = _mac_of(filename)
     if cred is None:
@@ -257,6 +349,10 @@ def get_file(filename: str, request: Request, db: Session = Depends(get_db)) -> 
             device=device,
         )
         return Response(status_code=404, headers={"Cache-Control": "no-store"})
+    if _scheme(request) == "https" and device.https_seen_at is None:
+        # Trusted from now on: no more plain-HTTP bootstrap for this phone.
+        device.https_seen_at = utcnow()
+        device.allow_bootstrap = False
     _log(
         db,
         request,

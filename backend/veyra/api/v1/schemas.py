@@ -63,6 +63,9 @@ class OrganizationPatch(BaseModel):
     is_active: bool | None = None
     # Default hold music set of the organization's phones; null = built-in.
     moh_class_id: uuid.UUID | None = None
+    # The plain-HTTP bootstrap also carries the enrollment credential
+    # (docs/FIREWALL_TRUST.md §6.4).
+    bootstrap_includes_credential: bool | None = None
 
     @field_validator("timezone")
     @classmethod
@@ -77,6 +80,7 @@ class OrganizationOut(ORM):
     timezone: str
     is_active: bool
     moh_class_id: uuid.UUID | None = None
+    bootstrap_includes_credential: bool = False
     created_at: datetime
 
 
