@@ -203,7 +203,7 @@ settings, the service state and the active bans.
 | `veyra-deployer` | veyra | Writes generated telephony configuration to `/etc/asterisk/veyra` and reloads Asterisk (only with a telephony engine) |
 | `veyra-pager` | veyra | Page sender: speakers' multicast and Poly group pages from one stream ([PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §2.2) |
 | `veyra-firewall` | veyra (+ CAP_NET_ADMIN) | Applies the nftables table `inet veyra` and bans attackers ([FIREWALL_TRUST.md](FIREWALL_TRUST.md) §3); off until turned on under System → Firewall |
-| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf`, `voicemail.conf`, `queues.conf`, `pjsip_notify.conf`, `musiconhold.conf` and `logger.conf` (with the security log the firewall reads) are Veyra-managed stubs that include the generated files. `asterisk-moh-opsound-wav` provides the built-in hold music; Veyra's hold music sets live in `<data>/moh/` |
+| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf`, `voicemail.conf`, `queues.conf`, `pjsip_notify.conf`, `musiconhold.conf`, `logger.conf` (with the security log the firewall reads), `cdr.conf` and `cdr_custom.conf` (call history) are Veyra-managed stubs that include the generated files. `asterisk-moh-opsound-wav` provides the built-in hold music; Veyra's hold music sets live in `<data>/moh/`, call recordings in `<data>/recordings/` |
 
 `journalctl -u veyra-deployer` shows deployments; `sudo veyra config status`
 summarises the engine and recent revisions.

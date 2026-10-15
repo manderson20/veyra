@@ -8,6 +8,15 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.15.0-dev — unreleased (Milestone 10)
+
+### Added
+- **Call history** (Telephony → Call History; [REPORTING.md](docs/REPORTING.md) §3): every call with direction, who called, who answered, ring and talk time and the outcome (answered, missed, busy, voicemail, abandoned, failed), searchable by number, name, extension, period, direction and outcome, with the legs behind each call and CSV export; **Recent calls** on everyone's account page (`/me/calls`). Asterisk writes one CSV line per call record through a managed `cdr_custom.conf` (`cdr.conf` now logs unanswered calls); the worker reads it every few seconds and folds the legs into calls; kept 400 days (migration `0019`).
+- **Call recording** (Telephony → Call Recording; §4): policies per organization (inbound, outbound, internal; every call or chosen phones, ring groups, queues and DIDs; an announcement; retention) generated into the dialplan; recordings converted to Ogg Opus after the call, played and downloaded in the browser with every listening written to the audit log, held against deletion, deleted after their retention (migration `0020`). Off until a policy enables it.
+- **Reports** (Telephony → Reports; §5): calls per day by direction, the busiest hours by weekday, ring and talk time, inbound answered within 20 s, extensions, trunks, and queue statistics from Asterisk's queue log (migration `0021`).
+- **Alerts** (System → Alerts; §6): the telephony engine, trunks, Veyra's services, disk space, the HTTPS certificate, firewall attacks and unregistered phones, raised after a delay, emailed when raised, daily while they last and when cleared; dashboard items "Calls today" and "Alerts" (migration `0022`).
+- **Prometheus metrics** at `/api/v1/metrics` for a token with `metrics.read`.
+
 ## 0.14.0 — 2026-10-15 (Milestone 9d)
 
 ### Added

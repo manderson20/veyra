@@ -72,8 +72,9 @@ lost. The file survives both; the worker reads it like the firewall reads
 the security log (inode and offset kept in the database, rotation
 followed), so nothing is read twice and nothing is missed. `cdr.conf`
 becomes a managed stub with `unanswered = yes` so missed calls appear, and
-`cdr_csv` is no longer loaded (it duplicated the data in a file nobody
-read).
+`cdr_csv` stays loaded: changing `modules.conf` makes the installer restart
+Asterisk, which drops calls, and its `Master.csv` is harmless (rotated with
+the other Asterisk logs).
 
 ### 3.2 Organization and direction
 
@@ -244,7 +245,6 @@ Built-in rules (each can be switched off or tuned):
 | Trunk down | A registration trunk unregistered, or an IP trunk not answering OPTIONS, for 5 minutes |
 | Veyra service down | api, worker, deployer, pager or firewall not running (from the services' heartbeats) for 2 minutes |
 | Disk space | Less than 10 % free on the data or log volume |
-| Backups | No backup newer than 36 hours *(once M12/M17 schedule backups; the installer's upgrade backups count until then)* |
 | Certificate | The HTTPS certificate expires within 21 days |
 | Firewall | More than 20 bans in an hour (an attack under way) |
 | Phones | More than 20 % of provisioned phones unregistered for 15 minutes |
@@ -256,12 +256,12 @@ message when cleared.
 
 ### 6.2 Metrics for outside tools
 
-`GET /metrics` in the Prometheus text format, with a dedicated bearer
-token (an API token with the new `metrics.read` scope), for districts that
-run Prometheus or Grafana: channels, calls by direction, registered phones,
-trunk state, queue waiting, service heartbeats, alert states, disk use,
-firewall bans. NGINX serves it under `/metrics` on the same HTTPS port. Off
-until a token is created.
+`GET /api/v1/metrics` in the Prometheus text format, for a bearer token
+with `metrics.read` (platform administrators hold it too), for districts that
+run Prometheus or Grafana: `veyra_up`, `veyra_engine_up`, `veyra_channels`,
+`veyra_calls{direction}`, `veyra_registered_phones`, `veyra_trunk_up{trunk}`,
+`veyra_alert{rule,subject}`, `veyra_alerts_raised`,
+`veyra_firewall_bans_active`, `veyra_disk_free_ratio{volume}`.
 
 ## 7. Permissions and API
 
@@ -300,14 +300,17 @@ GET  /metrics                            (Prometheus, metrics.read token)
 
 ## 9. Installer
 
-* Managed `cdr.conf` (simple mode, `unanswered = yes`) and
-  `cdr_custom.conf` (the Veyra mapping); `modules.conf` stops loading
-  `cdr_csv` and keeps `cdr_custom`; the old `Master.csv` stays where it is.
-* `<data>/recordings` (2770 `veyra:asterisk`).
+* Managed `cdr.conf` (simple mode, `unanswered = yes`, the package's CSV
+  settings kept) and `cdr_custom.conf` (the Veyra mapping), both reloaded
+  without a restart; `modules.conf` is not touched (see §3.1).
+* `<data>/recordings` and `<data>/recordings/incoming` (2770
+  `veyra:asterisk`): Asterisk writes only into `incoming/`, whose
+  permissions the installer controls; the worker creates the
+  `<org>/<yyyy>/<mm>/` folders itself.
 * `logrotate` for `veyra.csv` (`copytruncate` is not used: Asterisk
   reopens the file per record, so rename rotation is safe; the worker
   follows the inode).
-* NGINX `location = /metrics`.
+* No NGINX change: metrics are served by the API at `/api/v1/metrics`.
 * `verify.sh`: `cdr-custom` (the mapping is loaded: `cdr show status`
   lists `cdr_custom`), `recordings-dir`, `cdr-file` (readable by veyra).
 
@@ -349,6 +352,10 @@ module), call recording encryption at rest, SMS/Teams/Slack notifications
 
 ## 13. Decisions
 
+* 2026-10-15 (build): the backup rule waits for scheduled backups
+  (M12/M17); queue reports come from `queue_log` read like the CDR file;
+  alerts are evaluated on the worker's 30-second pass and emailed through
+  the mail queue; recordings are Ogg Opus at 16 kbit/s (`libopus`).
 * 2026-10-15: milestone started on the owner's "proceed" after 0.14.0;
   scope from roadmap row 10 and the two "coming later" pages. CDRs reach
   Veyra as a CSV file written by `cdr_custom` (no database password for

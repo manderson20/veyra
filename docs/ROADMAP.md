@@ -40,5 +40,4 @@ completed milestones in the order below (see
 Planned UI areas (shown in navigation as "coming later" with their
 milestone): Extensions (M4), Devices (M9), SIP Trunks (M6), Inbound and
 Outbound Routing (M6), IVR and Voicemail (M7), Ring Groups, Call Queues and Pickup Groups (M8),
-Paging (M9c; SIP paging is not a life-safety notification system), Call
-History (M10), Call Recording (M10).
+Paging (M9c; SIP paging is not a life-safety notification system). Call History and Call Recording followed in M10; since then every area is built and nothing is shown as coming later.
