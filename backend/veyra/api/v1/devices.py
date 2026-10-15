@@ -171,6 +171,9 @@ class DeviceOut(BaseModel):
     last_seen_ip: str | None
     last_user_agent: str | None
     last_result: str | None
+    # Phone trust (docs/FIREWALL_TRUST.md §6.3).
+    https_seen_at: datetime | None
+    allow_bootstrap: bool
     credential_user: str
     problems: list[str]
     created_at: datetime
@@ -384,6 +387,8 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
                 last_seen_ip=r.last_seen_ip,
                 last_user_agent=r.last_user_agent,
                 last_result=r.last_result,
+                https_seen_at=r.https_seen_at,
+                allow_bootstrap=r.allow_bootstrap,
                 credential_user=credential_user(r.mac_address),
                 problems=problems,
                 created_at=r.created_at,
@@ -643,6 +648,26 @@ def reprovision_device(
             "Reboot requested." if body.action == "reboot" else "Configuration check requested."
         )
     return ReprovisionOut(sent=sent, endpoint=ext.endpoint_name, message=message)
+
+
+@router.post(
+    "/{device_id}/allow-bootstrap",
+    response_model=DeviceOut,
+    summary="Let a reset phone fetch the plain-HTTP trust bootstrap again",
+)
+def allow_bootstrap(
+    device_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> DeviceOut:
+    device = _get(db, principal, device_id, WRITE)
+    device.allow_bootstrap = True
+    device.https_seen_at = None
+    _record(db, ctx, principal, "device.allow_bootstrap", device, {})
+    db.commit()
+    return _outs(request, db, [device])[0]
 
 
 class PreviewOut(BaseModel):

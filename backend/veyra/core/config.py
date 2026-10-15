@@ -13,7 +13,7 @@ import os
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     public_host: str | None = None
     # Plain-HTTP provisioning server block enabled by the installer (opt-in).
     provisioning_http: bool = False
+    # What plain HTTP serves (docs/FIREWALL_TRUST.md §6.3): "bootstrap" (the
+    # Veyra CA and the HTTPS address only, no secrets) or "full" (every file,
+    # as before 0.14.0; for phones that cannot take the CA).
+    provisioning_http_mode: Literal["bootstrap", "full"] = "bootstrap"
 
     # --- Sessions & security --------------------------------------------------
     session_ttl_hours: int = 12

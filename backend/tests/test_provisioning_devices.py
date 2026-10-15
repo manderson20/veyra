@@ -218,7 +218,7 @@ def test_device_preview_renders_lines_keys_paging_and_dst(admin, app):
 def test_provisioning_server_authenticates_logs_and_serves(admin, app):
     org, _ext, _other, _zone, _profile, device = _setup(admin, app)
     cred = admin.post(f"/api/v1/organizations/{org['id']}/provisioning-credential/rotate").json()
-    anon = TestClient(app, base_url="http://veyra.test")  # a phone: no session, no CSRF
+    anon = TestClient(app, base_url="https://veyra.test")  # a phone over HTTPS: no session, no CSRF
     ua = {"User-Agent": "PolycomVVX-VVX_450-UA/6.4.5.1234"}
     # No credentials, wrong credentials.
     r = anon.get(f"{PROV}/0004f2aabbcc.cfg", headers=ua)
@@ -247,7 +247,7 @@ def test_provisioning_server_authenticates_logs_and_serves(admin, app):
         and 'device.prov.password="********"' not in r.text
     )
     assert (
-        'device.prov.serverName="http://' in r.text and '/provisioning/"' in r.text
+        'device.prov.serverName="https://' in r.text and '/provisioning/"' in r.text
     )  # client scheme
     device_password = r.text.split('device.prov.password="')[1].split('"')[0]
     # Unknown MAC with a valid credential: 404 and listed as unregistered.
