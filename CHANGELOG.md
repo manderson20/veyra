@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.18.0 — unreleased (Milestone 12)
+## 0.18.0 — 2026-10-15 (Milestone 12)
 
 ### Added
 - **Updates from the interface** (System → Updates; [SOFTWARE_UPDATES.md](docs/SOFTWARE_UPDATES.md)): update source with an optional read-only token and email recipients; download of signed releases checked against the signed size and SHA-256; review with checks; install now or in a maintenance window; progress shown live through the restart (migration `0025`).
