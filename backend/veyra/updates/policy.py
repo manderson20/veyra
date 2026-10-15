@@ -38,10 +38,10 @@ CHANNEL_VISIBILITY: dict[Channel, set[Channel]] = {
     Channel.DEVELOPMENT: {Channel.STABLE, Channel.BETA, Channel.DEVELOPMENT},
 }
 
-# Modes implemented and tested in this release. Download and unattended
-# installation are deliberately unavailable until the update executor has
-# been tested end to end (Milestone 12).
-AVAILABLE_MODES = {Mode.MANUAL, Mode.NOTIFY}
+# Every mode works for Veyra itself (docs/SOFTWARE_UPDATES.md). Modules
+# update from the module catalog and only notify (docs/MODULE_CATALOG.md §4).
+AVAILABLE_MODES = set(Mode)
+DOWNLOAD_COMPONENTS = {Component.VEYRA_CORE}
 
 COMPONENT_LABELS = {
     Component.VEYRA_CORE: "Veyra application",
@@ -104,19 +104,19 @@ class PolicyUpdate(BaseModel):
 
 def availability_problem(component: Component, update: PolicyUpdate) -> str | None:
     """Reason a requested policy cannot be applied in this release, or None."""
-    if update.mode not in AVAILABLE_MODES:
+    if component not in DOWNLOAD_COMPONENTS and (
+        update.mode in (Mode.DOWNLOAD_APPROVE, Mode.AUTO_INSTALL_WINDOW) or update.auto_download
+    ):
         return (
-            "Automatic download and installation are not available yet; they will be "
-            "enabled after the update executor has been tested (Milestone 12)."
+            "Only Veyra itself is downloaded and installed automatically; modules are "
+            "updated from the module catalog."
         )
-    if update.auto_download:
-        return "Automatic download is not available yet (Milestone 12)."
     if (
         component in (Component.OPERATING_SYSTEM, Component.TELEPHONY_ENGINE)
         and update.check_enabled
     ):
         return (
-            "Operating system and telephony engine updates are managed with the system "
-            "package manager in this release; Veyra does not check them yet."
+            "Operating system and telephony engine updates are applied with the system "
+            "package manager; System → Updates lists the upgradable packages."
         )
     return None

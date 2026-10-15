@@ -548,8 +548,15 @@ export interface UpdatePolicy {
   auto_install_categories: string[];
   require_approval: boolean;
   notify_admins: boolean;
-  maintenance_window: Record<string, unknown> | null;
+  maintenance_window: MaintenanceWindow | null;
   updated_at: string;
+}
+
+export interface MaintenanceWindow {
+  days: string[];
+  start: string;
+  duration_minutes: number;
+  timezone: string;
 }
 
 export interface UpdatePolicies {
@@ -576,6 +583,68 @@ export interface AvailableUpdate {
   release_notes: string | null;
   state: string;
   created_at: string;
+  downloaded_at: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  install_when: "now" | "window" | null;
+  install_started_at: string | null;
+  install_finished_at: string | null;
+  error: string | null;
+}
+
+export interface UpdateCheckItem {
+  key: string;
+  ok: boolean;
+  message: string;
+}
+
+export interface UpdateDetail extends AvailableUpdate {
+  service_impact: string;
+  size: number | null;
+  checks: UpdateCheckItem[];
+  window: MaintenanceWindow | null;
+  next_window: string | null;
+}
+
+export interface UpdateSource {
+  url: string;
+  env_url: string;
+  effective_url: string;
+  token_set: boolean;
+  recipients: string[];
+  last_check: UpdateCheck | null;
+}
+
+export interface UpgradeRun {
+  version: string;
+  from_version: string;
+  state: "running" | "succeeded" | "failed";
+  step: string;
+  started_at: string;
+  finished_at: string | null;
+  error: string | null;
+  log_tail: string[];
+  log_file: string | null;
+}
+
+export interface UpgradeStatus {
+  installed_version: string;
+  run: UpgradeRun | null;
+}
+
+export interface SystemPackage {
+  name: string;
+  version: string;
+  from: string | null;
+  security: boolean;
+  telephony: boolean;
+}
+
+export interface SystemPackages {
+  checked_at: string | null;
+  packages: SystemPackage[];
+  error: string | null;
+  counts: { total: number; security: number; telephony: number };
 }
 
 export interface UpdateHistoryItem {

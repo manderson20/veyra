@@ -87,6 +87,26 @@ k1="$(random_hex_key)"; k2="$(random_hex_key)"
 t "random_hex_key is 64 hex characters" grep -qxE '[0-9a-f]{64}' <<<"$k1"
 t "random_hex_key unique" test "$k1" != "$k2"
 
+# Release archives carry REVISION instead of .git (docs/SOFTWARE_UPDATES.md §1.1).
+mkdir -p "$TMP/rel"
+t "source_revision without git or file" test "$(source_revision "$TMP/rel")" = local
+printf 'abc123def0\n' >"$TMP/rel/REVISION"
+t "source_revision from REVISION" test "$(source_revision "$TMP/rel")" = abc123def0
+printf '../evil;rm\n' >"$TMP/rel/REVISION"
+t "source_revision keeps hex only" test "$(source_revision "$TMP/rel")" = e
+t "upgrade unit template renders" render_template "$HERE/../templates/systemd/veyra-upgrade@.service.in" \
+    "$TMP/up.service" VEYRA_PREFIX=/opt/veyra VEYRA_ETC=/etc/veyra
+t "upgrade unit runs the verified runner" grep -q '^ExecStart=/opt/veyra/current/backend/.venv/bin/veyra updates run %i$' "$TMP/up.service"
+if command -v node >/dev/null 2>&1; then
+    rule_js="$TMP/rule.js"
+    { echo 'var polkit={Result:{YES:"yes",NOT_HANDLED:"no"},addRule:function(f){this.f=f}};'
+      cat "$HERE/../templates/polkit/50-veyra-services.rules"
+      echo 'function q(u,v,user){return polkit.f({id:"org.freedesktop.systemd1.manage-units",lookup:function(k){return k==="unit"?u:v}},{user:user||"veyra"})}'
+      echo 'var r=[q("veyra-upgrade@0.18.0.service","start"),q("veyra-upgrade@0.18.0.service","stop"),q("veyra-upgrade@x;y.service","start"),q("veyra-upgrade@0.18.0.service","start","www-data"),q("veyra-api.service","restart"),q("asterisk.service","restart")];'
+      echo 'process.stdout.write(r.join(","))'; } >"$rule_js"
+    t "polkit: start upgrade only, restart Veyra units only" test "$(node "$rule_js")" = "yes,no,no,no,yes,no"
+fi
+
 DRY_RUN=1
 t "dry-run does not execute" run touch "$TMP/should-not-exist"
 t "dry-run left no file" test ! -e "$TMP/should-not-exist"

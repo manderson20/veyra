@@ -1,0 +1,19 @@
+# Veyra upgrade (docs/SOFTWARE_UPDATES.md §3.2): installs a downloaded
+# release once an administrator approved it. Runs as root because the
+# installer does; the service account may start it (polkit) but not change
+# what it runs: the runner verifies the release against the official keys in
+# @VEYRA_ETC@/trust/official, unpacks it into a root-only directory and runs
+# that release's own installer/upgrade.sh. The instance is the version.
+[Unit]
+Description=Veyra upgrade to %i
+Documentation=file://@VEYRA_PREFIX@/current/docs/SOFTWARE_UPDATES.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=@VEYRA_ETC@/veyra.env
+WorkingDirectory=/
+ExecStart=@VEYRA_PREFIX@/current/backend/.venv/bin/veyra updates run %i
+TimeoutStartSec=2h
+UMask=0022

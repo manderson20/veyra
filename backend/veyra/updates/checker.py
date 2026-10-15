@@ -4,9 +4,6 @@
 from __future__ import annotations
 
 import logging
-import urllib.parse
-import urllib.request
-from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +18,7 @@ from veyra.core.models import (
 )
 from veyra.core.semver import Version
 from veyra.core.signing import Keyring
-from veyra.updates.metadata import MetadataError, UpdateMetadata, verify_metadata
+from veyra.updates.metadata import MetadataError, UpdateMetadata
 from veyra.updates.policy import CHANNEL_VISIBILITY, Channel, Component
 from veyra.version import __version__
 
@@ -32,18 +29,6 @@ MAX_METADATA_BYTES = 2 * 1024 * 1024
 _TIMEOUT = 15
 
 
-def _fetch(url: str, settings: Settings) -> bytes:
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme == "file":
-        if settings.is_production:
-            raise MetadataError("file:// update sources are only allowed outside production")
-        return Path(urllib.parse.unquote(parsed.path)).read_bytes()[: MAX_METADATA_BYTES + 1]
-    if parsed.scheme != "https":
-        raise MetadataError("Update sources must use HTTPS")
-    with urllib.request.urlopen(url, timeout=_TIMEOUT) as resp:  # noqa: S310 (scheme checked)
-        return resp.read(MAX_METADATA_BYTES + 1)
-
-
 def installed_versions(db: Session) -> dict[tuple[str, str], str]:
     versions = {(Component.VEYRA_CORE.value, "veyra"): __version__}
     for m in db.scalars(select(InstalledModule).where(InstalledModule.state != "removed")):
@@ -52,7 +37,9 @@ def installed_versions(db: Session) -> dict[tuple[str, str], str]:
 
 
 def check_for_updates(db: Session, settings: Settings, keyring: Keyring) -> UpdateCheck:
-    url = settings.update_metadata_url
+    from veyra.updates import manager
+
+    url = manager.source_url(db, settings)
     if not url:
         check = UpdateCheck(
             source="", outcome="not_configured", message="No update source is configured."
@@ -60,25 +47,26 @@ def check_for_updates(db: Session, settings: Settings, keyring: Keyring) -> Upda
         db.add(check)
         return check
     try:
-        body = _fetch(url, settings)
-        sig = _fetch(url + ".sig", settings).decode()
-        if len(body) > MAX_METADATA_BYTES:
-            raise MetadataError("Update metadata is too large")
         seq_row = db.get(SystemSetting, SEQUENCE_KEY)
-        meta = verify_metadata(
-            body, sig, keyring, last_sequence=int(seq_row.value) if seq_row else 0
+        meta, _body, _sig = manager.fetch_metadata(
+            db, settings, keyring, last_sequence=int(seq_row.value) if seq_row else 0
         )
     except MetadataError as e:
         check = UpdateCheck(source=url, outcome="rejected", message=str(e))
         db.add(check)
         log.warning("Update metadata rejected: %s", e)
         return check
-    except (OSError, ValueError) as e:
+    except (manager.UpdateError, OSError, ValueError) as e:
         check = UpdateCheck(source=url, outcome="failed", message=f"Could not fetch updates: {e}")
         db.add(check)
         return check
 
+    before = {r.id for r in db.scalars(select(AvailableUpdate))}
     found = record_available(db, meta)
+    notify = manager.mail_notifier(db, settings)
+    for row in db.scalars(select(AvailableUpdate).where(AvailableUpdate.component == "veyra_core")):
+        if row.id not in before:
+            notify("available", row)
     if seq_row is None:
         db.add(SystemSetting(key=SEQUENCE_KEY, value=meta.sequence))
     else:

@@ -49,12 +49,14 @@ else
     confirm "Remove the Veyra application from this server?" || die "Cancelled."
 fi
 
-for svc in veyra-api veyra-worker veyra-deployer; do
+for svc in veyra-api veyra-worker veyra-deployer veyra-pager veyra-firewall; do
     if systemctl list-unit-files "$svc.service" >/dev/null 2>&1; then
         run systemctl disable --now "$svc" || true
     fi
     [[ -f "/etc/systemd/system/$svc.service" ]] && run rm -f "/etc/systemd/system/$svc.service"
 done
+[[ -f /etc/systemd/system/veyra-upgrade@.service ]] && run rm -f /etc/systemd/system/veyra-upgrade@.service
+[[ -f /etc/polkit-1/rules.d/50-veyra-services.rules ]] && run rm -f /etc/polkit-1/rules.d/50-veyra-services.rules
 run systemctl daemon-reload
 
 if [[ -e /etc/nginx/sites-enabled/veyra.conf || -e /etc/nginx/sites-available/veyra.conf ]]; then
@@ -73,7 +75,7 @@ fi
 if (( PURGE )); then
     run runuser -u postgres -- dropdb --if-exists "$VEYRA_DB_NAME"
     run runuser -u postgres -- psql -qc "DROP ROLE IF EXISTS $VEYRA_DB_ROLE"
-    run rm -rf "$VEYRA_ETC" "$VEYRA_DATA"
+    run rm -rf "$VEYRA_ETC" "$VEYRA_DATA" /var/lib/veyra-upgrade
     if id -u "$VEYRA_USER" >/dev/null 2>&1; then run userdel "$VEYRA_USER"; fi
     ok "Veyra and its data were removed. Backups remain in $VEYRA_BACKUP_DIR."
 else

@@ -250,6 +250,15 @@ grep -qs "Managed by Veyra" /etc/polkit-1/rules.d/50-veyra-services.rules \
     && check services-restart pass "Veyra's services can be restarted from the interface" \
     || check services-restart warn "polkit rule missing: restart Veyra's services on the server after module updates"
 
+# --- updates from the interface (docs/SOFTWARE_UPDATES.md §8)
+if [[ -f /etc/systemd/system/veyra-upgrade@.service ]] \
+    && grep -qs "veyra-upgrade@" /etc/polkit-1/rules.d/50-veyra-services.rules \
+    && [[ "$(perm /var/lib/veyra-upgrade)" == "750 root:veyra" ]]; then
+    check upgrade-unit pass "updates can be installed from the interface"
+else
+    check upgrade-unit warn "veyra-upgrade@.service, its polkit rule or /var/lib/veyra-upgrade missing: install updates with upgrade.sh"
+fi
+
 # --- firewall (docs/FIREWALL_TRUST.md §8)
 [[ "$(perm "$VEYRA_DATA/firewall")" == "750 veyra:veyra" ]] \
     && check firewall-dir pass "750 veyra:veyra" \

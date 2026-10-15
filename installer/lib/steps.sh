@@ -537,6 +537,16 @@ do_services() {
     else
         warn "polkit is not installed: Veyra's services cannot be restarted from the web interface"
     fi
+    # Updates from the interface (docs/SOFTWARE_UPDATES.md §3.2): downloads
+    # (service account), the root runner's directory (status readable by the
+    # veyra group) and its unit, started only through polkit.
+    run install -d -m 0750 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/updates"
+    run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-upgrade
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-upgrade@.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC"
+    install_managed_file "$tmp" "/etc/systemd/system/veyra-upgrade@.service" 0644 root:root
+    rm -f "$tmp"
     # Before the units start (it is a ReadWritePaths entry). The firewall service keeps its last ruleset and feed lists here (docs/FIREWALL_TRUST.md §3.3).
     run install -d -m 0750 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firewall"
     for unit in "${units[@]}"; do

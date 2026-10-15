@@ -43,9 +43,13 @@ class Release(BaseModel):
     release_notes: str = ""
     service_impact: str = Field("", description="Expected service impact shown before approval")
     min_from_version: str | None = None
+    # Core releases: the module API they provide and their commit
+    # (docs/SOFTWARE_UPDATES.md §1.1).
+    module_api: str | None = None
+    revision: str = ""
     artifact: Artifact | None = None
 
-    @field_validator("version", "min_from_version")
+    @field_validator("version", "min_from_version", "module_api")
     @classmethod
     def _semver(cls, v: str | None) -> str | None:
         if v is not None:

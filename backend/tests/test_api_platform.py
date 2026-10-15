@@ -55,6 +55,8 @@ def test_update_policies(admin):
             "maintenance_window": {"days": ["sun"], "start": "02:00", "duration_minutes": 60},
         },
     )
+    assert r.status_code == 200 and r.json()["mode"] == "auto_install_window"  # Milestone 12
+    r = admin.put("/api/v1/updates/policies/modules", json={"mode": "download_approve"})
     assert r.status_code == 422 and r.json()["code"] == "not_available"
 
 

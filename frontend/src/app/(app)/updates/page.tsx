@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
   Callout,
   Card,
+  Checkbox,
   DataTable,
+  Dialog,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -15,22 +17,37 @@ import {
   Pagination,
   SelectField,
   Switch,
+  TextArea,
   TextField,
   useToast,
   type Column,
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { AvailableUpdate, Page, UpdateCheck, UpdateHistoryItem, UpdateMode, UpdatePolicies, UpdatePolicy } from "@/lib/types";
+import { browserTimeZone, timeZones } from "@/lib/timezones";
+import type {
+  AvailableUpdate,
+  MaintenanceWindow,
+  Page,
+  SystemPackages,
+  UpdateCheck,
+  UpdateDetail,
+  UpdateHistoryItem,
+  UpdateMode,
+  UpdatePolicies,
+  UpdatePolicy,
+  UpdateSource,
+  UpgradeStatus,
+} from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
 import { useOnChange } from "@/hooks/useOnChange";
 
 const MODES: { value: UpdateMode; label: string; help: string }[] = [
-  { value: "manual", label: "Manual only", help: "Veyra never checks automatically. An administrator checks and installs updates." },
-  { value: "notify", label: "Notify", help: "Check on a schedule and notify administrators. Nothing is downloaded or installed." },
-  { value: "download_approve", label: "Download, install on approval", help: "Download automatically; an administrator approves installation." },
-  { value: "auto_install_window", label: "Install automatically in a maintenance window", help: "Install approved categories during a maintenance window." },
+  { value: "manual", label: "Manual only", help: "Veyra never checks automatically. An administrator checks, downloads and installs." },
+  { value: "notify", label: "Notify", help: "Check on a schedule and email the update recipients. Nothing is downloaded or installed by itself." },
+  { value: "download_approve", label: "Download, install on approval", help: "Download new releases automatically; an administrator approves the installation." },
+  { value: "auto_install_window", label: "Install automatically in a maintenance window", help: "Download, and install the chosen categories in the maintenance window when no call is in progress. Other releases wait for approval." },
 ];
 
 const CHECK_OUTCOME: Record<string, { tone: "ok" | "neutral" | "danger" | "warn"; label: string }> = {
@@ -40,16 +57,38 @@ const CHECK_OUTCOME: Record<string, { tone: "ok" | "neutral" | "danger" | "warn"
   rejected: { tone: "warn", label: "Rejected" },
 };
 
+const STATE: Record<string, { tone: "ok" | "neutral" | "danger" | "warn" | "info"; label: string }> = {
+  available: { tone: "neutral", label: "Available" },
+  downloaded: { tone: "info", label: "Downloaded" },
+  approved: { tone: "warn", label: "Approved" },
+  installing: { tone: "warn", label: "Installing" },
+  installed: { tone: "ok", label: "Installed" },
+  failed: { tone: "danger", label: "Failed" },
+};
+
+const DAYS = [
+  ["mon", "Mon"], ["tue", "Tue"], ["wed", "Wed"], ["thu", "Thu"], ["fri", "Fri"], ["sat", "Sat"], ["sun", "Sun"],
+] as const;
+
+function formatSize(bytes: number | null | undefined): string {
+  if (!bytes) return "—";
+  return bytes > 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
+}
+
 export default function UpdatesPage() {
   const { can } = useSession();
   const toast = useToast();
   const policies = useApiData<UpdatePolicies>("/updates/policies");
   const latest = useApiData<UpdateCheck | null>("/updates/checks/latest");
   const available = useApiData<AvailableUpdate[]>("/updates/available");
+  const packages = useApiData<SystemPackages>("/updates/system-packages");
   const [histOffset, setHistOffset] = useState(0);
   const history = useApiData<Page<UpdateHistoryItem>>("/updates/history", { limit: 10, offset: histOffset });
   const [checking, setChecking] = useState(false);
+  const [review, setReview] = useState<string | null>(null);
   const manage = can("updates.manage");
+
+  const installing = (available.data ?? []).some((u) => u.state === "installing");
 
   const checkNow = async () => {
     setChecking(true);
@@ -68,11 +107,25 @@ export default function UpdatesPage() {
   };
 
   const availableColumns: Column<AvailableUpdate>[] = [
-    { key: "target", header: "Component", render: (u) => <span className="table__primary">{u.target}</span> },
+    { key: "target", header: "Component", render: (u) => <span className="table__primary">{u.target === "veyra" ? "Veyra" : u.target}</span> },
     { key: "version", header: "Version", render: (u) => <span className="mono">{u.current_version ?? "?"} → {u.version}</span> },
     { key: "category", header: "Type", render: (u) => <Badge tone={u.category === "security" ? "danger" : u.category === "bugfix" ? "warn" : "info"}>{u.category}</Badge> },
-    { key: "channel", header: "Channel", render: (u) => u.channel },
+    {
+      key: "state", header: "State", render: (u) => (
+        <span className="stack stack--sm">
+          <Badge tone={STATE[u.state]?.tone ?? "neutral"}>{STATE[u.state]?.label ?? u.state}{u.state === "approved" ? (u.install_when === "window" ? " · maintenance window" : " · starting") : ""}</Badge>
+          {u.error ? <span className="subtle">{u.error}</span> : null}
+        </span>
+      ),
+    },
     { key: "found", header: "Found", render: (u) => <span className="subtle">{formatRelative(u.created_at)}</span> },
+    {
+      key: "actions", header: <span className="sr-only">Actions</span>, render: (u) => (
+        u.component === "veyra_core" && !["installed"].includes(u.state)
+          ? <Button size="sm" onClick={() => setReview(u.id)}>{manage && ["available", "failed", "downloaded"].includes(u.state) ? "Review and install" : "Details"}</Button>
+          : null
+      ),
+    },
   ];
   const historyColumns: Column<UpdateHistoryItem>[] = [
     { key: "target", header: "Component", render: (h) => h.target },
@@ -86,13 +139,11 @@ export default function UpdatesPage() {
     <div className="stack">
       <PageHeader
         title="Updates"
-        description="Control how Veyra checks for and applies updates. Nothing is installed without your configuration."
+        description="Veyra releases are signed. They are downloaded and verified here, and installed when you approve them or inside your maintenance window."
         actions={manage ? <Button icon="refresh" onClick={checkNow} loading={checking}>Check now</Button> : null}
       />
-      <Callout tone="info" title="Update installation is not available yet">
-        This release checks for updates and verifies signed update information. Downloading and installing updates from this
-        page arrives in Milestone 12. Veyra never installs updates unattended by default.
-      </Callout>
+
+      <InstallProgress active={installing} onFinished={() => { available.reload(); history.reload(); }} />
 
       <div className="grid grid--2" style={{ alignItems: "start" }}>
         <Card title="Last check">
@@ -107,18 +158,7 @@ export default function UpdatesPage() {
             </dl>
           )}
         </Card>
-        <Card title="Update source">
-          {policies.data ? (
-            policies.data.source_configured ? (
-              <p>An authenticated update source is configured. Update information must be signed by an official Veyra key.</p>
-            ) : (
-              <Callout tone="neutral">
-                No update source is configured, so checks report “No update source”. The installer sets
-                <code> VEYRA_UPDATE_METADATA_URL</code> in <code>/etc/veyra/veyra.env</code> once official update channels are published.
-              </Callout>
-            )
-          ) : <LoadingState />}
-        </Card>
+        <SourceCard editable={manage} onSaved={() => policies.reload()} />
       </div>
 
       <Card title="Available updates" flush>
@@ -129,7 +169,7 @@ export default function UpdatesPage() {
       <section aria-labelledby="policies-title" className="stack stack--sm">
         <div>
           <h2 className="card__title" id="policies-title">Update policies</h2>
-          <p className="muted">Each component has its own policy. Operating system and telephony engine updates follow separate maintenance practices.</p>
+          <p className="muted">Each component has its own policy. Modules update from the module catalog; operating system packages are listed below and applied with the package manager.</p>
         </div>
         {policies.error ? <Card><ErrorState error={policies.error} onRetry={policies.reload} /></Card> : !policies.data ? <Card><LoadingState /></Card> : (
           policies.data.items.map((p) => (
@@ -139,12 +179,258 @@ export default function UpdatesPage() {
         )}
       </section>
 
+      <SystemPackagesCard data={packages.data} error={packages.error} onRetry={packages.reload} />
+
       <Card title="Update history" flush>
         <DataTable columns={historyColumns} rows={history.data?.items} rowKey={(h) => h.id} loading={history.loading} error={history.error} onRetry={history.reload}
           caption="Update history" empty={<EmptyState compact icon="history" title="No updates have been applied" />}
           pagination={history.data && history.data.total > 0 ? <Pagination total={history.data.total} limit={10} offset={histOffset} onChange={setHistOffset} /> : null} />
       </Card>
+
+      {review ? (
+        <ReviewDialog id={review} editable={manage} onClose={() => setReview(null)}
+          onChanged={() => { available.reload(); }} />
+      ) : null}
     </div>
+  );
+}
+
+/** Progress of the root upgrade runner. The API restarts during the upgrade,
+ * so failed requests mean "restarting" and polling continues. */
+function InstallProgress({ active, onFinished }: { active: boolean; onFinished: () => void }) {
+  const toast = useToast();
+  const [status, setStatus] = useState<UpgradeStatus | null>(null);
+  const [unreachable, setUnreachable] = useState(false);
+  const [watching, setWatching] = useState(active);
+  const finished = useRef(onFinished);
+  useEffect(() => { finished.current = onFinished; }, [onFinished]);
+
+  useOnChange(active, (a) => { if (a) setWatching(true); });
+
+  useEffect(() => {
+    let stop = false;
+    const poll = async () => {
+      try {
+        const s = await api.get<UpgradeStatus>("/updates/status");
+        if (stop) return;
+        setUnreachable(false);
+        setStatus((prev) => {
+          if (prev?.run?.state === "running" && s.run && s.run.state !== "running") {
+            if (s.run.state === "succeeded") toast.success(`Veyra ${s.run.version} installed`, "Reload the page to use the new version.");
+            else toast.error("The upgrade failed", s.run.error ?? undefined);
+            finished.current();
+          }
+          return s;
+        });
+      } catch {
+        if (!stop) setUnreachable(true);
+      }
+    };
+    void poll();
+    if (!watching) return () => { stop = true; };
+    const t = window.setInterval(poll, 3000);
+    return () => { stop = true; window.clearInterval(t); };
+  }, [watching, toast]);
+
+  const run = status?.run;
+  if (!run || (!watching && run.state !== "running")) return null;
+  const tone = run.state === "failed" ? "danger" : run.state === "succeeded" ? "ok" : "info";
+  return (
+    <Callout tone={tone} title={
+      run.state === "running" ? `Installing Veyra ${run.version}`
+        : run.state === "succeeded" ? `Veyra ${run.version} is installed`
+          : `Installing Veyra ${run.version} failed`
+    }>
+      <div className="stack stack--sm">
+        {run.state === "running" ? (
+          <p>{unreachable ? "Veyra is restarting; this page reconnects by itself." : <>Step: <strong>{run.step}</strong></>} Calls are not affected.</p>
+        ) : null}
+        {run.state === "succeeded" ? (
+          <p>Installed {run.finished_at ? formatRelative(run.finished_at) : ""}. <Button size="sm" onClick={() => window.location.reload()}>Reload the page</Button></p>
+        ) : null}
+        {run.error ? <p>{run.error}</p> : null}
+        {run.log_tail.length ? (
+          <details open={run.state === "failed"}>
+            <summary>Installer output</summary>
+            <pre className="mono" style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap" }}>{run.log_tail.join("\n")}</pre>
+          </details>
+        ) : null}
+        {run.log_file ? <p className="subtle">Full log on the server: <code>{run.log_file}</code></p> : null}
+      </div>
+    </Callout>
+  );
+}
+
+function SourceCard({ editable, onSaved }: { editable: boolean; onSaved: () => void }) {
+  const toast = useToast();
+  const source = useApiData<UpdateSource>("/updates/source");
+  const [url, setUrl] = useState("");
+  const [token, setToken] = useState("");
+  const [removeToken, setRemoveToken] = useState(false);
+  const [recipients, setRecipients] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useOnChange(source.data, (s) => {
+    if (!s) return;
+    setUrl(s.url);
+    setToken("");
+    setRemoveToken(false);
+    setRecipients(s.recipients.join(", "));
+  });
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await api.put<UpdateSource>("/updates/source", {
+        url: url.trim(),
+        token: removeToken ? "" : token.trim() ? token.trim() : null,
+        recipients: recipients.split(/[\s,;]+/).filter(Boolean),
+      });
+      source.setData(saved);
+      onSaved();
+      toast.success("Update source saved");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (source.error) return <Card title="Update source"><ErrorState compact error={source.error} onRetry={source.reload} /></Card>;
+  if (!source.data) return <Card title="Update source"><LoadingState /></Card>;
+  const s = source.data;
+  return (
+    <Card title="Update source" footer={editable ? <Button variant="primary" size="sm" onClick={save} loading={busy}>Save</Button> : undefined}>
+      <div className="stack stack--sm">
+        <p className="muted">The address of the signed release information (for example <code>…/stable.json</code>). Only releases signed by an official Veyra key are accepted.</p>
+        <TextField label="Metadata address" value={url} disabled={!editable} placeholder={s.env_url || "https://…/stable.json"}
+          help={s.env_url && !url ? `Empty: the server's setting is used (${s.env_url}).` : undefined}
+          onChange={(e) => setUrl(e.target.value)} />
+        <TextField label="Access token" type="password" autoComplete="off" value={token} disabled={!editable || removeToken}
+          placeholder={s.token_set ? "Saved (enter a new one to replace it)" : "Not needed for a public source"}
+          help="A read-only token for a private source (sent only to the source, never shown again)."
+          onChange={(e) => setToken(e.target.value)} />
+        {s.token_set && editable ? <Checkbox label="Remove the saved token" checked={removeToken} onChange={(e) => setRemoveToken(e.target.checked)} /> : null}
+        <TextArea label="Email notifications to" rows={2} value={recipients} disabled={!editable}
+          help="Addresses told when a release is available, downloaded, installed or failed (System → Settings → Email must be on)."
+          onChange={(e) => setRecipients(e.target.value)} />
+        {error ? <Callout tone="danger">{error}</Callout> : null}
+      </div>
+    </Card>
+  );
+}
+
+function ReviewDialog({ id, editable, onClose, onChanged }: { id: string; editable: boolean; onClose: () => void; onChanged: () => void }) {
+  const toast = useToast();
+  const detail = useApiData<UpdateDetail>(`/updates/available/${id}`);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const act = async (what: "download" | "now" | "window" | "cancel") => {
+    setBusy(what);
+    setError(null);
+    try {
+      if (what === "download") {
+        await api.post(`/updates/available/${id}/download`);
+        toast.success("Downloaded and verified");
+      } else if (what === "cancel") {
+        await api.post(`/updates/available/${id}/cancel`);
+        toast.info("Approval withdrawn");
+      } else {
+        await api.post(`/updates/available/${id}/approve`, { when: what });
+        toast.success(what === "now" ? "Installation starts within a minute" : "Will install in the next maintenance window");
+        onChanged();
+        onClose();
+        return;
+      }
+      detail.reload();
+      onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const d = detail.data;
+  const blocked = d ? d.checks.some((c) => !c.ok) : true;
+  const footer = d && editable ? (
+    <>
+      <Button onClick={onClose} disabled={!!busy}>Close</Button>
+      {["available", "failed"].includes(d.state) ? <Button variant="primary" onClick={() => act("download")} loading={busy === "download"}>Download and verify</Button> : null}
+      {d.state === "downloaded" ? (
+        <>
+          {d.window ? <Button onClick={() => act("window")} loading={busy === "window"} disabled={blocked || !!busy}>Install in maintenance window</Button> : null}
+          <Button variant="primary" onClick={() => act("now")} loading={busy === "now"} disabled={blocked || !!busy}>Install now</Button>
+        </>
+      ) : null}
+      {d.state === "approved" ? <Button variant="danger" onClick={() => act("cancel")} loading={busy === "cancel"}>Withdraw approval</Button> : null}
+    </>
+  ) : <Button onClick={onClose}>Close</Button>;
+
+  return (
+    <Dialog open onClose={onClose} busy={!!busy} size="lg" title={d ? `Veyra ${d.version}` : "Update"}
+      description={d ? `From ${d.current_version ?? "?"} · ${d.category} · ${d.channel} channel` : undefined} footer={footer}>
+      {detail.error ? <ErrorState compact error={detail.error} onRetry={detail.reload} /> : !d ? <LoadingState /> : (
+        <div className="stack stack--sm">
+          <dl className="dl">
+            <dt>State</dt><dd><Badge tone={STATE[d.state]?.tone ?? "neutral"}>{STATE[d.state]?.label ?? d.state}</Badge>{d.approved_by ? <span className="subtle"> · approved by {d.approved_by}</span> : null}</dd>
+            <dt>Download</dt><dd>{formatSize(d.size)}{d.downloaded_at ? ` · verified ${formatRelative(d.downloaded_at)}` : ""}</dd>
+            <dt>Service impact</dt><dd>{d.service_impact || "The web interface and API restart (usually under a minute). Calls are not affected."}</dd>
+            {d.window ? <><dt>Maintenance window</dt><dd>{d.window.days.join(", ")} {d.window.start} for {d.window.duration_minutes} min ({d.window.timezone}){d.next_window ? ` · next ${formatDateTime(d.next_window)}` : ""}</dd></> : null}
+          </dl>
+          {d.release_notes ? (
+            <div>
+              <h3 className="card__title">Release notes</h3>
+              <p style={{ whiteSpace: "pre-wrap" }}>{d.release_notes}</p>
+            </div>
+          ) : null}
+          <div>
+            <h3 className="card__title">Checks</h3>
+            <ul className="stack stack--sm" style={{ listStyle: "none", padding: 0 }}>
+              {d.checks.map((c) => (
+                <li key={c.key}><Badge tone={c.ok ? "ok" : "danger"}>{c.ok ? "OK" : "Blocked"}</Badge> {c.message}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="subtle">
+            Installing runs the release&apos;s own upgrade on the server: the database and configuration are backed up first,
+            the release is verified again against the official signing key, and a failed database step restores the previous version.
+          </p>
+          {d.error ? <Callout tone="danger">{d.error}</Callout> : null}
+          {error ? <Callout tone="danger">{error}</Callout> : null}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+function SystemPackagesCard({ data, error, onRetry }: { data: SystemPackages | undefined; error: unknown; onRetry: () => void }) {
+  const columns: Column<SystemPackages["packages"][number]>[] = [
+    { key: "name", header: "Package", render: (p) => <span className="mono">{p.name}</span> },
+    { key: "version", header: "Version", render: (p) => <span className="mono">{p.from ?? "?"} → {p.version}</span> },
+    {
+      key: "kind", header: "Type", render: (p) => (
+        <>
+          {p.security ? <Badge tone="danger">security</Badge> : null}{" "}
+          {p.telephony ? <Badge tone="warn">restarts Asterisk</Badge> : null}
+        </>
+      ),
+    },
+  ];
+  return (
+    <Card title="Operating system packages" flush
+      subtitle={data?.checked_at ? `${data.counts.total} upgradable (${data.counts.security} security) · checked ${formatRelative(data.checked_at)}` : "Checked daily by the worker"}>
+      {data?.error ? <div style={{ padding: "0 var(--space-4)" }}><Callout tone="warn">{data.error}</Callout></div> : null}
+      <DataTable columns={columns} rows={data?.packages.slice(0, 50)} rowKey={(p) => p.name} loading={!data && !error} error={error} onRetry={onRetry}
+        caption="Upgradable operating system packages"
+        empty={<EmptyState compact icon="checkCircle" title="Up to date">{data?.checked_at ? "No package upgrades are waiting." : "Not checked yet."}</EmptyState>} />
+      <p className="subtle" style={{ padding: "var(--space-3) var(--space-4)" }}>
+        Shown only: apply them on the server with <code>sudo apt upgrade</code> or unattended-upgrades. Upgrading Asterisk restarts it and drops calls in progress.
+      </p>
+    </Card>
   );
 }
 
@@ -157,6 +443,8 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
   const [checkEnabled, setCheckEnabled] = useState(policy.check_enabled);
   const [interval, setInterval_] = useState(String(policy.check_interval_hours));
   const [notify, setNotify] = useState(policy.notify_admins);
+  const [categories, setCategories] = useState<string[]>(policy.auto_install_categories);
+  const [window_, setWindow] = useState<MaintenanceWindow | null>(policy.maintenance_window);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -166,11 +454,17 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
     setCheckEnabled(p.check_enabled);
     setInterval_(String(p.check_interval_hours));
     setNotify(p.notify_admins);
+    setCategories(p.auto_install_categories);
+    setWindow(p.maintenance_window);
   });
 
+  const core = policy.component === "veyra_core";
   const external = policy.component === "operating_system" || policy.component === "telephony_engine";
+  const allowedModes = core ? availableModes : availableModes.filter((m) => m === "manual" || m === "notify");
   const dirty = mode !== policy.mode || channel !== policy.channel || checkEnabled !== policy.check_enabled
-    || interval !== String(policy.check_interval_hours) || notify !== policy.notify_admins;
+    || interval !== String(policy.check_interval_hours) || notify !== policy.notify_admins
+    || JSON.stringify(categories) !== JSON.stringify(policy.auto_install_categories)
+    || JSON.stringify(window_) !== JSON.stringify(policy.maintenance_window);
 
   const save = async () => {
     setBusy(true);
@@ -178,7 +472,10 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
     try {
       const saved = await api.put<UpdatePolicy>(`/updates/policies/${policy.component}`, {
         mode, channel, check_enabled: checkEnabled, check_interval_hours: Number(interval), notify_admins: notify,
-        auto_download: false, auto_install_categories: [], require_approval: true, maintenance_window: null,
+        auto_download: false,
+        auto_install_categories: mode === "auto_install_window" ? categories : [],
+        require_approval: true,
+        maintenance_window: core ? window_ : null,
       });
       onSaved({ ...saved, label: policy.label });
       toast.success("Policy saved", policy.label);
@@ -189,17 +486,18 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
     }
   };
 
+  const toggle = (list: string[], v: string, on: boolean) => (on ? [...list, v] : list.filter((x) => x !== v));
   const modeHelp = MODES.find((m) => m.value === mode)?.help;
   return (
     <Card title={policy.label} subtitle={`Last changed ${formatRelative(policy.updated_at)}`}
       footer={editable ? <Button variant="primary" size="sm" onClick={save} loading={busy} disabled={!dirty}>Save policy</Button> : undefined}>
       <div className="stack stack--sm">
         {external ? (
-          <Callout tone="neutral">Managed with the server&apos;s package manager in this release. Veyra does not check these updates yet.</Callout>
+          <Callout tone="neutral">Applied with the server&apos;s package manager; the upgradable packages are listed under “Operating system packages”.</Callout>
         ) : null}
         <div className="form-grid">
           <SelectField label="Update behaviour" value={mode} disabled={!editable} help={modeHelp}
-            options={MODES.map((m) => ({ value: m.value, label: availableModes.includes(m.value) ? m.label : `${m.label} (not available yet)`, disabled: !availableModes.includes(m.value) }))}
+            options={MODES.map((m) => ({ value: m.value, label: allowedModes.includes(m.value) ? m.label : `${m.label} (Veyra only)`, disabled: !allowedModes.includes(m.value) }))}
             onChange={(e) => setMode(e.target.value as UpdateMode)} />
           <SelectField label="Release channel" value={channel} disabled={!editable}
             help={channel === "stable" ? "Recommended for production." : "Pre-release software. Not recommended for production systems."}
@@ -211,6 +509,40 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
           <TextField label="Check every (hours)" type="number" min={1} max={720} value={interval} disabled={!editable || !checkEnabled || mode === "manual"} onChange={(e) => setInterval_(e.target.value)} />
         </div>
         <Switch label="Notify administrators" checked={notify} disabled={!editable} onChange={(e) => setNotify(e.target.checked)} />
+        {core ? (
+          <fieldset className="stack stack--sm" style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="card__title">Maintenance window</legend>
+            <Switch label="Use a maintenance window" checked={!!window_} disabled={!editable}
+              description="Approved updates can wait for it; in automatic mode, chosen categories install in it when no call is in progress."
+              onChange={(e) => setWindow(e.target.checked ? { days: ["sat"], start: "02:00", duration_minutes: 120, timezone: browserTimeZone() } : null)} />
+            {window_ ? (
+              <>
+                <div className="row" role="group" aria-label="Days">
+                  {DAYS.map(([v, l]) => (
+                    <Checkbox key={v} label={l} checked={window_.days.includes(v)} disabled={!editable}
+                      onChange={(e) => setWindow({ ...window_, days: toggle(window_.days, v, e.target.checked) })} />
+                  ))}
+                </div>
+                <div className="form-grid">
+                  <TextField label="Starts at" type="time" value={window_.start} disabled={!editable} onChange={(e) => setWindow({ ...window_, start: e.target.value })} />
+                  <TextField label="Length (minutes)" type="number" min={30} max={720} value={String(window_.duration_minutes)} disabled={!editable}
+                    onChange={(e) => setWindow({ ...window_, duration_minutes: Number(e.target.value) })} />
+                  <SelectField label="Time zone" value={window_.timezone} disabled={!editable}
+                    options={timeZones().map((z) => ({ value: z, label: z }))} onChange={(e) => setWindow({ ...window_, timezone: e.target.value })} />
+                </div>
+              </>
+            ) : null}
+            {mode === "auto_install_window" ? (
+              <div className="row" role="group" aria-label="Install automatically">
+                <span className="muted">Install automatically:</span>
+                {(["security", "bugfix", "feature"] as const).map((c) => (
+                  <Checkbox key={c} label={c === "bugfix" ? "Bug fixes" : c === "security" ? "Security" : "Features"} checked={categories.includes(c)} disabled={!editable}
+                    onChange={(e) => setCategories(toggle(categories, c, e.target.checked))} />
+                ))}
+              </div>
+            ) : null}
+          </fieldset>
+        ) : null}
         {error ? <Callout tone="danger">{error}</Callout> : null}
       </div>
     </Card>
