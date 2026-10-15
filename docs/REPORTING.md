@@ -51,8 +51,6 @@ veyra.csv => "v1",${CSV_QUOTE(${CDR(uniqueid)})},${CSV_QUOTE(${CDR(linkedid)})},
   ${CSV_QUOTE(${CDR(disposition)})},${CSV_QUOTE(${CDR(src)})},${CSV_QUOTE(${CDR(clid)})},
   ${CSV_QUOTE(${CDR(dst)})},${CSV_QUOTE(${CDR(dcontext)})},${CSV_QUOTE(${CDR(channel)})},
   ${CSV_QUOTE(${CDR(dstchannel)})},${CSV_QUOTE(${CDR(lastapp)})},
-  ${CSV_QUOTE(${CDR(veyra_org)})},${CSV_QUOTE(${CDR(veyra_dir)})},
-  ${CSV_QUOTE(${CDR(veyra_route)})},${CSV_QUOTE(${CDR(veyra_did)})},
   ${CSV_QUOTE(${CDR(veyra_rec)})}
 ```
 
@@ -77,23 +75,26 @@ becomes a managed stub with `unanswered = yes` so missed calls appear, and
 `cdr_csv` is no longer loaded (it duplicated the data in a file nobody
 read).
 
-### 3.2 Marking calls in the dialplan
+### 3.2 Organization and direction
 
-The generator sets inherited channel variables where a call enters
-Veyra's dialplan (so they follow the call through Local channels, groups
-and queues) **and** copies them into the channel's CDR with
-`Set(CDR(veyra_org)=${VEYRA_ORG})` and the like at the top of every Veyra
-context a channel enters (one `GoSub(veyra-cdr-mark)` line), because only
-CDR variables reach the CSV (§3.1). The worker takes, per `linkedid`, the
-first non-empty value of each field across the legs:
+Rather than marking every Veyra context (only CDR variables reach the
+file, §3.1), the worker **resolves calls from the channel names** each CDR
+carries: `PJSIP/<endpoint>-<n>` where the endpoint is either an
+extension's endpoint name (Veyra knows its organization) or
+`trunk-<slug>`; `Local/…` legs of ring groups and queues are grouped with
+the rest by `linkedid`.
 
-* `__VEYRA_ORG=<slug>` on every entry: phones (the endpoint's
-  organization), inbound routes (the route's), pages and features.
-* `__VEYRA_DIR=internal|inbound|outbound`: internal calls between
-  phones, inbound from a trunk, outbound to a trunk (set in the outbound
-  route before `Dial`, so an internal call that a phone forwards outside
-  becomes outbound).
-* `__VEYRA_REC=<recording id>` when the call is recorded (§4).
+* **direction**: a trunk on the calling side → `inbound`; a trunk on the
+  called side → `outbound`; phones only → `internal` (a phone call
+  forwarded out through a trunk counts as outbound).
+* **organization**: the calling phone's, else the called phone's, else
+  the inbound route matching the dialled DID.
+* The only mark in the dialplan is the recording: the recording
+  subroutine sets `CDR(veyra_rec)` (§4.2), which the CSV carries.
+
+So the mapping of §3.1 needs only `${CDR(veyra_rec)}` beyond the standard
+fields; the `veyra_org`/`veyra_dir`/`veyra_route`/`veyra_did` columns are
+dropped from it.
 
 ### 3.3 From legs to calls
 
@@ -168,7 +169,8 @@ organization and says:
 The generator evaluates policies into the dialplan: where a matching call
 is about to be bridged (extension dial, ring group, queue, outbound route),
 it calls a `veyra-record` subroutine that plays the announcement once, sets
-`__VEYRA_REC` to a new identifier and starts
+`__VEYRA_REC` to a new identifier (the channel's `UNIQUEID`), copies it
+into `CDR(veyra_rec)` so the call record names the file, and starts
 `MixMonitor(<data>/recordings/<org>/<yyyy>/<mm>/<dd>/<id>.wav,b)` (`b`:
 only the bridged part, no ringing or hold music). Only one recording per
 call: the subroutine returns if `VEYRA_REC` is already set (a transfer
