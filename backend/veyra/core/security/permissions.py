@@ -185,6 +185,11 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin",),
     ),
     PermissionDef(
+        "reports.read",
+        "View call reports",
+        default_roles=("org_admin", "site_admin", "read_only"),
+    ),
+    PermissionDef(
         "recordings.read",
         "Listen to and download call recordings (every playback is audited)",
         default_roles=("org_admin",),

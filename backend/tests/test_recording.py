@@ -90,10 +90,7 @@ def test_policies_reach_the_dialplan(admin, app, tmp_path):
     )
     # Outbound from the chosen phone.
     out = dialplan[dialplan.index("[veyra-out-local]") :]
-    assert (
-        '"${VEYRA_ORG}"="example" & ${REGEX("^(example\\-1001)$" ${CHANNEL(endpoint)})}'
-        in out
-    )
+    assert '"${VEYRA_ORG}"="example" & ${REGEX("^(example\\-1001)$" ${CHANNEL(endpoint)})}' in out
     # A disabled policy disappears again.
     admin.patch(f"{POL}/{inbound['id']}", json={"is_enabled": False})
     assert f"1(example,{inbound['id']}," not in _deploy(admin, deployer, cfg)

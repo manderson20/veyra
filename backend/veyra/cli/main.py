@@ -890,6 +890,9 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         from veyra.reporting import recordings
 
                         pruned_recs = recordings.prune(db, settings.recordings_dir)
+                        from veyra.reporting import queues as queue_log
+
+                        queue_log.prune(db)
                         if pruned_recs:
                             log.info("Deleted %d recordings past their retention", pruned_recs)
                         if pruned_calls:
@@ -940,6 +943,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     recordings.process(db, settings.recordings_dir)
+                # Queue events for the queue reports (docs/REPORTING.md §5.1).
+                from veyra.reporting import queues as queue_log
+
+                with session_scope() as db:
+                    queue_log.process(db)
             with session_scope() as db:
                 if args.once or now - last_module_sync >= 60:
                     modules.sync_worker(db)
