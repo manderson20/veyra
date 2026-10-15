@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { BrandIcon, BrandLogo } from "../Brand";
 import { Icon } from "../ui";
-import { activeLocation, buildNav, isActive, type NavSection } from "@/lib/nav";
+import { activeLocation, buildNav, groupItems, isActive, type NavItem, type NavSection } from "@/lib/nav";
 import { useSession } from "@/hooks/useSession";
 
 const HOVER_OPEN_MS = 150;
@@ -111,6 +111,15 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, drawer }: {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       links[Math.max(0, i - 1)]?.focus();
+    } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      // Jump to the first page of the next or previous column.
+      const groups = Array.from(flyoutRef.current?.querySelectorAll<HTMLElement>(".flyout__group") ?? []);
+      const g = groups.findIndex((el) => el.contains(document.activeElement));
+      const target = groups[e.key === "ArrowRight" ? Math.min(groups.length - 1, g + 1) : Math.max(0, g - 1)];
+      if (target) {
+        e.preventDefault();
+        target.querySelector<HTMLElement>("a")?.focus();
+      }
     } else if (e.key === "Escape") {
       e.preventDefault();
       setOpen(null);
@@ -118,22 +127,47 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, drawer }: {
     }
   };
 
-  const renderItems = (s: NavSection, inline: boolean) => (
-    <ul className={inline ? "rail__inline list-plain" : "flyout__list list-plain"} id={`nav-${s.id}`} role="list">
-      {s.items.map((item) => {
-        const active = isActive(item.href, pathname, search);
-        return (
-          <li key={item.href} style={{ borderTop: 0 }}>
-            <Link href={item.href} className={item.planned ? "flyout__link flyout__link--planned" : "flyout__link"} aria-current={active ? "page" : undefined} onClick={() => { setOpen(null); onNavigate(); }}>
-              <Icon name={item.icon} size={18} />
-              <span className="flyout__link-label">{item.label}</span>
-              {item.planned ? <span className="sidebar__badge">{item.planned.milestone ? `M${item.planned.milestone}` : "Planned"}</span> : null}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-  );
+  const renderLinks = (items: NavItem[]) =>
+    items.map((item) => {
+      const active = isActive(item.href, pathname, search);
+      return (
+        <li key={item.href} style={{ borderTop: 0 }}>
+          <Link href={item.href} className={item.planned ? "flyout__link flyout__link--planned" : "flyout__link"} aria-current={active ? "page" : undefined} onClick={() => { setOpen(null); onNavigate(); }}>
+            <Icon name={item.icon} size={18} />
+            <span className="flyout__link-label">{item.label}</span>
+            {item.planned ? <span className="sidebar__badge">{item.planned.milestone ? `M${item.planned.milestone}` : "Planned"}</span> : null}
+          </Link>
+        </li>
+      );
+    });
+
+  // Drawer: one list with small group headings. Flyout: one column per group.
+  const renderItems = (s: NavSection, inline: boolean) => {
+    const groups = groupItems(s.items);
+    const titled = groups.length > 1;
+    if (inline) {
+      return (
+        <div className="rail__inline" id={`nav-${s.id}`}>
+          {groups.map((g) => (
+            <div key={g.label ?? "_"}>
+              {titled && g.label ? <div className="rail__group-title">{g.label}</div> : null}
+              <ul className="list-plain" role="list">{renderLinks(g.items)}</ul>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="flyout__columns" id={`nav-${s.id}`}>
+        {groups.map((g, i) => (
+          <section key={g.label ?? "_"} className="flyout__group" data-group={i} aria-label={g.label ?? undefined}>
+            {titled && g.label ? <h3 className="flyout__group-title">{g.label}</h3> : null}
+            <ul className="flyout__list list-plain" role="list">{renderLinks(g.items)}</ul>
+          </section>
+        ))}
+      </div>
+    );
+  };
 
   const openSection = sections.find((s) => s.id === open) ?? null;
   return (
@@ -190,7 +224,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, drawer }: {
         </div>
       </aside>
       {openSection && !drawer ? (
-        <div className="flyout" ref={flyoutRef} role="region" aria-label={`${openSection.label} pages`} onMouseEnter={keepOpen} onMouseLeave={hoverClose} onKeyDown={(e) => onFlyoutKey(e, openSection.id)}>
+        <div className="flyout" ref={flyoutRef} style={{ ["--flyout-cols" as string]: Math.min(4, groupItems(openSection.items).length) }} role="region" aria-label={`${openSection.label} pages`} onMouseEnter={keepOpen} onMouseLeave={hoverClose} onKeyDown={(e) => onFlyoutKey(e, openSection.id)}>
           <div className="flyout__head">
             <span className="flyout__title">{openSection.label}</span>
             {openSection.description ? <span className="flyout__description">{openSection.description}</span> : null}

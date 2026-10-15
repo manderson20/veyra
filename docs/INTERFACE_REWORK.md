@@ -31,6 +31,14 @@ with every milestone.
   clicking outside closes it. On devices with a pointer, **hovering** a
   category for 150 ms opens its flyout too; moving the pointer into the
   panel keeps it open; leaving both closes it after 250 ms.
+* **Columns** (owner request 2026-10-15, 0.13.1): items carry a `group`
+  and the flyout shows one column per group with a small heading (for
+  Telephony: Phones and calls, Routing, Call handling, Audio, Paging and
+  bells, Coming later). The panel widens to fit up to four columns side by
+  side, wraps beyond that and never exceeds the screen beside the rail, so
+  every page of a category is visible at once without scrolling. Arrow
+  Left/Right move between columns. The drawer keeps one list with the same
+  headings. Module pages have no group and form one untitled column.
 * The category of the current page is highlighted in the rail; the current
   item is highlighted in the flyout.
 * A category with a single page (Overview → Dashboard) is a plain link in

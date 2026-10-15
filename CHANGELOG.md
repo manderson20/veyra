@@ -8,6 +8,17 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.13.1 — 2026-10-15
+
+### Changed
+
+- **Navigation flyouts in columns** (owner request): pages are grouped
+  (for Telephony: Phones and calls, Routing, Call handling, Audio, Paging
+  and bells, Coming later) and the flyout shows one column per group with a
+  heading, widening to fit up to four columns so a category's pages are
+  visible at once; Arrow Left/Right move between columns; the mobile
+  drawer shows the same headings ([INTERFACE_REWORK.md](docs/INTERFACE_REWORK.md) §1.2).
+
 ## 0.13.0 — 2026-10-15 (Milestone 9c)
 
 ### Added
