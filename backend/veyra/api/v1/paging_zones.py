@@ -226,6 +226,13 @@ def _outs(db: Session, rows: list[PagingZone]) -> list[ZoneOut]:
         select(PagingZone).where(PagingZone.organization_id.in_({r.organization_id for r in rows}))
     ):
         poly.setdefault(z.organization_id, set()).add((z.poly_address, z.poly_port))
+    # Multicast addresses are network-wide: another organization's zone on the
+    # same group would be heard by both (docs/MULTI_TENANCY.md §4).
+    groups_of: dict[tuple[str, int], set[uuid.UUID]] = {}
+    for z_org, addr, port in db.execute(
+        select(PagingZone.organization_id, PagingZone.multicast_address, PagingZone.multicast_port)
+    ):
+        groups_of.setdefault((addr, port), set()).add(z_org)
     member_ids: dict[uuid.UUID, list[uuid.UUID]] = {r.id: [] for r in rows}
     for m in db.scalars(
         select(PagingZoneMember).where(PagingZoneMember.zone_id.in_({r.id for r in rows}))
@@ -241,6 +248,11 @@ def _outs(db: Session, rows: list[PagingZone]) -> list[ZoneOut]:
             problems.append(
                 "Zones of this organization use different Poly paging addresses or ports; "
                 "Poly phones listen on one address, so only one set of zones will reach them."
+            )
+        if len(groups_of.get((r.multicast_address, r.multicast_port), set())) > 1:
+            problems.append(
+                "Another organization pages the same multicast address and port; "
+                "on a shared network both organizations' speakers would play each other's pages."
             )
         if r.kind == "emergency" and r.poly_group != EMERGENCY_GROUP:
             problems.append(f"Poly phones use group {EMERGENCY_GROUP} for emergency pages.")
@@ -399,7 +411,7 @@ def create_zone(
         raise not_found("Organization")
     _check_site(db, org.id, body.site_id)
     if body.number:
-        helpers.check_number(db, body.number, "paging zone", None)
+        helpers.check_number(db, body.number, "paging zone", None, org.id)
     helpers.load_members(db, org.id, body.members, "members")
     fields = body.model_dump(exclude={"members"})
     zone = PagingZone(
@@ -443,7 +455,7 @@ def update_zone(
     if "description" in changes:
         changes["description"] = (changes["description"] or "").strip() or None
     if changes.get("number") and changes["number"] != zone.number:
-        helpers.check_number(db, changes["number"], "paging zone", zone.id)
+        helpers.check_number(db, changes["number"], "paging zone", zone.id, zone.organization_id)
     members = changes.pop("members", None)
     details: dict[str, Any] = {}
     for field, value in changes.items():

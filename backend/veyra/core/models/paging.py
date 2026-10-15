@@ -37,6 +37,7 @@ class Page(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "name"),
         UniqueConstraint("organization_id", "slug"),
+        UniqueConstraint("organization_id", "number"),
     )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -46,7 +47,7 @@ class Page(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     slug: Mapped[str] = mapped_column(String(40))
     description: Mapped[str | None] = mapped_column(Text)
     # From the shared number space; optional (API- and bell-only pages).
-    number: Mapped[str | None] = mapped_column(String(32), unique=True)
+    number: Mapped[str | None] = mapped_column(String(32))
     # A recording from the audio library; None = live audio from the caller.
     audio_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("prompts.id", ondelete="SET NULL")

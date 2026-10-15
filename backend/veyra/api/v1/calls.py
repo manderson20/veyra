@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from veyra.api.v1.extensions import _visible as visible_extensions
-from veyra.core import audit
+from veyra.core import audit, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
@@ -31,7 +31,6 @@ from veyra.telephony.adapter import (
     NotSupported,
     TelephonyAdapter,
 )
-from veyra.telephony.asterisk.generator import CONTEXT_INTERNAL
 
 router = APIRouter(prefix="/calls", tags=["calls"])
 
@@ -161,7 +160,7 @@ def originate(
             ext.endpoint_name,
             number,
             caller_id=f"{number} <{number}>",
-            context=CONTEXT_INTERNAL,
+            context=tenancy.names_of(db, ext.organization_id).internal,
             timeout=ORIGINATE_TIMEOUT_SECONDS,
         )
     except EngineUnavailable as e:

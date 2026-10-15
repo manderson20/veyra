@@ -18,6 +18,7 @@ from veyra.api.v1 import destinations, hold_music
 from veyra.api.v1 import group_helpers as helpers
 from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
 from veyra.api.v1.group_helpers import READ, WRITE, MemberOut
+from veyra.core import tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import conflict, not_found
@@ -26,6 +27,7 @@ from veyra.core.models import CallQueue, Prompt, QueueMember
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
+from veyra.telephony.asterisk.names import Names
 
 router = APIRouter(prefix="/queues", tags=["queues"])
 
@@ -162,6 +164,11 @@ def _members(db: Session, queue_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[Que
 
 
 def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
+    spaces = tenancy.namespaces(db)
+
+    def names_of(org_id: uuid.UUID) -> Names:
+        return Names(spaces.get(org_id, ""))
+
     if not rows:
         return []
     orgs = helpers.org_names(db, {r.organization_id for r in rows})
@@ -215,8 +222,8 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
                 organization_name=orgs.get(r.organization_id, ""),
                 name=r.name,
                 slug=r.slug,
-                queue_name=f"veyra-{r.slug}",
-                context=f"veyra-queue-{r.slug}",
+                queue_name=names_of(r.organization_id).queue(r.slug),
+                context=names_of(r.organization_id).queue_context(r.slug),
                 number=r.number,
                 description=r.description,
                 strategy=r.strategy,
@@ -274,7 +281,7 @@ def _check_prompt(db: Session, org_id: uuid.UUID, prompt_id: uuid.UUID | None, f
 
 
 def _check(db: Session, org_id: uuid.UUID, body: QueueIn, self_id: uuid.UUID | None) -> None:
-    helpers.check_number(db, body.number, "queue", self_id)
+    helpers.check_number(db, body.number, "queue", self_id, org_id)
     helpers.load_members(db, org_id, [a.extension_id for a in body.members], "members")
     _check_prompt(db, org_id, body.announcement_prompt_id, "announcement_prompt_id")
     _check_prompt(db, org_id, body.periodic_prompt_id, "periodic_prompt_id")

@@ -10,6 +10,7 @@ import { api, errorMessage } from "@/lib/api";
 import { moveItem } from "@/lib/routing";
 import type { OutboundRoute, OutboundRoutes, TrunkPage } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
@@ -127,6 +128,7 @@ function CreateOutboundRouteDialog({ open, onClose, onCreated }: { open: boolean
   const toast = useToast();
   const errors = useFormErrors();
   const trunks = useApiData<TrunkPage>(open ? "/trunks" : null);
+  const { organizations } = useOrganizationOptions(open);
   const [draft, setDraft] = useState<OutboundRouteDraft>(EMPTY_OUTBOUND_ROUTE);
   const [busy, setBusy] = useState(false);
   useOnChange(open, () => {
@@ -164,7 +166,7 @@ function CreateOutboundRouteDialog({ open, onClose, onCreated }: { open: boolean
     >
       <form id="outbound-create" className="stack stack--sm" onSubmit={submit}>
         {trunks.data && trunks.data.items.length === 0 ? <Callout tone="warn">There are no trunks yet. Create a trunk first; a route needs at least one.</Callout> : null}
-        <OutboundRouteFields draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} errors={errors.fields} trunks={trunks.data?.items ?? []} autoFocus />
+        <OutboundRouteFields draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} errors={errors.fields} trunks={trunks.data?.items ?? []} autoFocus organizations={organizations} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>

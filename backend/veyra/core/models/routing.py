@@ -140,6 +140,11 @@ class OutboundRoute(UUIDPrimaryKey, Timestamps, Base):
     # [{"prefix": "9", "match": "NXXNXXXXXX", "prepend": "1"}, ...]
     patterns: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     caller_id_number: Mapped[str | None] = mapped_column(String(32))
+    # Only this organization's phones use the route; none: every organization
+    # (docs/MULTI_TENANCY.md §4).
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
 
 
 class OutboundRouteTrunk(Base):

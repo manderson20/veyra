@@ -4,7 +4,7 @@ unlock, fetch-metadata rejection and purging."""
 
 from datetime import timedelta
 
-from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, csrf_headers, login
+from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, csrf_headers, enable_multi_tenancy, login
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -301,6 +301,7 @@ def test_purge_expired_sessions_and_tokens(admin, settings, app):
 
 
 def test_cross_site_mutations_are_refused(admin):
+    enable_multi_tenancy()
     r = admin.post(
         "/api/v1/organizations",
         json={"name": "N", "slug": "n"},

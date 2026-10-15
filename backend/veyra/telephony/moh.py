@@ -21,6 +21,9 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+# A set's folder: its slug, or ``<namespace>_<slug>`` for organizations with
+# their own engine namespace (docs/MULTI_TENANCY.md §2).
+_DIR_RE = re.compile(r"^(?:[a-z0-9]{1,16}_)?[a-z0-9][a-z0-9-]{0,39}$")
 
 
 class MohError(Exception):
@@ -28,7 +31,7 @@ class MohError(Exception):
 
 
 def class_dir(base: Path, slug: str) -> Path:
-    if not _SLUG_RE.match(slug):
+    if not _DIR_RE.match(slug):
         raise MohError(f"hold music slug {slug!r} is not valid")
     return base / slug
 

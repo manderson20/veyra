@@ -174,3 +174,13 @@ def login(client: TestClient, email: str, password: str) -> TestClient:
     assert r.status_code == 200, r.text
     client.headers.update(csrf_headers(client))
     return client
+
+
+def enable_multi_tenancy() -> None:
+    """Let a test create a second active organization (docs/MULTI_TENANCY.md §6);
+    the API's switch runs the isolation checks, tests set the flag directly."""
+    from veyra.core.models import Installation
+
+    with session_scope() as db:
+        inst = db.query(Installation).one()
+        inst.multi_tenancy_enabled = True

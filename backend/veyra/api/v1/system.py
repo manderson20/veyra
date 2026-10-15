@@ -11,8 +11,10 @@ from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from veyra.core import audit, tenancy
 from veyra.core.db import get_db
-from veyra.core.deps import require
+from veyra.core.deps import RequestContext, request_context, require
+from veyra.core.errors import forbidden
 from veyra.core.models import Installation, InstalledModule
 from veyra.core.security.principal import Principal
 from veyra.ha.status import cluster_status
@@ -106,9 +108,15 @@ def health(
         "host": host.as_dict(),
         "cluster": cluster_status(db),
         # Live counts from the engine; None when the engine cannot report them.
-        "active_calls": active_calls,
-        "registrations": registrations,
+        # With multi-tenancy they cover every organization, so only platform
+        # administrators see them (docs/MULTI_TENANCY.md §6).
+        "active_calls": active_calls if _installation_wide(db, principal) else None,
+        "registrations": registrations if _installation_wide(db, principal) else None,
     }
+
+
+def _installation_wide(db: Session, principal: Principal) -> bool:
+    return principal.is_platform_admin or not tenancy.enabled(db)
 
 
 @router.get("/metrics/calls", summary="Channel and call history for the dashboard graphs")
@@ -120,6 +128,11 @@ def call_metrics(
 ) -> dict[str, Any]:
     from veyra.telephony import metrics
 
+    if not _installation_wide(db, principal):
+        raise forbidden(
+            "With multi-tenancy the call graphs cover every organization; "
+            "only platform administrators see them."
+        )
     current = metrics.read(request.app.state.telephony)
     return {
         **metrics.series(db, range),
@@ -143,3 +156,46 @@ def info(
         "version": __version__,
         "module_api_version": MODULE_API_VERSION,
     }
+
+
+# ----------------------------------------------------------------- multi-tenancy
+
+
+class MultiTenancyIn(BaseModel):
+    enabled: bool
+
+
+@router.get("/multi-tenancy", summary="The multi-tenancy switch and what is shared")
+def get_multi_tenancy(
+    principal: Principal = Depends(require("system.settings.read")),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return tenancy.status(db)
+
+
+@router.post("/multi-tenancy", summary="Turn multi-tenancy on (after the checks) or off")
+def set_multi_tenancy(
+    body: MultiTenancyIn,
+    request: Request,
+    principal: Principal = Depends(require("system.settings.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    from veyra.core.security.crypto import try_load_installation_key
+
+    checks = tenancy.switch(
+        db,
+        body.enabled,
+        try_load_installation_key(request.app.state.settings),
+    )
+    audit.record(
+        db,
+        action="system.multi_tenancy",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"enabled": body.enabled, "checks": [c["name"] for c in checks if c["ok"]]},
+    )
+    db.commit()
+    return {**tenancy.status(db), "checks": checks}

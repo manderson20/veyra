@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from veyra.api.v1.auth import SessionOut, _session_out, _set_cookies
 from veyra.api.v1.schemas import Email, OrganizationIn
-from veyra.core import audit, bootstrap
+from veyra.core import audit, bootstrap, tenancy
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context
@@ -155,6 +155,7 @@ def initialize(
         name=body.organization.name,
         slug=body.organization.slug,
         timezone=body.organization.timezone,
+        engine_namespace=tenancy.new_namespace(db, body.organization.slug),
     )
     db.add(org)
     db.flush()  # organization must exist before the user that references it

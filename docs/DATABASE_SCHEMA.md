@@ -10,7 +10,7 @@ the two agree. Constraint names follow a fixed naming convention.
 | Table | Purpose | Key columns / constraints |
 |---|---|---|
 | `installation` | Single row: identity of this installation | `instance_id` (permanent UUID for HA and central management), `deployment_mode`, `multi_tenancy_enabled`, `central_management_enabled`, `setup_completed_at` |
-| `organizations` | Tenants | `slug` unique, `timezone`, `is_active`; `provisioning_user`, `provisioning_secret_ciphertext` (migration `0011`: the enrollment credential, purpose `organization.provisioning_secret:<id>`) |
+| `organizations` | Tenants | `slug` unique, `timezone`, `is_active`; `engine_namespace` unique (migration `0027`: empty for the organization that predates M14, which keeps today's engine names; `[a-z0-9]` otherwise, [MULTI_TENANCY.md](MULTI_TENANCY.md) §2); `provisioning_user`, `provisioning_secret_ciphertext` (migration `0011`: the enrollment credential, purpose `organization.provisioning_secret:<id>`) |
 | `sites` | Locations of an organization | `organization_id`, unique (`organization_id`, `slug`), civic address (future dispatchable location); `emergency_caller_id_number` (migration `0011`, default for the site's extensions) |
 | `buildings` | Buildings at a site | `site_id`, unique (`site_id`, `name`) |
 | `departments` | Departments | unique (`organization_id`, `name`) |
@@ -25,7 +25,7 @@ the two agree. Constraint names follow a fixed naming convention.
 | `password_reset_tokens` | One-time password reset links (migration `0002`) | `token_hash` unique, `expires_at`, `used_at`, `issued_by` (administrator email or `cli`), `issued_from_ip`; at most one unused token per user |
 | `audit_log` | Append-only audit trail | indexed by time and organization; **UPDATE/DELETE blocked by trigger** `audit_log_append_only` (DELETE allowed only with `SET LOCAL veyra.audit_retention='on'`) |
 | `system_settings` | Key/value settings | e.g. `setup.token` (hash plus expiry), `updates.metadata_sequence`, `telephony.sip` (SIP and media settings, M3), `telephony.numbering` (numbering plan, M4), `telephony.pending_change` (set by any engine-relevant save until the next deployment), `security.mfa` (two-factor policy, M4b) |
-| `extensions` | Extensions (engine-neutral) | unique (`organization_id`, `number`); `endpoint_name` globally unique (`<org slug>-<number>`); numbers also unique installation-wide (enforced by the API with an advisory lock until M14); `sip_secret_ciphertext` (AES-256-GCM token, installation key) and `sip_secret_changed_at` (migration `0003`); `emergency_caller_id_number` (migration `0010`, presented on emergency routes) |
+| `extensions` | Extensions (engine-neutral) | unique (`organization_id`, `number`); `endpoint_name` globally unique (`<org slug>-<number>`); numbers unique per organization (migration `0027`; enforced by the API with an advisory lock per organization and number); `sip_secret_ciphertext` (AES-256-GCM token, installation key) and `sip_secret_changed_at` (migration `0003`); `emergency_caller_id_number` (migration `0010`, presented on emergency routes) |
 | `devices` | Phones registered by MAC address (migration `0011` adds the Milestone 9 columns; [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §2) | `mac_address` unique (12 hex digits), `profile_id` (`SET NULL`), `primary_extension_id` (`SET NULL`), `lines` (JSONB extra registrations), `keys` (JSONB line keys, NULL = the profile's), `values` (JSONB overrides), `firmware_image_id`, `provisioning_secret_ciphertext` (installation key, purpose `device.provisioning_secret:<id>`), `last_seen_*`, `last_result`, `firmware_reported`, `is_enabled` |
 | `installed_modules` | Module registry | `module_id` PK, `version`, `state`, `trust_level`, `signature_verified`, `manifest` (JSONB) |
 | `module_configs` | Module configuration | unique (`module_id`, `organization_id`) |
@@ -40,7 +40,7 @@ the two agree. Constraint names follow a fixed naming convention.
 | `sip_trunks` | Carrier connections (migration `0006`, M6) | `name` and `slug` unique (`trunk-<slug>` in the engine); `auth_mode` (`registration`/`ip`), host, port, transport, `password_ciphertext` (installation key), `match_addresses` (JSONB), codecs, `max_channels`, caller-ID and DTMF options, qualify and registration intervals |
 | `time_conditions` | Opening hours per organization (migration `0006`) | unique (`organization_id`, `name`); `timezone`, `ranges` (JSONB weekly ranges), `holidays` (JSONB `MM-DD`) |
 | `inbound_routes` | DID → destination (migration `0006`; typed destinations in `0008`) | `did` as the carrier sends it, `did_canonical` (ten digits for North American numbers); unique (`trunk_id`, `did_canonical`) with NULLs not distinct; `destination_type` (`extension`/`voicemail`/`ivr`) with `destination_extension_id` or `destination_ivr_id`, `destination_ring_group_id`, `destination_queue_id` (migration `0009`) (`SET NULL`), the same three for `after_hours_*`, `time_condition_id` and `trunk_id` (`RESTRICT`), `caller_id_prefix` |
-| `outbound_routes` | Dial patterns → trunks (migration `0006`) | `name` and `slug` unique (`veyra-out-<slug>`); `position` (evaluation order), `is_emergency`, `patterns` (JSONB `{prefix, match, prepend}`), `caller_id_number` |
+| `outbound_routes` | Dial patterns → trunks (migration `0006`) | `name` and `slug` unique (`veyra-out-<slug>`); `organization_id` (migration `0027`, `CASCADE`; NULL: every organization); `position` (evaluation order), `is_emergency`, `patterns` (JSONB `{prefix, match, prepend}`), `caller_id_number` |
 | `outbound_route_trunks` | Ordered trunks of a route | PK (`route_id`, `trunk_id`), unique (`route_id`, `position`); route `CASCADE`, trunk `RESTRICT` |
 | `api_tokens` | Scoped bearer tokens (migration `0007`, M6b, ADR 0015) | `token_hash` unique (SHA-256), `kind` (`companion`), `label` (device), `scopes` (JSONB permission keys), `created_at`/`created_ip`, `expires_at` (idle expiry, extended on use), `last_used_at`/`last_used_ip`, `revoked_at`; user `CASCADE`. Since migration `0026` also `kind` `integration` (prefix `vyi_`, no idle expiry; held by an integration's service account) |
 | `user_preferences` | Per-user settings document (migration `0007`) | `user_id` PK, `data` (JSONB; `companion` section: speed dials, dial prefix, default extension, notification toggles), `updated_at` |
@@ -92,6 +92,8 @@ the two agree. Constraint names follow a fixed naming convention.
 | `webhooks` | Outgoing webhooks (migration `0026`; §3) | unique (`organization_id`, `name`); `url`, `allow_http`, `events` (JSONB names or `group.*`), `secret_enc` and `previous_secret_enc`/`previous_secret_until` (purpose `webhooks:secret`), `enabled`/`disabled_reason`, `failing_since`, `last_delivery_at`, `last_status` |
 | `webhook_deliveries` | The outbox (migration `0026`) | `webhook_id` `CASCADE`, `event`, `payload` (the envelope as sent), `status` (`pending`/`delivered`/`failed`), `attempts`/`max_attempts`, `next_attempt_at`, `response_code`, `duration_ms`, `error`, `response_excerpt`; kept 7 days, at most 100 per webhook |
 
+Since migration `0027` the `number` of `ring_groups`, `call_queues`, `paging_zones`, `pages` and `voicemail_boxes` is unique per organization (`organization_id`, `number`) instead of across the installation; slugs stay unique across the installation.
+
 Tenant-owned tables (`sites`, `buildings`, `departments`, `extensions`,
 `devices`, `device_profiles`, `paging_zones`, `inbound_routes`, `time_conditions`) carry `organization_id` with `ON DELETE RESTRICT`, so deleting an
 organization never silently removes telephony data.
@@ -103,6 +105,6 @@ Each module owns tables prefixed `mod_<name>_` and its own version table
 
 ## Planned
 
-* Row-level security policies as defense in depth for tenant isolation (M14).
+* Row-level security policies as defense in depth for tenant isolation (proposed for M17, [MULTI_TENANCY.md](MULTI_TENANCY.md) §8).
 * CDR and CEL tables populated by Asterisk `cdr_pgsql` / `cel_pgsql` (M10).
 * An outbox table for cross-process events (M11/M16).

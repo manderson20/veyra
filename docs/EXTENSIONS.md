@@ -51,14 +51,14 @@ voicemail box; see [VOICEMAIL_IVR.md](VOICEMAIL_IVR.md)) and never
 collide. `GET /extensions/next-number[?after=]` suggests the lowest free
 number; the "Suggest next free" button in the interface uses it.
 
-**Numbers are unique across the whole installation**, not per
-organization, and ring groups and queues take their numbers from the same
-space (`409 number_in_use` names what holds the number), because everything
-is dialled in the single `veyra-internal` context until Milestone 14
-introduces per-tenant contexts
-(see [ARCHITECTURE.md](ARCHITECTURE.md) §6, tenant isolation). The
-generator refuses a snapshot with a duplicate number as a second line of
-defence. Changing the plan never touches existing extensions; it applies to
+**Numbers are unique per organization** (since Milestone 14,
+[MULTI_TENANCY.md](MULTI_TENANCY.md) §3): ring groups, queues, paging zones,
+pages and shared inboxes take their numbers from the organization's space
+(`409 number_in_use` names what holds the number), and each organization's
+phones dial in its own context, so two organizations can both have 1001.
+`next-number` takes `?organization_id=` (default: the caller's home
+organization). The generator refuses a snapshot with a duplicate number in
+one engine namespace as a second line of defence. Changing the plan never touches existing extensions; it applies to
 new and renumbered ones.
 
 ## 3. SIP credentials

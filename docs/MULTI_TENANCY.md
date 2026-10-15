@@ -43,8 +43,8 @@ The installation row has `multi_tenancy_enabled`, which nothing reads yet.
 
 ## 2. Engine namespace
 
-New column `organizations.engine_namespace` (up to 24 characters of
-`[a-z0-9-]`, unique, set when the organization is created, never changed):
+New column `organizations.engine_namespace` (up to 16 characters of
+`[a-z0-9]`, unique, set when the organization is created, never changed):
 
 * **Migration:** the oldest existing organization gets the empty namespace
   `""`. Every other existing organization gets one derived from its slug
@@ -56,19 +56,26 @@ Every engine name is built by one function:
 
 | Object | Empty namespace (today) | Namespace `acme` |
 |---|---|---|
-| Phone context | `veyra-internal` | `veyra-acme-internal` |
-| Feature codes | `veyra-features` | `veyra-acme-features` |
-| Paging / page playback | `veyra-paging`, `veyra-page-play` | `veyra-acme-paging`, `veyra-acme-page-play` |
-| Outbound | `veyra-outbound`, `veyra-out-<route>` | `veyra-acme-outbound`, `veyra-out-<route>` (shared, §4) |
-| IVR / ring group / queue contexts | `veyra-ivr-<slug>`, `veyra-rg-<slug>`, `veyra-queue-<slug>` | `veyra-acme-ivr-<slug>`, `veyra-acme-rg-<slug>`, `veyra-acme-queue-<slug>` |
-| Voicemail context | `veyra` | `veyra-acme` |
-| Queue name (`queues.conf`) | `veyra-<slug>` | `veyra-acme-<slug>` |
-| Hold music class | `veyra-<slug>` | `veyra-acme-<slug>` |
-| Pickup group names | `<slug>` | `acme-<slug>` |
+| Phone context | `veyra-internal` | `veyra_acme-internal` |
+| Feature codes | `veyra-features` | `veyra_acme-features` |
+| Paging / page playback | `veyra-paging`, `veyra-page-play` | `veyra_acme-paging`, `veyra_acme-page-play` |
+| Outbound | `veyra-outbound`, `veyra-out-<route>` | `veyra_acme-outbound`, `veyra-out-<route>` (shared, §4) |
+| IVR / ring group / queue contexts | `veyra-ivr-<slug>`, `veyra-rg-<slug>`, `veyra-queue-<slug>` | `veyra_acme-ivr-<slug>`, `veyra_acme-rg-<slug>`, `veyra_acme-queue-<slug>` |
+| Voicemail context | `veyra` | `veyra_acme` |
+| Queue name (`queues.conf`) | `veyra-<slug>` | `veyra_acme-<slug>` |
+| Hold music class / folder | `veyra-<slug>`, `<moh>/<slug>` | `veyra_acme-<slug>`, `<moh>/acme_<slug>` |
+| Pickup group names | `<slug>` | `acme_<slug>` |
+
+Today's names never contain `_`, and a namespace never contains `-`, so a
+name of one organization can never equal a name of another, whatever the
+slugs. Ring group, queue, menu and hold music slugs stay unique across the
+installation (a second organization's "Office" gets `office-2`); numbers do
+not (§3).
 
 Endpoint names stay `<org slug>-<number>`; they are already unique. The
 call history and queue reports read the queue and ring group from these
-names and learn the namespace prefix (REPORT_BUILDER.md §1). Prompts,
+names and learn the namespace prefix (REPORT_BUILDER.md §1); queue log
+rows name a namespaced queue `<ns>_<slug>`. Prompts,
 recordings and hold music files already live under per-organization
 folders.
 

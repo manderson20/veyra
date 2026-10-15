@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from conftest import ADMIN_PASSWORD, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
 
 
 def make_org(admin, slug):
+    enable_multi_tenancy()
     r = admin.post("/api/v1/organizations", json={"name": slug.title(), "slug": slug})
     assert r.status_code == 201, r.text
     return r.json()["id"]
@@ -79,6 +80,7 @@ def test_read_only_user_cannot_write_and_denial_is_audited(admin, app):
     make_user(admin, "viewer@gamma.local", a, "read_only")
     c = login(TestClient(app, base_url="http://veyra.test"), "viewer@gamma.local", ADMIN_PASSWORD)
     assert c.get("/api/v1/users").status_code == 200
+    enable_multi_tenancy()
     r = c.post(
         "/api/v1/users",
         json={

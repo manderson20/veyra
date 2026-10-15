@@ -190,8 +190,9 @@ registration trunk re-registers it; unchanged trunks are not disturbed.
 | `routing.read` | Organization and site administrators, technicians, read-only users | Inbound routes and time conditions of their organizations; outbound routes (read) |
 | `routing.write` | Organization and site administrators | Inbound routes and time conditions of their organizations |
 
-Outbound routes are installation-wide until per-tenant contexts arrive
-(Milestone 14), which is why they sit under `trunks.write`.
+Outbound routes are shared by every organization unless one is chosen for
+the route (Milestone 14, [MULTI_TENANCY.md](MULTI_TENANCY.md) §4); they sit
+under `trunks.write` because they choose the installation's trunks.
 
 ## 10. API summary
 

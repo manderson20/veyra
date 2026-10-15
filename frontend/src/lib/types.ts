@@ -151,6 +151,8 @@ export interface Organization {
   moh_class_id?: string | null;
   /** The plain-HTTP trust bootstrap also carries the enrollment credential. */
   bootstrap_includes_credential?: boolean;
+  /** Prefix of the organization's engine names; empty: today's names. */
+  engine_namespace?: string;
   created_at: string;
 }
 
@@ -897,6 +899,8 @@ export interface OutboundRoute {
   /** Failover order. */
   trunks: RouteTrunk[];
   caller_id_number: string | null;
+  /** Only this organization's phones use the route; null: every organization. */
+  organization_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -914,6 +918,7 @@ export interface OutboundRouteInput {
   patterns?: OutboundPattern[];
   trunk_ids?: string[];
   caller_id_number?: string | null;
+  organization_id?: string | null;
 }
 
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -2225,4 +2230,20 @@ export interface WebhookDeliveryOut {
   error: string | null;
   response_excerpt: string | null;
   payload: Record<string, unknown>;
+}
+
+// --- Multi-tenancy (docs/MULTI_TENANCY.md) ------------------------------------
+
+export interface MultiTenancyCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface MultiTenancyStatus {
+  enabled: boolean;
+  active_organizations: number;
+  organizations: { id: string; name: string; slug: string; namespace: string; is_active: boolean }[];
+  shared: string[];
+  checks?: MultiTenancyCheck[];
 }

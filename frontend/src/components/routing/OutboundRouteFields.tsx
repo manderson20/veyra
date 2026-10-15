@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { Checkbox, Switch, TextArea, TextField } from "@/components/ui";
+import { Checkbox, SelectField, Switch, TextArea, TextField } from "@/components/ui";
 import type { OutboundPattern, OutboundRoute, OutboundRouteInput } from "@/lib/types";
 import { EMPTY_PATTERN, PatternsEditor } from "./PatternsEditor";
 import { TrunkOrderEditor, type TrunkOption } from "./TrunkOrderEditor";
@@ -14,6 +14,8 @@ export interface OutboundRouteDraft {
   patterns: OutboundPattern[];
   trunk_ids: string[];
   caller_id_number: string;
+  /** "" = every organization (docs/MULTI_TENANCY.md §4). */
+  organization_id: string;
 }
 
 export const EMPTY_OUTBOUND_ROUTE: OutboundRouteDraft = {
@@ -24,6 +26,7 @@ export const EMPTY_OUTBOUND_ROUTE: OutboundRouteDraft = {
   patterns: [{ ...EMPTY_PATTERN }],
   trunk_ids: [],
   caller_id_number: "",
+  organization_id: "",
 };
 
 export function outboundRouteDraft(r: OutboundRoute): OutboundRouteDraft {
@@ -35,6 +38,7 @@ export function outboundRouteDraft(r: OutboundRoute): OutboundRouteDraft {
     patterns: r.patterns.map((p) => ({ ...p })),
     trunk_ids: r.trunks.map((t) => t.id),
     caller_id_number: r.caller_id_number ?? "",
+    organization_id: r.organization_id ?? "",
   };
 }
 
@@ -47,6 +51,7 @@ export function outboundRouteBody(d: OutboundRouteDraft): OutboundRouteInput {
     patterns: d.patterns.map((p) => ({ prefix: p.prefix.trim(), match: p.match.trim(), prepend: p.prepend.trim() })),
     trunk_ids: d.trunk_ids,
     caller_id_number: d.caller_id_number.trim() || null,
+    organization_id: d.organization_id || null,
   };
 }
 
@@ -54,13 +59,15 @@ export function outboundRouteValid(d: OutboundRouteDraft): boolean {
   return d.name.trim().length > 0 && d.patterns.length > 0 && d.patterns.every((p) => p.match.trim()) && d.trunk_ids.length > 0;
 }
 
-export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled, autoFocus }: {
+export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled, autoFocus, organizations }: {
   draft: OutboundRouteDraft;
   onChange: (patch: Partial<OutboundRouteDraft>) => void;
   errors: Record<string, string>;
   trunks: TrunkOption[];
   disabled?: boolean;
   autoFocus?: boolean;
+  /** Shown when there is more than one organization. */
+  organizations?: { id: string; name: string }[];
 }) {
   return (
     <>
@@ -70,6 +77,12 @@ export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled,
         <TextField label="Caller ID number" inputMode="tel" disabled={disabled} value={draft.caller_id_number} error={errors.caller_id_number}
           help="Overrides the extension's caller ID for calls on this route." onChange={(e) => onChange({ caller_id_number: e.target.value })} />
       </div>
+      {organizations && organizations.length > 1 ? (
+        <SelectField label="Used by" value={draft.organization_id} disabled={disabled} error={errors.organization_id}
+          options={[{ value: "", label: "All organizations" }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]}
+          help="A route of one organization is never used by the others' phones."
+          onChange={(e) => onChange({ organization_id: e.target.value })} />
+      ) : null}
       <Checkbox label="Emergency route" description="Emergency routes are evaluated before all others and cannot be moved below them. Use for 911 and similar numbers." checked={draft.is_emergency} disabled={disabled}
         onChange={(e) => onChange({ is_emergency: e.target.checked })} />
       <PatternsEditor patterns={draft.patterns} onChange={(patterns) => onChange({ patterns })} error={errors.patterns ?? errors.route} disabled={disabled} />

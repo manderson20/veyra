@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from veyra.api.v1.schemas import OrganizationIn, OrganizationOut, OrganizationPatch
 from veyra.configmgmt import service as configmgmt
-from veyra.core import audit
+from veyra.core import audit, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import conflict, not_found
@@ -59,7 +59,14 @@ def create_organization(
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
 ) -> OrganizationOut:
-    org = Organization(id=uuid.uuid4(), name=body.name, slug=body.slug, timezone=body.timezone)
+    tenancy.check_may_activate(db)
+    org = Organization(
+        id=uuid.uuid4(),
+        name=body.name,
+        slug=body.slug,
+        timezone=body.timezone,
+        engine_namespace=tenancy.new_namespace(db, body.slug),
+    )
     db.add(org)
     try:
         db.flush()
@@ -109,6 +116,10 @@ def update_organization(
     if org is None:
         raise not_found("Organization")
     changes = body.model_dump(exclude_unset=True)
+    if changes.get("is_active") and not org.is_active:
+        tenancy.check_may_activate(db, exclude=org.id)
+    if "is_active" in changes and changes["is_active"] != org.is_active:
+        configmgmt.mark_changed(db, by=principal.label, what=f"organization {org.slug}")
     if "moh_class_id" in changes:
         from veyra.api.v1 import hold_music
 

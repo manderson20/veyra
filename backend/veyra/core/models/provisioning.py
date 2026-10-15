@@ -34,6 +34,7 @@ class PagingZone(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         UniqueConstraint("organization_id", "name"),
         UniqueConstraint("organization_id", "slug"),
         UniqueConstraint("organization_id", "poly_group"),
+        UniqueConstraint("organization_id", "number"),
     )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -56,7 +57,7 @@ class PagingZone(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # Milestone 9c (docs/PAGING_RECORDINGS.md §2): dialable number from the
     # shared number space, who may page it and the longest page.
-    number: Mapped[str | None] = mapped_column(String(32), unique=True)
+    number: Mapped[str | None] = mapped_column(String(32))
     allowed: Mapped[str] = mapped_column(
         String(16), default="everyone"
     )  # everyone|members|administrators

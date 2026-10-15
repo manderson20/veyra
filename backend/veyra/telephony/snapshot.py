@@ -59,7 +59,7 @@ from veyra.telephony import moh
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 10
+SNAPSHOT_VERSION = 11  # 11: engine namespaces (docs/MULTI_TENANCY.md)
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -162,6 +162,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     voicemail = _voicemail_ivr(
         db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues
     )
+    shared_by_ext: dict[Any, list[str]] = voicemail.pop("_shared_by_extension")
     hold_music, moh_slug = _hold_music(db, active, org_slug)
     groups = _groups(db, extensions, org_slug, targets, ring_groups, queues, moh_slug)
     pickup = _pickup_groups(db, active, ext_by_id)
@@ -183,6 +184,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "name": o.name,
                 "timezone": o.timezone,
                 "is_active": o.is_active,
+                "namespace": o.engine_namespace,
                 "hold_music": moh_slug(o.moh_class_id, o.id),
             }
             for o in orgs
@@ -201,12 +203,13 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "max_contacts": contacts.get(e.id, 1),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
+                "shared_mailboxes": shared_by_ext.get(e.id, []),
             }
             for e in extensions
         ],
         **voicemail,
         **groups,
-        **_routing(db, key, active, extensions, targets),
+        **_routing(db, key, active, extensions, targets, org_slug),
         "paging": _paging(db, active, org_slug, ext_by_id),
         "recording": _recording(db, active, org_slug, ext_by_id, ring_groups, queues),
     }
@@ -478,6 +481,8 @@ def _voicemail_ivr(
         return p.slug if p is not None and p.organization_id == org_id else None
 
     return {
+        # Per extension id for the extension rows (popped by build_snapshot).
+        "_shared_by_extension": {e: sorted(numbers) for e, numbers in shared_by_ext.items()},
         "shared_mailboxes": {
             ext_by_id[e].number: sorted(numbers) for e, numbers in shared_by_ext.items()
         },
@@ -661,8 +666,10 @@ def _routing(
     active_orgs: set[Any],
     extensions: list[Extension],
     targets: Targets,
+    org_slug: dict[Any, str] | None = None,
 ) -> dict[str, Any]:
     """Trunks, routes and time conditions (docs/TRUNKS_ROUTING.md §8)."""
+    org_slug = org_slug or {}
     trunks = db.scalars(select(SipTrunk).order_by(SipTrunk.slug)).all()
     enabled_trunks = {t.id: t for t in trunks if t.is_enabled}
     conditions = db.scalars(select(TimeCondition).order_by(TimeCondition.name)).all()
@@ -703,6 +710,7 @@ def _routing(
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
                 "caller_id_prefix": r.caller_id_prefix,
                 "organization": str(r.organization_id),
+                "organization_slug": org_slug.get(r.organization_id, ""),
             }
         )
     return {
@@ -741,8 +749,11 @@ def _routing(
                 "patterns": list(r.patterns or []),
                 "trunks": route_trunks.get(r.id, []),
                 "caller_id_number": r.caller_id_number,
+                # None: every organization (docs/MULTI_TENANCY.md §4).
+                "organization": org_slug.get(r.organization_id) if r.organization_id else None,
             }
             for r in outbound
+            if r.organization_id is None or r.organization_id in active_orgs
         ],
         "time_conditions": [
             {

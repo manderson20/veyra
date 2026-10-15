@@ -8,7 +8,7 @@ import wave
 from datetime import timedelta
 
 import pytest
-from conftest import ADMIN_PASSWORD, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from test_api_routing import INBOUND, OUTBOUND, _ext, _fake, _org, _trunk
@@ -99,6 +99,7 @@ def test_policies_reach_the_dialplan(admin, app, tmp_path):
 
 def test_policy_validation_and_scope(admin):
     org = _org(admin)
+    enable_multi_tenancy()
     other = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()
     b = _ext(admin, other["id"], "2001")
     r = admin.post(

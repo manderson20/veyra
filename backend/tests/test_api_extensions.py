@@ -4,7 +4,7 @@ encrypted at rest, generated configuration and encrypted revision artifacts."""
 
 import json
 
-from conftest import ADMIN_PASSWORD, csrf_headers, login, make_settings
+from conftest import ADMIN_PASSWORD, csrf_headers, enable_multi_tenancy, login, make_settings
 from fake_adapter import FakeAdapter
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -132,17 +132,23 @@ def test_numbering_plan_is_enforced(admin):
     assert ev and ev[0]["details"]["changed"]["extension_length"] == 3
 
 
-def test_numbers_are_unique_across_organizations(admin):
+def test_numbers_are_unique_per_organization(admin):
+    """Since Milestone 14 each organization has its own number space
+    (docs/MULTI_TENANCY.md §3)."""
     a = _org(admin)["id"]
+    enable_multi_tenancy()
     r = admin.post("/api/v1/organizations", json={"name": "Other", "slug": "other"})
     b = r.json()["id"]
     _create(admin, a, "1001")
-    r = admin.post(EXT, json={"organization_id": b, "number": "1001", "display_name": "dup"})
+    r = admin.post(EXT, json={"organization_id": b, "number": "1001", "display_name": "same"})
+    assert r.status_code == 201, r.text
+    r = admin.post(EXT, json={"organization_id": a, "number": "1001", "display_name": "dup"})
     assert r.status_code == 409 and r.json()["code"] == "number_in_use"
     _create(admin, b, "1002")
-    # renumbering onto a used number is refused too
+    # renumbering onto a number used in the same organization is refused
     listing = admin.get(EXT, params={"organization_id": b}).json()["items"]
-    r = admin.patch(f"{EXT}/{listing[0]['id']}", json={"number": "1001"})
+    second = next(e for e in listing if e["number"] == "1002")
+    r = admin.patch(f"{EXT}/{second['id']}", json={"number": "1001"})
     assert r.status_code == 409
     # inactive organizations cannot get new extensions
     admin.patch(f"/api/v1/organizations/{b}", json={"is_active": False})
@@ -152,6 +158,7 @@ def test_numbers_are_unique_across_organizations(admin):
 
 def test_user_assignment_must_match_the_organization(admin):
     a = _org(admin)["id"]
+    enable_multi_tenancy()
     b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
     r = admin.post(
         "/api/v1/users",
@@ -266,6 +273,7 @@ def test_sip_secret_is_encrypted_at_rest_revealed_only_on_request_and_rotatable(
 
 def test_org_admin_is_confined_and_technician_cannot_write(admin, app):
     a = _org(admin)["id"]
+    enable_multi_tenancy()
     b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
     _create(admin, a, "1001", name="Alpha phone")
     ext_b = _create(admin, b, "2001", name="Beta phone")
