@@ -1,6 +1,8 @@
 # High Availability Architecture
 
-**Status:** Design (Milestone 0). Implementation and testing: Milestone 16.
+**Status:** Architecture (Milestone 0). The Milestone 16 build design is
+[HIGH_AVAILABILITY.md](HIGH_AVAILABILITY.md); this document keeps the goals,
+non-goals, recovery targets and the test plan.
 Automatic failover is **disabled** and stays disabled until the fencing and
 quorum mechanisms described here have been implemented and pass the test
 plan below.
