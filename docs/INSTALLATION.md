@@ -111,10 +111,23 @@ numbering plan (length and range; it can be changed later). Steps marked
 
 ## 4. TLS
 
-The self-signed certificate is in `/etc/veyra/tls/veyra.crt` and
-`veyra.key`. To use your own certificate, replace both files (key mode 0600)
-and run `sudo systemctl reload nginx`. The installer never overwrites
-existing certificate files.
+The installer creates a **Veyra certificate authority** (`/etc/veyra/tls/ca.crt`,
+key `ca.key` readable by root only, 10 years, limited to this server's host
+names) and an HTTPS certificate issued by it (`/etc/veyra/tls/veyra.crt` and
+`veyra.key`, 825 days, renewed by the installer within 30 days of expiry).
+Installations from before 0.14.0 have their self-signed certificate replaced
+by one from the CA at the next upgrade.
+
+* **Browsers** trust Veyra once the CA certificate is installed: download it
+  from `https://<host>/downloads/veyra-ca.crt` and import it as a trusted
+  root (or push it to managed Chromebooks and Chrome with Google Admin:
+  Devices → Networks → Certificates). Until then browsers warn, as with the
+  self-signed certificate; the Companion extension needs the CA installed.
+* **Phones** get the CA through provisioning (§4a).
+* **Your own certificate**: replace `veyra.crt` and `veyra.key` (key mode
+  0600) and run `sudo systemctl reload nginx`. The installer never replaces
+  a certificate it did not issue; phones then need that certificate's CA
+  (a public CA is already trusted).
 
 ### 4a. Phone provisioning
 
@@ -122,13 +135,18 @@ Phones fetch their configuration from `https://<host>/provisioning/` with
 HTTP Basic authentication ([DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md)
 §3). The host name phones use is `VEYRA_PUBLIC_HOST`, set in
 `/etc/veyra/installer.conf` (default: the server's fully qualified name)
-and written to `veyra.env` by the installer. Poly phones do not trust a
-self-signed certificate: install a trusted certificate (§4), add the
-certificate to the phones once, or, for a staging VLAN only, enable the
-plain-HTTP provisioning block with `VEYRA_PROVISIONING_HTTP=1` in
-`installer.conf` and re-run the installer. With HTTP enabled, `verify.sh`
-and the organization page warn that SIP secrets cross the network
-unencrypted. Firmware images uploaded through the interface are served by
+and written to `veyra.env` by the installer. Poly phones do not trust the
+server's certificate (issued by the Veyra CA, §4) until they have the CA. The recommended way to give it to them is
+the **trust bootstrap** ([FIREWALL_TRUST.md](FIREWALL_TRUST.md) §6): set
+`VEYRA_PROVISIONING_HTTP=1` in `installer.conf` and re-run the installer;
+plain HTTP then serves only the Veyra CA and the HTTPS address (no
+secrets), to the bootstrap networks only (System → Firewall → Settings;
+default: the SIP local networks). Point DHCP option 66 (and 160 for Poly)
+on the staging or voice VLAN at `http://<host>/provisioning/`; a new phone
+fetches the bootstrap, reboots, and provisions over HTTPS. The device page
+shows "Trusted, HTTPS" afterwards; a factory-reset phone needs "Allow
+bootstrap again". `VEYRA_PROVISIONING_HTTP_MODE=full` serves every file over
+HTTP as before 0.14.0 (SIP secrets unencrypted; `verify.sh` warns). Firmware images uploaded through the interface are served by
 NGINX from `/var/lib/veyra/firmware`.
 
 ## 5. Verify and operate
@@ -167,6 +185,15 @@ The reset link is valid for 24 hours and can be used once; the account is
 signed out everywhere when it is used. Administrators can do the same from
 a user's page in the UI.
 
+### Firewall recovery from the server console
+
+If a firewall setting locks you out, from the console (or any SSH session
+that still works) run `sudo veyra firewall off`: it turns the firewall off
+in the database and deletes the table `inet veyra` at once. Without Veyra,
+`sudo nft delete table inet veyra` removes it too. Veyra never touches other
+nftables tables (LXD, Docker, ufw). `sudo veyra firewall status` shows the
+settings, the service state and the active bans.
+
 ### Services
 
 | Unit | Runs as | Purpose |
@@ -175,7 +202,8 @@ a user's page in the UI.
 | `veyra-worker` | veyra | Heartbeat, update checks, session purge, outgoing mail queue (voicemail notifications), prompt folders |
 | `veyra-deployer` | veyra | Writes generated telephony configuration to `/etc/asterisk/veyra` and reloads Asterisk (only with a telephony engine) |
 | `veyra-pager` | veyra | Page sender: speakers' multicast and Poly group pages from one stream ([PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §2.2) |
-| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf`, `voicemail.conf`, `queues.conf`, `pjsip_notify.conf` and `musiconhold.conf` are Veyra-managed stubs that include the generated files. `asterisk-moh-opsound-wav` provides the built-in hold music; Veyra's hold music sets live in `<data>/moh/` |
+| `veyra-firewall` | veyra (+ CAP_NET_ADMIN) | Applies the nftables table `inet veyra` and bans attackers ([FIREWALL_TRUST.md](FIREWALL_TRUST.md) §3); off until turned on under System → Firewall |
+| `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf`, `voicemail.conf`, `queues.conf`, `pjsip_notify.conf`, `musiconhold.conf` and `logger.conf` (with the security log the firewall reads) are Veyra-managed stubs that include the generated files. `asterisk-moh-opsound-wav` provides the built-in hold music; Veyra's hold music sets live in `<data>/moh/` |
 
 `journalctl -u veyra-deployer` shows deployments; `sudo veyra config status`
 summarises the engine and recent revisions.

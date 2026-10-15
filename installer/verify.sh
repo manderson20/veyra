@@ -73,7 +73,11 @@ code="$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/provisioning/0
 [[ "$code" == "401" ]] && check prov-auth pass "provisioning requires credentials (401)" \
     || check prov-auth fail "https://127.0.0.1/provisioning/000000000000.cfg answered $code (expected 401)"
 if grep -qs '^VEYRA_PROVISIONING_HTTP=1' "$VEYRA_ETC/veyra.env"; then
-    check prov-http warn "phone provisioning is also served over plain HTTP: SIP secrets cross the network unencrypted"
+    if grep -qs '^VEYRA_PROVISIONING_HTTP_MODE=full' "$VEYRA_ETC/veyra.env"; then
+        check prov-http warn "phone provisioning is also served over plain HTTP in full: SIP secrets cross the network unencrypted"
+    else
+        check prov-http pass "plain HTTP serves the phone trust bootstrap only (no secrets)"
+    fi
 else
     check prov-http pass "provisioning over HTTPS only"
 fi

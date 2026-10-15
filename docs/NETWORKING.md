@@ -38,7 +38,14 @@ These are the external addresses and local networks in the SIP settings (M3); th
 
 ## Firewall
 
-The installer **does not change firewall rules** (it reports whether ufw is
-active). A recommended ufw profile will be generated from the active
-configuration in M5/M17. Never expose the admin interface, ARI, AMI or
-PostgreSQL to the internet.
+Since 0.14.0 Veyra has its own firewall (System → Firewall,
+[FIREWALL_TRUST.md](FIREWALL_TRUST.md)): one nftables table, `inet veyra`,
+that only **drops** traffic (banned, blocked and blocklist-feed addresses,
+and, per service, anything not on the allow list when a service is limited
+to it). It is off after installation. The allow list (this server, the SIP
+local networks, trunk addresses, and your own entries) is checked first and
+is never banned. Other firewalls (ufw, LXD, Docker) keep working; an
+`accept` elsewhere cannot override Veyra's drops. The ports it uses for each
+service come from the deployed SIP settings (`sip`, `rtp`), 80/443 (`web`,
+including provisioning) and the SSH ports in the firewall settings. Never
+expose ARI, AMI or PostgreSQL to the internet.
