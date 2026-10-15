@@ -49,9 +49,10 @@ t "nginx template includes the HTTP provisioning block when enabled" grep -q 'Pr
 t "HTTP provisioning block is rendered" not grep -q '@VEYRA_DATA@' "$TMP/nginx-http.conf"
 render_template "$HERE/../templates/veyra.env.in" "$TMP/env" VEYRA_ETC=/etc/veyra VEYRA_DATA=/var/lib/veyra \
     VEYRA_LOG_DIR=/var/log/veyra VEYRA_PREFIX=/opt/veyra DB_NAME=veyra TELEPHONY_ENGINE=asterisk \
-    PUBLIC_HOST=pbx.example.invalid PROVISIONING_HTTP=0
+    PUBLIC_HOST=pbx.example.invalid PROVISIONING_HTTP=0 PROVISIONING_HTTP_MODE=bootstrap
 t "env template carries the public host" grep -qx 'VEYRA_PUBLIC_HOST=pbx.example.invalid' "$TMP/env"
 t "env template carries the HTTP provisioning flag" grep -qx 'VEYRA_PROVISIONING_HTTP=0' "$TMP/env"
+t "env template carries the HTTP provisioning mode" grep -qx 'VEYRA_PROVISIONING_HTTP_MODE=bootstrap' "$TMP/env"
 printf 'a=@MISSING@\n' >"$TMP/in2"
 t "render_template rejects unrendered placeholders" not bash -c \
     ". '$HERE/../lib/common.sh'; render_template '$TMP/in2' '$TMP/out2'"
