@@ -116,3 +116,13 @@ community modules are wanted soon).
   proposed defaults while the §9 questions are open.
 * 2026-10-15: approved ("M12 approved, go ahead with 0.18.0"); the §9
   questions remain open.
+
+## Addendum (2026-10-15 14:43 UTC): 0.18.0 on dev1
+
+The owner upgraded dev1 from the 0.17.1-dev.1 test build to the release
+build **0.18.0-25aadce9f5** from `~/veyra-release` (dry run first, then the
+real run): backups taken, schema current (0025), all verify checks OK
+including `upgrade-unit` (`catalog-trust` warns, as expected without a
+catalog key). The live-test signing key was removed from
+`/etc/veyra/trust/official/` afterwards and the API and worker restarted,
+so dev1 trusts only the official keys again.
