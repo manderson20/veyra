@@ -84,10 +84,9 @@ timeout, so they expire even if the Veyra services are stopped.
 Per-service block rules (`services[]` set) render as
 `ip saddr <cidr> udp dport { 5060 } drop` style lines inside the chain;
 services map to ports read from the deployed configuration: `sip`
-(transports from the SIP settings), `rtp` (the RTP range), `web` (443/80),
-`provisioning` (443/80 path-level is not possible in nftables, so a
-provisioning-only block is enforced by NGINX `deny` instead), `ssh` (22 or
-the port sshd listens on, read with `ss`).
+(transports from the SIP settings), `rtp` (the RTP range), `web` (443/80,
+which includes provisioning: nftables cannot tell paths apart), `ssh` (the
+SSH ports in the firewall settings, 22 by default).
 
 ### 3.2 Modes
 
@@ -145,14 +144,19 @@ revision, as the deployer does for Asterisk.
 | Source | How Veyra reads it | Events |
 |---|---|---|
 | **Asterisk** | Security log channel: a Veyra-managed `logger.conf` stub adds `security.log => security` (file `/var/log/asterisk/security.log`, group `asterisk`, read by `veyra`); `veyra-firewall` follows the file | `InvalidAccountID` (unknown endpoint: scanners), `ChallengeResponseFailed`/`InvalidPassword` (wrong SIP password), `FailedACL`, `RequestBadFormat` |
-| **Veyra sign-in** | Written directly by the API where it already records "Sign-in failed" (real client address via `core.deps.client_address`) | `login_failed`, `mfa_failed`, `reset_invalid` |
-| **Provisioning** | Written by `provisioning/serve.py` on 401 | `prov_unauthorized` |
-| **NGINX** | Error log lines `limiting requests` (limit_req rejections); `veyra` reads `/var/log/nginx/error.log` via group `adm` | `rate_limited` |
+| **Veyra sign-in** | Read from the audit log the API already writes (`auth.login`, `auth.companion_login`, `auth.mfa_verify`, `auth.password_reset` with outcome failure or denied, and the client address) | `login_failed`, `mfa_failed`, `reset_invalid` |
+| **Provisioning** | Read from the provisioning request log (status 401) | `prov_unauthorized` |
+| **NGINX** | Error log lines `limiting requests` (limit_req rejections); the service reads `/var/log/nginx/error.log` with the supplementary group `adm` of its unit | `rate_limited` |
 
 Asterisk security events are reliable and cheap; the log file is the only
-channel available while AMI stays off. *(spike: confirm the exact line
-format of Asterisk 22's security log on dev1 and the remote address field
-for PJSIP over UDP and TCP.)*
+channel available while AMI stays off. Measured on dev1 (Asterisk 22.5,
+2026-10-15): lines are `SecurityEvent="…",…,AccountID="…",…,
+RemoteAddress="IPV4/UDP/<address>/<port>"`; an unknown account logs
+`InvalidAccountID` **and** `ChallengeResponseFailed` with
+`AccountID="<unknown>"` for the same attempt (the second is ignored), and a
+client retrying a wrong password in a loop produced 62 000 lines in six
+seconds. Events are therefore counted in memory and stored **once per
+pass** per address, kind and detail with a `count`, not one row each.
 
 ### 4.2 Ban rules
 
@@ -202,10 +206,12 @@ passwords cross the LAN unencrypted.
 ### 6.2 A Veyra certificate authority
 
 * The installer creates a **Veyra CA** (`/etc/veyra/tls/ca.key`, `ca.crt`,
-  EC P-256, 10 years, `O=Veyra local CA`, with a name constraint limiting
-  it to the server's own names and addresses *(spike: Poly firmware
-  handling of name constraints; drop the constraint if the phone rejects
-  it)*). The key is root-only and used only by the installer.
+  EC P-256, 10 years, `O=Veyra local CA`, with a critical name constraint
+  limiting it to the server's own DNS names (host, FQDN, `localhost`,
+  `VEYRA_PUBLIC_HOST`); IP addresses stay unconstrained so phones may use
+  the address *(spike: Poly firmware handling of name constraints, part of
+  the owner's hardware check)*. The key is root-only and used only by the
+  installer.
 * The server certificate is **issued by the CA** instead of self-signed
   (same names and addresses as today, 825 days). An existing certificate
   is replaced only if it is Veyra's own self-signed one (subject
@@ -226,11 +232,15 @@ the bootstrap only**.
    provisioning address from DHCP option 66/160:
    `http://<host>/provisioning/` (no credential needed for the bootstrap).
 2. Over HTTP Veyra answers `<MAC>.cfg` with a **bootstrap master file**
-   that contains no secret: the CA certificate
-   (`device.sec.TLS.customCaCert1` + `.set`), the HTTPS server address
-   (`device.prov.serverType=HTTPS`, `device.prov.serverName`), and the
-   organization enrollment credential only if the administrator chose to
-   include it (§6.4). Other files requested over HTTP return 404.
+   naming one file, `veyra-bootstrap-<MAC>.cfg`, that contains no secret:
+   the CA certificate (`device.sec.TLS.customCaCert1` + `.set`, newlines
+   kept as `&#10;`), the HTTPS server address (`device.prov.serverType=3`,
+   `device.prov.serverName=<host>/provisioning/`), and the organization
+   enrollment credential only if the administrator chose to include it
+   (§6.4). Other files requested over HTTP return 404; without the CA
+   file the bootstrap answers 503. Unknown Poly phones get the bootstrap
+   too (it holds nothing secret) and then show up under "unregistered
+   phones seen" over HTTPS.
 3. The phone reboots, now trusts the CA and provisions over **HTTPS**; it
    gets its full configuration including the SIP password and its own
    device credential (DEVICE_PROVISIONING.md §3.2), as today.
@@ -239,8 +249,11 @@ the bootstrap only**.
    date). A reset phone needs "Allow bootstrap again" on its device page.
 
 HTTP bootstrap is accepted only from the **bootstrap networks** in the
-firewall settings (default: the SIP local networks), enforced by NGINX
-`allow/deny` in the HTTP block.
+firewall settings (default: the SIP local networks); the provisioning
+server answers 403 to anyone else (checked in the API so a change in the
+interface applies at once). `VEYRA_PROVISIONING_HTTP_MODE=full` in
+`installer.conf` restores the 0.11.0 behaviour (every file over HTTP) for
+phones that cannot take the CA.
 
 Poly parameter names are from the UC Software administrator guide
 *(spike: confirm on the owner's VVX firmware that a custom CA delivered in
@@ -299,12 +312,18 @@ organization's provisioning card the bootstrap choice (§6.4).
 ## 8. Installer
 
 * `nftables` package (Ubuntu ships it); the `veyra-firewall` unit with
-  `CAP_NET_ADMIN`; `veyra` added to group `adm` (NGINX error log).
-* Managed `logger.conf` stub (security channel), keeping the existing
-  channels; `logger reload`.
-* CA and CA-signed server certificate (§6.2); `/downloads/veyra-ca.crt`.
-* The HTTP provisioning block (`VEYRA_PROVISIONING_HTTP=1`) serves the
-  bootstrap with `allow/deny` from the bootstrap networks.
+  `CAP_NET_ADMIN` only (bounding and ambient set), `AF_NETLINK`, and the
+  supplementary groups `asterisk` and `adm` for the two logs (the service
+  account itself joins no new group); `<data>/firewall` for the last
+  ruleset and feed lists.
+* Managed `logger.conf` (the package's channels plus `security.log =>
+  security`, `#tryinclude logger_local.conf` for local channels), reloaded
+  with the other stubs.
+* CA and CA-signed server certificate (§6.2), also on upgrade; public
+  copies `/etc/veyra/veyra-ca.crt` (bootstrap) and `/opt/veyra/veyra-ca.crt`
+  (`/downloads/veyra-ca.crt`).
+* The HTTP provisioning block (`VEYRA_PROVISIONING_HTTP=1`) hands requests
+  to the API, which serves the bootstrap (§6.3).
 * The firewall is **off after installation and upgrade**; the
   administrator turns it on from the interface after confirming the allow
   list. `verify.sh`: `firewall-service`, `firewall-table` (table present
@@ -353,3 +372,9 @@ applies its own table); sending signals to CrowdSec.
 
 * 2026-10-14: scope from the owner's messages (above); Veyra-native
   blocker with optional CrowdSec rather than fail2ban.
+* 2026-10-15: security log format and event volume measured on dev1
+  (§4.1); events aggregated per pass. The CA's name constraint covers DNS
+  names only, so phones may still reach the server by IP address. The
+  service's sandbox (CAP_NET_ADMIN only, MemoryDenyWriteExecute) was
+  checked with a transient unit: `nft` works with the capability and is
+  refused without it.

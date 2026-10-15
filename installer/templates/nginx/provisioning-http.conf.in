@@ -1,6 +1,8 @@
     # Provisioning over plain HTTP (opt-in: VEYRA_PROVISIONING_HTTP=1 in
-    # /etc/veyra/installer.conf). Credentials are still required, but SIP
-    # secrets cross the network unencrypted: use it on a staging VLAN only.
+    # /etc/veyra/installer.conf). By default the API answers here with the
+    # phone trust bootstrap only (docs/FIREWALL_TRUST.md §6.3); with
+    # VEYRA_PROVISIONING_HTTP_MODE=full it serves every file and SIP secrets
+    # cross the network unencrypted.
     location /provisioning/firmware/ {
         alias @VEYRA_DATA@/firmware/;
         types { }

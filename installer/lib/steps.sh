@@ -276,6 +276,7 @@ PY
 # The name phones and browsers use for this server (installer.conf overrides).
 public_host() { printf '%s' "${VEYRA_PUBLIC_HOST:-$(hostname -f 2>/dev/null || hostname)}"; }
 provisioning_http() { [[ "${VEYRA_PROVISIONING_HTTP:-0}" == "1" ]] && printf 1 || printf 0; }
+provisioning_http_mode() { [[ "${VEYRA_PROVISIONING_HTTP_MODE:-bootstrap}" == "full" ]] && printf full || printf bootstrap; }
 
 do_activate() {
     begin activate "Activating release"
@@ -294,7 +295,8 @@ do_activate() {
     render_template "$SCRIPT_DIR/templates/veyra.env.in" "$tmp" \
         "VEYRA_ETC=$VEYRA_ETC" "VEYRA_DATA=$VEYRA_DATA" "VEYRA_LOG_DIR=$VEYRA_LOG_DIR" \
         "VEYRA_PREFIX=$VEYRA_PREFIX" "DB_NAME=$VEYRA_DB_NAME" "TELEPHONY_ENGINE=$TELEPHONY_ENGINE" \
-        "PUBLIC_HOST=$(public_host)" "PROVISIONING_HTTP=$(provisioning_http)"
+        "PUBLIC_HOST=$(public_host)" "PROVISIONING_HTTP=$(provisioning_http)" \
+        "PROVISIONING_HTTP_MODE=$(provisioning_http_mode)"
     if [[ -f "$VEYRA_ETC/veyra.env" ]] && ! cmp -s "$tmp" "$VEYRA_ETC/veyra.env"; then
         # Keep a locally configured update source across re-installs.
         local url
@@ -579,7 +581,11 @@ do_nginx() {
     if [[ "$(provisioning_http)" == "1" ]]; then
         http_prov="$(sed -e "s|@VEYRA_DATA@|$VEYRA_DATA|g" -e "s|@VEYRA_ETC@|$VEYRA_ETC|g" \
             "$SCRIPT_DIR/templates/nginx/provisioning-http.conf.in")"
-        warn "Phone provisioning is also served over plain HTTP (VEYRA_PROVISIONING_HTTP=1): SIP secrets cross the network unencrypted"
+        if [[ "$(provisioning_http_mode)" == "full" ]]; then
+            warn "Phone provisioning is also served over plain HTTP in full (VEYRA_PROVISIONING_HTTP_MODE=full): SIP secrets cross the network unencrypted"
+        else
+            info "Plain HTTP serves the phone trust bootstrap only (the Veyra CA and the HTTPS address)"
+        fi
     fi
     render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$tmp" \
         "LISTEN_HTTP=$(listen_directives 80 '')" "LISTEN_HTTPS=$(listen_directives 443 ' ssl')" \

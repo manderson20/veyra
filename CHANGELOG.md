@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.14.0-dev — unreleased (Milestone 9d)
+
+### Added
+- **Firewall** (System → Firewall; [FIREWALL_TRUST.md](docs/FIREWALL_TRUST.md)): Veyra's own nftables table `inet veyra`, applied by the new `veyra-firewall` service (CAP_NET_ADMIN only) and never touching other tables. Automatic timed bans from Asterisk security events (unknown accounts, wrong SIP passwords), failed sign-ins and second factors, refused provisioning and NGINX rate limiting, scored per address over a window and doubling on repeat offences; a **permanent allow list** (this server, the SIP local networks and trunk addresses automatically, plus your own entries) that is checked first and never banned, with "would have been banned" events to find misconfigured phones; manual blocks per service and with expiry; per-service "allow list only" policy with confirm-or-revert after 60 s; blocklist feeds (CrowdSec local API as a bouncer, or HTTPS address lists); refusal of changes that would cut off the administrator (`firewall_self_block`). Off after installation and upgrade. Console recovery: `sudo veyra firewall off` (migration `0018`).
+- **Phone trust** ([FIREWALL_TRUST.md](docs/FIREWALL_TRUST.md) §6): a Veyra certificate authority issues the HTTPS certificate; plain-HTTP provisioning now serves only a bootstrap (the CA and the HTTPS address, no secrets) to the bootstrap networks, so new Poly phones switch to HTTPS on their own; downgrade protection once a phone provisioned over HTTPS ("Allow bootstrap again" on the device page); per organization, the bootstrap may carry the enrollment credential. `/downloads/veyra-ca.crt` for browsers.
+
+### Changed
+- The installer replaces Veyra's own **self-signed certificate** with one issued by the Veyra CA at the next upgrade (an administrator's certificate is kept); browsers warn until `veyra-ca.crt` is installed. The TLS step now also runs on upgrades and renews Veyra-issued certificates within 30 days of expiry.
+- `logger.conf` is Veyra-managed (the package's channels plus `security.log`); `VEYRA_PROVISIONING_HTTP_MODE=full` keeps the old plain-HTTP behaviour.
+
 ## 0.13.1 — 2026-10-15
 
 ### Changed

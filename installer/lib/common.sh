@@ -15,7 +15,10 @@ VEYRA_BACKUP_DIR="${VEYRA_BACKUP_DIR:-/var/backups/veyra}"
 #                      (Companion host permission and policy, docs/COMPANION.md
 #                      §5.1; provisioning URL, docs/DEVICE_PROVISIONING.md §3)
 #   VEYRA_PROVISIONING_HTTP  1 to also serve phone provisioning over plain HTTP
-#                      (opt-in with a warning; docs/DEVICE_PROVISIONING.md §3.3)
+#                      (opt-in; docs/DEVICE_PROVISIONING.md §3.3)
+#   VEYRA_PROVISIONING_HTTP_MODE  bootstrap (default: plain HTTP hands out only
+#                      the Veyra CA and the HTTPS address, docs/FIREWALL_TRUST.md
+#                      §6.3) or full (every file, SIP secrets unencrypted)
 # shellcheck disable=SC1091
 [[ -f "/etc/veyra/installer.conf" ]] && source "/etc/veyra/installer.conf"
 VEYRA_USER="veyra"
