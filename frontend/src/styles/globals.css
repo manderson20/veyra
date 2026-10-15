@@ -396,11 +396,23 @@ a.rail__button:hover { color: #fff; }
 .shell--collapsed .rail__button { justify-content: center; padding: var(--space-3) var(--space-2); }
 .rail__inline { margin: var(--space-1) 0 var(--space-2); padding-left: var(--space-4); }
 .flyout {
-  position: fixed; top: 0; bottom: 0; left: var(--sidebar-width); width: 280px; z-index: 34;
+  position: fixed; top: 0; bottom: 0; left: var(--sidebar-width); z-index: 34;
+  /* One column per group (up to four), never wider than the screen beside the rail. */
+  width: min(calc(var(--flyout-cols, 1) * 240px + 2 * var(--space-3) + (var(--flyout-cols, 1) - 1) * var(--space-4)), calc(100vw - var(--sidebar-width) - 48px));
+  min-width: 280px;
   background: var(--surface); color: var(--text); border-right: 1px solid var(--border); box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column; overflow-y: auto; padding: var(--space-4) var(--space-3);
 }
-.shell--collapsed .flyout { left: var(--sidebar-collapsed); }
+.shell--collapsed .flyout { left: var(--sidebar-collapsed); max-width: calc(100vw - var(--sidebar-collapsed) - 48px); }
+.flyout__columns { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-2) var(--space-4); align-items: start; }
+.flyout__group-title {
+  margin: var(--space-2) var(--space-3) var(--space-1); font-size: var(--text-xs, 0.75rem); font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);
+}
+.rail__group-title {
+  margin: var(--space-2) var(--space-3) var(--space-1); font-size: var(--text-xs, 0.75rem); font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--sidebar-text); opacity: 0.7;
+}
 .flyout__head { padding: var(--space-2) var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); margin-bottom: var(--space-2); }
 .flyout__title { display: block; font-weight: var(--weight-semibold); font-size: var(--text-lg); }
 .flyout__description { display: block; color: var(--text-muted); font-size: var(--text-sm); margin-top: var(--space-1); }

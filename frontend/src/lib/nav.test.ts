@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
-import { buildNav, canSee, isActive, moduleNavItems } from "./nav";
+import { buildNav, canSee, groupItems, isActive, moduleNavItems } from "./nav";
 import type { UiExtension } from "./types";
 
 const ext: UiExtension = {
@@ -86,5 +86,25 @@ describe("activeLocation and rail metadata", () => {
     expect(activeLocation(sections, "/", "")?.item.label).toBe("Dashboard");
     expect(activeLocation(sections, "/nowhere/", "")).toBeNull();
     for (const s of NAV) expect(s.icon, `${s.id} has an icon`).toBeTruthy();
+  });
+});
+
+describe("flyout columns", () => {
+  it("groups items in first-appearance order and gives every core page a group", () => {
+    const all = buildNav({ permissions: [], isPlatformAdmin: true });
+    const telephony = all.find((s) => s.id === "telephony")!;
+    const groups = groupItems(telephony.items);
+    expect(groups.map((g) => g.label)).toEqual([
+      "Phones and calls", "Routing", "Call handling", "Audio", "Paging and bells", "Coming later",
+    ]);
+    expect(groups.flatMap((g) => g.items)).toHaveLength(telephony.items.length);
+    // Single-page categories are direct links in the rail and need no column.
+    for (const s of all.filter((x) => x.items.length > 1)) for (const i of s.items) expect(i.group, i.href).toBeTruthy();
+  });
+
+  it("keeps ungrouped items (module pages) in one untitled column", () => {
+    const groups = groupItems([{ label: "A", href: "/a/", icon: "x" }, { label: "B", href: "/b/", icon: "x" }]);
+    expect(groups).toEqual([{ label: null, items: expect.any(Array) }]);
+    expect(groups[0]!.items).toHaveLength(2);
   });
 });
