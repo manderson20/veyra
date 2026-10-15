@@ -89,11 +89,15 @@ export function Chart<T extends ChartPoint>({ points, series, rangeSeconds, heig
         {hovered ? <span className="subtle">{new Date(hovered.at).toLocaleString()}</span> : null}
       </div>
       {n === 0 ? <p className="muted chart__empty">No samples in this range yet.</p> : null}
-      <table className="sr-only">
-        <caption>{ariaLabel}</caption>
-        <thead><tr><th>Time</th>{series.map((s) => <th key={s.key}>{s.label}</th>)}</tr></thead>
-        <tbody>{points.map((p) => <tr key={p.at}><td>{new Date(p.at).toLocaleString()}</td>{series.map((s) => <td key={s.key}>{valueOf(p, s.key)}</td>)}</tr>)}</tbody>
-      </table>
+      {/* Tables ignore height and overflow, so a hidden table would still
+          stretch the page by one row per sample: clip it in a block. */}
+      <div className="sr-only">
+        <table>
+          <caption>{ariaLabel}</caption>
+          <thead><tr><th>Time</th>{series.map((s) => <th key={s.key}>{s.label}</th>)}</tr></thead>
+          <tbody>{points.map((p) => <tr key={p.at}><td>{new Date(p.at).toLocaleString()}</td>{series.map((s) => <td key={s.key}>{valueOf(p, s.key)}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
     </div>
   );
 }
