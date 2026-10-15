@@ -8,6 +8,15 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.13.2 — 2026-10-15
+
+### Fixed
+
+- **Overview page scrolled past its end and took the menu with it**: the
+  charts' hidden data tables (for screen readers) kept their full height,
+  one row per sample, because tables ignore the clipping that hides them;
+  they are now clipped inside a hidden block (owner report).
+
 ## 0.13.1 — 2026-10-15
 
 ### Changed
