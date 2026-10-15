@@ -3,6 +3,7 @@
 
 from veyra.core.models.base import Base
 from veyra.core.models.bells import BellRing, BellSchedule, Calendar, CalendarEvent
+from veyra.core.models.firewall import FirewallBan, FirewallEvent, FirewallFeed, FirewallRule
 from veyra.core.models.groups import (
     CallQueue,
     PickupGroup,
@@ -86,6 +87,10 @@ __all__ = [
     "DeviceProfile",
     "DeviceProfilePaging",
     "Extension",
+    "FirewallBan",
+    "FirewallEvent",
+    "FirewallFeed",
+    "FirewallRule",
     "FirmwareImage",
     "InboundRoute",
     "Installation",

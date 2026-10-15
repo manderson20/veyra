@@ -51,6 +51,11 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     provisioning_user: Mapped[str | None] = mapped_column(String(63))
     provisioning_secret_ciphertext: Mapped[str | None] = mapped_column(Text)
     provisioning_secret_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The HTTP bootstrap also carries the enrollment credential (§6.4); off:
+    # the phone gets it from DHCP or typed by hand.
+    bootstrap_includes_credential: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
 
 
 class Site(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
