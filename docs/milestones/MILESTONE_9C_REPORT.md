@@ -111,3 +111,10 @@ order".
   (on-server speech recognition preferred for privacy; not scheduled).
 * 2026-10-15: approved ("resume"); released as 0.13.0. The AND clock and
   Poly captures stay open (§6) and are applied as patch releases.
+
+## Addendum (2026-10-15 01:13 UTC)
+
+The owner upgraded dev1 from `~/veyra-release` to **0.13.0-73ca5e104f**:
+backups taken, schema current (0017), Asterisk unchanged, all four Veyra
+services and the pager running, bundled module signed and verified, all
+verify checks OK, old releases pruned to three.
