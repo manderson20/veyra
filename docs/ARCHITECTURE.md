@@ -68,7 +68,7 @@ All modes use the same code and schema. The mode is data
 | A. Standalone | Foundation in M0, installation in M1 | One node; `cluster_nodes` holds one row with role `standalone`. |
 | B. HA (active/passive) | Design only (see [HA_ARCHITECTURE.md](HA_ARCHITECTURE.md)), M16 | A standalone node is enrolled as primary; a second node joins as secondary. No rebuild. |
 | C. Multi-tenant | Data model in M0; isolation and activation in M14 ([MULTI_TENANCY.md](MULTI_TENANCY.md)) | Every tenant-owned row carries `organization_id`. Telephony isolation is generated separately (see §6). |
-| D. Centrally managed | Identity in M0; M15 | `installation.instance_id` is a permanent UUID. Instances keep working when central management is unreachable. |
+| D. Centrally managed | Identity in M0; console and membership in M15 ([CENTRAL_MANAGEMENT.md](CENTRAL_MANAGEMENT.md)) | `installation.instance_id` is a permanent UUID. Any installation can act as the console; instances enroll with a one-time token and the console's fingerprint, then check in every minute with signed messages (no inbound connection to the instance). The local administrator chooses which policy sections and commands to accept. Instances keep working when central management is unreachable. |
 
 Converting standalone to HA works because node roles live in
 `cluster_nodes`, not in hostnames, and the instance identity does not change.

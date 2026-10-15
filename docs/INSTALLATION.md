@@ -217,6 +217,20 @@ when it is set, otherwise from the address the browser used). For Google:
 The recovery administrator always signs in with a password; with *Require
 single sign-on* on, linked accounts cannot.
 
+### Central management
+
+Optional ([CENTRAL_MANAGEMENT.md](CENTRAL_MANAGEMENT.md)). On the server
+that should be the console, turn on System → Central console and create an
+enrollment token. On each other server, open System → Central management
+and enter the console address, the token and the fingerprint shown with
+the token. The instance connects out to the console over HTTPS; nothing
+connects in to the instance. The console's `/api/v1/central/` path must be
+reachable from the instances: NGINX listens on private addresses only
+unless the console was installed with `--allow-public-admin`. If the
+console uses a self-signed certificate, paste its CA certificate into the
+enrollment form. An instance that loses the console keeps working; the
+console shows it as offline and can raise an alert.
+
 ### Firewall recovery from the server console
 
 If a firewall setting locks you out, from the console (or any SSH session
