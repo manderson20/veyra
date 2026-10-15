@@ -160,7 +160,9 @@ def compose(
     to: str,
     subject: str,
     text: str,
+    attachments: list[tuple[str, str, bytes]] | None = None,
 ) -> EmailMessage:
+    """``attachments``: (filename, MIME type, content), e.g. a report's CSV."""
     msg = EmailMessage(policy=policy.SMTP)
     msg["From"] = email.utils.formataddr((from_name, from_address))
     msg["To"] = to
@@ -168,6 +170,11 @@ def compose(
     msg["Date"] = email.utils.formatdate(localtime=True)
     msg["Message-ID"] = email.utils.make_msgid(domain=from_address.rpartition("@")[2] or None)
     msg.set_content(text)
+    for filename, mime, content in attachments or []:
+        maintype, _, subtype = mime.partition("/")
+        msg.add_attachment(
+            content, maintype=maintype, subtype=subtype or "octet-stream", filename=filename
+        )
     return msg
 
 

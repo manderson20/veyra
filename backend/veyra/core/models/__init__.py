@@ -58,6 +58,7 @@ from veyra.core.models.routing import (
     SipTrunk,
     TimeCondition,
 )
+from veyra.core.models.saved_reports import SavedReport
 from veyra.core.models.telephony import Device, Extension
 from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
 from veyra.core.models.voicemail import (
@@ -134,6 +135,7 @@ __all__ = [
     "Role",
     "RoleAssignment",
     "RolePermission",
+    "SavedReport",
     "SipTrunk",
     "Site",
     "SystemSetting",

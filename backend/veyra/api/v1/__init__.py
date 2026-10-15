@@ -98,3 +98,4 @@ for r in (
     companion,
 ):
     api_router.include_router(r.router)
+api_router.include_router(reports.saved_router)

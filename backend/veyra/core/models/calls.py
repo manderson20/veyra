@@ -53,6 +53,10 @@ class CallRecord(UUIDPrimaryKey, TenantScoped, Base):
     leg_count: Mapped[int] = mapped_column(Integer, default=0)
     # Recording identifier from CDR(veyra_rec) (docs/REPORTING.md §4.2).
     recording_ref: Mapped[str | None] = mapped_column(String(64))
+    # The queue and ring group the call went through, by slug
+    # (docs/REPORT_BUILDER.md §1), from the legs' contexts.
+    queue: Mapped[str | None] = mapped_column(String(80), index=True)
+    ring_group: Mapped[str | None] = mapped_column(String(80), index=True)
     # No leg added for a minute after the last end: the call is complete.
     is_final: Mapped[bool] = mapped_column(default=False)
     updated_at: Mapped[datetime] = mapped_column(
