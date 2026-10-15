@@ -924,6 +924,10 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         settings,
                         get_adapter(settings) if settings.telephony_engine != "none" else None,
                     )
+                    # Scheduled report emails (docs/REPORT_BUILDER.md §3).
+                    from veyra.reporting import schedule as report_schedule
+
+                    report_schedule.process(db, settings.mailqueue_dir)
                     process_mail_queue(db, settings, log)
                     if settings.telephony_engine != "none":
                         ensure_prompt_dirs(db, settings)

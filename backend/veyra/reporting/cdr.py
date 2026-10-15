@@ -215,6 +215,20 @@ class Directory:
         return None
 
 
+def _group_of(legs: list[CallLeg], prefix: str) -> str | None:
+    """The slug of the queue or ring group a call went through
+    (docs/REPORT_BUILDER.md §1): a leg run in its context, or a Local
+    channel into it."""
+    local = re.compile(rf"@{re.escape(prefix)}(.+)-[0-9a-f]{{8}};[12]$")
+    for leg in legs:
+        if leg.dcontext.startswith(prefix):
+            return leg.dcontext[len(prefix) :][:80]
+        m = local.search(leg.channel)
+        if m:
+            return m.group(1)[:80]
+    return None
+
+
 def fold(call: CallRecord, legs: list[CallLeg], d: Directory, now: datetime) -> None:
     """Derive the call's fields from all its legs (idempotent)."""
     legs = sorted(legs, key=lambda leg: (leg.start, leg.uniqueid))
@@ -313,6 +327,8 @@ def fold(call: CallRecord, legs: list[CallLeg], d: Directory, now: datetime) -> 
             max(int((call.ended_at - call.started_at).total_seconds()), 0) if call.ended_at else 0
         )
         call.talk_seconds = 0
+    call.queue = _group_of(legs, "veyra-queue-")
+    call.ring_group = _group_of(legs, "veyra-rg-")
     call.leg_count = len(legs)
     call.recording_ref = next((leg.rec for leg in legs if leg.rec), None)
     call.is_final = call.ended_at is not None and now - call.ended_at >= SETTLE
