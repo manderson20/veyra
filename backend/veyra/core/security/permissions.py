@@ -33,9 +33,7 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
     PermissionDef("system.settings.read", "View system settings", platform_only=True),
     PermissionDef("system.settings.write", "Change system settings", platform_only=True),
     PermissionDef("firewall.read", "View the firewall, bans and events", platform_only=True),
-    PermissionDef(
-        "firewall.write", "Change firewall rules, bans and settings", platform_only=True
-    ),
+    PermissionDef("firewall.write", "Change firewall rules, bans and settings", platform_only=True),
     PermissionDef(
         "organizations.read",
         "View organizations",
@@ -175,6 +173,16 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         "bells.write",
         "Create and edit calendars and bell schedules",
         default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
+        "calls.history.read",
+        "View the call history of the organization",
+        default_roles=("org_admin", "site_admin", "technician", "read_only"),
+    ),
+    PermissionDef(
+        "calls.history.export",
+        "Export the call history as CSV",
+        default_roles=("org_admin",),
     ),
     PermissionDef(
         "devices.read",

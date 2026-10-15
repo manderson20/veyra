@@ -3,6 +3,7 @@
 
 from veyra.core.models.base import Base
 from veyra.core.models.bells import BellRing, BellSchedule, Calendar, CalendarEvent
+from veyra.core.models.calls import CallLeg, CallRecord
 from veyra.core.models.firewall import FirewallBan, FirewallEvent, FirewallFeed, FirewallRule
 from veyra.core.models.groups import (
     CallQueue,
@@ -77,7 +78,9 @@ __all__ = [
     "Building",
     "Calendar",
     "CalendarEvent",
+    "CallLeg",
     "CallQueue",
+    "CallRecord",
     "CallSample",
     "ClusterEvent",
     "ClusterNode",

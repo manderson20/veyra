@@ -119,7 +119,7 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm /etc/asterisk/veyra)" == "2750 veyra:asterisk" ]] \
         && check engine-include-dir pass "2750 veyra:asterisk" \
         || check engine-include-dir fail "/etc/asterisk/veyra is $(perm /etc/asterisk/veyra) (expected 2750 veyra:asterisk)"
-    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf logger.conf; do
+    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf logger.conf cdr.conf cdr_custom.conf; do
         grep -qs "Managed by Veyra" "/etc/asterisk/$f" \
             && check "engine-stub:$f" pass "Veyra-managed" \
             || check "engine-stub:$f" fail "/etc/asterisk/$f is not the Veyra-managed stub"
@@ -163,6 +163,19 @@ if [[ "$ENGINE" == "asterisk" ]]; then
         check engine-moh pass "music-on-hold class default is loaded"
     else
         check engine-moh fail "music-on-hold class 'default' is not loaded (install asterisk-moh-opsound-wav, then: sudo asterisk -rx 'module unload res_musiconhold.so' && sudo asterisk -rx 'module load res_musiconhold.so'); queue callers would wait in silence"
+    fi
+    # Call history (docs/REPORTING.md §3.1): unanswered calls logged, the
+    # Veyra CSV mapping active, and its file readable by the worker.
+    cdr_status="$(asterisk -rx "cdr show status" 2>/dev/null || true)"
+    if grep -q "cdr-custom" <<<"$cdr_status" && grep -qE "Log unanswered calls: +Yes" <<<"$cdr_status"; then
+        check cdr-custom pass "call records are written for Veyra's call history (unanswered included)"
+    else
+        check cdr-custom fail "cdr_custom is not active or unanswered calls are not logged (sudo asterisk -rx 'module reload cdr_custom.so'); call history stays empty"
+    fi
+    if [[ -e /var/log/asterisk/cdr-custom/veyra.csv ]] && ! runuser -u veyra -- test -r /var/log/asterisk/cdr-custom/veyra.csv; then
+        check cdr-file fail "/var/log/asterisk/cdr-custom/veyra.csv is not readable by veyra"
+    else
+        check cdr-file pass "readable by veyra (created with the first call)"
     fi
     # The firewall reads Asterisk's security events (docs/FIREWALL_TRUST.md §4.1).
     if asterisk -rx "logger show channels" 2>/dev/null | grep -q "security.log.*SECURITY"; then
