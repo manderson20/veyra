@@ -981,12 +981,15 @@ def cmd_firewall_off(args: argparse.Namespace) -> int:
         print("Firewall turned off in the database.")
     except Exception as e:  # the table goes anyway
         print(f"Could not update the database ({e}); removing the table only.", file=sys.stderr)
+    # The saved ruleset would be re-applied at boot.
+    (get_settings().data_dir / "firewall" / "veyra.nft").unlink(missing_ok=True)
+    if args.database_only:
+        return 0  # the sudo wrapper removes the table as root
     try:
         NftCommand()._run(["delete", "table", "inet", "veyra"])
         print("Table inet veyra removed.")
     except (NftError, OSError) as e:
         print(f"Table inet veyra not removed: {e}", file=sys.stderr)
-    (get_settings().data_dir / "firewall" / "veyra.nft").unlink(missing_ok=True)
     return 0
 
 
@@ -1166,9 +1169,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--interval", type=int, default=2, help="Seconds between passes")
     s.add_argument("--once", action="store_true")
     s.set_defaults(func=cmd_firewall_run)
-    fwp.add_parser(
-        "off", help="Turn the firewall off and remove its table (console recovery)"
-    ).set_defaults(func=cmd_firewall_off)
+    s = fwp.add_parser("off", help="Turn the firewall off and remove its table (console recovery)")
+    s.add_argument(
+        "--database-only", action="store_true", help=argparse.SUPPRESS
+    )  # used by the sudo wrapper, which removes the table as root
+    s.set_defaults(func=cmd_firewall_off)
     fwp.add_parser("status", help="Settings, service state and active bans").set_defaults(
         func=cmd_firewall_status
     )
