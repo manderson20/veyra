@@ -61,7 +61,7 @@ pop-up, voicemail pruning.
 
 | Suite | Result |
 |---|---|
-| Backend `pytest` | 472 passed, 1 skipped (`age` not installed on the development host); new: `test_backups.py` 9 (keep policy, schedule, the runner against a fake system incl. a failed restore test and pruning, age round trip when `age` is installed, restore checks, settings, rows, summary, tick, API, alerts), `test_rotation.py` 2, `test_retention.py` 3, `test_emergency.py` 4 (generator site routes, event and callback; event detection; service record/notify/readiness; API), `test_secrets_in_logs.py` 1 |
+| Backend `pytest` | 475 passed (final run 33d647f, `age` installed on dev1 so the round-trip test runs); new: `test_backups.py` 12 (keep policy, pending-row adoption, partial settings, schedule, the runner against a fake system incl. a failed restore test and pruning, age round trip when `age` is installed, restore checks, settings, rows, summary, tick, API, alerts), `test_rotation.py` 2, `test_retention.py` 3, `test_emergency.py` 4 (generator site routes, event and callback; event detection; service record/notify/readiness; API), `test_secrets_in_logs.py` 1 |
 | Frontend `vitest`, `tsc`, `eslint`, `next build` | 51 passed, clean; the build writes 66 script hashes |
 | Installer `test_lib.sh` | 68 passed (backup unit, polkit instances, security headers file, every location re-includes it) |
 | `upgrade.sh --dry-run` on dev1 | OK (esm-apps attached) |
