@@ -480,6 +480,14 @@ Where the build departs from or sharpens the sections above:
   (postgres-owned copies of the CA and the node certificate, refreshed by
   the agent), because `/etc/veyra/tls` is root-only; the `conf.d` fragment
   is written world-readable. The agent's runtime directory is `root:veyra`.
+* **The root agent serves the root-only sync roots** (`etc/secrets`,
+  `etc/tls`, `etc/trust`): the API cannot read them, so `manifest` merges
+  the agent's entries and `file` relays those files through the agent; the
+  manifest names the roots it covers and a standby deletes only inside
+  them, so a root the primary could not list never empties the standby.
+* **The §7.3 rules run at the agent's start and when the peer becomes
+  reachable again**, never when a running primary loses its peer: a healthy
+  primary keeps serving through a standby outage (§1 principle 6).
 * **Engine units are not enabled at boot on an HA node** (`asterisk`,
   `veyra-deployer`, `veyra-pager`): the agent starts them with the primary
   role (§7.3), the installer and `upgrade.sh` respect `node.json`.
