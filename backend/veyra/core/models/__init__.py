@@ -14,6 +14,7 @@ from veyra.core.models.central import (
     CentralPolicy,
     CentralSample,
 )
+from veyra.core.models.emergency import EmergencyCall
 from veyra.core.models.firewall import FirewallBan, FirewallEvent, FirewallFeed, FirewallRule
 from veyra.core.models.groups import (
     CallQueue,
@@ -49,6 +50,7 @@ from veyra.core.models.paging import Page, PageLog, PageMember, PageZone, Paging
 from veyra.core.models.platform import (
     AuditEvent,
     AvailableUpdate,
+    Backup,
     ClusterEvent,
     ClusterNode,
     ConfigRevision,
@@ -57,7 +59,6 @@ from veyra.core.models.platform import (
     ProvisioningTemplate,
     SystemSetting,
     UpdateCheck,
-    Backup,
     UpdateHistory,
     UpdatePolicy,
 )
@@ -95,6 +96,7 @@ __all__ = [
     "ApiToken",
     "AuditEvent",
     "AvailableUpdate",
+    "Backup",
     "Base",
     "BellRing",
     "BellSchedule",
@@ -120,6 +122,7 @@ __all__ = [
     "Device",
     "DeviceProfile",
     "DeviceProfilePaging",
+    "EmergencyCall",
     "Extension",
     "FirewallBan",
     "FirewallEvent",
@@ -169,7 +172,6 @@ __all__ = [
     "SystemSetting",
     "TimeCondition",
     "UpdateCheck",
-    "Backup",
     "UpdateHistory",
     "UpdatePolicy",
     "User",

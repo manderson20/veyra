@@ -136,6 +136,9 @@ class OutboundRoute(UUIDPrimaryKey, Timestamps, Base):
     description: Mapped[str | None] = mapped_column(Text)
     position: Mapped[int] = mapped_column(Integer, default=0)
     is_emergency: Mapped[bool] = mapped_column(Boolean, default=False)
+    # An emergency route bound to one site (docs/PRODUCTION_HARDENING.md §6);
+    # NULL serves every site.
+    site_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # [{"prefix": "9", "match": "NXXNXXXXXX", "prepend": "1"}, ...]
     patterns: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)

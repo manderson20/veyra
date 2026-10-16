@@ -111,6 +111,9 @@ BUSY_STATES = "(INUSE|BUSY|RINGINUSE)"
 VOICEMAIL_CONTEXT = "veyra"
 OUTBOUND_DIAL_TIMEOUT = 60
 EMERGENCY_DIAL_TIMEOUT = 120
+_SITE_RE = re.compile(r"^[0-9a-f-]{36}$")
+EMERGENCY_EVENT = "VeyraEmergency"
+ASTDB_CALLBACK = "veyra_ecb"
 DEFAULT_RING_SECONDS = 30
 # Where the prompts live and the script Asterisk hands notifications to;
 # the adapter passes the installation's paths (veyra.core.config).
@@ -602,6 +605,12 @@ def _endpoints(
         if ecid and not _NUMBER_RE.match(str(ecid)):
             raise GenerationError(f"emergency caller ID {ecid!r} is not valid")
         emergency_cid = [f"set_var=VEYRA_EMERGENCY_CID={ecid}"] if ecid else []
+        # The phone's site, read by site-bound emergency routes
+        # (docs/PRODUCTION_HARDENING.md §6).
+        site = str(ext.get("site") or "")
+        if site and not _SITE_RE.match(site):
+            raise GenerationError(f"site id {site!r} is not valid")
+        emergency_cid += [f"set_var=__VEYRA_SITE={site}"] if site else []
         # Message waiting indication: the phone subscribes to, or is notified
         # about, its own mailbox (docs/VOICEMAIL_IVR.md §3.2).
         # Own box plus the shared inboxes the phone's lamp follows
@@ -1001,7 +1010,9 @@ def _dialplan(
             }
             lines += _paging_contexts(part, prompts_dir)
     lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir, spaces)
-    lines += _inbound_contexts(inbound, conditions, trunk_slugs, recording, prompts_dir)
+    lines += _inbound_contexts(
+        inbound, conditions, trunk_slugs, recording, prompts_dir, list(snapshot.get("sites") or [])
+    )
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _ivr_contexts(mine(menus, ns), prompts_dir)
@@ -1185,13 +1196,20 @@ def _outbound_contexts(
     per route, emergency routes first (docs/TRUNKS_ROUTING.md §4, §6, §7). A
     route of one organization is included only in that organization's
     outbound context (docs/MULTI_TENANCY.md §4)."""
-    ordered = sorted(routes, key=lambda r: not bool(r.get("is_emergency")))
+    # Emergency routes first; among them the site-bound ones before the
+    # installation-wide ones, so a site's route is tried first and chains to
+    # the next one when the caller's site differs (docs/PRODUCTION_HARDENING.md §6).
+    ordered = sorted(
+        routes,
+        key=lambda r: (not bool(r.get("is_emergency")), not bool(r.get("site"))),
+    )
     slugs: list[str] = []
     for r in ordered:
         slug = _check_section(str(r["slug"]), "outbound route slug")
         if slug in slugs:
             raise GenerationError(f"duplicate outbound route slug {slug!r}")
         slugs.append(slug)
+    emergency_slugs = [sl for r, sl in zip(ordered, slugs, strict=True) if r.get("is_emergency")]
     lines: list[str] = []
     for ns in spaces if spaces is not None else [engine_names.LEGACY]:
         lines += [
@@ -1232,10 +1250,30 @@ def _outbound_contexts(
                 *_record_outbound(recording or [], prompts_dir),
             ]
             if emergency:
+                site = str(r.get("site") or "")
+                if site:
+                    if not _SITE_RE.match(site):
+                        raise GenerationError(f"outbound route {slug}: site {site!r} is not valid")
+                    # Another site's phone: on to the next emergency route.
+                    after = emergency_slugs[emergency_slugs.index(slug) + 1 :]
+                    if after:
+                        lines.append(
+                            f' same => n,GotoIf($["${{VEYRA_SITE}}"!="{site}"]'
+                            f"?{CONTEXT_OUT_PREFIX}{after[0]},${{EXTEN}},1)"
+                        )
                 # The extension's emergency caller ID wins over the route's
                 # and the trunk's numbers (docs/TRUNKS_ROUTING.md §7).
                 lines += [
                     " same => n,Set(__VEYRA_EMERGENCY=1)",
+                    # On-site notification (Kari's Law): the API's event listener
+                    # turns this into emergency.call (docs/PRODUCTION_HARDENING.md §6).
+                    f" same => n,UserEvent({EMERGENCY_EVENT},Extension: ${{CALLERID(num)}},"
+                    f"Site: ${{VEYRA_SITE}},Number: ${{EXTEN}},Route: {slug},"
+                    "EmergencyCID: ${VEYRA_EMERGENCY_CID},Channel: ${CHANNEL})",
+                    # The PSAP's callback finds the caller through the ELIN (§6).
+                    ' same => n,ExecIf($["${VEYRA_EMERGENCY_CID}"!=""]'
+                    f"?Set(DB({ASTDB_CALLBACK}/${{VEYRA_EMERGENCY_CID}})="
+                    "${CALLERID(num)}|${EPOCH}))",
                     " same => n,Log(WARNING,Veyra EMERGENCY call from ${CALLERID(num)}"
                     ' to ${EXTEN}; extension emergency caller ID: ${IF($["${VEYRA_EMERGENCY_CID}"'
                     '!=""]?${VEYRA_EMERGENCY_CID}:none)})',
@@ -1298,6 +1336,7 @@ def _inbound_contexts(
     trunk_slugs: list[str],
     recording: list[dict[str, Any]] | None = None,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
+    sites: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """``veyra-from-trunk`` (shared DIDs), one ``veyra-from-trunk-<slug>`` per
     trunk (its restricted DIDs, then the shared ones, then its fallback), and
@@ -1320,6 +1359,32 @@ def _inbound_contexts(
     explicit = {(r.get("trunk") or None, r["did"]) for r in shared}
     for slug, rs in per_trunk.items():
         explicit |= {(slug, r["did"]) for r in rs}
+    # The PSAP's callback to a site's ELIN (docs/PRODUCTION_HARDENING.md §6):
+    # within the window it rings the extension that placed the emergency
+    # call, else the site's responder, else the DID's own route.
+    elins: dict[str, dict[str, Any]] = {}
+    for site in sites or []:
+        elin = routing.normalize_did(str(site.get("emergency_caller_id_number") or ""))
+        if elin:
+            elins[routing.canonical_did(elin)] = site
+
+    def callback_lines(site: dict[str, Any], did: str) -> list[str]:
+        window = int(site.get("callback_minutes") or 30) * 60
+        ns = engine_names.for_org(str(site.get("organization") or "")).internal
+        out = [
+            f" same => n,Set(VEYRA_ECB=${{DB({ASTDB_CALLBACK}/{did})}})",
+            ' same => n,GotoIf($["${VEYRA_ECB}"=""]?responder)',
+            " same => n,Set(VEYRA_ECB_EXT=${CUT(VEYRA_ECB,|,1)})",
+            " same => n,Set(VEYRA_ECB_AT=${CUT(VEYRA_ECB,|,2)})",
+            f" same => n,GotoIf($[${{EPOCH}} - ${{VEYRA_ECB_AT}} > {window}]?responder)",
+            " same => n,NoOp(Veyra: emergency callback to ${VEYRA_ECB_EXT})",
+            f" same => n,Goto({ns},${{VEYRA_ECB_EXT}},1)",
+            " same => n(responder),NoOp(Veyra: emergency callback outside the window)",
+        ]
+        responder = site.get("responder")
+        if responder:
+            out.append(f" same => n,Goto({ns},{_check_value(str(responder), 'responder')},1)")
+        return out
 
     def body(r: dict[str, Any], context: str) -> list[str]:
         did = r["did"]
@@ -1331,6 +1396,9 @@ def _inbound_contexts(
             f" same => n,Set(__VEYRA_DID={did})",
             *_record_inbound(recording or [], r, prompts_dir),
         ]
+        site = elins.get(routing.canonical_did(did))
+        if site is not None:
+            out += callback_lines(site, did)
         out += _destination_lines(r, conditions)
         for alias in routing.did_aliases(did):
             if (r.get("trunk") or None, alias) not in explicit:
@@ -1340,6 +1408,21 @@ def _inbound_contexts(
     lines = [f"[{CONTEXT_FROM_TRUNK}]", "; DIDs that match on every trunk."]
     for r in shared:
         lines += body(r, CONTEXT_FROM_TRUNK)
+    # ELINs without an inbound route of their own still take the callback.
+    routed = {routing.canonical_did(r["did"]) for r in shared} | {
+        routing.canonical_did(r["did"]) for rs in per_trunk.values() for r in rs
+    }
+    for canonical, site in elins.items():
+        if canonical in routed:
+            continue
+        did = routing.normalize_did(str(site["emergency_caller_id_number"]))
+        lines += [
+            f"exten => {did},1,NoOp(Veyra emergency callback for {site.get('slug')})",
+            " same => n,Set(__VEYRA_HOPS=1)",
+            f" same => n,Set(__VEYRA_DID={did})",
+            *callback_lines(site, did),
+            " same => n,Hangup(1)",
+        ]
     lines.append("")
     shared_any = next((r for r in shared if r["did"] == routing.DID_ANY), None)
     for slug in trunk_slugs:

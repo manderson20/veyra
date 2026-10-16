@@ -40,6 +40,12 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # Number presented on emergency routes instead of the regular caller ID
     # (docs/TRUNKS_ROUTING.md §7): the building's ELIN or registered DID.
     emergency_caller_id_number: Mapped[str | None] = mapped_column(String(32))
+    # Dispatchable location (docs/PRODUCTION_HARDENING.md §6): the building
+    # and the floor/room text the on-site notification carries.
+    building_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("buildings.id", ondelete="SET NULL")
+    )
+    location: Mapped[str | None] = mapped_column(String(200))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -81,6 +87,10 @@ class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     last_user_agent: Mapped[str | None] = mapped_column(String(200))
     last_result: Mapped[str | None] = mapped_column(String(32))
     firmware_reported: Mapped[str | None] = mapped_column(String(64))
+    building_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("buildings.id", ondelete="SET NULL")
+    )
+    location: Mapped[str | None] = mapped_column(String(200))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # Phone trust (docs/FIREWALL_TRUST.md §6.3): the first HTTPS fetch; after
     # it, plain-HTTP bootstrap is refused until allow_bootstrap is set again.
