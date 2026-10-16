@@ -209,8 +209,20 @@ check_services() {
 check_role() {
     case "$ROLE" in
         standalone) record pass role "standalone" ;;
-        primary|secondary)
-            record warn role "HA roles are accepted for planning only; HA installation arrives in Milestone 16" ;;
+        secondary)
+            # docs/HIGH_AVAILABILITY.md §5: the primary must answer before anything changes.
+            local url="${VEYRA_JOIN_URL:-}"
+            if [[ -z "$url" ]]; then
+                record fail role "secondary needs --join https://<primary>"
+            elif curl -ksS --max-time 5 "$url/api/v1/system/ping" 2>/dev/null | grep -q '"ok"'; then
+                record pass role "secondary; primary $url answers"
+            else
+                record fail role "the primary $url does not answer /api/v1/system/ping"
+            fi
+            if ! timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -qx yes; then
+                record warn ha-clock "HA needs both nodes' clocks within 30 s; enable NTP"
+            fi ;;
+        primary) record fail role "a primary is made on the HA page of a standalone installation" ;;
         *) record fail role "Unknown role '$ROLE'" ;;
     esac
 }

@@ -108,10 +108,13 @@ do_release
 begin switch "Switching to the new release"
 run systemctl stop veyra-worker veyra-api
 systemctl list-unit-files veyra-deployer.service >/dev/null 2>&1 && run systemctl stop veyra-deployer
+systemctl list-unit-files veyra-ha-agent.service >/dev/null 2>&1 && run systemctl stop veyra-ha-agent
 do_activate
 CURRENT_STEP="migrate"
 step "Applying database migrations"
-if ! run /usr/local/bin/veyra db upgrade; then
+if [[ "$(ha_role)" == "secondary" ]]; then
+    ok "Skipped on an HA standby: the schema arrives through replication (docs/HIGH_AVAILABILITY.md §12)"
+elif ! run /usr/local/bin/veyra db upgrade; then
     fail "Migration failed and was rolled back. Restoring the previous release."
     run ln -sfn "$OLD_RELEASE_DIR" "$VEYRA_PREFIX/current.new"
     run mv -T "$VEYRA_PREFIX/current.new" "$VEYRA_PREFIX/current"

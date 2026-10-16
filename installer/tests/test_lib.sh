@@ -107,6 +107,24 @@ if command -v node >/dev/null 2>&1; then
     t "polkit: start upgrade only, restart Veyra units only" test "$(node "$rule_js")" = "yes,no,no,no,yes,no"
 fi
 
+# High availability (Milestone 16): the agent unit renders and runs as root
+# with the runtime directory for its socket; the role helper reads node.json.
+render_template "$HERE/../templates/systemd/veyra-ha-agent.service.in" "$TMP/ha.service" \
+    VEYRA_PREFIX=/opt/veyra VEYRA_ETC=/etc/veyra
+t "ha-agent unit runs the agent" grep -q 'ExecStart=/opt/veyra/current/backend/.venv/bin/veyra ha agent' "$TMP/ha.service"
+t "ha-agent unit keeps /run/veyra" grep -qx 'RuntimeDirectory=veyra' "$TMP/ha.service"
+t "ha-agent unit is root" grep -qx 'User=root' "$TMP/ha.service"
+. "$HERE/../lib/steps.sh" 2>/dev/null || true
+VEYRA_DATA="$TMP/data"
+t "ha_role without node.json is standalone" test "$(ha_role)" = standalone
+mkdir -p "$TMP/data/ha"
+echo '{"role": "secondary", "epoch": 3}' >"$TMP/data/ha/node.json"
+t "ha_role reads node.json" test "$(ha_role)" = secondary
+echo 'not json' >"$TMP/data/ha/node.json"
+t "ha_role tolerates a broken node.json" test "$(ha_role)" = standalone
+t "install.sh accepts --role secondary with --join and --token" grep -q -- '--join) JOIN_URL=' "$HERE/../install.sh"
+t "preflight refuses --role primary" grep -q 'primary) record fail role' "$HERE/../preflight.sh"
+
 DRY_RUN=1
 t "dry-run does not execute" run touch "$TMP/should-not-exist"
 t "dry-run left no file" test ! -e "$TMP/should-not-exist"

@@ -29,14 +29,36 @@ ENGINE="$(sed -n 's/^VEYRA_TELEPHONY_ENGINE=//p' "$VEYRA_ETC/veyra.env" 2>/dev/n
 
 perm() { stat -c '%a %U:%G' "$1" 2>/dev/null || echo missing; }
 
+# --- HA role (docs/HIGH_AVAILABILITY.md §5): what node.json says decides
+# which services must run here.
+HA_ROLE=standalone
+if [[ -s "$VEYRA_DATA/ha/node.json" ]]; then
+    HA_ROLE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("role") or "standalone")' "$VEYRA_DATA/ha/node.json" 2>/dev/null || echo standalone)"
+fi
+
 # --- services
-services=(postgresql veyra-api veyra-worker veyra-firewall nginx)
-[[ "$ENGINE" == "asterisk" ]] && services+=(asterisk veyra-deployer veyra-pager)
+services=(postgresql veyra-api veyra-worker veyra-firewall nginx veyra-ha-agent)
+engine_units=()
+[[ "$ENGINE" == "asterisk" ]] && engine_units=(asterisk veyra-deployer veyra-pager)
+if [[ "$HA_ROLE" == "secondary" ]]; then
+    for svc in "${engine_units[@]}"; do
+        systemctl is-active --quiet "$svc" \
+            && check "service:$svc" fail "running on a standby (the agent stops it)" \
+            || check "service:$svc" pass "stopped (standby)"
+    done
+elif [[ "$HA_ROLE" == "primary" ]]; then
+    services+=("${engine_units[@]}")
+else
+    services+=("${engine_units[@]}")
+fi
 for svc in "${services[@]}"; do
     if systemctl is-active --quiet "$svc"; then
         check "service:$svc" pass "active"
     else
         check "service:$svc" fail "not active (journalctl -u $svc)"
+    fi
+    if [[ "$HA_ROLE" != "standalone" ]] && [[ " ${engine_units[*]} " == *" $svc "* ]]; then
+        continue  # the agent starts the engine units with the role; not enabled at boot
     fi
     systemctl is-enabled --quiet "$svc" 2>/dev/null || check "service:$svc" warn "not enabled at boot"
 done
@@ -308,3 +330,46 @@ PY
 fi
 (( FAILURES == 0 )) || { [[ $JSON == 1 ]] || fail "$FAILURES check(s) failed."; exit 1; }
 [[ $JSON == 1 ]] || ok "Installation verified."
+
+# --- high availability (docs/HIGH_AVAILABILITY.md §5): roles must agree, the
+# peer must answer, replication must stream and the file sync must be fresh.
+if [[ "$HA_ROLE" != "standalone" ]]; then
+    if ha="$(/usr/local/bin/veyra ha status --json 2>/dev/null)"; then
+        python3 - "$HA_ROLE" <<<"$ha" <<'PY' | while IFS=$'\t' read -r name status msg; do check "$name" "$status" "$msg"; done
+import json, sys
+role = sys.argv[1]
+st = json.load(sys.stdin)
+node, rep, sync = st["node"], st.get("replication") or {}, st.get("sync") or {}
+out = []
+db_role = rep.get("db_role")
+agree = (role == "primary" and db_role == "primary" and st.get("holds_address")) or (
+    role == "secondary" and db_role == "standby" and not st.get("holds_address")
+)
+out.append(("ha-role", "pass" if agree else "fail",
+            f"{role}, database {db_role}, service address {'held' if st.get('holds_address') else 'not held'}"
+            + ("" if agree else " (node.json, the database and the address disagree)")))
+if role == "primary":
+    state = rep.get("state")
+    out.append(("ha-replication", "pass" if state == "streaming" else "warn",
+                f"{state or 'no standby connected'}; lag {rep.get('lag_bytes')} bytes"))
+else:
+    recv = rep.get("receiver")
+    out.append(("ha-replication", "pass" if recv == "streaming" else "fail",
+                f"WAL receiver {recv or 'stopped'}; replay {rep.get('replay_lsn')}"))
+    last = sync.get("last_success_at")
+    out.append(("ha-sync", "pass" if last and not sync.get("last_error") else "warn",
+                f"last success {last or 'never'} {sync.get('last_error') or ''}".strip()))
+peer = st.get("peer") or {}
+reach = st.get("peer_reachable")
+same = peer.get("version") == st.get("version")
+out.append(("ha-peer", "pass" if reach and same else ("warn" if reach else "fail"),
+            f"{node.get('peer', {}).get('node_name') or 'no peer'} "
+            + ("reachable" if reach else "unreachable")
+            + (f", version {peer.get('version')}" + ("" if same else f" (this node {st.get('version')})") if reach else "")))
+for row in out:
+    print("\t".join(row))
+PY
+    else
+        check ha-agent fail "veyra ha status failed (journalctl -u veyra-ha-agent)"
+    fi
+fi
