@@ -247,9 +247,43 @@ export interface OriginateResult {
   message: string;
 }
 
+/** One registered contact and where it registers from (docs/CALL_FEATURES.md §2.1). */
+export interface RegistrationContact {
+  uri: string;
+  /** The address the phone put in its Contact header (its own, often private). */
+  contact_host: string | null;
+  contact_port: number | null;
+  /** Where the registration actually arrived from (public behind NAT). */
+  source_host: string | null;
+  source_port: number | null;
+  nat: boolean;
+  transport: string | null;
+  user_agent: string | null;
+  expires_at: string | null;
+  status: string | null;
+  rtt_ms: number | null;
+}
+
 export interface Registration {
   registered: boolean;
   channels: number;
+  contacts: RegistrationContact[];
+}
+
+export interface RegistrationRow extends RegistrationContact {
+  endpoint: string;
+  extension_id: string | null;
+  extension_number: string | null;
+  extension_name: string | null;
+  organization_id: string | null;
+  organization_name: string | null;
+}
+
+export interface Registrations {
+  registrations: RegistrationRow[];
+  available: boolean;
+  message: string | null;
+  unregistered: number;
 }
 
 export interface ApplyResult {

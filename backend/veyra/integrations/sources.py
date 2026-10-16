@@ -201,6 +201,16 @@ def registrations(db: Session, adapter: Any) -> int:
         statuses = adapter.endpoint_statuses()
     except Exception:
         return 0
+    # Where each endpoint registers from (CALL_FEATURES.md §2.1), when the
+    # engine can say; the event then carries the source and contact addresses.
+    details: dict[str, Any] = {}
+    caps: set[Any] = getattr(adapter, "capabilities", lambda: set())()
+    if "registrations" in {str(c) for c in caps}:
+        try:
+            for r in adapter.registrations():
+                details.setdefault(r.endpoint, r)
+        except Exception:
+            details = {}
     previous = _setting(db, REG_STATE_KEY)
     first = not previous
     current: dict[str, Any] = {}
@@ -208,8 +218,20 @@ def registrations(db: Session, adapter: Any) -> int:
     for s in statuses:
         name = s.endpoint
         registered = bool(s.registered)
+        d = details.get(name)
         address = s.contacts[0] if s.contacts else None
-        current[name] = {"registered": registered, "address": address}
+        if d is not None and d.source_host:
+            address = f"{d.source_host}:{d.source_port}" if d.source_port else d.source_host
+        current[name] = {
+            "registered": registered,
+            "address": address,
+            "contact_address": (
+                f"{d.contact_host}:{d.contact_port}"
+                if d and d.contact_host and d.contact_port
+                else (d.contact_host if d else None)
+            ),
+            "nat": bool(d.nat) if d else False,
+        }
         before = previous.get(name)
         if not first and (before is None or before.get("registered") != registered):
             if before is None and not registered:
@@ -229,7 +251,10 @@ def registrations(db: Session, adapter: Any) -> int:
                 "extension": {"number": ext.number, "name": ext.display_name},
                 "registered": current[name]["registered"],
                 "address": current[name]["address"],
-                "user_agent": s.user_agent,
+                "contact_address": current[name].get("contact_address"),
+                "nat": current[name].get("nat", False),
+                "user_agent": (details[name].user_agent if name in details else None)
+                or s.user_agent,
             },
         )
     db.commit()

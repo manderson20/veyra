@@ -2,9 +2,11 @@
 
 How Veyra manages extensions, their SIP credentials and the numbering plan,
 and how secrets are protected at rest. Delivered in Milestone 4. Live
-registration status and internal calling tests follow in Milestone 5;
+registration status and internal calling tests followed in Milestone 5,
 device provisioning (which removes the need to type credentials into
-phones) in Milestone 9.
+phones) in Milestone 9, and where each phone registers from (its source
+address, public behind NAT, next to the address the phone reports) in
+Milestone 18 ([CALL_FEATURES.md](CALL_FEATURES.md) §2.1).
 
 ## 1. What an extension is
 

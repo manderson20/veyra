@@ -31,6 +31,7 @@ class Capability(StrEnum):
     QUEUES = "queues"
     PAGING = "paging"
     RECORDING = "recording"
+    REGISTRATIONS = "registrations"  # per-contact registration details (addresses)
 
 
 EngineState = Literal[
@@ -64,6 +65,36 @@ class EndpointStatus:
     registered: bool
     contacts: list[str] = field(default_factory=list)
     user_agent: str | None = None
+
+
+@dataclass(frozen=True)
+class Registration:
+    """One registered contact of an endpoint (docs/CALL_FEATURES.md §2.1).
+
+    ``contact_host``/``contact_port`` is the address the phone put in its
+    Contact header (its own, often private, address); ``source_host``/
+    ``source_port`` is where the REGISTER actually came from (public when
+    the phone is behind NAT). ``nat`` is true when they differ.
+    """
+
+    endpoint: str
+    uri: str
+    contact_host: str | None = None
+    contact_port: int | None = None
+    source_host: str | None = None
+    source_port: int | None = None
+    transport: str | None = None
+    user_agent: str | None = None
+    expires_at: str | None = None  # ISO 8601, UTC
+    status: str | None = None  # engine wording: Avail, Unavail, NonQual, Unknown
+    rtt_ms: float | None = None
+    reg_server: str | None = None
+
+    @property
+    def nat(self) -> bool:
+        return bool(
+            self.source_host and self.contact_host and self.source_host != self.contact_host
+        )
 
 
 @dataclass(frozen=True)
@@ -111,6 +142,10 @@ class TelephonyAdapter(ABC):
 
     def active_calls(self) -> list[ActiveCall]:
         raise NotSupported(f"{self.name}: active calls not implemented yet")
+
+    def registrations(self) -> list[Registration]:
+        """Every registered contact with its addresses (Capability.REGISTRATIONS)."""
+        raise NotSupported(f"{self.name}: registration details not implemented")
 
     def originate(
         self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30

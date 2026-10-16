@@ -1,0 +1,272 @@
+# Call Features (Milestones 18 and 19)
+
+Design for the first two FreePBX-parity milestones ([ROADMAP.md](ROADMAP.md)
+rows 18 and 19; [FREEPBX_GAP_ANALYSIS.md](FREEPBX_GAP_ANALYSIS.md) §4 item 1).
+Milestone 18 (0.24.0) delivers **diagnostics** the owner asked for on
+2026-10-16 (where phones register from, packet capture) and the
+**extension-centred** features: Do Not Disturb, call forwarding, find me /
+follow me, per-extension outbound caller ID, intercom and auto-answer,
+transfer to voicemail, the voicemail operator, class of service and a
+feature-code page. Milestone 19 (0.25.0) delivers the **call-flow**
+features: parking, conferences, announcements, the dial-by-name directory,
+day/night toggles, time-condition override, the caller blacklist, queue
+agent log-in and pause, the queue break-out menu and the in-call codes.
+The diagnostics come first so they can be used while the rest is tested.
+
+## 1. Principles
+
+1. **State lives in the database, not only in the engine.** DND, forwards
+   and toggles set from a phone are written back to Veyra (through the ARI
+   event stream or a dialplan `UserEvent`), so the interface, the user
+   portal (Milestone 20) and the generator always agree. The engine's
+   `AstDB` is a cache the generator seeds; it never holds the truth.
+2. **Feature codes are data.** One table of codes per installation with the
+   FreePBX defaults (so a migrating site keeps its habits), renamable and
+   switchable per code; the generator reads them; the Companion and the
+   phone templates learn them from the API.
+3. **Nothing an extension does can exceed its class of service.** External
+   forwards and follow-me legs are outbound calls from the extension and
+   follow its routes, its caller-ID rules and its class.
+4. **Per organization.** Every object is tenant-scoped; numbers and codes
+   live in the organization's engine namespace ([MULTI_TENANCY.md](MULTI_TENANCY.md)).
+5. **Root only where the kernel requires it.** Packet capture runs as root
+   through a fixed unit; nothing else in these milestones does.
+
+## 2. Diagnostics (Milestone 18, built first)
+
+### 2.1 Where each phone registers from
+
+Owner request: "see what IP addresses endpoints are registering from
+(local/public when necessary)". ARI's `/endpoints` only says online or
+offline. PJSIP keeps the facts in its contact objects, persisted in the
+Asterisk database (`database show registrar/contact`, one JSON object per
+contact with `uri`, `via_addr`, `via_port`, `user_agent`, `expiration_time`,
+`reg_server`, `endpoint`) and listed with reachability and round-trip time
+by `pjsip show contacts`. Both are read over the CLI socket the service
+account already has (`veyra/telephony/asterisk/cli.py`), parsed in
+`contacts.py` without a shell, joined on the contact URI and cached for
+five seconds.
+
+Two addresses per contact, named plainly in the interface:
+
+| Field | Meaning |
+|---|---|
+| `source_host`, `source_port` | where the REGISTER actually arrived from (the Via address PJSIP recorded). Public when the phone sits behind a remote NAT; the LAN address for a local phone |
+| `contact_host`, `contact_port` | what the phone put in its Contact header: its own address, usually private |
+| `nat` | the two differ |
+| `transport`, `user_agent`, `expires_at`, `status` (`Avail`, `Unavail`, `NonQual`), `rtt_ms` | from the URI parameters, the store and the listing |
+
+Adapter: `Capability.REGISTRATIONS`, `registrations() -> list[Registration]`.
+API: `GET /telephony/registrations[?organization_id=&q=]` (`extensions.read`,
+scoped like the extension list; platform administrators also see contacts no
+extension claims), and `registration.contacts` on every extension. Webhook
+`registration.changed` carries `address` (source), `contact_address` and
+`nat`. Interface: Telephony → Registrations (search, organization filter,
+refresh every ten seconds, NAT badge, reachability and expiry) and a
+"Registers from" column on Extensions. Addresses are not written to the
+audit log. Trunk registrations (Veyra registering to a carrier, issue #45)
+are a different object, `pjsip show registrations`, and join this page in
+the same milestone.
+
+### 2.2 Packet capture
+
+Owner request: "the ability to do packet captures for testing". System →
+Diagnostics → Captures (platform administrators, permission
+`diagnostics.capture`):
+
+* **Start** with a filter built from data, never typed: an extension or
+  device (its current source address and the SIP ports), a trunk (its
+  host), an address or network, or "all SIP" (the SIP transports' ports);
+  **RTP** is a separate tick box because media is sensitive; a duration
+  (default 2 min, max 30) and a size limit (default 50 MB, max 500).
+* A root unit `veyra-capture@<id>.service`, started through polkit like
+  `veyra-backup@` ([PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) §2.2),
+  runs one fixed `tcpdump` command: `-i any -nn -s 0 -w <file> -G <seconds>
+  -W 1 -C <mb>` plus a BPF expression Veyra assembles from validated
+  fields (`host`, `net`, `port`, `portrange`); the unit refuses anything
+  else. Files land in `/var/lib/veyra/captures/<id>.pcap` (root:veyra
+  0640). `veyra capture start|stop|list` for the console.
+* The page lists captures (status, started, duration, size, packets,
+  filter, who), **stops** a running one, **downloads** the `.pcap` (audited
+  `capture.download`; a one-time notice reminds the operator that captures
+  can contain call content and personal data) and **deletes** it.
+* A **SIP summary** is parsed from the file in Python (`dpkt`-free, own
+  minimal pcap reader): one row per SIP message (time, source, destination,
+  method or response, Call-ID, From, To, User-Agent), grouped by dialog, so
+  the common "why does this phone not register" needs no Wireshark.
+* Retention class `captures` (default 7 days, [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) §4).
+  Captures are per node and are not synced to an HA standby. `verify.sh`
+  checks the unit, the polkit rule and the directory. Model `Capture`
+  (migration `0032`), table `captures`.
+
+### 2.3 Diagnostics page
+
+The P2 row "Asterisk logfiles and CLI in the browser" as a safe subset:
+a **log tail** of `/var/log/asterisk/full` and `security.log` (last N
+lines, filter, audited `diagnostics.log_read`) and **engine queries** from
+a fixed list (`pjsip show endpoint <name>`, `pjsip show contacts`, `core
+show channels verbose`, `pjsip show registrations`, `database show
+registrar`), arguments validated, every query audited. No free-form CLI.
+
+## 3. Extension call features (Milestone 18)
+
+### 3.1 Feature codes
+
+Table `feature_codes` (per installation; migration `0032`): `key`, `code`,
+`enabled`, `description`. Defaults follow FreePBX so a migrating site keeps
+its habits; the existing Veyra codes stay (`*43`, `*60`, `*95`, `*97`,
+`*98`, `*8`, `**<ext>`):
+
+| Key | Default | Milestone |
+|---|---|---|
+| `dnd_on`, `dnd_off`, `dnd_toggle` | `*78`, `*79`, `*76` | 18 |
+| `cf_on`, `cf_off`, `cfb_on`, `cfb_off`, `cfu_on`, `cfu_off` | `*72`, `*73`, `*90`, `*91`, `*52`, `*53` | 18 |
+| `fmfm_toggle` | `*21` | 18 |
+| `intercom` | `*80` | 18 |
+| `vm_direct` | `*` (prefix: `*<ext>`) | 18 |
+| `park`, `park_slot_prefix` | `70`, `71–79` | 19 |
+| `callflow_toggle_prefix`, `tc_override_prefix` | `*28`, `*27` | 19 |
+| `blacklist_add`, `blacklist_remove`, `blacklist_last` | `*30`, `*31`, `*32` | 19 |
+| `queue_login`, `queue_logout`, `queue_pause` | `*45`, `*46`, `*47` | 19 |
+| `record_toggle`, `attended_transfer`, `blind_transfer` | `*1`, `*2`, `##` | 19 |
+
+Codes may not collide with each other, with the numbering plan's reserved
+prefixes or with extensions; the API validates and the generator refuses a
+snapshot with a collision. `GET/PUT /telephony/feature-codes`; Telephony →
+Feature Codes lists them with what each does. Codes are also exported to
+templates (`{{feature_codes.dnd_toggle}}`) and the Companion.
+
+### 3.2 Do Not Disturb
+
+`extension_states` (one row per extension, migration `0032`): `dnd`,
+`cf_always`, `cf_busy`, `cf_no_answer`, `fmfm_enabled`, `updated_at`,
+`updated_by` (`phone`, `user`, `admin`). Phone: `*78`/`*79`/`*76` run a
+dialplan that answers, confirms with a prompt and raises
+`UserEvent(VeyraExtState,Extension:…,Field:dnd,Value:1)`; the API's ARI
+listener writes the row and publishes `extension.state_changed`. Interface:
+a switch on the extension page (and the user's own page in Milestone 20).
+Generator: the internal context checks `${DB(veyra/dnd/<org>/<ext>)}`,
+seeded from the table at deployment and kept current by the same event
+handler, before dialling; DND sends the call to the extension's busy
+destination (voicemail busy greeting by default). A BLF hint
+`*76<ext>` (custom device state) lights a key when DND is on.
+
+### 3.3 Call forwarding
+
+Three targets per extension: always, busy, no answer, each an internal or
+external number (external only when the class of service allows it) with
+the extension's own ring time (`ring_seconds`, 5–120, default 30; this also
+closes the gap that an extension without voicemail could not change its
+ring time). Phone: `*72<number>` or `*72` then prompt, `*73` off, likewise
+busy and no answer; same `UserEvent` path. Generator: the internal context
+reads the three `DB` keys, dials the forward target as a new leg through
+the organization's outbound routes (`Local/<number>@veyra-out-<org>`) with
+the extension's outbound caller ID (§3.5) and class (§3.8). An
+administrator sees and clears forwards on the extension page; a BLF hint
+shows CF state.
+
+### 3.4 Find me / follow me and external ring-group members
+
+`follow_me` per extension: `enabled`, `strategy` (`ringall`,
+`sequential`), `members` (extensions and external numbers with a per-member
+ring time), `initial_ring_seconds` (ring the desk first), `confirm_calls`
+(an external leg must press 1, so a mobile voicemail cannot swallow the
+call), `caller_id_mode` (`caller`, `extension`), `destination` when nobody
+answers. The generator emits one `Dial` with the legs, `Local` channels for
+external numbers through the outbound context, `confirm` through a short
+macro-free `Gosub`. Ring groups accept external members the same way
+(`ring_group_members.external_number`). Toggle from the phone with `*21`.
+
+### 3.5 Per-extension outbound caller ID
+
+Today the endpoint's `caller_id_number` reaches the carrier only when
+neither the route nor the trunk sets one (gap analysis §3.1, corrected
+2026-10-16). New fields on extensions: `outbound_caller_id_number`,
+`outbound_caller_id_name`. Precedence on a trunk call: emergency caller ID
+(emergency routes) → route caller ID when the route is marked **force** →
+extension outbound caller ID → route caller ID → trunk default. Validation:
+the number must be one of the organization's DIDs (`inbound_routes`), or
+be on a per-organization allow list, or the caller must hold
+`routing.write`; otherwise `422 caller_id_not_allowed`. Generator: the
+endpoint carries `set_var=VEYRA_OUT_CID=<number>` and the outbound
+context applies the precedence with `ExecIf`.
+
+### 3.6 Intercom and auto-answer
+
+`*80<ext>` dials the extension with `Alert-Info: <http://www.notuse.com>;info=alert-autoanswer`
+(Poly) and `Call-Info: <uri>;answer-after=0` (Yealink, Grandstream)
+headers through `PJSIP_HEADER(add,…)`, the called phone answers on
+speaker; per-extension `intercom` setting (`allow`, `deny`,
+`allow_from_group`) and a per-organization default. The templates set the
+matching phone option. Paging zones already use the same headers
+([PAGING_RECORDINGS.md](PAGING_RECORDINGS.md)).
+
+### 3.7 Transfer to voicemail and the voicemail operator
+
+`*<ext>` from a phone (direct dial or as a transfer target) goes straight to
+the box's unavailable greeting, `VoiceMail(<box>@<ns>,s)`. Voicemail boxes
+gain `operator_extension` (press 0 while the greeting plays → that
+extension, the organization's operator or a destination) and `locater`
+(press 1 → find me / follow me, press 2 → a second destination), rendered
+as `exitcontext` and the `o`/`a` options with a per-box context.
+
+### 3.8 Class of service
+
+`classes_of_service` per organization: `name`, `allowed_outbound_route_ids`,
+`allowed_feature_code_keys`, `allow_external_forwards`,
+`allow_external_follow_me`, `allow_intercom`, `max_outbound_calls`;
+extensions reference one (`class_of_service_id`, default class per
+organization = everything allowed, so nothing changes until an
+administrator restricts). Generator: `set_var=VEYRA_COS=<slug>` on the
+endpoint; each outbound route context and feature code starts with a
+`GotoIf` on the class's allow sets (a `DB` tree seeded at deployment);
+refusals play `pbx-invalid` and are counted (`cos.denied` in the call
+history outcome).
+
+## 4. Call-flow features (Milestone 19)
+
+Parking (`res_parking` lots per organization, `70` parks, `71–79` slots
+with hints, timeout return to the parker), conference rooms (`ConfBridge`
+with user and admin PINs, menu, recording to the recordings store, limit),
+announcements (play a prompt then continue to a destination), dial-by-name
+directory (`Directory()` on the organization's voicemail context, last or
+first name), call-flow toggles (`*28<n>` day/night per flow with BLF, two
+destinations), time-condition override (`*27<n>` temporary until the next
+change or permanent, BLF), caller blacklist (`*30`/`*31`/`*32`, anonymous
+callers, CSV, counts, per organization in `DB(veyra/blacklist/<org>)`),
+queue agents (`*45`/`*46`/`*47`, `AddQueueMember`/`PauseQueueMember`,
+hints, pause reasons), the queue break-out menu (press a key while waiting
+to leave a message or reach a destination) and the in-call codes
+(`features.conf` `applicationmap`: `*1` on-demand recording, `*2`
+attended, `##` blind transfer). Each gets its section in this document
+when Milestone 19 starts; the data model is sketched here so Milestone 18
+leaves room for it (destinations, feature codes, extension states).
+
+## 5. Permissions and API summary
+
+| Permission | Grants |
+|---|---|
+| `extensions.read` / `extensions.write` | registrations view; DND, forwards, follow-me, outbound caller ID, intercom, class assignment on an extension |
+| `routing.write` | classes of service, feature codes, caller-ID allow list |
+| `diagnostics.capture` | start, stop, download, delete captures (platform administrators by default) |
+| `diagnostics.read` | diagnostics page: log tail, engine queries |
+
+New endpoints: `/telephony/registrations`, `/telephony/feature-codes`,
+`/extensions/{id}/state` (DND, forwards), `/extensions/{id}/follow-me`,
+`/classes-of-service`, `/diagnostics/captures[/{id}[/download|/stop]]`,
+`/diagnostics/logs?file=&lines=&q=`, `/diagnostics/query`.
+
+## 6. Testing
+
+Generator tests per feature (contexts, precedence, class refusals), API
+tests (scoping, validation, audit), parser tests for contacts and pcap SIP
+summaries, installer tests for the capture unit. Live on dev1: register a
+phone from the LAN and one through NAT and compare the two addresses; a
+capture of a registration; DND, forwards and follow-me from a Poly VVX and
+a softphone; outbound caller ID observed at the carrier or in a capture.
+
+## 7. Known limitations (planned)
+
+Secure SIP stays in 17b. Presence-driven DND (from a calendar or Teams)
+is Milestone 20 or a module. Captures are per node. The SIP summary reads
+pcap files Veyra wrote; arbitrary uploads are not parsed.
