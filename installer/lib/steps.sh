@@ -584,6 +584,9 @@ do_telephony() {
     else
         ok "Asterisk configuration unchanged"
     fi
+    if [[ "$role" == "secondary" ]]; then
+        return
+    fi
     if [[ "$DRY_RUN" != "1" ]]; then
 
         for _ in $(seq 1 20); do

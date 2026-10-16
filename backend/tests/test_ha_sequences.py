@@ -152,8 +152,8 @@ def test_switchover_happy_path():
         "role:primary:4:online",
         "db_roles:dev2:dev1:4:rejoining",
         "migrate",
-        "deploy",
         "engine_start",
+        "deploy",
         "hold_address",
         "frozen:False",
     ]
@@ -235,8 +235,8 @@ def test_rejoin_demote_resume():
     assert op.status == "completed"
     assert node.calls == [
         "postgres_start",
-        "deploy",
         "engine_start",
+        "deploy",
         "hold_address",
         "role:primary:5:online",
         "frozen:False",
