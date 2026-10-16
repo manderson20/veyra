@@ -95,9 +95,10 @@ def record(db: Session, p: dict[str, Any]) -> Backup:
             id=uuid.uuid4(), kind=str(p.get("kind") or "manual"), path=str(p.get("path") or "")
         )
         db.add(row)
-    row.started_at = (
-        datetime.fromisoformat(str(p["started_at"])) if p.get("started_at") else utcnow()
-    )
+    if p.get("started_at"):
+        row.started_at = datetime.fromisoformat(str(p["started_at"]))
+    elif row.started_at is None:
+        row.started_at = utcnow()  # a later record (a deletion) keeps the start
     if p.get("finished_at"):
         row.finished_at = datetime.fromisoformat(str(p["finished_at"]))
     row.state = str(p.get("state") or "failed")

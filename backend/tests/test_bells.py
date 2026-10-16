@@ -39,6 +39,15 @@ DTEND:20261015T160000Z
 END:VEVENT
 END:VCALENDAR
 """
+# The API poll looks two days ahead from the real clock: a weekday-only rule
+# has nothing from Friday afternoon to Sunday, so the polled feed also
+# carries a daily event.
+ICS_POLLED = ICS.replace(
+    b"END:VCALENDAR",
+    b"BEGIN:VEVENT\nUID:daily@test\nSUMMARY:Bell: every day\n"
+    b"DTSTART;TZID=America/Chicago:20261012T120000\nDTEND;TZID=America/Chicago:20261012T120100\n"
+    b"RRULE:FREQ=DAILY\nEND:VEVENT\nEND:VCALENDAR",
+)
 
 
 def test_expand_handles_recurrence_exceptions_all_day_and_single_events():
@@ -85,7 +94,7 @@ def _setup(admin, app, monkeypatch):
             "audio_id": bell["id"],
         },
     ).json()
-    monkeypatch.setattr(calendars, "fetch", lambda url: ICS)
+    monkeypatch.setattr(calendars, "fetch", lambda url: ICS_POLLED)
     r = admin.post(
         "/api/v1/calendars",
         json={
