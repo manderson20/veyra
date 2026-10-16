@@ -8,6 +8,17 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.23.1 — 2026-10-16
+
+### Fixed
+- **CDR reader skipped a rotated file**: a rotated call-record file was recognised only by a changed inode or a smaller size; a new file that reused the inode and was exactly as long as the stored offset (possible after `logrotate`) was never read. The cursor now also keeps the first 128 bytes of the file and treats a different head as a new file.
+- Migration `0030` created `ix_backups_started_at` without the `Backup` model declaring it, so `alembic check` failed in CI.
+- Installer scripts: ShellCheck findings in the HA agent and NGINX steps (an unused variable, a flag that shared its name with an array) and the test library's source path.
+- CI: the secret scan lacked `pull-requests: read` and failed on every pull request; `actions/setup-node` 7.1.0; Dependabot now also watches `companion/`.
+
+### Changed
+- Dependencies, each set installed and tested together (Dependabot #1–#5, #7–#11, #50, #51, #53, #56, #62, #65–#67, #69, #70): fastapi 0.143.0, starlette 1.8.0, sqlalchemy 2.1.4, pydantic 2.14.1, cryptography 50.0.2, websockets 17.2 (the ARI event client's `connect(url, ping_interval=, ping_timeout=)` is unchanged on the asyncio implementation), setuptools ≥ 84; ruff 0.17.0, mypy 2.4.0; next 16.4.0, eslint 10.12.0, eslint-config-next 16.4.0, vite 8.3.4, vitest 5.0.4, @types/node 26.6.5, @types/chrome 0.3.5. TypeScript stays at 6.0.3 until typescript-eslint supports 7 (#47). The frontend build now emits 67 inline-script hashes for the CSP instead of 66.
+
 ## 0.23.0 — 2026-10-16 (Milestone 17)
 
 ### Added
