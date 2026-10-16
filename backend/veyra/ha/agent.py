@@ -132,7 +132,13 @@ class System:
 
 
 def default_system() -> System:
-    return System(postgres.subprocess_runner(), Path(sys.executable).parent / "veyra")
+    # The wrapper sources veyra.env and runs as the service account; the venv
+    # binary is the fallback for a checkout without an installation.
+    wrapper = Path("/usr/local/bin/veyra")
+    return System(
+        postgres.subprocess_runner(),
+        wrapper if wrapper.exists() else Path(sys.executable).parent / "veyra",
+    )
 
 
 VERBS: dict[str, str] = {
@@ -688,13 +694,19 @@ class Agent:
         n.address = str(args.get("address") or n.address)
         n.service = service
         n.synchronous = bool(args.get("synchronous"))
+        self.state.save_node(n)  # the steps below re-read node.json
         op = Operation(kind="enable", actor=str(args.get("actor") or "operator"))
 
         def run(op: Operation) -> Operation:
             sequences._step(self, op, "node-key", lambda: pub[:8] + "...")
             sequences._step(self, op, "replication-password", self._ensure_replication_password)
             sequences._step(
-                self, op, "certificates", lambda: self._certificates(service.name, [n.node_name])
+                self,
+                op,
+                "certificates",
+                lambda: self._certificates(
+                    service.name, [n.node_name], [n.address, service.address]
+                ),
             )
             sequences._step(self, op, "postgres", lambda: self._configure_postgres(n, restart=True))
             sequences._step(
@@ -744,18 +756,33 @@ class Agent:
                 raise AgentError("replication_role", r.stderr.strip()[:300])
             self.pg.grant_monitor(self.paths.database)
 
-    def _certificates(self, service_name: str, node_names: list[str]) -> str:
-        """HTTPS certificate for the service name and the nodes; PostgreSQL
-        server certificate for this node."""
+    def _certificates(
+        self, service_name: str, node_names: list[str], addresses: list[str] | None = None
+    ) -> str:
+        """HTTPS certificate for the service name, the nodes and their
+        addresses (node calls verify by address); PostgreSQL server
+        certificate for this node."""
         n = self.node()
         names = list(dict.fromkeys([service_name, *node_names, socket.gethostname(), "localhost"]))
+        ips = list(
+            dict.fromkeys(
+                a
+                for a in [
+                    *(addresses or []),
+                    n.address,
+                    n.service.address,
+                    n.peer.address if n.peer else "",
+                ]
+                if a
+            )
+        )
         changed = certs.widen_ca(self.paths.tls, names, self.system.run)
         certs.issue(
             self.paths.tls,
             names,
             self.paths.tls / "veyra.crt",
             self.paths.tls / "veyra.key",
-            addresses=[a for a in (n.address, n.service.address) if a],
+            addresses=ips,
             run=self.system.run,
         )
         # The leaf followed by the CA, as the installer writes it (clients
@@ -893,7 +920,7 @@ class Agent:
         if self.pg:
             self.pg.ensure_slot(postgres.slot_name(peer_name))
         self._configure_postgres(n, restart=False)
-        self._certificates(n.service.name, [n.node_name, peer_name])
+        self._certificates(n.service.name, [n.node_name, peer_name], [peer_address])
         # The new node's own PostgreSQL certificate, issued here with the CA key.
         tmp_crt, tmp_key = (
             self.paths.state / "peer-postgres.crt",
