@@ -12,6 +12,8 @@ Wants=network-online.target
 [Service]
 Type=exec
 User=root
+# The runtime directory becomes root:veyra so the API can reach the socket.
+Group=veyra
 EnvironmentFile=@VEYRA_ETC@/veyra.env
 WorkingDirectory=@VEYRA_PREFIX@/current/backend
 ExecStart=@VEYRA_PREFIX@/current/backend/.venv/bin/veyra ha agent

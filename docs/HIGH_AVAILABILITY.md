@@ -476,6 +476,10 @@ Where the build departs from or sharpens the sections above:
   the HA page says that phones and browsers must trust the new copy. The
   node's PostgreSQL certificate is issued by the primary and travels in the
   bundle, as does the HTTPS certificate for the service name and both nodes.
+* **PostgreSQL reads its certificate from `/var/lib/postgresql/veyra-tls/`**
+  (postgres-owned copies of the CA and the node certificate, refreshed by
+  the agent), because `/etc/veyra/tls` is root-only; the `conf.d` fragment
+  is written world-readable. The agent's runtime directory is `root:veyra`.
 * **Engine units are not enabled at boot on an HA node** (`asterisk`,
   `veyra-deployer`, `veyra-pager`): the agent starts them with the primary
   role (§7.3), the installer and `upgrade.sh` respect `node.json`.

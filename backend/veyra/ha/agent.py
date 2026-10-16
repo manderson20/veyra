@@ -199,6 +199,16 @@ class Paths:
     def ca_crt(self) -> Path:
         return self.tls / "ca.crt"
 
+    @property
+    def pg_tls(self) -> Path:
+        """Copies of the CA and the node's PostgreSQL certificate that the
+        ``postgres`` user can read (``/etc/veyra/tls`` is root-only)."""
+        return Path("/var/lib/postgresql/veyra-tls")
+
+    @property
+    def pg_ca(self) -> Path:
+        return self.pg_tls / "ca.crt"
+
 
 @dataclass
 class Agent:
@@ -239,7 +249,12 @@ class Agent:
         priv, pub = protocol.new_keypair()
         self.paths.node_key.parent.mkdir(parents=True, exist_ok=True)
         self.paths.node_key.write_text(priv + "\n")
-        os.chmod(self.paths.node_key, 0o600)
+        # root:veyra 0640 like the installation key: the API signs with it too.
+        os.chmod(self.paths.node_key, 0o640)
+        with contextlib.suppress(KeyError, PermissionError, OSError):
+            import grp
+
+            os.chown(self.paths.node_key, 0, grp.getgrnam("veyra").gr_gid)
         return pub
 
     def ca_pem(self) -> str | None:
@@ -396,7 +411,8 @@ class Agent:
             raise AgentError("no_peer", "No peer to rejoin.")
         password = self.replication_password()
         slot = postgres.slot_name(n.node_name)
-        ca = str(self.paths.ca_crt)
+        self._install_pg_tls()
+        ca = str(self.paths.pg_ca)
         r = self.pg.rewind(n.peer.address, password, ca)
         if r.ok:
             self.pg.write_standby(n.peer.address, password, ca, slot)
@@ -777,22 +793,58 @@ class Agent:
     def _configure_postgres(self, n: NodeState, *, restart: bool) -> None:
         if self.pg is None:
             raise AgentError("no_cluster", "No PostgreSQL cluster found.")
+        self._install_pg_tls()
         conf = postgres.render_conf(
             node_address=n.address or "localhost",
-            cert_file=str(self.paths.tls / "postgres.crt"),
-            key_file=str(self.paths.tls / "postgres.key"),
-            ca_file=str(self.paths.ca_crt),
+            cert_file=str(self.paths.pg_tls / "postgres.crt"),
+            key_file=str(self.paths.pg_tls / "postgres.key"),
+            ca_file=str(self.paths.pg_ca),
             synchronous_standby=postgres.slot_name(n.peer.node_name)
             if n.synchronous and n.peer
             else None,
         )
         self.pg.cluster.conf_d.mkdir(parents=True, exist_ok=True)
-        (self.pg.cluster.conf_d / postgres.CONF_NAME).write_text(conf)
+        fragment = self.pg.cluster.conf_d / postgres.CONF_NAME
+        fragment.write_text(conf)
+        os.chmod(fragment, 0o644)  # the agent's umask would hide it from postgres
         self._hba(n)
         if restart:
             r = self.pg.ctl("restart")
             if not r.ok:
                 raise AgentError("postgres_restart", r.stderr.strip()[:300])
+
+    def _install_pg_tls(self) -> None:
+        """Copy the CA and this node's PostgreSQL certificate where the
+        ``postgres`` user can read them."""
+        self.system.run(
+            [
+                "install",
+                "-d",
+                "-o",
+                "postgres",
+                "-g",
+                "postgres",
+                "-m",
+                "0700",
+                str(self.paths.pg_tls),
+            ]
+        )
+        for name, mode in (("ca.crt", "0644"), ("postgres.crt", "0644"), ("postgres.key", "0600")):
+            src = self.paths.tls / name
+            if src.exists():
+                self.system.run(
+                    [
+                        "install",
+                        "-o",
+                        "postgres",
+                        "-g",
+                        "postgres",
+                        "-m",
+                        mode,
+                        str(src),
+                        str(self.paths.pg_tls / name),
+                    ]
+                )
 
     def _hba(self, n: NodeState) -> None:
         if self.pg is None:
@@ -969,10 +1021,11 @@ class Agent:
     def _basebackup(self, n: NodeState) -> str:
         if self.pg is None or n.peer is None:
             raise AgentError("no_cluster", "No PostgreSQL cluster or peer.")
+        self._install_pg_tls()
         r = self.pg.basebackup(
             n.peer.address,
             self.replication_password(),
-            str(self.paths.ca_crt),
+            str(self.paths.pg_ca),
             postgres.slot_name(n.node_name),
         )
         if not r.ok:
@@ -1241,7 +1294,11 @@ class Agent:
         with contextlib.suppress(KeyError, PermissionError, OSError):
             import grp
 
-            os.chown(path, 0, grp.getgrnam("veyra").gr_gid)
+            gid = grp.getgrnam("veyra").gr_gid
+            os.chown(path, 0, gid)
+            # RuntimeDirectory= is root:root; the API connects as veyra.
+            os.chown(path.parent, 0, gid)
+            os.chmod(path.parent, 0o750)  # noqa: S103 - root:veyra, group reads only
         self.state.dir.mkdir(parents=True, exist_ok=True)
         log.info("HA agent listening on %s", path)
         t = threading.Thread(target=server.serve_forever, name="ha-socket", daemon=True)
