@@ -60,6 +60,7 @@ FIELDS = (
 )
 # A call is complete once no leg has arrived for this long after its end.
 SETTLE = timedelta(seconds=60)
+HEAD_BYTES = 128  # first bytes of the file, kept in the cursor to detect rotation
 TRUNK_PREFIX = "trunk-"
 _PJSIP_RE = re.compile(r"^PJSIP/(?P<endpoint>.+)-[0-9a-f]{8}$")
 _CLID_RE = re.compile(r'^\s*"?(?P<name>.*?)(?<!\\)"?\s*<(?P<number>[^>]*)>\s*$')
@@ -170,15 +171,23 @@ class CdrReader:
         row = db.get(SystemSetting, self.key)
         cursor: dict[str, Any] = dict(row.value) if row and isinstance(row.value, dict) else {}
         pos = int(cursor.get("offset", 0))
-        if cursor.get("inode") != st.st_ino or st.st_size < pos:
-            pos = 0  # new or rotated file: read it from the start
-        if st.st_size == pos:
-            return []
         with self.path.open("rb") as f:
+            head = f.read(HEAD_BYTES).decode("utf-8", "replace")
+            # A rotated file usually gets a new inode, but not always: the
+            # number can be reused at once, and the new file may be as long
+            # as the old offset. The first bytes of the file tell them apart.
+            if (
+                cursor.get("inode") != st.st_ino
+                or st.st_size < pos
+                or (pos and "head" in cursor and cursor["head"] != head)
+            ):
+                pos = 0  # new or rotated file: read it from the start
+            if st.st_size == pos:
+                return []
             f.seek(pos)
             data = f.read(max_bytes)
         end = data.rfind(b"\n") + 1
-        value = {"inode": st.st_ino, "offset": pos + end}
+        value = {"inode": st.st_ino, "offset": pos + end, "head": head}
         if row is None:
             db.add(SystemSetting(key=self.key, value=value))
         else:

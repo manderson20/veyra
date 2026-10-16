@@ -125,6 +125,7 @@ render_template "$HERE/../templates/systemd/veyra-ha-agent.service.in" "$TMP/ha.
 t "ha-agent unit runs the agent" grep -q 'ExecStart=/opt/veyra/current/backend/.venv/bin/veyra ha agent' "$TMP/ha.service"
 t "ha-agent unit keeps /run/veyra" grep -qx 'RuntimeDirectory=veyra' "$TMP/ha.service"
 t "ha-agent unit is root" grep -qx 'User=root' "$TMP/ha.service"
+# shellcheck source=installer/lib/steps.sh
 . "$HERE/../lib/steps.sh" 2>/dev/null || true
 VEYRA_DATA="$TMP/data"
 t "ha_role without node.json is standalone" test "$(ha_role)" = standalone

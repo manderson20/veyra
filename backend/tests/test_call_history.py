@@ -288,6 +288,38 @@ def test_reader_cursor_rotation_and_settle(admin, tmp_path):
         assert cdr.settle(db, now=call.ended_at + timedelta(seconds=61)) == 1
 
 
+def test_reader_detects_rotation_when_inode_is_reused(admin, tmp_path):
+    """A rotated file can get the old inode back and be as long as the old
+    offset; the first bytes of the file tell the reader it is new."""
+    _org, (a, _), (b, _), _, _ = _setup(admin)
+    f = tmp_path / "veyra.csv"
+    rec = line(
+        "3.3",
+        "3.3",
+        t(0),
+        t(0, 2),
+        t(1),
+        src="1001",
+        dst="1002",
+        channel=f"PJSIP/{a}-00000001",
+        dstchannel=f"PJSIP/{b}-00000002",
+    )
+    f.write_text(rec + "\n")
+    st = f.stat()
+    with session_scope() as db:
+        db.add(
+            SystemSetting(
+                key=cdr.CURSOR_KEY,
+                value={"inode": st.st_ino, "offset": st.st_size, "head": "an older file"},
+            )
+        )
+    reader = cdr.CdrReader(f)
+    with session_scope() as db:
+        assert reader.read(db) == [rec]
+        assert db.get(SystemSetting, cdr.CURSOR_KEY).value["head"] == (rec + "\n")[: cdr.HEAD_BYTES]
+        assert reader.read(db) == []
+
+
 def test_retention_prunes_old_calls(admin):
     _org, (a, _), (b, _), _, _ = _setup(admin)
     old = line(
