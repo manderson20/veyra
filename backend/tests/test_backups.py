@@ -428,3 +428,34 @@ def test_backup_alerts(admin):
         assert alerts.check_backups(db, utcnow()) == []
         service.save_settings(db, {"enabled": False}, None)
         db.commit()
+
+
+def test_scheduled_run_adopts_the_pending_row(admin, recorder):
+    """The worker's row (named by its clock) is the one the runner's report
+    updates, even when the runner's stamp is a second later; a pending row
+    the unit never reported on is failed after STALE_RUNNING_HOURS."""
+    now = datetime(2026, 10, 18, 9, 0, tzinfo=UTC)
+    with session_scope() as db:
+        assert service.tick(db, now, ZoneInfo("UTC")) is True
+        later = now + timedelta(seconds=1)
+        row = service.record(
+            db,
+            {
+                "name": policy.stamp(later),
+                "kind": "scheduled",
+                "state": "failed",
+                "path": f"/var/backups/veyra/{policy.stamp(later)}",
+                "started_at": later.isoformat(),
+                "finished_at": (later + timedelta(seconds=3)).isoformat(),
+                "error": "boom",
+            },
+        )
+        db.commit()
+        assert db.query(Backup).filter_by(kind="scheduled").count() == 1
+        assert row.state == "failed" and row.path.endswith(policy.stamp(later))
+        # A second pending row that nobody reports on.
+        assert service.tick(db, now + timedelta(days=1), ZoneInfo("UTC")) is True
+        pending = db.query(Backup).filter_by(kind="scheduled", state="running").one()
+        service.tick(db, now + timedelta(days=1, hours=9), ZoneInfo("UTC"))
+        db.refresh(pending)
+        assert pending.state == "failed" and "did not report" in (pending.error or "")

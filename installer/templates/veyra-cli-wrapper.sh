@@ -31,6 +31,12 @@ if [[ "${1:-}" == "firewall" && "${2:-}" == "off" ]]; then
     fi
     exit 0
 fi
+# Backups (docs/PRODUCTION_HARDENING.md §2): taking and restoring one run as
+# root; they use the root-only store and run pg_dump/pg_restore as postgres.
+if [[ "${1:-}" == "backup" && ( "${2:-}" == "run" || "${2:-}" == "restore" ) ]]; then
+    set -a; . "$ENV_FILE"; set +a
+    exec "$VEYRA_BIN" "$@"
+fi
 # Installation key rotation (docs/PRODUCTION_HARDENING.md §3.1): root makes
 # the new key, the service account re-encrypts the database with it, root
 # installs it (keeping the previous key) and restarts the services.

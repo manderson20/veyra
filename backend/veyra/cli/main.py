@@ -1502,7 +1502,7 @@ def cmd_backup_list(args: argparse.Namespace) -> int:
         return 0
     for r in rows:
         print(
-            f"{r['started_at']}  {r['kind']:9} {r['state']:9} "
+            f"{str(r['started_at'])[:19]}  {r['kind']:9} {r['state']:9} "
             f"{r['bytes'] // (1024 * 1024):6} MB  {r['path']}"
         )
     return 0
