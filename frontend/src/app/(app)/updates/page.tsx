@@ -39,6 +39,7 @@ import type {
   UpdatePolicy,
   UpdateSource,
   UpgradeStatus,
+  HaStatus,
 } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
@@ -91,6 +92,22 @@ export default function UpdatesPage() {
   const manage = can("updates.manage");
 
   const installing = (available.data ?? []).some((u) => u.state === "installing");
+  // HA-aware updates (docs/HIGH_AVAILABILITY.md §12).
+  const ha = useApiData<HaStatus>(can("ha.read") ? "/ha/status" : null);
+  const [standbyBusy, setStandbyBusy] = useState(false);
+  const standbyCandidate = (available.data ?? []).find((u) => u.component === "veyra_core" && ["downloaded", "available"].includes(u.state));
+  const installOnStandby = async (version: string) => {
+    setStandbyBusy(true);
+    try {
+      await api.post("/ha/standby-upgrade", { version });
+      toast.success(`Installing ${version} on the standby`, "Watch System → High availability for its version to change, then switch over.");
+      ha.reload();
+    } catch (err) {
+      toast.error("Could not start the standby upgrade", errorMessage(err));
+    } finally {
+      setStandbyBusy(false);
+    }
+  };
 
   const checkNow = async () => {
     setChecking(true);
@@ -148,6 +165,14 @@ export default function UpdatesPage() {
       {central.data?.managed.updates ? (
         <Callout tone="info" title="Managed by the central console">
           {central.data.console_name ?? "The central console"} sets the update policy, source and recipients of this installation; changes made here are replaced at its next check-in. Under System → Central management you can take the update policy back.
+        </Callout>
+      ) : null}
+
+      {ha.data?.ha_enabled && ha.data.local.role === "primary" ? (
+        <Callout tone="info" title="Update the standby first">
+          {ha.data.peer ? <>The standby {ha.data.peer.node_name} runs <span className="mono">{ha.data.peer.software_version ?? "an unknown version"}</span>. </> : null}
+          Order for a pair: 1. install the release on the standby, 2. switch over to it, 3. install on the old primary (now the standby), 4. optionally switch back. The standby gets the artifact through the file sync.
+          {manage && standbyCandidate ? <> <Button size="sm" onClick={() => installOnStandby(standbyCandidate.version)} loading={standbyBusy}>Install {standbyCandidate.version} on the standby</Button></> : null}
         </Callout>
       ) : null}
 

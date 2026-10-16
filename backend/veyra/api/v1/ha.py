@@ -480,6 +480,34 @@ def remove_node(
     return _agent_call(settings, "remove-peer", actor=principal.label)
 
 
+class StandbyUpgradeIn(BaseModel):
+    version: str = Field(min_length=1, max_length=64)
+
+
+@router.post("/standby-upgrade", summary="Install a release on the standby first (§12)")
+def standby_upgrade(
+    body: StandbyUpgradeIn,
+    principal: Principal = Depends(require("updates.manage")),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """docs/HIGH_AVAILABILITY.md §12: the standby starts its own upgrade unit
+    with the artifact the file sync already brought it."""
+    local = _state_dir(settings).node()
+    if local is None or local.role != "primary":
+        raise ProblemError(
+            409, "Not the primary", "Start standby upgrades at the primary.", code="not_primary"
+        )
+    op = _state_dir(settings).operation()
+    if op is not None and op.running:
+        raise ProblemError(409, "Busy", "An HA operation is running.", code="busy")
+    out = _peer_call(db, settings, "run", {"verb": "upgrade", "args": {"version": body.version}})
+    _audit(db, principal, ctx, "ha.standby_upgrade", version=body.version)
+    db.commit()
+    return {"started": out.get("result", {}).get("started", body.version)}
+
+
 # ----------------------------------------------------------------- fencing, sync
 
 

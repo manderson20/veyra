@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, select
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from veyra.core.models import ClusterNode, Installation
 from veyra.core.models.base import utcnow
+from veyra.ha.state import StateDir
 
 HEARTBEAT_STALE_AFTER = timedelta(minutes=2)
 
@@ -25,7 +27,26 @@ def _db_role(db: Session) -> str | None:
     return "standby" if in_recovery else "primary"
 
 
-def cluster_status(db: Session) -> dict[str, Any]:
+def summary(mode: str, nodes: list[ClusterNode], local_state: str | None, now: datetime) -> str:
+    """healthy | degraded | isolated | standalone, for the dashboard tile
+    (docs/HIGH_AVAILABILITY.md §10)."""
+    if mode != "ha":
+        return "standalone"
+    if local_state == "isolated":
+        return "isolated"
+    for n in nodes:
+        if n.role not in ("primary", "secondary"):
+            continue
+        stale = n.last_heartbeat_at is None or now - n.last_heartbeat_at > HEARTBEAT_STALE_AFTER
+        if stale or n.state not in ("online", "frozen"):
+            return "degraded"
+        rep = n.replication or {}
+        if n.role == "secondary" and rep.get("receiver") not in (None, "streaming"):
+            return "degraded"
+    return "healthy"
+
+
+def cluster_status(db: Session, state_dir: Path | None = None) -> dict[str, Any]:
     inst = db.scalar(select(Installation))
     nodes = list(db.scalars(select(ClusterNode).order_by(ClusterNode.node_name)))
     now = utcnow()
@@ -47,7 +68,16 @@ def cluster_status(db: Session) -> dict[str, Any]:
             }
         )
     mode = inst.deployment_mode if inst else "standalone"
+    local_state: str | None = None
+    local_role: str | None = None
+    if state_dir is not None:
+        local = StateDir(state_dir).node()
+        if local is not None:
+            local_state, local_role = local.state, local.role
     return {
+        "summary": summary(mode, nodes, local_state, now),
+        "local_role": local_role,
+        "local_state": local_state,
         "deployment_mode": mode,
         "ha_enabled": mode == "ha",
         "automatic_failover": False,
