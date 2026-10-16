@@ -39,8 +39,8 @@ comparison also covers what a PBXact buyer gets.
 
 ## 2. Summary
 
-Counting every capability row below: Veyra has 60 (✔), has part of 43
-(◐), lacks 134 (✘) and deliberately leaves out 19 (—). The numbers flatter
+Counting every capability row below: Veyra has 59 (✔), has part of 45
+(◐), lacks 133 (✘) and deliberately leaves out 19 (—). The numbers flatter
 neither side: many missing rows are small dialplan features that a day of
 work closes, while several things Veyra has (multi-tenancy, a central
 console, signed updates, built-in HA, the paging engine, OIDC) FreePBX
@@ -111,7 +111,7 @@ below are the reasons a FreePBX site would hesitate.
 | Virtual extension (voicemail and follow-me without a device) | an extension can exist without a device, shared inboxes exist; no "virtual" type and no follow-me | ◐ | P2 (with follow-me) |
 | Custom/other extension (free-form dial string) | no | ✘ | P3 |
 | Display name and internal caller ID | yes | ✔ | |
-| **Outbound caller ID per extension** (`"name" <number>` on trunks) | outbound calls carry the route or trunk caller ID; per-extension value applies to internal calls only | ✘ | **P1** |
+| **Outbound caller ID per extension** (`"name" <number>` on trunks) | the extension's caller ID reaches the carrier only when neither the route nor the trunk sets one; a route or trunk caller ID always replaces it, so there is no per-extension outbound number that survives a trunk default, no separate outbound name and no DID validation | ◐ | **P1** |
 | Emergency caller ID per extension | yes, plus ELIN per site, location per extension and device, readiness checks | ✔ ahead | |
 | Do Not Disturb (`*78/*79/*76`, portal, presence-driven) | no | ✘ | **P1** |
 | Call forwarding unconditional, busy, no-answer (`*72/*73`, `*90/*91`, `*52/*53`, remote variants, ring timer) | no | ✘ | **P1** |
@@ -119,7 +119,7 @@ below are the reasons a FreePBX site would hesitate.
 | Call waiting toggle (`*70/*71`) | ring groups can ring busy members; no per-extension toggle | ✘ | P2 |
 | Internal auto-answer / intercom per extension | no | ✘ | **P1** (with intercom, §3.5) |
 | Outbound concurrency limit per extension | no | ✘ | P2 (toll-fraud control) |
-| Ring time per extension | yes (voicemail ring time 5–120 s) | ✔ | |
+| Ring time per extension | only through the voicemail box (5–120 s); an extension without voicemail rings a fixed 30 s | ◐ | P3 |
 | Optional destinations: no answer, busy, not reachable | voicemail only | ◐ | P2 |
 | Recording options per extension (four directions, on-demand allow/override, priority) | recording policies can select extensions; no per-direction extension flags, no on-demand `*1` | ◐ | P2 |
 | Call screening (caller says name) | no | ✘ | P3 |
