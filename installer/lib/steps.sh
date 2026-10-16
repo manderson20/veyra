@@ -161,6 +161,13 @@ ha_role() {
         || printf standalone
 }
 
+# The HA service address from node.json, empty when none.
+ha_service_address() {
+    local f="${VEYRA_DATA:-/var/lib/veyra}/ha/node.json"
+    [[ -s "$f" ]] || return 0
+    python3 -c 'import json,sys; print((json.load(open(sys.argv[1])).get("service") or {}).get("address") or "")' "$f" 2>/dev/null || true
+}
+
 do_database() {
     begin database "Configuring PostgreSQL"
     run systemctl enable --now postgresql
@@ -706,7 +713,12 @@ listen_directives() {
         addrs=("${LISTEN[@]}")
     else
         addrs=(127.0.0.1)
+        # The HA service address moves between the nodes; the agent's include
+        # file carries it (docs/HIGH_AVAILABILITY.md §2), never this list.
+        local service_addr
+        service_addr="$(ha_service_address)"
         for addr in $(host_addresses); do
+            [[ -n "$service_addr" && "$addr" == "$service_addr" ]] && continue
             if is_private_address "$addr" || [[ $ALLOW_PUBLIC == 1 ]]; then
                 addrs+=("$addr")
             else
@@ -763,6 +775,11 @@ do_nginx() {
         info "NGINX holds wildcard listeners on 80/443; a restart is needed to rebind"
         restart=1
     fi
+    # The HA agent fills these with the service address (empty otherwise).
+    local inc
+    for inc in nginx-ha-listen-http.conf nginx-ha-listen-https.conf; do
+        [[ -f "$VEYRA_ETC/$inc" ]] || run install -m 0644 -o root -g root /dev/null "$VEYRA_ETC/$inc"
+    done
     run nginx -t
     run systemctl enable nginx
     if (( restart )) || ! systemctl is-active --quiet nginx; then

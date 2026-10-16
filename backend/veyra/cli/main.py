@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import logging
 import os
 import sys
 import time
@@ -314,6 +315,9 @@ def cmd_updates_record(args: argparse.Namespace) -> int:
     from veyra.core.models import UpdateHistory
     from veyra.core.models.base import utcnow
 
+    if standby_tick(logging.getLogger("veyra.updates"), True):
+        print("HA standby: the upgrade is recorded by the primary's history after a switchover")
+        return 0
     with session_scope() as db:
         db.add(
             UpdateHistory(
