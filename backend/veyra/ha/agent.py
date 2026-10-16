@@ -605,8 +605,12 @@ class Agent:
             self.last_peer is None or not self.last_peer.reachable
         ) and health.reachable
         self.last_peer = health
-        if not self.busy and (not self.decided_once or became_reachable):
-            self.decided_once = True
+        # The §7.3 rules apply at the agent's start (a boot) and whenever the
+        # peer becomes reachable again. A running primary whose peer goes
+        # away keeps serving (§1 principle 6): it is never isolated while up.
+        first = not self.decided_once
+        self.decided_once = True
+        if not self.busy and (first or became_reachable):
             self.apply_decision(health)
         now = time.monotonic()
         if n.role == "secondary":

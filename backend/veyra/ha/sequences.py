@@ -179,8 +179,11 @@ def _take_epoch(node: Node, epoch: int, how: str) -> None:
 
 
 def _deploy_and_start(node: Node) -> None:
-    node.deploy()
+    # The deployer applies a revision by reloading the engine, so the engine
+    # starts first (with the files already on disk) and the fresh revision
+    # from the database follows at once.
     node.engine_start()
+    node.deploy()
 
 
 # ------------------------------------------------------------------ failover
