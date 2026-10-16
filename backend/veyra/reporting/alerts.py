@@ -62,6 +62,13 @@ RULES: dict[str, RuleDef] = {
         # Central console only (docs/CENTRAL_MANAGEMENT.md §6).
         RuleDef("instance_offline", "Instance not checking in", 0),
         RuleDef("instance_failed", "Instance unhealthy", 5),
+        # High availability (docs/HIGH_AVAILABILITY.md §10).
+        RuleDef("node_offline", "HA node offline", 2),
+        RuleDef("replication_broken", "Replication broken", 2),
+        RuleDef("replication_lag", "Replication lagging", 1, 64, "MB behind"),
+        RuleDef("ha_sync_failed", "File sync failing", 5),
+        RuleDef("node_isolated", "Primary isolated", 0),
+        RuleDef("ha_operation_failed", "HA operation failed", 0),
     )
 }
 SERVICES = ("veyra-api", "veyra-deployer", "veyra-pager", "veyra-firewall")
@@ -242,6 +249,79 @@ def check_central(db: Session, now: datetime) -> list[Finding]:
     return out
 
 
+def check_ha(db: Session, settings: Any, now: datetime, lag_mb: int) -> list[Finding]:
+    """The HA pair (docs/HIGH_AVAILABILITY.md §10), evaluated on the primary:
+    the peer's heartbeat, replication, the file sync, isolation, failed
+    operations."""
+    from veyra.core.models import ClusterNode, Installation
+    from veyra.ha import service as ha
+    from veyra.ha.state import StateDir
+
+    inst = db.scalar(select(Installation))
+    if inst is None or inst.deployment_mode != "ha":
+        return []
+    out: list[Finding] = []
+    state_dir = StateDir(settings.data_dir / "ha")
+    local = state_dir.node()
+    me = ha.local_name()
+    for n in db.scalars(select(ClusterNode).where(ClusterNode.node_name != me)):
+        if n.role not in ("primary", "secondary"):
+            continue
+        if n.last_heartbeat_at is None or now - n.last_heartbeat_at > ha.HEARTBEAT_STALE_AFTER:
+            out.append(
+                Finding("node_offline", n.node_name, f"{n.node_name} has not sent a heartbeat.")
+            )
+            continue
+        rep = n.replication or {}
+        if n.role == "secondary" and rep.get("receiver") not in ("streaming", None):
+            out.append(
+                Finding(
+                    "replication_broken",
+                    n.node_name,
+                    f"{n.node_name} is not receiving WAL ({rep.get('receiver')}).",
+                )
+            )
+        if n.sync_at is None or now - n.sync_at > timedelta(minutes=5):
+            out.append(
+                Finding("ha_sync_failed", n.node_name, f"The file sync to {n.node_name} is stale.")
+            )
+    mine = db.scalar(select(ClusterNode).where(ClusterNode.node_name == me))
+    if mine is not None and mine.role == "primary":
+        rep = mine.replication or {}
+        if rep.get("db_role") == "primary" and rep.get("state") is None:
+            out.append(Finding("replication_broken", me, "No standby is connected."))
+        lag = rep.get("lag_bytes")
+        secs = rep.get("lag_seconds")
+        if (lag is not None and lag > lag_mb * 1024 * 1024) or (secs is not None and secs > 60):
+            out.append(
+                Finding(
+                    "replication_lag",
+                    me,
+                    f"The standby is {(lag or 0) // (1024 * 1024)} MB and "
+                    f"{int(secs or 0)} s behind.",
+                )
+            )
+    if local is not None and local.state == "isolated":
+        out.append(
+            Finding(
+                "node_isolated",
+                local.node_name,
+                "This primary cannot reach its peer and is not serving calls; "
+                "confirm the peer is down and resume, or fix the link.",
+            )
+        )
+    op = state_dir.operation()
+    if op is not None and op.status == "failed":
+        out.append(
+            Finding(
+                "ha_operation_failed",
+                op.kind,
+                f"The {op.kind} started {op.started_at} failed: {op.error}",
+            )
+        )
+    return out
+
+
 def check_firewall(db: Session, now: datetime, threshold: int) -> list[Finding]:
     n = db.scalar(
         select(func.count())
@@ -389,6 +469,7 @@ def run(db: Session, settings: Any, adapter: Any | None, now: datetime | None = 
         lambda: check_certificate(certificate_days_left(), threshold("certificate")),
         lambda: check_firewall(db, now, threshold("firewall_bans")),
         lambda: check_central(db, now),
+        lambda: check_ha(db, settings, now, threshold("replication_lag")),
     ]
     if adapter is not None:
         checks += [

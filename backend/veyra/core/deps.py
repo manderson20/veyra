@@ -14,6 +14,7 @@ from veyra.core import audit
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
 from veyra.core.errors import ProblemError, forbidden
+from veyra.core.models import User
 from veyra.core.security import api_tokens, tokens
 from veyra.core.security.principal import Principal
 from veyra.core.security.sessions import load_principal, resolve_session
@@ -128,6 +129,21 @@ def current_principal(
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         raise unauthorized()
+    standby = getattr(request.app.state, "standby_sessions", None)
+    if standby is not None and (ss := standby.resolve(token)) is not None:
+        # The standby's in-memory session (docs/HIGH_AVAILABILITY.md §9).
+        if request.method not in SAFE_METHODS and not standby.csrf_ok(
+            ss, request.headers.get(CSRF_HEADER, "")
+        ):
+            raise ProblemError(
+                403, "Forbidden", "Missing or invalid CSRF token.", code="csrf_failed"
+            )
+        standby_user = db.get(User, ss.user_id)
+        if standby_user is None or not standby_user.is_active:
+            raise unauthorized("Your session has expired. Sign in again.")
+        principal = load_principal(db, standby_user, None)
+        request.state.principal = principal
+        return principal
     resolved = resolve_session(db, token, settings)
     if resolved is None:
         raise unauthorized("Your session has expired. Sign in again.")

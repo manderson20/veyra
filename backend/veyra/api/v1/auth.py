@@ -72,6 +72,10 @@ def _too_many(detail: str) -> ProblemError:
 class LoginIn(BaseModel):
     email: Email
     password: str = Field(min_length=1, max_length=1024)
+    # Only read on an HA standby, whose sign-in cannot open a pre-authentication
+    # session (docs/HIGH_AVAILABILITY.md §9): the authenticator code goes with
+    # the password.
+    code: str | None = Field(None, max_length=32)
 
 
 class MfaStatusOut(BaseModel):
@@ -349,6 +353,72 @@ def mfa_decision(db: Session, user: User, now: datetime) -> tuple[bool, bool, st
     return pending, enrolled, mfa_state
 
 
+def standby_login(
+    request: Request,
+    body: LoginIn,
+    response: Response,
+    db: Session,
+    settings: Settings,
+    ctx: RequestContext,
+) -> SessionOut:
+    """Sign-in on an HA standby (docs/HIGH_AVAILABILITY.md §9): password and
+    authenticator code checked against the replicated tables, no writes,
+    platform administrators only, session in the API process."""
+    import time
+
+    from veyra.api.v1.extensions import installation_key
+    from veyra.core.security import totp
+
+    failure = ProblemError(
+        401,
+        "Sign-in failed",
+        "The email address or password is incorrect.",
+        code="invalid_credentials",
+    )
+    user = db.scalar(select(User).where(User.email == body.email))
+    if user is None:
+        passwords.verify_dummy(body.password)
+        raise failure
+    now = utcnow()
+    if (user.locked_until and user.locked_until > now) or not user.is_active:
+        passwords.verify_dummy(body.password)
+        raise failure
+    if not passwords.verify_password(user.password_hash, body.password):
+        raise failure
+    principal = load_principal(db, user, None)
+    if not principal.is_platform_admin:
+        raise ProblemError(
+            403,
+            "Standby node",
+            "Only platform administrators can sign in on the standby node.",
+            code="ha_standby",
+        )
+    methods = [m for m in mfa.confirmed_methods(db, user.id) if m.type == mfa.METHOD_TOTP]
+    if methods:
+        key = installation_key(request)
+        code = totp.normalize_code(body.code or "")
+        matched = any(
+            m.secret_ciphertext
+            and totp.verify(
+                key.decrypt(m.secret_ciphertext, mfa.secret_purpose(user.id)),
+                code,
+                timestamp=time.time(),
+            )
+            is not None
+            for m in methods
+        )
+        if not matched:
+            raise ProblemError(
+                401 if body.code else 202,
+                "Second factor required",
+                "Enter the code from your authenticator app with your password.",
+                code="mfa_code_required",
+            )
+    token, csrf = request.app.state.standby_sessions.create(user.id)
+    _set_cookies(response, settings, token, csrf, max_age=3600)
+    return _session_out(db, user, principal, csrf)
+
+
 @router.post(
     "/login",
     response_model=SessionOut,
@@ -358,12 +428,15 @@ def mfa_decision(db: Session, user: User, now: datetime) -> tuple[bool, bool, st
 def login(
     body: LoginIn,
     response: Response,
+    request: Request,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     ctx: RequestContext = Depends(request_context),
 ) -> SessionOut | JSONResponse:
     if not _limiter(settings).hit(ctx.ip or "unknown"):
         raise _too_many("Too many sign-in attempts. Wait a minute and try again.")
+    if request.app.state.ha_guard.flags().standby:
+        return standby_login(request, body, response, db, settings, ctx)
     user = check_credentials(db, settings, ctx, body.email, body.password)
     now = utcnow()
     pending, _enrolled, mfa_state = mfa_decision(db, user, now)
@@ -391,10 +464,17 @@ def login(
 @router.post("/logout", response_model=MessageOut, summary="Sign out of the current session")
 def logout(
     response: Response,
+    request: Request,
     principal: Principal = Depends(current_principal),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
 ) -> MessageOut:
+    standby = getattr(request.app.state, "standby_sessions", None)
+    if principal.session_id is None and standby is not None:
+        standby.revoke(request.cookies.get(SESSION_COOKIE, ""))
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        response.delete_cookie(CSRF_COOKIE, path="/")
+        return MessageOut(message="Signed out.")
     if principal.session_id:
         s = db.get(UserSession, principal.session_id)
         if s:

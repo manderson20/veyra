@@ -160,6 +160,7 @@ VERBS: dict[str, str] = {
     "set-sync": "verb_set_sync",
     "set-fencing": "verb_set_fencing",
     "fence": "verb_fence",
+    "set-synchronous": "verb_set_synchronous",
     "set-peer-epoch": "verb_set_peer_epoch",
     "remove-peer": "verb_remove_peer",
     "standalone": "verb_standalone",
@@ -1103,6 +1104,18 @@ class Agent:
         if result is None:
             raise AgentError("no_fencing", "Fencing is not configured.")
         return {"result": result}
+
+    def verb_set_synchronous(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Synchronous replication on or off (§4.1); the setting is reloadable."""
+        n = self.node()
+        if n.role != "primary":
+            raise AgentError("not_primary", "Replication mode is set on the primary.")
+        n.synchronous = bool(args.get("synchronous"))
+        self.state.save_node(n)
+        self._configure_postgres(n, restart=False)
+        if self.pg:
+            self.pg.reload()
+        return {"synchronous": n.synchronous}
 
     def verb_set_peer_epoch(self, args: dict[str, Any]) -> dict[str, Any]:
         n = self.node()
