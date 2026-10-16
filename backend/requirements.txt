@@ -14,7 +14,7 @@ jinja2==3.1.6
 segno==1.6.6
 # WebSocket server (uvicorn picks it up) for the Companion call-event stream and
 # the ARI event client; pure Python, BSD, no dependencies (docs/COMPANION.md §2).
-websockets==15.0.1
+websockets==17.2
 # Multipart form parsing for prompt uploads (docs/VOICEMAIL_IVR.md §4); pure Python, Apache-2.0.
 python-multipart==0.0.32
 # iCalendar feeds for bell schedules (docs/PAGING_RECORDINGS.md §4): parsing and
