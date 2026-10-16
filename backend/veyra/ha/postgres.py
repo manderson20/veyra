@@ -424,6 +424,8 @@ class Postgres:
             "--source-server",
             self.conninfo(host, password, ca_file) + f" dbname={self.database}",
             "--restore-target-wal",
+            # Debian keeps postgresql.conf outside the data directory.
+            f"--config-file={self.cluster.conf_dir / 'postgresql.conf'}",
             "--no-ensure-shutdown",
         )
 

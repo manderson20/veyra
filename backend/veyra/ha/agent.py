@@ -743,6 +743,13 @@ class Agent:
                     service.name, [n.node_name], [n.address, service.address]
                 ),
             )
+            sequences._step(
+                self,
+                op,
+                "nginx",
+                lambda: self._nginx_service_listen(service.address),
+                "service address",
+            )
             sequences._step(self, op, "postgres", lambda: self._configure_postgres(n, restart=True))
             sequences._step(
                 self,
@@ -873,6 +880,34 @@ class Agent:
             r = self.pg.ctl("restart")
             if not r.ok:
                 raise AgentError("postgres_restart", r.stderr.strip()[:300])
+
+    def _nginx_service_listen(self, address: str | None) -> None:
+        """NGINX listens on the service address on both nodes (§2): the
+        include files the installer's site template reads, plus
+        ``ip_nonlocal_bind`` so the standby's NGINX starts without the
+        address. Empty files when the node leaves the cluster."""
+        http = self.paths.config_dir / "nginx-ha-listen-http.conf"
+        https = self.paths.config_dir / "nginx-ha-listen-https.conf"
+        if address:
+            http.write_text(f"    listen {address}:80;\n")
+            https.write_text(f"    listen {address}:443 ssl;\n")
+            sysctl = Path("/etc/sysctl.d/90-veyra-ha.conf")
+            with contextlib.suppress(OSError):
+                sysctl.write_text(
+                    "# Managed by Veyra: NGINX binds the HA service address before it is held.\n"
+                    "net.ipv4.ip_nonlocal_bind = 1\n"
+                )
+            self.system.run(["sysctl", "-q", "-w", "net.ipv4.ip_nonlocal_bind=1"])
+        else:
+            http.write_text("")
+            https.write_text("")
+        for f in (http, https):
+            os.chmod(f, 0o644)
+        r = self.system.run(["nginx", "-t"])
+        if r.ok:
+            self.system.systemctl("reload", "nginx")
+        else:
+            log.warning("nginx -t failed after the HA listen change: %s", r.stderr.strip()[:300])
 
     def _install_pg_tls(self) -> None:
         """Copy the CA and this node's PostgreSQL certificate where the
@@ -1072,6 +1107,13 @@ class Agent:
                 self, op, "postgres-conf", lambda: self._configure_postgres(n, restart=False)
             )
             sequences._step(self, op, "postgres-start", self.postgres_start)
+            sequences._step(
+                self,
+                op,
+                "nginx",
+                lambda: self._nginx_service_listen(n.service.address),
+                "service address",
+            )
             self.system.systemctl("disable", *ENGINE_UNITS)
             sequences._step(self, op, "sync", lambda: self.run_sync(force=True))
             n.state = "online"
@@ -1269,6 +1311,8 @@ class Agent:
             n.role, n.state = "standalone", "online"
             self.state.save_node(n)
             self.system.systemctl("enable", *ENGINE_UNITS)
+            # The service address stays here (§8) but no longer moves.
+            self._nginx_service_listen(n.service.address or None)
         return out
 
     def verb_standalone(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -1284,6 +1328,7 @@ class Agent:
         self.system.veyra_db("standalone", {"node_name": n.node_name})
         self.system.systemctl("enable", *ENGINE_UNITS)
         self.release_address()
+        self._nginx_service_listen(None)
         return {"role": "standalone"}
 
     def verb_upgrade(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -1393,7 +1438,25 @@ class Agent:
         self.loop(once=once)
         server.shutdown()
 
+    def ensure_nginx_listen(self) -> None:
+        """At start: the include files match the node's service address."""
+        n = self.node()
+        want = (
+            f"    listen {n.service.address}:443 ssl;\n"
+            if n.ha_enabled and n.service.address
+            else ""
+        )
+        https = self.paths.config_dir / "nginx-ha-listen-https.conf"
+        try:
+            current = https.read_text()
+        except OSError:
+            current = None
+        if current != want:
+            self._nginx_service_listen(n.service.address if n.ha_enabled else None)
+
     def loop(self, *, once: bool = False) -> None:
+        with contextlib.suppress(Exception):
+            self.ensure_nginx_listen()
         while True:
             try:
                 self.tick()

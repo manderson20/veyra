@@ -39,6 +39,7 @@ render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx.conf" \
     "LISTEN_HTTP=    listen 127.0.0.1:80;" "LISTEN_HTTPS=    listen 127.0.0.1:443 ssl;" \
     API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra HTTP_PROVISIONING=
 t "nginx template has the provisioning location" grep -q 'location /provisioning/ {' "$TMP/nginx.conf"
+t "nginx template includes the HA listen files" grep -q 'include /etc/veyra/nginx-ha-listen-https.conf;' "$TMP/nginx.conf"
 t "nginx template serves firmware from the data directory" grep -q 'alias /var/lib/veyra/firmware/;' "$TMP/nginx.conf"
 t "nginx template has no HTTP provisioning by default" not grep -q 'Provisioning over plain HTTP' "$TMP/nginx.conf"
 block="$(sed -e 's|@VEYRA_DATA@|/var/lib/veyra|g' -e 's|@VEYRA_ETC@|/etc/veyra|g' "$HERE/../templates/nginx/provisioning-http.conf.in")"
