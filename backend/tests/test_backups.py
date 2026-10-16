@@ -459,3 +459,17 @@ def test_scheduled_run_adopts_the_pending_row(admin, recorder):
         service.tick(db, now + timedelta(days=1, hours=9), ZoneInfo("UTC"))
         db.refresh(pending)
         assert pending.state == "failed" and "did not report" in (pending.error or "")
+
+
+def test_settings_partial_update_keeps_the_rest(admin):
+    r = admin.put(
+        "/api/v1/backups/settings",
+        json={"recipients": ["age1tjp6mpjd2jcnsyujzl4efy36jy4zm9mawtqfkkrn2nnflcxwhfkq9cxc3m"]},
+    )
+    assert r.status_code == 200 and len(r.json()["recipients"]) == 1
+    r = admin.put("/api/v1/backups/settings", json={"copy_dir": "/mnt/backups"})
+    assert r.status_code == 200
+    assert len(r.json()["recipients"]) == 1 and r.json()["copy_dir"] == "/mnt/backups"
+    assert r.json()["time"] == "02:30" and r.json()["enabled"] is True
+    r = admin.put("/api/v1/backups/settings", json={"recipients": [], "copy_dir": ""})
+    assert r.json()["recipients"] == [] and r.json()["copy_dir"] == ""
