@@ -364,7 +364,6 @@ do_ha_agent() {
     run systemctl enable veyra-ha-agent
     run systemctl restart veyra-ha-agent
     if [[ "$DRY_RUN" != "1" ]]; then
-        local i
         for _ in $(seq 1 20); do
             [[ -S /run/veyra/ha.sock ]] && break
             sleep 0.5
@@ -788,9 +787,9 @@ do_nginx() {
     # new configuration and keeps the old one. So the server is restarted
     # whenever the site changes or a wildcard listener is present, and only
     # reloaded otherwise (upgrades with an unchanged site).
-    local restart=0
-    cmp -s "$tmp" /etc/nginx/sites-available/veyra.conf || restart=1
-    [[ -L /etc/nginx/sites-enabled/veyra.conf ]] || restart=1
+    local nginx_restart=0
+    cmp -s "$tmp" /etc/nginx/sites-available/veyra.conf || nginx_restart=1
+    [[ -L /etc/nginx/sites-enabled/veyra.conf ]] || nginx_restart=1
     install_managed_file "$tmp" /etc/nginx/sites-available/veyra.conf 0644 root:root
     rm -f "$tmp"
     install_managed_file "$SCRIPT_DIR/templates/nginx/proxy.conf" "$VEYRA_ETC/nginx-proxy.conf" 0644 root:root
@@ -799,12 +798,12 @@ do_nginx() {
         # Only the symlink is removed; /etc/nginx/sites-available/default is untouched.
         run rm /etc/nginx/sites-enabled/default
         info "Disabled the NGINX default site (re-enable by restoring its symlink)"
-        restart=1
+        nginx_restart=1
     fi
     if ss -H -ltn '( sport = :80 or sport = :443 )' 2>/dev/null | awk '{print $4}' \
         | grep -qE '^(0\.0\.0\.0|\[::\]|\*):'; then
         info "NGINX holds wildcard listeners on 80/443; a restart is needed to rebind"
-        restart=1
+        nginx_restart=1
     fi
     # The HA agent fills these with the service address (empty otherwise).
     local inc
@@ -813,7 +812,7 @@ do_nginx() {
     done
     run nginx -t
     run systemctl enable nginx
-    if (( restart )) || ! systemctl is-active --quiet nginx; then
+    if (( nginx_restart )) || ! systemctl is-active --quiet nginx; then
         run systemctl restart nginx
     else
         run systemctl reload nginx

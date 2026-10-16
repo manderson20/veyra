@@ -171,7 +171,9 @@ class Backup(UUIDPrimaryKey, Base):
     __tablename__ = "backups"
 
     kind: Mapped[str] = mapped_column(String(16))  # scheduled | manual | upgrade
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # running | verified | failed | deleted
     state: Mapped[str] = mapped_column(String(16), default="running")
