@@ -40,7 +40,7 @@ render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx.conf" \
     API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra HTTP_PROVISIONING= \
     "CSP_SCRIPT_SRC= 'sha256-abc='"
 t "nginx template renders script hashes into the CSP" grep -q "script-src 'self' 'sha256-abc=';" "$TMP/nginx.conf"
-t "nginx template sets Permissions-Policy" grep -q 'Permissions-Policy' "$TMP/nginx.conf"
+t "nginx template sets Permissions-Policy once" test "$(grep -c 'Permissions-Policy' "$TMP/nginx.conf")" = 1
 t "nginx template has the provisioning location" grep -q 'location /provisioning/ {' "$TMP/nginx.conf"
 t "nginx template includes the HA listen files" grep -q 'include /etc/veyra/nginx-ha-listen-https.conf;' "$TMP/nginx.conf"
 t "nginx template serves firmware from the data directory" grep -q 'alias /var/lib/veyra/firmware/;' "$TMP/nginx.conf"
