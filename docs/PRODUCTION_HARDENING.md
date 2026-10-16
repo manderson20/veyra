@@ -6,7 +6,7 @@ a Veyra installation carries a district's telephones for years. Five areas:
 SECURITY.md plus secure SIP), **retention** (one audited job for every data
 class), a **security review** with its fixes, and **emergency calling
 validation** (the open items of [EMERGENCY_CALLING.md](EMERGENCY_CALLING.md)).
-Milestone 18 (public release) follows and does not repeat this work.
+Milestone 23 (public release) follows and does not repeat this work.
 
 ## 1. Principles
 
@@ -358,7 +358,7 @@ test procedures in operator form.
 Off-site replication of the database (that is HA), backup to tape or
 Windows shares by Veyra itself (mount them), WebAuthn and SSO (own
 milestones), a vulnerability disclosure programme and release signing
-infrastructure (M18), E911 location services beyond the carrier's
+infrastructure (M23), E911 location services beyond the carrier's
 registration (NG911 PIDF-LO), mass notification.
 
 ## 14. Implementation notes (build, 2026-10-16)

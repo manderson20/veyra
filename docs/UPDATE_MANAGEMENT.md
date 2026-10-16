@@ -82,7 +82,7 @@ Verification (`veyra/updates/metadata.py`) checks all of the following:
 * **No update scripts from the source are executed.** Upgrades run Veyra's own versioned procedure with verified artifacts.
 
 No official release key or update server exists yet. Publishing one is part
-of release engineering (M12/M18).
+of release engineering (M12/M23).
 
 ## 4. Upgrade process
 

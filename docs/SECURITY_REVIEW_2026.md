@@ -47,7 +47,7 @@ a date.
 | Item | Why | Review by |
 |---|---|---|
 | `style-src 'unsafe-inline'` | The interface still sets a few inline styles; hashing styles is not worth it until they are gone | 2027-04 |
-| HSTS off | A self-signed site would lock the browser out; on with a public certificate (M18 packaging) | M18 |
+| HSTS off | A self-signed site would lock the browser out; on with a public certificate (M23 packaging) | M23 |
 | Rate limiter per process | One API process per node; the HA standby answers only reads | — |
 | `ProtectSystem=strict` on the HA agent | The agent writes to `/etc`, `/var/lib/postgresql` and `/run`; a full sandbox must be tested in stage 2 of the HA plan | M16 stage 2 |
 | The ARI password is 0640 root:veyra | The API reads it; a socket-authenticated ARI does not exist | — |

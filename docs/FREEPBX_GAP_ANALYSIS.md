@@ -2,7 +2,7 @@
 
 Veyra 0.23.0 compared with FreePBX 16/17, every free module and every
 Sangoma commercial module (FreePBX add-ons and PBXact), as of
-2026-10-16. Written before Milestone 18 (public release) so that no
+2026-10-16. Written before the public release (now Milestone 23) so that no
 FreePBX feature is left out of the roadmap only because the current
 feature set felt good enough.
 
@@ -466,10 +466,13 @@ ENUM and DUNDi, TFTP/FTP provisioning, raw configuration file editing,
 IMAP voicemail storage, chat and video meetings, hotel property
 management, and billing.
 
-Nothing in this document changes the Milestone 18 scope on its own. The
-owner decides which of the four pieces run before the public release and
-which follow it; the honest alternative is to release 1.0 with the gaps
-stated and the four milestones published on the roadmap.
+**Decision (owner, 2026-10-16):** all four pieces run before the public
+release, split into smaller milestones so nothing is bitten off at once:
+Milestone 18 (diagnostics and the extension-centred half of item 1, with
+the owner's requests for registration addresses and packet capture),
+19 (the call-flow half of item 1), 20 (item 2), 21 (item 3), 22 (item 4),
+then Milestone 23, the public release, after intensive testing. The
+roadmap carries the rows; the GitHub milestones match.
 
 ## 5. Tracking
 
