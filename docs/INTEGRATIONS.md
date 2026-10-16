@@ -241,7 +241,7 @@ Webhooks belong to an organization and see only that organization's events.
 | `page.sent` | Veyra starts a recorded page | page name and number, zones, recording, how it was started (`ui`, `api`, `bell`) and by whom; pages dialled from a phone are not reported |
 | `bell.rang` | A bell schedule rings | schedule, calendar event title, page |
 | `alert.raised` / `alert.resolved` | A monitoring alert changes state (M10) | rule, title, subject, message, details |
-| `registration.changed` | A phone registers or unregisters | extension, device, address, user agent |
+| `registration.changed` | A phone registers or unregisters | extension, registered, `address` (where the registration came from, public behind NAT), `contact_address` (the phone's own), `nat`, user agent (M18, [CALL_FEATURES.md](CALL_FEATURES.md) §2.1) |
 | `deployment.finished` | A configuration deployment ends | revision, result |
 | `webhook.test` | "Send test" on the page | none |
 

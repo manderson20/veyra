@@ -185,10 +185,46 @@ class ExtensionPatch(BaseModel):
         return _caller_id_number(v)
 
 
+class ContactOut(BaseModel):
+    """One registered contact with where it registers from (CALL_FEATURES.md §2.1)."""
+
+    uri: str
+    # The address the phone put in its Contact header (its own, often private).
+    contact_host: str | None = None
+    contact_port: int | None = None
+    # Where the registration actually arrived from (public behind NAT).
+    source_host: str | None = None
+    source_port: int | None = None
+    nat: bool = False
+    transport: str | None = None
+    user_agent: str | None = None
+    expires_at: str | None = None
+    status: str | None = None
+    rtt_ms: float | None = None
+
+
 class RegistrationOut(BaseModel):
     registered: bool
     # Channels currently up on this endpoint (0 when idle).
     channels: int = 0
+    # Registered contacts with addresses, when the engine can report them.
+    contacts: list[ContactOut] = []
+
+
+def contact_out(r: Any) -> ContactOut:
+    return ContactOut(
+        uri=r.uri,
+        contact_host=r.contact_host,
+        contact_port=r.contact_port,
+        source_host=r.source_host,
+        source_port=r.source_port,
+        nat=r.nat,
+        transport=r.transport,
+        user_agent=r.user_agent,
+        expires_at=r.expires_at,
+        status=r.status,
+        rtt_ms=r.rtt_ms,
+    )
 
 
 class ExtensionOut(BaseModel):
@@ -270,12 +306,22 @@ def _registrations(request: Request | None) -> dict[str, RegistrationOut] | None
     if Capability.ENDPOINT_STATUS not in adapter.capabilities():
         return None
     try:
-        return {
+        out = {
             s.endpoint: RegistrationOut(registered=s.registered, channels=len(s.contacts))
             for s in adapter.endpoint_statuses()
         }
     except (EngineUnavailable, NotSupported):
         return None
+    if Capability.REGISTRATIONS in adapter.capabilities():
+        # Addresses are a second engine query; without them the status still shows.
+        try:
+            for r in adapter.registrations():
+                reg = out.get(r.endpoint)
+                if reg is not None:
+                    reg.contacts.append(contact_out(r))
+        except (EngineUnavailable, NotSupported):
+            pass
+    return out
 
 
 def _memberships(

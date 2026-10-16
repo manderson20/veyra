@@ -82,8 +82,8 @@ def test_registration_status_in_extension_responses(admin, app, tmp_path):
         EndpointStatus(b["endpoint_name"], False),
     ]
     items = {x["number"]: x for x in admin.get(EXT).json()["items"]}
-    assert items["1001"]["registration"] == {"registered": True, "channels": 1}
-    assert items["1002"]["registration"] == {"registered": False, "channels": 0}
+    assert items["1001"]["registration"] == {"registered": True, "channels": 1, "contacts": []}
+    assert items["1002"]["registration"] == {"registered": False, "channels": 0, "contacts": []}
     assert admin.get(f"{EXT}/{a['id']}").json()["registration"]["registered"] is True
     # engine down: no live data, the extension is still shown
     adapter.state = "unreachable"

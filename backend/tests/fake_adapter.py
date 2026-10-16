@@ -18,6 +18,7 @@ from veyra.telephony.adapter import (
     EngineInfo,
     EngineUnavailable,
     GeneratedFile,
+    Registration,
     TelephonyAdapter,
 )
 from veyra.telephony.asterisk import generator
@@ -42,6 +43,21 @@ class FakeAdapter(TelephonyAdapter):
         self.fail_verify: list[str] = []
         self.fail_reload: str | None = None
         self.endpoints = [EndpointStatus("1001", True), EndpointStatus("1002", False)]
+        self.contacts: list[Registration] = [
+            Registration(
+                endpoint="1001",
+                uri="sip:1001@192.168.10.20:5060;transport=tls",
+                contact_host="192.168.10.20",
+                contact_port=5060,
+                source_host="203.0.113.7",
+                source_port=41234,
+                transport="tls",
+                user_agent="PolycomVVX-VVX_411-UA/6.4.3",
+                expires_at="2026-10-16T22:00:00Z",
+                status="Avail",
+                rtt_ms=12.5,
+            )
+        ]
         self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="example-1001")]
         self.originated: list[tuple[str, str, str]] = []
         self.fail_originate: str | None = None
@@ -54,6 +70,7 @@ class FakeAdapter(TelephonyAdapter):
             Capability.CONFIG_GENERATION,
             Capability.CONFIG_RELOAD,
             Capability.CLICK_TO_DIAL,
+            Capability.REGISTRATIONS,
         }
 
     def health(self) -> EngineHealth:
@@ -73,6 +90,9 @@ class FakeAdapter(TelephonyAdapter):
 
     def active_calls(self) -> list[ActiveCall]:
         return list(self.calls)
+
+    def registrations(self) -> list[Registration]:
+        return list(self.contacts)
 
     def originate(
         self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -23,9 +24,10 @@ from veyra.telephony.adapter import (
     EngineInfo,
     EngineUnavailable,
     GeneratedFile,
+    Registration,
     TelephonyAdapter,
 )
-from veyra.telephony.asterisk import generator
+from veyra.telephony.asterisk import cli, contacts, generator
 from veyra.telephony.asterisk.ari import AriClient
 
 # Modules whose status the engine page shows and that reloads depend on.
@@ -65,6 +67,9 @@ def _age_seconds(creation: Any, now: datetime) -> int:
     return max(0, int((now - created).total_seconds()))
 
 
+REGISTRATIONS_TTL = 5.0
+
+
 class AsteriskAdapter(TelephonyAdapter):
     name = "asterisk"
 
@@ -84,9 +89,10 @@ class AsteriskAdapter(TelephonyAdapter):
         self.mailqueue_command = mailqueue_command
         self.moh_dir = str(moh_dir)
         self.recordings_dir = str(recordings_dir)
+        self._registrations_cache: tuple[float, list[Registration]] | None = None
 
     def capabilities(self) -> set[Capability]:
-        return {
+        caps = {
             Capability.HEALTH,
             Capability.ENDPOINT_STATUS,
             Capability.ACTIVE_CALLS,
@@ -96,6 +102,9 @@ class AsteriskAdapter(TelephonyAdapter):
             Capability.VOICEMAIL,
             Capability.IVR,
         }
+        if cli.asterisk_available():
+            caps.add(Capability.REGISTRATIONS)
+        return caps
 
     # --- status -------------------------------------------------------------
 
@@ -160,6 +169,25 @@ class AsteriskAdapter(TelephonyAdapter):
                 )
             )
         return out
+
+    def registrations(self) -> list[Registration]:
+        """Registered contacts with addresses (docs/CALL_FEATURES.md §2.1), from
+        the AstDB contact store and ``pjsip show contacts`` over the CLI socket,
+        cached for REGISTRATIONS_TTL seconds because several pages ask at once."""
+        cached = self._registrations_cache
+        now = time.monotonic()
+        if cached is not None and now - cached[0] < REGISTRATIONS_TTL:
+            return list(cached[1])
+        ok_db, db_out = cli.run(contacts.CMD_DATABASE)
+        ok_li, li_out = cli.run(contacts.CMD_CONTACTS)
+        if not ok_db and not ok_li:
+            raise EngineUnavailable(db_out or li_out or "the Asterisk CLI did not answer")
+        rows = contacts.merge(
+            contacts.parse_database(db_out if ok_db else ""),
+            contacts.parse_contacts(li_out if ok_li else ""),
+        )
+        self._registrations_cache = (now, rows)
+        return list(rows)
 
     def active_calls(self) -> list[ActiveCall]:
         out = []

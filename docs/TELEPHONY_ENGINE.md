@@ -163,6 +163,21 @@ for the Companion ([COMPANION.md](COMPANION.md) §4). `GET /telephony/engine`
 reports the listener under `events` (`disabled`, `connecting`, `connected`,
 `reconnecting`, connected clients, events seen).
 
+Since Milestone 18 the engine also reports **where each phone registers
+from** ([CALL_FEATURES.md](CALL_FEATURES.md) §2.1): `GET
+/telephony/registrations` lists every registered contact with the address
+the registration arrived from (`source_host`/`source_port`, public when
+the phone is behind NAT), the address the phone put in its Contact header
+(`contact_host`/`contact_port`, its own and often private), `nat` when
+they differ, transport, user agent, expiry, the engine's reachability word
+(`Avail`, `Unavail`, `NonQual`) and round-trip time. The adapter reads
+PJSIP's contact store (`database show registrar/contact`, one JSON object
+per contact) and `pjsip show contacts` through the CLI socket, joins them
+on the contact URI and caches the result for five seconds; the extension
+list carries the same contacts under `registration.contacts`. Telephony →
+Registrations shows the list (search, organization filter, ten-second
+refresh); the Extensions page shows the source address per extension.
+
 ## 6. Security notes
 
 * ARI stays on loopback with a generated credential; the adapter refuses

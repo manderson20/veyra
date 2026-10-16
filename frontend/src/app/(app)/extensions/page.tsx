@@ -23,7 +23,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import type { Extension, NextNumber, Page, User } from "@/lib/types";
+import type { Extension, NextNumber, Page, RegistrationContact, User } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
@@ -31,6 +31,21 @@ import { useSession } from "@/hooks/useSession";
 import { useOnChange } from "@/hooks/useOnChange";
 
 const LIMIT = 25;
+
+/** Source address of the first contact; the contact address too when the phone is behind NAT (CALL_FEATURES.md §2.1). */
+function RegistersFrom({ contacts }: { contacts: RegistrationContact[] }) {
+  const c = contacts[0];
+  if (!c) return <span className="subtle">—</span>;
+  const source = c.source_host ? `${c.source_host}${c.source_port ? `:${c.source_port}` : ""}` : null;
+  const contact = c.contact_host ? `${c.contact_host}${c.contact_port ? `:${c.contact_port}` : ""}` : null;
+  return (
+    <span>
+      <span className="mono" style={{ display: "block" }}>{source ?? contact ?? "—"}</span>
+      {c.nat && contact ? <span className="table__secondary mono">behind NAT, phone says {contact}</span> : null}
+      {contacts.length > 1 ? <span className="table__secondary" style={{ display: "block" }}>+{contacts.length - 1} more</span> : null}
+    </span>
+  );
+}
 
 export default function ExtensionsPage() {
   const router = useRouter();
@@ -86,6 +101,11 @@ export default function ExtensionsPage() {
       render: (x) => x.registration === null ? <span className="subtle">—</span>
         : x.registration.registered ? <Badge tone="ok" icon="checkCircle">{x.registration.channels ? `On a call (${x.registration.channels})` : "Registered"}</Badge>
         : <Badge tone="neutral">Not registered</Badge>,
+    },
+    {
+      key: "from",
+      header: "Registers from",
+      render: (x) => <RegistersFrom contacts={x.registration?.contacts ?? []} />,
     },
   ];
 
