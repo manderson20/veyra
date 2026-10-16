@@ -5,6 +5,7 @@ import { CompanionDeploymentCard } from "@/components/account/CompanionDeploymen
 import { EmailDeliveryCard } from "@/components/account/EmailDeliveryCard";
 import { MfaPolicyCard } from "@/components/account/MfaPolicyCard";
 import { MultiTenancyCard } from "@/components/organizations/MultiTenancyCard";
+import { RetentionCard } from "@/components/account/RetentionCard";
 import { useThemePreference } from "@/components/ThemeToggle";
 import { Badge, Card, ErrorState, LoadingState, PageHeader } from "@/components/ui";
 import type { ThemePreference } from "@/lib/theme";
@@ -19,7 +20,7 @@ const THEMES: { value: ThemePreference; label: string; help: string }[] = [
 ];
 
 export default function SettingsPage() {
-  const { can } = useSession();
+  const { can, session } = useSession();
   const info = useApiData<SystemInfo>(can("system.health.read") ? "/system/info" : null);
   const [theme, setTheme] = useThemePreference();
 
@@ -60,6 +61,7 @@ export default function SettingsPage() {
       {can("system.settings.read") ? <MfaPolicyCard editable={can("system.settings.write")} /> : null}
       {can("system.settings.read") ? <CompanionDeploymentCard /> : null}
       {can("system.settings.read") ? <MultiTenancyCard editable={can("system.settings.write")} /> : null}
+      {session?.is_platform_admin ? <RetentionCard /> : null}
       <Card title="Coming later">
         <p className="muted">
           Network, backup and branding settings are delivered in later milestones. They are not shown here until they
