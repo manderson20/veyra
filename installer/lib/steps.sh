@@ -775,7 +775,8 @@ do_nginx() {
     render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$tmp" \
         "LISTEN_HTTP=$(listen_directives 80 '')" "LISTEN_HTTPS=$(listen_directives 443 ' ssl')" \
         "API_PORT=$VEYRA_API_PORT" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_PREFIX=$VEYRA_PREFIX" \
-        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov"
+        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov" \
+        "CSP_SCRIPT_SRC=$(csp_script_src)"
     # Veyra listens on specific addresses. A reload cannot bind them while
     # NGINX still holds wildcard sockets (the package default site) on the same
     # ports: it binds 443, fails on 80, retries for ~2 s, then drops the whole
@@ -820,8 +821,7 @@ do_nginx() {
         curl -fsSk -m 3 https://127.0.0.1/api/v1/system/ping >/dev/null 2>&1 \
             || die "NGINX is running but https://127.0.0.1/ does not answer; see /var/log/nginx/error.log"
     fi
-    ok "NGINX serving the Veyra web interface over HTTPS" \
-        "CSP_SCRIPT_SRC=$(csp_script_src)"
+    ok "NGINX serving the Veyra web interface over HTTPS"
 }
 
 do_setup_token() {
