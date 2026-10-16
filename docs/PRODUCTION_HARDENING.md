@@ -360,3 +360,33 @@ Windows shares by Veyra itself (mount them), WebAuthn and SSO (own
 milestones), a vulnerability disclosure programme and release signing
 infrastructure (M18), E911 location services beyond the carrier's
 registration (NG911 PIDF-LO), mass notification.
+
+## 14. Implementation notes (build, 2026-10-16)
+
+Where the build departs from the sections above:
+
+* **Backups:** the S3 destination (§2.4) waits for the owner's answer to
+  question 1; local store and copy directory are built. Pre-upgrade backups
+  stay `upgrade.sh`'s own dump and tarball (recorded in the update history,
+  not in `backups`), because the runner is part of the release being
+  replaced. Backups and deletions run as `veyra-backup@run|run-manual|delete-<id>`.
+* **Key rotation** is console-only (`sudo veyra installation-key rotate`,
+  the wrapper does the root part); the Settings page item of §3.1 is not
+  built. Every ciphertext purpose is listed in
+  `veyra/core/security/rotation.py`, and a test fails when an encrypted
+  column is missing from it.
+* **Retention:** voicemail messages are not pruned by Veyra (Asterisk owns
+  the spool, 0750 `asterisk`); the inventory shows the spool's size. The
+  Milestone 10 `calls.retention_days` setting is kept in step with the
+  retention document's `calls` row.
+* **Emergency calling:** no Buildings API yet (the address and location
+  columns exist; addresses are entered on the site, locations on the
+  extension and the phone); no Companion pop-up; the responder's phone
+  hears the extension number read out (`veyra-emergency-notify`) rather
+  than a prompt; the ELIN callback uses Asterisk's own database
+  (`DB(veyra_ecb/<elin>)`), written by the emergency route itself, so it
+  works with the API down.
+* **Security review:** `ProtectSystem=strict` for the HA agent is an
+  exception until stage 2 of the HA plan; the rest of §5 is built.
+* **Secure SIP (§3.3)** is not built in this milestone (question 4).
+
