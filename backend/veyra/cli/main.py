@@ -8,6 +8,7 @@ status on failure, so it can be used from scripts and the installer.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -1107,7 +1108,20 @@ def cmd_firewall_run(args: argparse.Namespace) -> int:
     service = FirewallService(settings.data_dir, NftCommand(), try_load_installation_key(settings))
     log.info("%s firewall started", plain_header())
     restored = False
+    standby_logged = False
     while True:
+        # On an HA standby the database is read-only: keep the last ruleset
+        # (docs/HIGH_AVAILABILITY.md §9) and wait for the promotion.
+        if standby_tick(log, standby_logged):
+            standby_logged = True
+            if not restored:
+                with contextlib.suppress(Exception):
+                    restored = service.restore_last()
+            if args.once:
+                return 0
+            time.sleep(args.interval)
+            continue
+        standby_logged = False
         try:
             with session_scope() as db:
                 service.tick(db)
