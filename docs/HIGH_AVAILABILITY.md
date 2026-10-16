@@ -453,3 +453,44 @@ application HA).
   `pg_rewind`, configuration sync failure, ten switchovers — plus the
   update order of §12, with RTO and RPO measured and written into the
   report. HA is described as available only after this table passes.
+
+## 16. Implementation notes (build, 2026-10-16)
+
+Where the build departs from or sharpens the sections above:
+
+* **Digests are SHA-256**, not BLAKE2 (§4.2): one hash function for the
+  manifest and for the signed `file` answer, whose signature covers the
+  SHA-256 of the streamed body (`veyra.ha.peer.answer_headers`).
+* **The node key is `root:veyra 0640`** (§3.2), like the installation key:
+  the API signs its answers to the peer and makes node calls itself
+  (switchover request, `run`, health); the agent uses the same key.
+* **Database writes of the agent** go through `veyra ha db <action>` run as
+  the service account (`set-roles`, `set-frozen`, `event`, `node-report`,
+  `enable`, `register-peer`, `remove-node`, `standalone`, `deploy`,
+  `deploy-state`): the root agent never holds a database connection, and
+  PostgreSQL keeps peer authentication. The standby's agent reports through
+  the primary's `heartbeat` instead.
+* **The CA may be widened** (§2, §5): the installer's CA carries name
+  constraints for one server; `enable` and `make-bundle` re-sign the CA with
+  its own key when the service name or a node name is not permitted, and
+  the HA page says that phones and browsers must trust the new copy. The
+  node's PostgreSQL certificate is issued by the primary and travels in the
+  bundle, as does the HTTPS certificate for the service name and both nodes.
+* **Engine units are not enabled at boot on an HA node** (`asterisk`,
+  `veyra-deployer`, `veyra-pager`): the agent starts them with the primary
+  role (§7.3), the installer and `upgrade.sh` respect `node.json`.
+* **Sign-in on the standby** takes the authenticator code in the login body
+  (`code`), because a pre-authentication session cannot be written; sessions
+  are in memory, one hour, platform administrators only (§9).
+* **Synchronous replication** is switched on the HA page (`PUT /ha/service`
+  `synchronous`); the agent rewrites `conf.d/veyra-ha.conf` and reloads.
+* **Fencing settings** are mirrored by the API into the agent's
+  `<data>/ha/fencing.json` (root 0600, with the decrypted token) so a
+  failover can fence without the database.
+* **Additional routes:** `GET /ha/switchover-check`, `GET /ha/fencing`,
+  `POST /ha/fencing/test`, `PUT /ha/sync`, `POST /ha/standby-upgrade`.
+* **Agent verbs added:** `set-synchronous`, `set-sync`, `set-fencing`,
+  `remove-peer`, `make-bundle`, `current-lsn`, `checkpoint`, `freeze`,
+  `unfreeze`, `event`; peers may ask for `switchover`, `engine-start`,
+  `hold-address` (refused in recovery) and `event` besides the §3.2 list.
+

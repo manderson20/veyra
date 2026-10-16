@@ -66,7 +66,7 @@ All modes use the same code and schema. The mode is data
 | Mode | Status | Notes |
 |---|---|---|
 | A. Standalone | Foundation in M0, installation in M1 | One node; `cluster_nodes` holds one row with role `standalone`. |
-| B. HA (active/passive) | Design only (see [HA_ARCHITECTURE.md](HA_ARCHITECTURE.md)), M16 | A standalone node is enrolled as primary; a second node joins as secondary. No rebuild. |
+| B. HA (active/passive) | Built in M16 ([HIGH_AVAILABILITY.md](HIGH_AVAILABILITY.md); goals and test plan in [HA_ARCHITECTURE.md](HA_ARCHITECTURE.md)) | A standalone node is enabled as primary in place; a second node joins as secondary with a one-time token. PostgreSQL streaming replication, a file sync over the signed peer channel, a Veyra-held service address, manual switchover and failover driven by a root agent on each node; the standby's interface is read-only. No rebuild. |
 | C. Multi-tenant | Data model in M0; isolation and activation in M14 ([MULTI_TENANCY.md](MULTI_TENANCY.md)) | Every tenant-owned row carries `organization_id`. Telephony isolation is generated separately (see §6). |
 | D. Centrally managed | Identity in M0; console and membership in M15 ([CENTRAL_MANAGEMENT.md](CENTRAL_MANAGEMENT.md)) | `installation.instance_id` is a permanent UUID. Any installation can act as the console; instances enroll with a one-time token and the console's fingerprint, then check in every minute with signed messages (no inbound connection to the instance). The local administrator chooses which policy sections and commands to accept. Instances keep working when central management is unreachable. |
 
