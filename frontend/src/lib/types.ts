@@ -411,6 +411,14 @@ export interface ClusterNode {
   state: string;
   last_heartbeat_at: string | null;
   software_version: string | null;
+  // Milestone 16 (docs/HIGH_AVAILABILITY.md §11)
+  fingerprint?: string | null;
+  epoch?: number;
+  db_role?: string;
+  replication?: HaReplication;
+  sync_at?: string | null;
+  holds_address?: boolean;
+  stale?: boolean;
 }
 
 export interface ClusterStatus {
@@ -419,8 +427,124 @@ export interface ClusterStatus {
   automatic_failover: boolean;
   automatic_failover_reason: string;
   database_role: string | null;
-  replication: { state: string } | null;
+  replication: HaReplication | { state: string } | null;
   nodes: ClusterNode[];
+  /** healthy | degraded | isolated | standalone (dashboard tile). */
+  summary?: string;
+  local_role?: string | null;
+  local_state?: string | null;
+}
+
+// ----------------------------------------------------------------- high availability (Milestone 16)
+
+export interface HaReplication {
+  db_role?: string;
+  state?: string | null;
+  receiver?: string | null;
+  slot?: string | null;
+  lag_bytes?: number | null;
+  lag_seconds?: number | null;
+  current_lsn?: string | null;
+  replay_lsn?: string | null;
+  replay_at?: string | null;
+  synchronous?: boolean;
+  detail?: string;
+}
+
+export interface HaStep {
+  name: string;
+  status: "running" | "ok" | "failed" | "skipped";
+  started_at: string;
+  finished_at: string | null;
+  detail: string;
+  seconds: number | null;
+}
+
+export interface HaOperation {
+  kind: string;
+  target: string;
+  actor: string;
+  status: "running" | "completed" | "aborted" | "failed";
+  started_at: string;
+  finished_at: string | null;
+  error: string;
+  steps: HaStep[];
+}
+
+export interface HaService {
+  name: string;
+  address: string;
+  prefix: number;
+  interface: string;
+  synchronous: boolean;
+  holder: string | null;
+}
+
+export interface HaStatus extends ClusterStatus {
+  version: string;
+  epoch: number;
+  local: {
+    node_name: string;
+    role: string;
+    epoch: number;
+    state: string;
+    db_role: string;
+    holds_address: boolean;
+    agent: boolean;
+    peer_reachable: boolean | null;
+    frozen: boolean;
+  };
+  peer: ClusterNode | null;
+  replication: HaReplication | null;
+  sync: { last_success_at: string | null; last_attempt_at: string | null; last_error: string; backlog: number; recordings: boolean } | null;
+  service: HaService;
+  operation: HaOperation | null;
+  fencing: { configured: boolean; method: string };
+}
+
+export interface HaEvent {
+  id: number;
+  occurred_at: string;
+  event_type: string;
+  node_name: string | null;
+  actor_label: string;
+  details: Record<string, unknown>;
+}
+
+export interface HaJoinToken {
+  id: string;
+  label: string | null;
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  used_by: string | null;
+  expired?: boolean;
+}
+
+export interface HaJoinTokenCreated extends HaJoinToken {
+  token: string;
+  primary_url: string;
+  fingerprint: string | null;
+  command: string;
+}
+
+export interface HaFencing {
+  enabled: boolean;
+  method: string;
+  url: string;
+  token_id: string;
+  pve_node: string;
+  vms: Record<string, { vmid: number; pve_node?: string }>;
+  verify_tls: boolean;
+  ca_pem: string;
+  has_secret: boolean;
+}
+
+export interface HaSwitchoverCheck {
+  target: string;
+  ok: boolean;
+  problems: string[];
 }
 
 export interface ModuleHealthRow {
@@ -2309,7 +2433,7 @@ export interface CentralCommandRow {
 }
 
 export interface CentralInstanceDetail extends CentralInstanceRow {
-  report: Record<string, any> | null;
+  report: Record<string, unknown> | null;
   fingerprint: string;
   revoked_at: string | null;
   samples: { at: string; registered: number | null; active_calls: number | null; alerts: number | null; status: string }[];

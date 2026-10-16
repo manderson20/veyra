@@ -15,6 +15,7 @@ import { useSession } from "@/hooks/useSession";
 import { ApplyChanges } from "./ApplyChanges";
 import { GlobalSearch } from "./GlobalSearch";
 import { CentralNotice } from "./CentralNotice";
+import { StandbyBanner } from "./StandbyBanner";
 import { MfaNag } from "./MfaNag";
 import { Sidebar } from "./Sidebar";
 import { UserMenu } from "./UserMenu";
@@ -99,6 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <UserMenu />
         </header>
         <MfaNag />
+        <StandbyBanner />
         <CentralNotice />
         <main id="main" className="content" tabIndex={-1}>
           {children}

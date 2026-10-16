@@ -106,7 +106,7 @@ def health(
         "version": __version__,
         "components": components,
         "host": host.as_dict(),
-        "cluster": cluster_status(db),
+        "cluster": cluster_status(db, request.app.state.settings.data_dir / "ha"),
         # Live counts from the engine; None when the engine cannot report them.
         # With multi-tenancy they cover every organization, so only platform
         # administrators see them (docs/MULTI_TENANCY.md §6).

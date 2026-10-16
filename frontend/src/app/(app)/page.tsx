@@ -18,6 +18,7 @@ import {
   toStatus,
 } from "@/components/ui";
 import { formatBytes, formatDuration, formatPercent, formatRelative } from "@/lib/format";
+import { overallStatus } from "@/lib/ha";
 import type { AuditEvent, AvailableUpdate, CallMetrics, MetricsRange, Page, SystemHealth } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
@@ -118,6 +119,13 @@ export default function Dashboard() {
               hint={h.components.telephony.message} />
             <MetricCard icon="modules" label="Modules" value={<StatusBadge status={toStatus(h.components.modules.status)} />} hint={h.components.modules.message} />
           </section>
+          {h.cluster.ha_enabled && session?.is_platform_admin ? (
+            <section aria-label="High availability" className="grid grid--4">
+              <MetricCard icon="ha" label="High availability"
+                value={<StatusBadge status={overallStatus(h.cluster)} label={h.cluster.summary ?? undefined} />}
+                hint={<Link href="/system/ha/">{`${h.cluster.local_role ?? "node"}${h.cluster.local_state && h.cluster.local_state !== "online" ? ` · ${h.cluster.local_state}` : ""} · ${h.cluster.nodes.length} node${h.cluster.nodes.length === 1 ? "" : "s"}`}</Link>} />
+            </section>
+          ) : null}
 
           <section aria-label="Server resources" className="grid grid--4">
             <MetricCard icon="cpu" label="CPU" value={formatPercent(h.host.cpu_percent)}
