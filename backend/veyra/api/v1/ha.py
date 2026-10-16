@@ -5,6 +5,7 @@ endpoints ``/ha/peer/*`` the other node calls."""
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
 import uuid
@@ -668,8 +669,17 @@ def _peer_dispatch(
         service.action_node_report(db, data)
         return {"ok": True, "epoch": service.installation(db).ha_epoch}
     if verb == "manifest":
-        entries = sync.manifest(_roots(db, settings), digest_cache=_digest_cache)
-        return {"entries": [e.to_dict() for e in entries]}
+        # Data roots are readable by the service account; the root-only
+        # roots (secrets, TLS, trust) come from the agent (§4.2).
+        readable, _privileged = sync.split_roots(_roots(db, settings))
+        entries = [e.to_dict() for e in sync.manifest(readable, digest_cache=_digest_cache)]
+        covered = list(readable)
+        with contextlib.suppress(AgentError):
+            etc = _agent(settings).call("manifest-etc")
+            if isinstance(etc, dict):
+                entries += list(etc.get("entries") or [])
+                covered += list(etc.get("roots") or [])
+        return {"entries": entries, "roots": covered}
     if verb == "run":
         inner = str(data.get("verb") or "")
         args: dict[str, Any] = data["args"] if isinstance(data.get("args"), dict) else {}
@@ -758,8 +768,18 @@ def _peer_file(
     db: Session, settings: Settings, data: dict[str, Any], key: str, nonce: str
 ) -> Response:
     logical = str(data.get("path") or "")
-    path = sync.resolve(_roots(db, settings), logical)
-    if path is None or not path.is_file() or logical.endswith(tuple(sync.NEVER_SYNC)):
+    readable, privileged = sync.split_roots(_roots(db, settings))
+    if sync.resolve(privileged, logical) is not None:
+        # Root-only file: the agent reads it (small files, base64 over the socket).
+        try:
+            out = _agent(settings).call("read-file", path=logical)
+        except AgentError as e:
+            raise peer.PeerError(404 if e.code == "no_file" else 503, e.code, e.message) from e
+        content = base64.b64decode(str(out.get("content") or ""))
+        headers = peer.answer_headers(key, nonce, hashlib.sha256(content).hexdigest())
+        return Response(content=content, media_type="application/octet-stream", headers=headers)
+    path = sync.resolve(readable, logical)
+    if path is None or not path.is_file() or sync.excluded(logical):
         raise peer.PeerError(404, "no_file", "No such file.")
     digest = hashlib.sha256()
     for chunk in sync.read_chunks(path):

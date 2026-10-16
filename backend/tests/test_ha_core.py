@@ -245,6 +245,12 @@ def test_manifest_plan_and_transfer(tmp_path: Path):
     assert (b / "prompts/sub/y.wav").read_bytes() == b"y"
     assert not (b / "prompts/gone.wav").exists()
     assert sync.plan(sync.manifest(roots_b), ma).backlog == 0
+    # Deletions only inside covered roots: a root the primary could not read
+    # never empties the standby's copy.
+    extra = sync.Entry("etc/secrets/k", 1, 0.0, 0o600, "root", "root", None)
+    assert sync.plan([*sync.manifest(roots_b), extra], ma, covered=["data/prompts"]).delete == []
+    assert sync.plan([*sync.manifest(roots_b), extra], ma, covered=[]).delete == []
+    assert sync.plan([*sync.manifest(roots_b), extra], ma).delete == ["etc/secrets/k"]
     # Round trip of the entry format and refusal of escaping paths.
     assert sync.Entry.from_dict(ma[0].to_dict()) == ma[0]
     assert sync.resolve(roots_b, "data/prompts/../x") is None

@@ -110,8 +110,11 @@ def _names(st: os.stat_result) -> tuple[str, str]:
     return owner, group
 
 
-def _excluded(logical: str) -> bool:
+def excluded(logical: str) -> bool:
     return any(logical == f"etc/{n}" for n in NEVER_SYNC) or logical.endswith(TEMP_SUFFIX)
+
+
+_excluded = excluded
 
 
 def manifest(
@@ -188,12 +191,29 @@ class Plan:
         return len(self.fetch) + len(self.delete)
 
 
-def plan(local: Iterable[Entry], remote: Iterable[Entry]) -> Plan:
+def plan(
+    local: Iterable[Entry], remote: Iterable[Entry], covered: Iterable[str] | None = None
+) -> Plan:
+    """What to fetch and what to delete. Deletions only happen inside roots
+    the primary says it listed completely (``covered``; None = all): a root
+    the primary could not read must never empty the standby's copy."""
     mine = {e.path: e for e in local}
     theirs = {e.path: e for e in remote}
     fetch = [e for p, e in theirs.items() if p not in mine or not mine[p].same_as(e)]
-    delete = [p for p in mine if p not in theirs]
+    roots = None if covered is None else [c.rstrip("/") + "/" for c in covered]
+    delete = [
+        p
+        for p in mine
+        if p not in theirs and (roots is None or any(p.startswith(r) for r in roots))
+    ]
     return Plan(fetch, delete)
+
+
+def split_roots(roots: dict[str, Path]) -> tuple[dict[str, Path], dict[str, Path]]:
+    """(roots the service account can read, roots only root can read)."""
+    readable = {k: v for k, v in roots.items() if not k.startswith("etc/")}
+    privileged = {k: v for k, v in roots.items() if k.startswith("etc/")}
+    return readable, privileged
 
 
 Fetcher = Callable[[str], Iterator[bytes]]
