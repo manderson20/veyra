@@ -488,6 +488,12 @@ Where the build departs from or sharpens the sections above:
 * **The §7.3 rules run at the agent's start and when the peer becomes
   reachable again**, never when a running primary loses its peer: a healthy
   primary keeps serving through a standby outage (§1 principle 6).
+* **NGINX listens on the service address on both nodes** through two
+  include files the agent writes (`/etc/veyra/nginx-ha-listen-{http,https}.conf`)
+  with `net.ipv4.ip_nonlocal_bind=1`, so the standby's NGINX starts without
+  the address and answers the moment the address is held; the installer
+  keeps the service address out of its own listen list.
+* **Removing a node keeps its events** (`cluster_events.node_id` is cleared).
 * **Engine units are not enabled at boot on an HA node** (`asterisk`,
   `veyra-deployer`, `veyra-pager`): the agent starts them with the primary
   role (§7.3), the installer and `upgrade.sh` respect `node.json`.
