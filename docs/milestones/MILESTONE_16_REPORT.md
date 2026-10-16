@@ -159,3 +159,11 @@ veyra-dev2 exists.
 ## 8. Owner decisions
 
 * 2026-10-15: "Go ahead with the design, I'll set up veyra-dev2."
+
+## Addendum (2026-10-16 04:46 UTC): 0.22.0 on dev1
+
+The owner upgraded dev1 from `~/veyra-release` to `0.22.0-e5713e9569`
+(schema 0029, `verify.sh` all OK; the only warning is the known
+`catalog-trust`, no catalog key yet). dev1 is standalone with the HA agent
+running and idle; the HA remnants of the stage-1 test listed in §6 are
+still in place and harmless.
