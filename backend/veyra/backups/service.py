@@ -23,6 +23,7 @@ from veyra.core.models import Backup, SystemSetting
 from veyra.core.models.base import utcnow
 
 UNIT = "veyra-backup@{instance}.service"
+STALE_RUNNING_HOURS = 8  # longer than TimeoutStartSec of the unit (6 h)
 STATUS_PATH = Path("/var/lib/veyra-backup/status.json")
 STALE_AFTER = timedelta(days=2)
 # Tests replace this with a recorder.
@@ -77,6 +78,18 @@ def record(db: Session, p: dict[str, Any]) -> Backup:
     row = db.scalar(select(Backup).where(Backup.manifest["name"].astext == name))
     if row is None:
         row = db.scalar(select(Backup).where(Backup.path.like(f"%/{name}%")))
+    if row is None and p.get("kind") == "scheduled":
+        # tick() recorded the run before starting the unit, with the name of
+        # its own clock; the runner stamps its own a moment later. The pending
+        # row is adopted rather than left "running" forever.
+        row = db.scalar(
+            select(Backup)
+            .where(Backup.kind == "scheduled", Backup.state == "running", Backup.path == "")
+            .order_by(Backup.started_at.desc())
+            .limit(1)
+        )
+        if row is not None:
+            row.manifest = {**(row.manifest or {}), "name": name}
     if row is None:
         row = Backup(
             id=uuid.uuid4(), kind=str(p.get("kind") or "manual"), path=str(p.get("path") or "")
@@ -234,6 +247,19 @@ def running(path: Path = STATUS_PATH) -> bool:
 def tick(db: Session, now: datetime | None = None, tz: ZoneInfo | None = None) -> bool:
     """The worker: start the scheduled backup when due. True when started."""
     now = now or utcnow()
+    # A pending row the unit never reported on (the unit failed to start, or
+    # the host went down) would otherwise show as running forever.
+    for stale in db.scalars(
+        select(Backup).where(
+            Backup.kind == "scheduled",
+            Backup.state == "running",
+            Backup.path == "",
+            Backup.started_at < now - timedelta(hours=STALE_RUNNING_HOURS),
+        )
+    ):
+        stale.state = "failed"
+        stale.finished_at = now
+        stale.error = "the backup unit did not report back"
     s = settings(db)
     if not s["enabled"] or running():
         return False
