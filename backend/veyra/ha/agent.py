@@ -743,8 +743,7 @@ class Agent:
             addresses=[a for a in (n.address, n.service.address) if a],
             run=self.system.run,
         )
-        os.chmod(self.paths.tls / "veyra.key", 0o640)
-        self.system.run(["chgrp", "veyra", str(self.paths.tls / "veyra.key")])
+        os.chmod(self.paths.tls / "veyra.key", 0o600)
         certs.issue(
             self.paths.tls,
             [socket.gethostname()],

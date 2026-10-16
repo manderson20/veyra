@@ -16,7 +16,10 @@
 #   --listen ADDR            Address for the web interface (repeatable; default:
 #                            this host's private addresses and 127.0.0.1)
 #   --allow-public-admin     Also listen on public addresses (not recommended)
-#   --role standalone        Installation role (HA roles arrive in Milestone 16)
+#   --role standalone        Installation role: standalone (default) or secondary
+#   --role secondary --join https://<primary> --token <t>
+#                            Join an HA primary as its secondary (docs/HIGH_AVAILABILITY.md §5);
+#                            the primary is made from a standalone on its HA page
 #   -h, --help               Show this help
 set -Eeuo pipefail
 
@@ -30,6 +33,8 @@ SOURCE_DIR="$(dirname "$SCRIPT_DIR")"
 SKIP_TELEPHONY=0
 ALLOW_PUBLIC=0
 ROLE="standalone"
+JOIN_URL=""
+JOIN_TOKEN=""
 LISTEN=()
 
 while [[ $# -gt 0 ]]; do
@@ -40,13 +45,24 @@ while [[ $# -gt 0 ]]; do
         --allow-public-admin) ALLOW_PUBLIC=1 ;;
         --listen) LISTEN+=("${2:?--listen requires an address}"); shift ;;
         --role) ROLE="${2:?}"; shift ;;
-        -h|--help) sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --join) JOIN_URL="${2:?--join requires the address of the primary}"; shift ;;
+        --token) JOIN_TOKEN="${2:?--token requires a join token}"; shift ;;
+        -h|--help) sed -n '3,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "Unknown option: $1 (see --help)" ;;
     esac
     shift
 done
 
-[[ "$ROLE" == "standalone" ]] || die "Only --role standalone is supported in this release (HA: Milestone 16)."
+case "$ROLE" in
+    standalone) [[ -z "$JOIN_URL$JOIN_TOKEN" ]] || die "--join and --token go with --role secondary." ;;
+    secondary)
+        [[ -n "$JOIN_URL" && -n "$JOIN_TOKEN" ]] || die "--role secondary needs --join https://<primary> and --token <join token> (from the HA page of the primary)."
+        JOIN_URL="${JOIN_URL%/}"
+        [[ "$JOIN_URL" == https://* ]] || die "--join must be an https:// address."
+        export VEYRA_JOIN_URL="$JOIN_URL" ;;
+    primary) die "A primary is not installed with --role: install a standalone and enable HA on its System > High availability page." ;;
+    *) die "Unknown role '$ROLE' (standalone or secondary)." ;;
+esac
 
 VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$SOURCE_DIR/backend/veyra/version.py")"
 [[ -n "$VERSION" ]] || die "Cannot determine the Veyra version from $SOURCE_DIR"
@@ -84,12 +100,23 @@ state_set status "in_progress"
 do_packages
 do_versions
 do_account
-do_secrets
-do_database
-do_release
-do_activate
-do_migrate
-do_tls
+if [[ "$ROLE" == "secondary" ]]; then
+    # The secondary gets its credentials, certificates and database from the
+    # primary (docs/HIGH_AVAILABILITY.md §5): no secrets, database or
+    # migrations of its own; Asterisk is installed but left stopped.
+    do_database
+    do_release
+    do_activate
+    do_ha_agent
+    do_ha_join
+else
+    do_secrets
+    do_database
+    do_release
+    do_activate
+    do_migrate
+    do_tls
+fi
 do_telephony
 do_services
 do_nginx
@@ -105,7 +132,11 @@ state_set version "$VERSION"
 state_set release "$RELEASE_NAME"
 state_set role "$ROLE"
 state_set completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-do_setup_token
+if [[ "$ROLE" == "secondary" ]]; then
+    ok "This node is the standby of $JOIN_URL. Its own interface (platform administrators, read-only) is https://$(hostname)/system/ha/."
+else
+    do_setup_token
+fi
 if [[ "$DRY_RUN" == "1" ]]; then
     info "Dry run complete. Nothing was changed."
 else

@@ -1,0 +1,34 @@
+# Veyra HA agent (docs/HIGH_AVAILABILITY.md §3): the root service that holds
+# the service address, drives PostgreSQL replication and runs switchover,
+# failover and rejoin. The API and the CLI talk to it over /run/veyra/ha.sock
+# (root:veyra 0660) with a fixed list of verbs; it never takes orders from the
+# network except signed node calls relayed by the API.
+[Unit]
+Description=Veyra high availability agent
+Documentation=file://@VEYRA_PREFIX@/current/docs/HIGH_AVAILABILITY.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=root
+EnvironmentFile=@VEYRA_ETC@/veyra.env
+WorkingDirectory=@VEYRA_PREFIX@/current/backend
+ExecStart=@VEYRA_PREFIX@/current/backend/.venv/bin/veyra ha agent
+Restart=always
+RestartSec=3
+RuntimeDirectory=veyra
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
+UMask=0027
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

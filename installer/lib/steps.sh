@@ -31,7 +31,7 @@ begin() { CURRENT_STEP="$1"; step "$2"; }
 do_preflight() {
     begin preflight "Checking this server"
     local rc=0
-    "$SCRIPT_DIR/preflight.sh" || rc=$?
+    "$SCRIPT_DIR/preflight.sh" --role "${ROLE:-standalone}" || rc=$?
     if (( rc == 1 )); then
         die "Preflight found blocking problems. Nothing has been changed."
     elif (( rc == 2 )); then
@@ -43,6 +43,8 @@ do_packages() {
     begin packages "Installing system packages"
     local pkgs=(python3 python3-venv python3-dev build-essential libpq-dev postgresql nginx
                 openssl ca-certificates rsync curl git)
+    # iputils-arping: the HA agent announces the service address (docs/HIGH_AVAILABILITY.md §2).
+    pkgs+=(iputils-arping)
     if [[ ! -d "$SOURCE_DIR/frontend/out" ]]; then
         pkgs+=(nodejs npm)
     fi
@@ -150,9 +152,22 @@ do_secrets() {
     fi
 }
 
+# The HA role this node holds, from the agent's node.json (docs/HIGH_AVAILABILITY.md §11);
+# "standalone" when HA was never enabled here.
+ha_role() {
+    local f="${VEYRA_DATA:-/var/lib/veyra}/ha/node.json"
+    [[ -s "$f" ]] || { printf standalone; return; }
+    python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("role") or "standalone")' "$f" 2>/dev/null \
+        || printf standalone
+}
+
 do_database() {
     begin database "Configuring PostgreSQL"
     run systemctl enable --now postgresql
+    if [[ "${ROLE:-standalone}" == "secondary" ]]; then
+        ok "PostgreSQL installed; the join replaces its data directory with a copy of the primary's"
+        return
+    fi
     if [[ "$DRY_RUN" == "1" ]]; then
         info "[dry-run] would create role and database '$VEYRA_DB_NAME' if missing"
         return
@@ -290,6 +305,12 @@ do_activate() {
         [[ -n "$previous" ]] && state_set previous_release "$previous"
         ok "Active release: $RELEASE_NAME"
     fi
+    write_env
+    install_managed_file "$SCRIPT_DIR/templates/veyra-cli-wrapper.sh" /usr/local/bin/veyra 0755 root:root
+    ok "Configuration written to $VEYRA_ETC/veyra.env"
+}
+
+write_env() {
     local tmp
     tmp="$(mktemp)"
     render_template "$SCRIPT_DIR/templates/veyra.env.in" "$tmp" \
@@ -305,14 +326,72 @@ do_activate() {
     fi
     install_managed_file "$tmp" "$VEYRA_ETC/veyra.env" 0640 "root:$VEYRA_USER"
     rm -f "$tmp"
-    install_managed_file "$SCRIPT_DIR/templates/veyra-cli-wrapper.sh" /usr/local/bin/veyra 0755 root:root
-    ok "Configuration written to $VEYRA_ETC/veyra.env"
 }
 
 do_migrate() {
     begin migrate "Applying database migrations"
+    if [[ "$(ha_role)" == "secondary" ]]; then
+        ok "Skipped on an HA standby: the schema arrives through replication (docs/HIGH_AVAILABILITY.md §5)"
+        return
+    fi
     run /usr/local/bin/veyra db upgrade
     ok "Database schema is current"
+}
+
+# ---------------------------------------------------------------- high availability
+
+# The root agent (docs/HIGH_AVAILABILITY.md §3) runs on every node, HA or not:
+# enabling HA on a standalone goes through it.
+do_ha_agent() {
+    begin ha-agent "Installing the HA agent"
+    local tmp
+    run install -d -m 2750 -o root -g "$VEYRA_USER" "$VEYRA_DATA/ha"
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-ha-agent.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC"
+    install_managed_file "$tmp" /etc/systemd/system/veyra-ha-agent.service 0644 root:root
+    rm -f "$tmp"
+    run systemctl daemon-reload
+    run systemctl enable veyra-ha-agent
+    run systemctl restart veyra-ha-agent
+    if [[ "$DRY_RUN" != "1" ]]; then
+        local i
+        for _ in $(seq 1 20); do
+            [[ -S /run/veyra/ha.sock ]] && break
+            sleep 0.5
+        done
+        [[ -S /run/veyra/ha.sock ]] || die "veyra-ha-agent did not start; see: journalctl -u veyra-ha-agent"
+    fi
+    ok "veyra-ha-agent running"
+}
+
+# install.sh --role secondary: ask the primary for the bundle (secrets, TLS,
+# trust keys), take a base backup and start as a standby (docs/HIGH_AVAILABILITY.md §5).
+do_ha_join() {
+    begin ha-join "Joining ${JOIN_URL:-the primary} as the secondary"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        info "[dry-run] would run: veyra ha join-prepare --url $JOIN_URL --address <this node>"
+        return
+    fi
+    if [[ "$(ha_role)" != "standalone" ]]; then
+        ok "This node already joined (role $(ha_role)); kept"
+    else
+        local addr
+        addr="$(host_addresses | head -1)"
+        [[ -n "$addr" ]] || die "This server has no non-loopback address."
+        run /usr/local/bin/veyra ha join-prepare --url "$JOIN_URL" --token "$JOIN_TOKEN" --address "$addr"
+        ok "Joined $JOIN_URL; PostgreSQL is a standby of the primary"
+    fi
+    # The service name is what phones and browsers use (§2): it becomes
+    # VEYRA_PUBLIC_HOST here too, so a promoted standby serves the same name.
+    local service_name
+    service_name="$(python3 -c 'import json,sys; print((json.load(open(sys.argv[1])).get("service") or {}).get("name") or "")' "$VEYRA_DATA/ha/node.json" 2>/dev/null || true)"
+    if [[ -n "$service_name" ]]; then
+        VEYRA_PUBLIC_HOST="$service_name"
+        export VEYRA_PUBLIC_HOST
+        write_env
+        ok "Public host is the service name $service_name"
+    fi
 }
 
 # The Veyra CA (docs/FIREWALL_TRUST.md §6.2) signs the server certificate so
@@ -484,8 +563,19 @@ do_telephony() {
         "$VEYRA_DATA/moh" "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming"
     # Firmware images uploaded through the API, served by NGINX (www-data reads).
     run install -d -m 0755 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firmware"
-    run systemctl enable asterisk
-    if (( core_changed )) || ! systemctl is-active --quiet asterisk; then
+    local role
+    role="$(ha_role)"
+    if [[ "$role" != "standalone" ]]; then
+        # On an HA node the agent starts and stops Asterisk with the role
+        # (docs/HIGH_AVAILABILITY.md §7.3); it is never enabled at boot.
+        run systemctl disable asterisk
+    else
+        run systemctl enable asterisk
+    fi
+    if [[ "$role" == "secondary" ]]; then
+        run systemctl stop asterisk
+        ok "Asterisk configured and stopped: a standby does not run the engine"
+    elif (( core_changed )) || ! systemctl is-active --quiet asterisk; then
         run systemctl restart asterisk
     elif (( stub_changed )); then
         # ARI/HTTP unchanged: a reload is enough and does not disturb calls.
@@ -561,7 +651,30 @@ do_services() {
         run systemctl disable --now veyra-deployer veyra-pager || true
         run rm -f /etc/systemd/system/veyra-deployer.service /etc/systemd/system/veyra-pager.service
     fi
+    # The HA agent (docs/HIGH_AVAILABILITY.md §3) on every node.
+    run install -d -m 2750 -o root -g "$VEYRA_USER" "$VEYRA_DATA/ha"
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-ha-agent.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC"
+    install_managed_file "$tmp" /etc/systemd/system/veyra-ha-agent.service 0644 root:root
+    rm -f "$tmp"
+    units+=(veyra-ha-agent)
     run systemctl daemon-reload
+    local role
+    role="$(ha_role)"
+    if [[ "$role" != "standalone" ]]; then
+        # The agent starts the deployer and the pager with the primary role.
+        local u kept=()
+        for u in "${units[@]}"; do
+            case "$u" in
+                veyra-deployer|veyra-pager)
+                    run systemctl disable "$u"
+                    [[ "$role" == "secondary" ]] && run systemctl stop "$u" ;;
+                *) kept+=("$u") ;;
+            esac
+        done
+        units=("${kept[@]}")
+    fi
     run systemctl enable "${units[@]}"
     run systemctl restart "${units[@]}"
     if [[ "$DRY_RUN" != "1" ]]; then
