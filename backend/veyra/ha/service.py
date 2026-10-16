@@ -347,6 +347,10 @@ def action_remove_node(db: Session, p: dict[str, Any]) -> dict[str, Any]:
         node_name=None,
         actor=str(p.get("actor") or "agent"),
     )
+    # The history keeps its rows; they just no longer point at the node.
+    from sqlalchemy import update
+
+    db.execute(update(ClusterEvent).where(ClusterEvent.node_id == node.id).values(node_id=None))
     db.delete(node)
     inst = installation(db)
     remaining = db.scalar(select(func.count()).select_from(ClusterNode))

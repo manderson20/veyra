@@ -185,6 +185,7 @@ VERBS: dict[str, str] = {
     "set-synchronous": "verb_set_synchronous",
     "set-peer-epoch": "verb_set_peer_epoch",
     "remove-peer": "verb_remove_peer",
+    "remove-node": "verb_remove_node",
     "standalone": "verb_standalone",
     "upgrade": "verb_upgrade",
     "event": "verb_event",
@@ -1314,6 +1315,13 @@ class Agent:
             # The service address stays here (§8) but no longer moves.
             self._nginx_service_listen(n.service.address or None)
         return out
+
+    def verb_remove_node(self, args: dict[str, Any]) -> dict[str, Any]:
+        """§8 from the console: the peer becomes standalone (best effort),
+        then it is removed here."""
+        with contextlib.suppress(peer.PeerError, AgentError, OSError):
+            self.peer_run("standalone")
+        return self.verb_remove_peer(args)
 
     def verb_standalone(self, args: dict[str, Any]) -> dict[str, Any]:
         """A removed secondary becomes a standalone that may run the engine

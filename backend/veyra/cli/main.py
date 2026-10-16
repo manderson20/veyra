@@ -1430,6 +1430,7 @@ def cmd_ha_verb(args: argparse.Namespace, verb: str) -> int:
             "Only when the peer is really down: resuming next to a live primary splits the brain."
         ),
         "standalone": "This node leaves the cluster and runs on its own.",
+        "remove-node": "The secondary leaves the cluster; this node becomes standalone.",
     }
     if verb in warnings and not args.yes:
         print(warnings[verb])
@@ -1785,6 +1786,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("resume", "Resume primary duties on an isolated primary"),
         ("rejoin", "Rejoin as the standby of the peer"),
         ("standalone", "Leave the cluster: this node is on its own again"),
+        ("remove-node", "Remove the secondary from the cluster (run on the primary)"),
         ("sync-now", "Run the file sync now (standby)"),
     ):
         s = ha.add_parser(verb, help=help_text)
