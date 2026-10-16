@@ -986,7 +986,6 @@ def cmd_worker(args: argparse.Namespace) -> int:
     except Exception:
         log.exception("Could not record the finished restart")
     last_purge = 0.0
-    last_metrics_prune = 0.0
     last_full = last_module_sync = -1e9
     # Enabled modules' event handlers and periodic tasks (module API 1.1).
     modules = ModuleManager(settings, bus)
@@ -1021,20 +1020,8 @@ def cmd_worker(args: argparse.Namespace) -> int:
                                 purged_sessions,
                                 purged_tokens,
                             )
-                        from veyra.provisioning.serve import prune_requests
-
-                        pruned = prune_requests(db)
-                        if pruned:
-                            log.info("Pruned %d provisioning request log rows", pruned)
-                        from veyra.api.v1.pages import prune_log
-                        from veyra.bells import scheduler
-
-                        pruned_pages = prune_log(db)
-                        if pruned_pages:
-                            log.info("Pruned %d page log rows", pruned_pages)
-                        pruned_rings = scheduler.prune(db)
-                        if pruned_rings:
-                            log.info("Pruned %d bell rings", pruned_rings)
+                        # Provisioning, page and bell logs: the retention job
+                        # (docs/PRODUCTION_HARDENING.md §4) prunes them daily.
                         from veyra.reporting import cdr
 
                         pruned_calls = cdr.prune(db)
@@ -1107,6 +1094,15 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                     report_schedule.process(db, settings.mailqueue_dir)
                     process_mail_queue(db, settings, log)
+                    # Retention, once a day (docs/PRODUCTION_HARDENING.md §4).
+                    from veyra.core import retention
+
+                    if retention.due(db):
+                        removed = retention.run(db)
+                        db.commit()
+                        gone = {k: v for k, v in removed.items() if v}
+                        if gone:
+                            log.info("Retention removed %s", gone)
                     # Scheduled backups (docs/PRODUCTION_HARDENING.md §2.2).
                     from veyra.backups import service as backup_service
 
@@ -1119,16 +1115,14 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         ensure_prompt_dirs(db, settings)
                         # Dashboard graphs: one reading per iteration (docs/INTERFACE_REWORK.md §2).
                         from veyra.telephony import get_adapter
-                        from veyra.telephony.metrics import prune, record_sample
+                        from veyra.telephony.metrics import record_sample
 
                         record_sample(db, get_adapter(settings))
                         # Phone registrations for webhooks (docs/INTEGRATIONS.md §3.2).
                         from veyra.integrations import sources as webhook_sources
 
                         webhook_sources.registrations(db, get_adapter(settings))
-                        if time.monotonic() - last_metrics_prune >= 3600 or args.once:
-                            prune(db)
-                            last_metrics_prune = time.monotonic()
+                        # Samples are pruned by the retention job.
             except Exception:
                 log.exception("Worker iteration failed")
         # Bells and module tasks run on a short tick so a bell rings within a

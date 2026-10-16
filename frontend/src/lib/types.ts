@@ -2535,3 +2535,29 @@ export interface BackupStatus {
   error?: string | null;
   backup?: string | null;
 }
+
+// ----------------------------------------------------------------- retention (Milestone 17)
+
+export interface RetentionRule {
+  key: string;
+  label: string;
+  description: string;
+  days: number;
+  default_days: number;
+  minimum_days: number;
+}
+
+export interface RetentionState {
+  rules: RetentionRule[];
+  last_run: { at: string; removed: Record<string, number> } | null;
+}
+
+export interface RetentionInventoryRow {
+  key: string;
+  label: string;
+  rows: number;
+  bytes: number;
+  oldest: string | null;
+  days: number | null;
+  note?: string;
+}
