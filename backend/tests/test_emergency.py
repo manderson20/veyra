@@ -231,7 +231,7 @@ def test_service_records_notifies_and_readiness(admin, app, tmp_path):
 
 
 def test_emergency_api(admin, app):
-    org_id, site, ext = _site_and_ext(admin)
+    _org_id, site, ext = _site_and_ext(admin)
     overview = admin.get("/api/v1/emergency/sites").json()
     assert overview["ready"] == 0 and overview["sites"][0]["name"] == "Main Campus"
     assert "carrier" in overview["disclaimer"]

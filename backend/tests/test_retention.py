@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# ruff: noqa: E501
 """Retention (docs/PRODUCTION_HARDENING.md §4): settings with their
 minimums, the daily job per class including the append-only audit log,
 the inventory and the API."""
