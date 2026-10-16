@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.22.0 — unreleased (Milestone 16)
+## 0.22.0 — 2026-10-16 (Milestone 16)
 
 ### Added
 - **High availability** ([HIGH_AVAILABILITY.md](docs/HIGH_AVAILABILITY.md)): two nodes, active/passive. System → High availability turns a standalone installation into the primary in place (service name and address, PostgreSQL streaming replication with a slot, `wal_log_hints` and TLS from the Veyra CA, HTTPS certificate reissued for the service name and both nodes) and gives a one-time join token; `install.sh --role secondary --join <url> --token <t>` makes the second server a standby from an encrypted bundle and a base backup (migration `0029`).
