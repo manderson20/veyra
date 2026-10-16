@@ -445,7 +445,7 @@ def test_agent_epoch_rules_on_tick(ha_agent, monkeypatch):
 
 
 def test_agent_sync_now_uses_peer_manifest(ha_agent, monkeypatch, tmp_path):
-    a, system = ha_agent
+    a, _system = ha_agent
     (a.paths.data_dir / "prompts").mkdir(parents=True)
     content = b"hello"
     import hashlib
