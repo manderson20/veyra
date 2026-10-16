@@ -105,7 +105,7 @@ generated file and run `alembic check`.
 | A milestone completes (in roadmap order: 0, 1, 2, 3, 4, 4b, 5, …) | minor bump: Milestone 4 → `0.4.0`, Milestone 4b → `0.5.0`, Milestone 5 → `0.6.0` |
 | A fix shipped between milestones | patch bump: `0.4.1` |
 | Work in progress on a milestone branch | next version with `-dev`: `0.5.0-dev` |
-| Public release (Milestone 18) | `1.0.0`, then ordinary semantic versioning |
+| Public release (Milestone 23) | `1.0.0`, then ordinary semantic versioning |
 
 The installer names each release `<version>-<git revision>` (visible in the
 sidebar tooltip and `/etc/veyra/install-state.json`) and refuses downgrades

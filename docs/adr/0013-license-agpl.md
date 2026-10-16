@@ -18,5 +18,5 @@ service runtime talk to the core over HTTP and may be proprietary.
 
 **Consequences:** `LICENSE` holds the AGPL-3.0 text and sources carry SPDX
 headers. Some organizations avoid AGPL software; the owner can revisit the
-choice before the public release (Milestone 18) while the repository is
+choice before the public release (Milestone 23) while the repository is
 private, and a later ADR would supersede this one.

@@ -43,7 +43,7 @@ cannot download from it. Two options, both supported:
 * **A public releases repository** (proposed `manderson20/veyra-releases`)
   holding `stable.json`, `stable.json.sig` and the tarballs as GitHub
   release assets. Simple for every server; the release tarballs are then
-  public (the code is AGPL-licensed and meant to be published at M18).
+  public (the code is AGPL-licensed and meant to be published at M23).
 * **The private repository with a token**: the update source stores a
   read-only GitHub token (fine-grained, contents read) encrypted with the
   installation key and sends it with every request.
