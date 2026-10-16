@@ -127,12 +127,15 @@ def restore(
             if not r.ok:
                 raise BackupError(f"creating the database: {r.stderr.strip()[:300]}")
             # The backup directory is root-only, so the dump is fed on stdin.
+            # --role: the objects must belong to the service role, not to
+            # postgres, or the application cannot read its own tables.
             r = run(
                 [
                     "bash",
                     "-c",
                     "runuser -u postgres -- pg_restore --no-owner --no-privileges "
-                    f"-d {shlex.quote(database)} < {shlex.quote(str(directory / 'db.dump'))}",
+                    f"--role {shlex.quote(database)} -d {shlex.quote(database)} "
+                    f"< {shlex.quote(str(directory / 'db.dump'))}",
                 ]
             )
             if not r.ok:
