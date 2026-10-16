@@ -50,12 +50,15 @@ class KeepIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
-    enabled: bool = True
-    time: str = Field("02:30", max_length=5)
-    keep: KeepIn = Field(default_factory=KeepIn)
-    recordings: bool = False
-    recipients: list[str] = Field(default_factory=list, max_length=10)
-    copy_dir: str = Field("", max_length=1024)
+    """Fields left out keep their current value (a change to the copy
+    directory must not drop the recipients)."""
+
+    enabled: bool | None = None
+    time: str | None = Field(None, max_length=5)
+    keep: KeepIn | None = None
+    recordings: bool | None = None
+    recipients: list[str] | None = Field(None, max_length=10)
+    copy_dir: str | None = Field(None, max_length=1024)
 
 
 @router.get("/settings", summary="Backup schedule, keep policy, encryption and destinations")
@@ -73,7 +76,8 @@ def put_settings(
     ctx: RequestContext = Depends(request_context),
 ) -> dict[str, Any]:
     try:
-        value = service.save_settings(db, body.model_dump(), principal.user_id)
+        merged = {**service.settings(db), **body.model_dump(exclude_none=True)}
+        value = service.save_settings(db, merged, principal.user_id)
     except service.BackupError as e:
         raise _problem(e) from e
     _audit(
