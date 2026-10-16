@@ -53,6 +53,7 @@ class Node(Protocol):
     def db_event(self, event_type: str, details: dict[str, Any]) -> None: ...
     def fence_peer(self) -> str | None: ...  # None when no fencing is configured
     def sync_now(self) -> None: ...
+    def ensure_peer_slot(self) -> None: ...
     def local_name(self) -> str: ...
     def peer_name(self) -> str: ...
     # --- on the peer (node calls); raise PeerError when it fails
@@ -139,6 +140,7 @@ def switchover(node: Node, op: Operation, *, sleep: float = 0.5) -> Operation:
 
         _step(node, op, "promote", promote)
         _step(node, op, "epoch", lambda: _take_epoch(node, new_epoch, "switchover"))
+        _step(node, op, "slot", node.ensure_peer_slot, "for the old primary's rejoin")
         _step(node, op, "migrate", node.migrate, "schema at the new primary's version")
         _step(node, op, "deploy", lambda: _deploy_and_start(node))
         _step(node, op, "hold-address", node.hold_address, "gratuitous ARP")
@@ -228,6 +230,7 @@ def failover(node: Node, op: Operation, *, confirm_fenced: bool, sleep: float = 
 
         _step(node, op, "promote", promote)
         _step(node, op, "epoch", lambda: _take_epoch(node, new_epoch, "failover"))
+        _step(node, op, "slot", node.ensure_peer_slot, "for the old primary's rejoin")
         _step(node, op, "migrate", node.migrate)
         _step(node, op, "deploy", lambda: _deploy_and_start(node))
         _step(node, op, "hold-address", node.hold_address)

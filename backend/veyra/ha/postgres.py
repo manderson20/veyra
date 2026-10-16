@@ -324,7 +324,21 @@ class Postgres:
             f"ELSE ALTER ROLE {REPLICATION_ROLE} WITH REPLICATION LOGIN PASSWORD '{quoted}'; "
             "END IF; END $$"
         )
-        return self.sql(statement, database="postgres")
+        r = self.sql(statement, database="postgres")
+        if not r.ok:
+            return r
+        # pg_rewind reads the source's files through these functions
+        # (a replication role has no other way without being a superuser).
+        grants = "; ".join(
+            f"GRANT EXECUTE ON FUNCTION pg_catalog.{fn} TO {REPLICATION_ROLE}"
+            for fn in (
+                "pg_ls_dir(text, boolean, boolean)",
+                "pg_stat_file(text, boolean)",
+                "pg_read_binary_file(text)",
+                "pg_read_binary_file(text, bigint, bigint, boolean)",
+            )
+        )
+        return self.sql(grants, database="postgres")
 
     def grant_monitor(self, role: str) -> Result:
         return self.sql(f"GRANT pg_monitor TO {role}", database="postgres")

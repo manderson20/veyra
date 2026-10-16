@@ -107,6 +107,9 @@ class FakeNode:
     def sync_now(self):
         self._c("sync")
 
+    def ensure_peer_slot(self):
+        self._c("slot")
+
     def peer_run(self, verb, **args):
         self.peer_calls.append((verb, args))
         if verb in self.peer_fail:
@@ -131,6 +134,7 @@ def test_switchover_happy_path():
         "postgres-stop",
         "promote",
         "epoch",
+        "slot",
         "migrate",
         "deploy",
         "hold-address",
@@ -151,6 +155,7 @@ def test_switchover_happy_path():
         "promote",
         "role:primary:4:online",
         "db_roles:dev2:dev1:4:rejoining",
+        "slot",
         "migrate",
         "engine_start",
         "deploy",
