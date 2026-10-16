@@ -241,21 +241,20 @@ class Agent:
 
     def ensure_node_key(self) -> str:
         """The node's Ed25519 key, created on first use; returns the public key."""
-        if self.paths.node_key.exists():
-            priv = self.private_key()
-            return base64.b64encode(
-                protocol.load_private_key(priv).public_key().public_bytes_raw()
-            ).decode()
-        priv, pub = protocol.new_keypair()
-        self.paths.node_key.parent.mkdir(parents=True, exist_ok=True)
-        self.paths.node_key.write_text(priv + "\n")
+        if not self.paths.node_key.exists():
+            priv, _pub = protocol.new_keypair()
+            self.paths.node_key.parent.mkdir(parents=True, exist_ok=True)
+            self.paths.node_key.write_text(priv + "\n")
+        priv = self.private_key()
         # root:veyra 0640 like the installation key: the API signs with it too.
         os.chmod(self.paths.node_key, 0o640)
         with contextlib.suppress(KeyError, PermissionError, OSError):
             import grp
 
             os.chown(self.paths.node_key, 0, grp.getgrnam("veyra").gr_gid)
-        return pub
+        return base64.b64encode(
+            protocol.load_private_key(priv).public_key().public_bytes_raw()
+        ).decode()
 
     def ca_pem(self) -> str | None:
         try:
