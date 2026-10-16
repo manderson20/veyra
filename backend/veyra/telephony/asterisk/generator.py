@@ -113,6 +113,7 @@ OUTBOUND_DIAL_TIMEOUT = 60
 EMERGENCY_DIAL_TIMEOUT = 120
 _SITE_RE = re.compile(r"^[0-9a-f-]{36}$")
 EMERGENCY_EVENT = "VeyraEmergency"
+CONTEXT_EMERGENCY_NOTIFY = "veyra-emergency-notify"
 ASTDB_CALLBACK = "veyra_ecb"
 DEFAULT_RING_SECONDS = 30
 # Where the prompts live and the script Asterisk hands notifications to;
@@ -1009,6 +1010,19 @@ def _dialplan(
                 "pages": mine(list(paging.get("pages") or []), ns),
             }
             lines += _paging_contexts(part, prompts_dir)
+    lines += [
+        f"[{CONTEXT_EMERGENCY_NOTIFY}]",
+        "; A responder's phone rung by the on-site notification hears the",
+        "; extension that placed the emergency call (docs/PRODUCTION_HARDENING.md §6).",
+        "exten => _X.,1,Answer()",
+        " same => n,Wait(1)",
+        " same => n,Playback(beep)",
+        " same => n,SayDigits(${EXTEN})",
+        " same => n,Wait(1)",
+        " same => n,SayDigits(${EXTEN})",
+        " same => n,Hangup()",
+        "",
+    ]
     lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir, spaces)
     lines += _inbound_contexts(
         inbound, conditions, trunk_slugs, recording, prompts_dir, list(snapshot.get("sites") or [])

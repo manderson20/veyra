@@ -871,6 +871,8 @@ class OutboundRouteIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str | None = Field(None, max_length=2000)
     is_emergency: bool = False
+    # An emergency route bound to one site (docs/PRODUCTION_HARDENING.md §6).
+    site_id: uuid.UUID | None = None
     is_enabled: bool = True
     patterns: list[PatternIn] = Field(min_length=1, max_length=50)
     trunk_ids: list[uuid.UUID] = Field(min_length=1, max_length=20)
@@ -927,6 +929,7 @@ class OutboundRoutePatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, max_length=2000)
     is_emergency: bool | None = None
+    site_id: uuid.UUID | None = None
     is_enabled: bool | None = None
     patterns: list[PatternIn] | None = Field(None, min_length=1, max_length=50)
     trunk_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=20)
@@ -948,6 +951,7 @@ class OutboundRouteOut(BaseModel):
     description: str | None
     position: int
     is_emergency: bool
+    site_id: uuid.UUID | None = None
     is_enabled: bool
     patterns: list[PatternIn]
     examples: list[str]
@@ -998,6 +1002,7 @@ def _or_outs(db: Session, rows: list[OutboundRoute]) -> list[OutboundRouteOut]:
             description=r.description,
             position=r.position,
             is_emergency=r.is_emergency,
+            site_id=r.site_id,
             is_enabled=r.is_enabled,
             patterns=[PatternIn(**p) for p in (r.patterns or [])],
             examples=[routing.exten_for(p["prefix"], p["match"]) for p in (r.patterns or [])],
@@ -1121,6 +1126,7 @@ def create_outbound(
         description=(body.description or "").strip() or None,
         position=position,
         is_emergency=body.is_emergency,
+        site_id=body.site_id,
         is_enabled=body.is_enabled,
         patterns=[p.model_dump() for p in body.patterns],
         caller_id_number=body.caller_id_number,
@@ -1229,7 +1235,7 @@ def update_outbound(
         details["description"] = True
     if "organization_id" in changes:
         _check_route_org(db, validated.organization_id)
-    for field in ("is_emergency", "is_enabled", "caller_id_number", "organization_id"):
+    for field in ("is_emergency", "is_enabled", "caller_id_number", "organization_id", "site_id"):
         if field in changes and getattr(validated, field) != getattr(route, field):
             value = getattr(validated, field)
             setattr(route, field, value)

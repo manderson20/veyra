@@ -162,6 +162,30 @@ class AriEventTranslator:
 LIVE_WEBHOOK_EVENTS = frozenset({"call.ringing", "call.answered"})
 
 
+EMERGENCY_EVENT = "VeyraEmergency"
+
+
+def _emergency(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraEmergency)`` from the emergency route: record the call
+    and notify the site (docs/PRODUCTION_HARDENING.md §6); never raises."""
+    try:
+        from veyra.core.config import get_settings
+        from veyra.core.db import session_scope
+        from veyra.emergency import service
+        from veyra.telephony import get_adapter
+
+        settings = get_settings()
+        adapter = get_adapter(settings) if settings.telephony_engine != "none" else None
+        with session_scope() as db:
+            service.handle_event(db, settings, adapter, event.get("userevent") or {})
+    except Exception:
+        log.exception("Could not handle the emergency event")
+
+
+def is_emergency_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == EMERGENCY_EVENT
+
+
 def _webhook(ce: CallEvent) -> None:
     """Queue live call webhooks (docs/INTEGRATIONS.md §3.2); never raises."""
     try:
@@ -226,6 +250,8 @@ class AriEventListener:
                             event = json.loads(raw)
                         except ValueError:
                             continue
+                        if is_emergency_event(event):
+                            await asyncio.to_thread(_emergency, event)
                         for ce in self.translator.translate(event):
                             self.hub.publish(ce)
                             if ce.type in LIVE_WEBHOOK_EVENTS:
