@@ -1,6 +1,6 @@
 # Runtime dependencies (pinned; see docs/DEVELOPMENT.md "Dependency policy").
 fastapi==0.143.0
-starlette==1.7.0
+starlette==1.8.0
 uvicorn==0.54.0
 sqlalchemy==2.1.4
 alembic==1.20.0
@@ -8,13 +8,13 @@ pydantic==2.13.5
 pydantic-settings==2.15.0
 psycopg[binary]==3.3.6
 argon2-cffi==25.1.0
-cryptography==50.0.1
+cryptography==50.0.2
 jinja2==3.1.6
 # QR codes for authenticator enrolment, rendered server-side as SVG (docs/MFA_DESIGN.md §5).
 segno==1.6.6
 # WebSocket server (uvicorn picks it up) for the Companion call-event stream and
 # the ARI event client; pure Python, BSD, no dependencies (docs/COMPANION.md §2).
-websockets==15.0.1
+websockets==17.2
 # Multipart form parsing for prompt uploads (docs/VOICEMAIL_IVR.md §4); pure Python, Apache-2.0.
 python-multipart==0.0.32
 # iCalendar feeds for bell schedules (docs/PAGING_RECORDINGS.md §4): parsing and
