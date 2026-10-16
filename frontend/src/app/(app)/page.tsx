@@ -94,6 +94,7 @@ export default function Dashboard() {
   }, [reloadHealth]);
 
   const backups = useApiData<{ summary: BackupSummary; backups: unknown[] }>(session?.is_platform_admin ? "/backups" : null);
+  const emergency = useApiData<{ sites: { id: string }[]; ready: number }>(can("emergency.read") ? "/emergency/sites" : null);
   const h = health.data;
   return (
     <div className="stack">
@@ -120,6 +121,13 @@ export default function Dashboard() {
               hint={h.components.telephony.message} />
             <MetricCard icon="modules" label="Modules" value={<StatusBadge status={toStatus(h.components.modules.status)} />} hint={h.components.modules.message} />
           </section>
+          {emergency.data && emergency.data.sites.length ? (
+            <section aria-label="Emergency calling" className="grid grid--4">
+              <MetricCard icon="alert" label="Emergency calling"
+                value={<StatusBadge status={emergency.data.ready === emergency.data.sites.length ? "ok" : "degraded"} label={`${emergency.data.ready} of ${emergency.data.sites.length} sites ready`} />}
+                hint={<Link href="/system/emergency/">readiness per site, test calls</Link>} />
+            </section>
+          ) : null}
           {session?.is_platform_admin && backups.data ? (
             <section aria-label="Backups" className="grid grid--4">
               <MetricCard icon="database" label="Last good backup"

@@ -286,6 +286,8 @@ export interface Extension {
   caller_id_number: string | null;
   /** Presented on emergency routes instead of the regular caller ID (the building's ELIN or DID). */
   emergency_caller_id_number: string | null;
+  building_id?: string | null;
+  location?: string | null;
   is_enabled: boolean;
   sip_secret_set: boolean;
   sip_secret_changed_at: string | null;
@@ -1016,6 +1018,7 @@ export interface OutboundRoute {
   description: string | null;
   position: number;
   is_emergency: boolean;
+  site_id?: string | null;
   is_enabled: boolean;
   patterns: OutboundPattern[];
   /** Rendered Asterisk extensions, e.g. `_9NXXNXXXXXX`. */
@@ -1038,6 +1041,7 @@ export interface OutboundRouteInput {
   name?: string;
   description?: string | null;
   is_emergency?: boolean;
+  site_id?: string | null;
   is_enabled?: boolean;
   patterns?: OutboundPattern[];
   trunk_ids?: string[];
@@ -1637,6 +1641,8 @@ export interface Device {
   organization_id: string;
   organization_name: string;
   site_id: string | null;
+  building_id?: string | null;
+  location?: string | null;
   site_name: string | null;
   mac_address: string;
   mac_display: string;
@@ -2560,4 +2566,62 @@ export interface RetentionInventoryRow {
   oldest: string | null;
   days: number | null;
   note?: string;
+}
+
+// ----------------------------------------------------------------- emergency calling (Milestone 17)
+
+export interface EmergencyCheck {
+  key: string;
+  ok: boolean;
+  label: string;
+  detail: string;
+}
+
+export interface EmergencySiteRow {
+  id: string;
+  name: string;
+  organization_id: string;
+  ready: boolean;
+  missing: string[];
+  extensions: number;
+  calls: number;
+  elin: string | null;
+}
+
+export interface EmergencySettings {
+  emergency_caller_id_number: string | null;
+  address: string | null;
+  attested: boolean;
+  attested_by: string | null;
+  attested_at: string | null;
+  responder_extension_id: string | null;
+  responder_number: string | null;
+  callback_minutes: number;
+  recipients: { emails?: string[]; page_id?: string | null; extensions?: string[]; webhook?: boolean };
+  last_test_at: string | null;
+  last_test_result: string | null;
+  last_notification_test_at: string | null;
+}
+
+export interface EmergencyCallRow {
+  id: string;
+  occurred_at: string;
+  site_id: string | null;
+  extension_number: string;
+  number: string;
+  route: string | null;
+  caller_id: string | null;
+  location: string | null;
+  kind: string;
+  notifications: Record<string, unknown>;
+  callback_until: string | null;
+}
+
+export interface EmergencySiteDetail {
+  id: string;
+  name: string;
+  readiness: { ready: boolean; checks: EmergencyCheck[]; extensions: number };
+  settings: EmergencySettings;
+  calls: EmergencyCallRow[];
+  disclaimer: string;
 }
