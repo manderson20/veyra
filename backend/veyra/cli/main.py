@@ -727,6 +727,47 @@ def cmd_installation_key_generate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_installation_key_rotate(args: argparse.Namespace) -> int:
+    """Re-encrypt every ciphertext from the current key to the key in
+    ``--new-key`` (docs/PRODUCTION_HARDENING.md §3.1); the root wrapper
+    generates the file before and installs it after, so this runs as the
+    service account with the database only."""
+    import json
+    from pathlib import Path
+
+    from veyra.core import audit
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.core.security import rotation
+    from veyra.core.security.crypto import InstallationKey, load_installation_key
+
+    settings = get_settings()
+    old = load_installation_key(settings)
+    new = InstallationKey.load(Path(args.new_key))
+    if new.fingerprint == old.fingerprint:
+        raise RuntimeError("the new key is the current key")
+    with session_scope() as db:
+        before = rotation.check(db, old)
+        if not before.ok and not args.force:
+            raise RuntimeError(
+                "some ciphertexts do not decrypt with the current key: "
+                + ", ".join(before.unreadable or [])[:500]
+            )
+        n = rotation.rotate(db, old, new)
+        after = rotation.check(db, new)
+        if not after.ok:
+            raise RuntimeError("rotation produced unreadable ciphertexts; nothing was committed")
+        audit.record(
+            db,
+            action="security.installation_key_rotate",
+            actor_type="system",
+            actor_label="console",
+            details={"from": old.fingerprint, "to": new.fingerprint, "ciphertexts": n},
+        )
+    print(json.dumps({"rotated": n, "from": old.fingerprint, "to": new.fingerprint}))
+    return 0
+
+
 def cmd_installation_key_check(args: argparse.Namespace) -> int:
     from veyra.core.config import get_settings
     from veyra.core.security.crypto import InstallationKeyError, load_installation_key
@@ -741,11 +782,34 @@ def cmd_installation_key_check(args: argparse.Namespace) -> int:
         else:
             print(f"installation key: missing ({e})")
         return 1
+    unreadable: list[str] = []
+    total = 0
+    if getattr(args, "ciphertexts", False):
+        from veyra.core.db import session_scope
+        from veyra.core.security import rotation
+
+        with session_scope() as db:
+            report = rotation.check(db, key)
+        total, unreadable = report.total, list(report.unreadable or [])
     if args.json:
-        print(json.dumps({"path": str(path), "present": True, "fingerprint": key.fingerprint}))
+        print(
+            json.dumps(
+                {
+                    "path": str(path),
+                    "present": True,
+                    "fingerprint": key.fingerprint,
+                    "ciphertexts": total,
+                    "unreadable": unreadable,
+                }
+            )
+        )
     else:
         print(f"installation key: {path} (fingerprint {key.fingerprint})")
-    return 0
+        if getattr(args, "ciphertexts", False):
+            print(f"ciphertexts: {total}, unreadable: {len(unreadable)}")
+            for label in unreadable[:20]:
+                print(f"  cannot decrypt: {label}")
+    return 1 if unreadable else 0
 
 
 def process_mail_queue(db: Any, settings: Any, log: Any) -> None:
@@ -1861,12 +1925,19 @@ def build_parser() -> argparse.ArgumentParser:
     ik = sub.add_parser(
         "installation-key", help="The key that encrypts secrets at rest"
     ).add_subparsers(dest="subcommand", metavar="<action>", required=True)
+    s = ik.add_parser("rotate", help=argparse.SUPPRESS)
+    s.add_argument("--new-key", required=True)
+    s.add_argument("--force", action="store_true")
+    s.set_defaults(func=cmd_installation_key_rotate)
     s = ik.add_parser("generate", help="Create the installation key (refuses to replace one)")
     s.add_argument("--path", help="Key file (default: the configured location)")
     s.add_argument("--force", action="store_true", help="Replace an existing key")
     s.set_defaults(func=cmd_installation_key_generate)
     s = ik.add_parser("check", help="Show whether the key is present and its fingerprint")
     s.add_argument("--json", action="store_true")
+    s.add_argument(
+        "--ciphertexts", action="store_true", help="Also decrypt every stored ciphertext"
+    )
     s.set_defaults(func=cmd_installation_key_check)
 
     s = sub.add_parser("deployer", help="Run the configuration deployer service")

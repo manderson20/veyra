@@ -110,8 +110,10 @@ a `backups` policy section (schedule and keep policy) in a later milestone.
 
 ### 3.1 Installation key rotation
 
-`sudo veyra installation-key rotate` and System → Settings → Security →
-*Rotate the installation key*: a new key is generated, every ciphertext
+`sudo veyra installation-key rotate` (console only: the key file is
+root's, and a rotation is rare enough not to need a page; the Settings
+page shows the fingerprint, the rotation date and the command): a new key
+is generated, every ciphertext
 bound to the old key is re-encrypted in one transaction (SIP secrets,
 revision artifacts, MFA secrets, organization provisioning secrets, module
 configuration, SMTP password, SSO client secret, webhook secrets, firewall

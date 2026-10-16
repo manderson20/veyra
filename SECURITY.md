@@ -26,7 +26,7 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 | Authorization | Scoped RBAC (platform / organization / site) enforced in the backend; platform-only permissions; last-admin protection |
 | Tenant isolation | Scoped queries, with 404 for out-of-scope objects; telephony isolation validated before multi-tenancy is enabled (M14) |
 | Audit | Append-only audit log enforced by a database trigger; secrets redacted; denied and failed attempts recorded |
-| Secrets | No database password (peer authentication); generated ARI credential (0640); nothing secret in the repository or config files; SIP secrets and sensitive revision files encrypted at rest with the installation key (AES-256-GCM, purpose-bound, key outside the database, ADR 0014); secrets generated server-side, revealed only through audited endpoints, rotatable |
+| Secrets | No database password (peer authentication); generated ARI credential (0640); nothing secret in the repository or config files; SIP secrets, MFA secrets, trunk and provisioning credentials, integration secrets and sensitive revision files encrypted at rest with the installation key (AES-256-GCM, purpose-bound, key outside the database, ADR 0014); `sudo veyra installation-key rotate` re-encrypts everything to a new key in one transaction (M17); secrets generated server-side, revealed only through audited endpoints, rotatable |
 | Exposure | API, ARI and PostgreSQL on loopback only; AMI disabled; UI only on private addresses by default; checked by `verify.sh` |
 | Services | Dedicated `veyra` account; systemd sandboxing; code is root-owned and read-only; only the deployer unit may write under `/etc/asterisk/veyra` |
 | Engine configuration | Generated from the database by a pure function with allow-list validation of every value; targeted reloads over loopback ARI; failed deployments restore the previous files; rollback by redeploying |
@@ -37,7 +37,6 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 
 ## Known gaps (tracked)
 
-* Installation key rotation with re-encryption is not implemented; a lost key means rotating every SIP secret ([docs/EXTENSIONS.md](docs/EXTENSIONS.md) §5).
 * Passkeys (WebAuthn) and "remember this browser" are not implemented ([docs/MFA_DESIGN.md](docs/MFA_DESIGN.md)); SSO (OIDC, Entra ID, Google) is not yet implemented.
 * Self-service "forgot password" needs email delivery (Milestone 7); until then a reset link comes from an administrator or the server console.
 * The isolated service runtime for community and third-party modules is not yet implemented, so such modules are refused.
