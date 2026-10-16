@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.23.0 — unreleased (Milestone 17)
+
+### Added
+- **Backups** ([PRODUCTION_HARDENING.md](docs/PRODUCTION_HARDENING.md) §2): System → Backups takes, schedules (daily at a chosen time, run by the worker through a root unit), verifies (every dump is restored into a scratch database and compared), encrypts (age, to the administrator's recipients; Veyra keeps no private key), copies (a mounted directory) and prunes (daily/weekly/pre-upgrade keep policy) backups of the database, `/etc/veyra`, the engine configuration, prompts, hold music, firmware, templates, modules, voicemail and optionally recordings; `sudo veyra backup run|list|restore`; alert rules `backup_failed` and `backup_stale`; dashboard tile; migration `0030`.
+
 ## 0.22.0 — 2026-10-16 (Milestone 16)
 
 ### Added

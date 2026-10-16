@@ -164,6 +164,29 @@ class UpdateHistory(UUIDPrimaryKey, Base):
     log: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
 
 
+class Backup(UUIDPrimaryKey, Base):
+    """A backup taken by the root runner (docs/PRODUCTION_HARDENING.md §2);
+    the runner records it through ``veyra backup record``."""
+
+    __tablename__ = "backups"
+
+    kind: Mapped[str] = mapped_column(String(16))  # scheduled | manual | upgrade
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # running | verified | failed | deleted
+    state: Mapped[str] = mapped_column(String(16), default="running")
+    path: Mapped[str] = mapped_column(Text)
+    encrypted: Mapped[bool] = mapped_column(Boolean, default=False)
+    recipients: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    parts: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    copies: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    verify: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(320), default="scheduler")
+
+
 class UpdateCheck(Base):
     __tablename__ = "update_checks"
 

@@ -299,6 +299,24 @@ else
     check upgrade-unit warn "veyra-upgrade@.service, its polkit rule or /var/lib/veyra-upgrade missing: install updates with upgrade.sh"
 fi
 
+# --- backups (docs/PRODUCTION_HARDENING.md §2)
+if [[ -f /etc/systemd/system/veyra-backup@.service ]] \
+    && grep -qs "veyra-backup@" /etc/polkit-1/rules.d/50-veyra-services.rules \
+    && [[ "$(perm /var/lib/veyra-backup)" == "750 root:veyra" ]] && command -v age >/dev/null; then
+    check backup-unit pass "backups can run from the interface; age available"
+else
+    check backup-unit warn "veyra-backup@.service, its polkit rule, /var/lib/veyra-backup or age missing"
+fi
+if last="$(/usr/local/bin/veyra backup list --json 2>/dev/null)"; then
+    if python3 -c 'import json,sys; rows=json.load(sys.stdin); sys.exit(0 if any(r.get("state")=="verified" for r in rows) else 1)' <<<"$last"; then
+        check backup-last pass "a verified backup exists (System > Backups shows when)"
+    else
+        check backup-last warn "no verified backup yet (System > Backups: Back up now)"
+    fi
+else
+    check backup-last warn "could not list backups (veyra backup list)"
+fi
+
 # --- firewall (docs/FIREWALL_TRUST.md §8)
 [[ "$(perm "$VEYRA_DATA/firewall")" == "750 veyra:veyra" ]] \
     && check firewall-dir pass "750 veyra:veyra" \

@@ -1043,6 +1043,14 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                     report_schedule.process(db, settings.mailqueue_dir)
                     process_mail_queue(db, settings, log)
+                    # Scheduled backups (docs/PRODUCTION_HARDENING.md §2.2).
+                    from veyra.backups import service as backup_service
+
+                    try:
+                        if backup_service.tick(db):
+                            log.info("Started the scheduled backup")
+                    except backup_service.BackupError as e:
+                        log.warning("Scheduled backup not started: %s", e.message)
                     if settings.telephony_engine != "none":
                         ensure_prompt_dirs(db, settings)
                         # Dashboard graphs: one reading per iteration (docs/INTERFACE_REWORK.md §2).
@@ -1347,6 +1355,128 @@ def cmd_updates_run(args: argparse.Namespace) -> int:
 
 
 # ----------------------------------------------------------------- parser
+
+
+# ------------------------------------------------------------------ backups
+
+
+def cmd_backup_unit(args: argparse.Namespace) -> int:
+    """``veyra-backup@<instance>``: run, run-manual, verify-<id>, delete-<id>."""
+    import json
+    import uuid
+
+    from veyra.backups import runner
+    from veyra.core.db import session_scope
+
+    instance = str(args.instance)
+    if instance in ("run", "run-manual"):
+        payload = runner.run_backup(
+            "scheduled" if instance == "run" else "manual",
+            created_by="scheduler" if instance == "run" else "operator",
+        )
+        print(json.dumps({k: payload.get(k) for k in ("name", "state", "bytes", "error")}))
+        return 0 if payload.get("state") == "verified" else 1
+    if instance.startswith("delete-"):
+        backup_id = uuid.UUID(instance[len("delete-") :])
+        settings = runner.load_settings(runner.subprocess_runner())
+        from veyra.core.models import Backup
+
+        with session_scope() as db:
+            row = db.get(Backup, backup_id)
+            name = row.manifest.get("name") if row else None
+            kind = row.kind if row else "manual"
+        if not name:
+            raise RuntimeError("unknown backup")
+        runner.delete_backup(str(name), copy_dir=settings.get("copy_dir") or "")
+        r = runner.record(
+            runner.subprocess_runner(), {"name": name, "state": "deleted", "kind": kind}
+        )
+        return 0 if r.ok else 1
+    raise RuntimeError(f"unknown backup unit instance {instance!r}")
+
+
+def cmd_backup_run(args: argparse.Namespace) -> int:
+    """From the console (root): a manual or pre-upgrade backup, synchronously."""
+    import json
+
+    from veyra.backups import runner
+
+    payload = runner.run_backup(args.kind, created_by="console")
+    print(json.dumps({k: payload.get(k) for k in ("name", "state", "path", "bytes", "error")}))
+    return 0 if payload.get("state") == "verified" else 1
+
+
+def cmd_backup_record(args: argparse.Namespace) -> int:
+    import json
+
+    from veyra.backups import service
+    from veyra.core.db import session_scope
+
+    with session_scope() as db:
+        row = service.record(db, json.loads(args.json))
+        print(json.dumps({"id": str(row.id), "state": row.state}))
+    return 0
+
+
+def cmd_backup_settings(args: argparse.Namespace) -> int:
+    import json
+
+    from veyra.backups import service
+    from veyra.core.db import session_scope
+
+    with session_scope() as db:
+        print(json.dumps(service.settings(db)))
+    return 0
+
+
+def cmd_backup_list(args: argparse.Namespace) -> int:
+    import json
+
+    from veyra.backups import service
+    from veyra.core.db import session_scope
+
+    with session_scope() as db:
+        rows = [service.row_out(b) for b in service.rows(db, 200)]
+    if args.json:
+        print(
+            json.dumps([{"name": r["name"], "kind": r["kind"], "state": r["state"]} for r in rows])
+        )
+        return 0
+    for r in rows:
+        print(
+            f"{r['started_at']}  {r['kind']:9} {r['state']:9} "
+            f"{r['bytes'] // (1024 * 1024):6} MB  {r['path']}"
+        )
+    return 0
+
+
+def cmd_backup_restore(args: argparse.Namespace) -> int:
+    """Root: restore this server from a backup (docs/PRODUCTION_HARDENING.md §2.5)."""
+    from pathlib import Path
+
+    from veyra.backups import restore, runner
+
+    if not args.yes:
+        print("This replaces the database, configuration and data of this server.")
+        answer = input("Restore now? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            return 1
+    parts = [p.strip() for p in (args.parts or ",".join(restore.ALL_PARTS)).split(",") if p.strip()]
+    try:
+        out = restore.restore(
+            Path(args.source),
+            parts=parts,
+            identity=Path(args.identity) if args.identity else None,
+            run=runner.subprocess_runner(timeout=7200),
+        )
+    except runner.BackupError as e:
+        raise RuntimeError(str(e)) from e
+    print(
+        f"Restored {', '.join(out['parts'])}; "
+        f"services {'started' if out.get('started') else 'NOT started'}."
+    )
+    print("Run: sudo installer/verify.sh")
+    return 0
 
 
 def cmd_ha_agent(args: argparse.Namespace) -> int:
@@ -1770,6 +1900,30 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--tick", type=int, default=5, help="Seconds between bell and module passes")
     s.add_argument("--once", action="store_true")
     s.set_defaults(func=cmd_worker)
+    bk = sub.add_parser("backup", help="Backups (docs/PRODUCTION_HARDENING.md §2)").add_subparsers(
+        dest="backup_cmd", metavar="<action>", required=True
+    )
+    s = bk.add_parser("run", help="Take a backup now (root)")
+    s.add_argument("--kind", default="manual", choices=["manual", "upgrade", "scheduled"])
+    s.set_defaults(func=cmd_backup_run)
+    s = bk.add_parser("list", help="List backups")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_backup_list)
+    s = bk.add_parser("restore", help="Restore this server from a backup (root)")
+    s.add_argument("source", help="Backup directory or .tar.age file")
+    s.add_argument("--identity", help="age identity file for an encrypted backup")
+    s.add_argument("--parts", help="Comma-separated: db,etc,engine,data,voicemail,recordings")
+    s.add_argument("--yes", action="store_true")
+    s.set_defaults(func=cmd_backup_restore)
+    s = bk.add_parser("unit", help=argparse.SUPPRESS)
+    s.add_argument("instance")
+    s.set_defaults(func=cmd_backup_unit)
+    s = bk.add_parser("record", help=argparse.SUPPRESS)
+    s.add_argument("--json", required=True)
+    s.set_defaults(func=cmd_backup_record)
+    s = bk.add_parser("settings", help=argparse.SUPPRESS)
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_backup_settings)
     ha = sub.add_parser("ha", help="High availability (docs/HIGH_AVAILABILITY.md)").add_subparsers(
         dest="ha_cmd", metavar="<action>", required=True
     )

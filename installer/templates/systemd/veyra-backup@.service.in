@@ -1,0 +1,23 @@
+# Veyra backup runner (docs/PRODUCTION_HARDENING.md §2): takes, verifies,
+# encrypts and prunes backups as root. Instances: run (scheduled, started by
+# the worker through polkit), run-manual (the page), delete-<id>.
+[Unit]
+Description=Veyra backup (%i)
+Documentation=file://@VEYRA_PREFIX@/current/docs/PRODUCTION_HARDENING.md
+After=postgresql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=@VEYRA_ETC@/veyra.env
+WorkingDirectory=/
+ExecStart=@VEYRA_PREFIX@/current/backend/.venv/bin/veyra backup unit %i
+TimeoutStartSec=6h
+UMask=0077
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native

@@ -57,6 +57,7 @@ from veyra.core.models.platform import (
     ProvisioningTemplate,
     SystemSetting,
     UpdateCheck,
+    Backup,
     UpdateHistory,
     UpdatePolicy,
 )
@@ -168,6 +169,7 @@ __all__ = [
     "SystemSetting",
     "TimeCondition",
     "UpdateCheck",
+    "Backup",
     "UpdateHistory",
     "UpdatePolicy",
     "User",

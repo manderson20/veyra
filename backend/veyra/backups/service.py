@@ -1,0 +1,269 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""The database side of backups (docs/PRODUCTION_HARDENING.md §2): settings,
+the rows the runner records, scheduling from the worker, starting the root
+unit through polkit, and the status file for the page."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import uuid
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from veyra.backups import policy
+from veyra.core import audit
+from veyra.core.models import Backup, SystemSetting
+from veyra.core.models.base import utcnow
+
+UNIT = "veyra-backup@{instance}.service"
+STATUS_PATH = Path("/var/lib/veyra-backup/status.json")
+STALE_AFTER = timedelta(days=2)
+# Tests replace this with a recorder.
+systemctl: Callable[[list[str]], Any] | None = None
+
+
+class BackupError(Exception):
+    def __init__(self, status: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status, self.code, self.message = status, code, message
+
+
+# ------------------------------------------------------------------ settings
+
+
+def settings(db: Session) -> dict[str, Any]:
+    row = db.get(SystemSetting, policy.SETTINGS_KEY)
+    return policy.settings_doc(row.value if row is not None and isinstance(row.value, dict) else {})
+
+
+def save_settings(db: Session, body: dict[str, Any], by: uuid.UUID | None) -> dict[str, Any]:
+    try:
+        value = policy.settings_doc(body)
+    except ValueError as e:
+        raise BackupError(400, "bad_settings", str(e)) from e
+    bad = [r for r in value["recipients"] if not policy.valid_recipient(r)]
+    if bad:
+        raise BackupError(
+            400,
+            "bad_recipient",
+            "Recipients are age public keys (age1…) or SSH public keys (ssh-ed25519 …).",
+        )
+    if value["copy_dir"] and not value["copy_dir"].startswith("/"):
+        raise BackupError(400, "bad_copy_dir", "The copy directory is an absolute path.")
+    row = db.get(SystemSetting, policy.SETTINGS_KEY)
+    if row is None:
+        db.add(SystemSetting(key=policy.SETTINGS_KEY, value=value, updated_by=by))
+    else:
+        row.value = value
+        row.updated_by = by
+    db.flush()
+    return value
+
+
+# ------------------------------------------------------------------ rows
+
+
+def record(db: Session, p: dict[str, Any]) -> Backup:
+    """``veyra backup record``: the runner's payload becomes a row (or updates
+    the row of a backup already recorded as running)."""
+    name = str(p["name"])
+    row = db.scalar(select(Backup).where(Backup.manifest["name"].astext == name))
+    if row is None:
+        row = db.scalar(select(Backup).where(Backup.path.like(f"%/{name}%")))
+    if row is None:
+        row = Backup(
+            id=uuid.uuid4(), kind=str(p.get("kind") or "manual"), path=str(p.get("path") or "")
+        )
+        db.add(row)
+    row.started_at = (
+        datetime.fromisoformat(str(p["started_at"])) if p.get("started_at") else utcnow()
+    )
+    if p.get("finished_at"):
+        row.finished_at = datetime.fromisoformat(str(p["finished_at"]))
+    row.state = str(p.get("state") or "failed")
+    row.path = str(p.get("path") or row.path)
+    # A later record for the same backup (a deletion) carries only what changed.
+    if "encrypted" in p:
+        row.encrypted = bool(p.get("encrypted"))
+    if p.get("recipients") is not None:
+        row.recipients = list(p.get("recipients") or [])
+    if p.get("bytes") is not None:
+        row.bytes = int(p.get("bytes") or 0)
+    if p.get("parts"):
+        row.parts = list(p["parts"])
+    if p.get("copies"):
+        row.copies = dict(p["copies"])
+    if p.get("verify"):
+        row.verify = dict(p["verify"])
+    if p.get("manifest"):
+        row.manifest = dict(p["manifest"])
+    elif not row.manifest:
+        row.manifest = {"name": name}
+    if "error" in p:
+        row.error = str(p["error"])[:1000] if p.get("error") else None
+    row.created_by = str(p.get("created_by") or row.created_by or "scheduler")
+    for removed in p.get("removed") or []:
+        old = db.scalar(select(Backup).where(Backup.manifest["name"].astext == str(removed)))
+        if old is not None:
+            old.state = "deleted"
+    db.flush()
+    audit.record(
+        db,
+        action="backups.run",
+        outcome="success" if row.state == "verified" else "failure",
+        actor_type="system",
+        actor_label=row.created_by,
+        target_type="backup",
+        target_id=row.id,
+        details={
+            "kind": row.kind,
+            "bytes": row.bytes,
+            "error": row.error,
+            "removed": p.get("removed"),
+        },
+    )
+    return row
+
+
+def mark_deleted(db: Session, backup_id: uuid.UUID) -> Backup | None:
+    row = db.get(Backup, backup_id)
+    if row is not None:
+        row.state = "deleted"
+        db.flush()
+    return row
+
+
+def rows(db: Session, limit: int = 50) -> list[Backup]:
+    return list(db.scalars(select(Backup).order_by(Backup.started_at.desc()).limit(limit)))
+
+
+def row_out(b: Backup) -> dict[str, Any]:
+    return {
+        "id": str(b.id),
+        "name": b.manifest.get("name") or Path(b.path).name.split(".")[0],
+        "kind": b.kind,
+        "started_at": b.started_at.isoformat(),
+        "finished_at": b.finished_at.isoformat() if b.finished_at else None,
+        "state": b.state,
+        "path": b.path,
+        "encrypted": b.encrypted,
+        "recipients": b.recipients,
+        "bytes": b.bytes,
+        "parts": b.parts,
+        "copies": b.copies,
+        "verify": {k: v for k, v in b.verify.items() if k != "counts"} | {"ok": b.verify.get("ok")},
+        "version": b.manifest.get("version"),
+        "schema": b.manifest.get("schema"),
+        "error": b.error,
+        "created_by": b.created_by,
+    }
+
+
+def last_good(db: Session) -> Backup | None:
+    return db.scalar(
+        select(Backup)
+        .where(Backup.state == "verified")
+        .order_by(Backup.finished_at.desc())
+        .limit(1)
+    )
+
+
+def last_any(db: Session) -> Backup | None:
+    return db.scalar(select(Backup).order_by(Backup.started_at.desc()).limit(1))
+
+
+def summary(db: Session) -> dict[str, Any]:
+    good, last = last_good(db), last_any(db)
+    s = settings(db)
+    stale = s["enabled"] and (
+        good is None or utcnow() - (good.finished_at or good.started_at) > STALE_AFTER
+    )
+    return {
+        "enabled": s["enabled"],
+        "last_good_at": (good.finished_at or good.started_at).isoformat() if good else None,
+        "last_state": last.state if last else None,
+        "last_error": last.error if last else None,
+        "stale": stale,
+        "encrypted": bool(s["recipients"]),
+        "count": db.scalar(
+            select(func.count()).select_from(Backup).where(Backup.state == "verified")
+        ),
+    }
+
+
+# ------------------------------------------------------------------ the unit
+
+
+def start(instance: str) -> None:
+    """``systemctl start --no-block veyra-backup@<instance>`` through polkit."""
+    cmd = ["systemctl", "start", "--no-block", UNIT.format(instance=instance)]
+    res = (
+        systemctl(cmd)
+        if systemctl
+        else subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)  # noqa: S603
+    )
+    if getattr(res, "returncode", 1) != 0:
+        raise BackupError(
+            503,
+            "unit_failed",
+            "The backup could not be started: "
+            + ((getattr(res, "stderr", "") or "systemctl failed").strip()[:300]),
+        )
+
+
+def status(path: Path = STATUS_PATH) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def running(path: Path = STATUS_PATH) -> bool:
+    st = status(path)
+    return bool(st and st.get("state") == "running")
+
+
+def tick(db: Session, now: datetime | None = None, tz: ZoneInfo | None = None) -> bool:
+    """The worker: start the scheduled backup when due. True when started."""
+    now = now or utcnow()
+    s = settings(db)
+    if not s["enabled"] or running():
+        return False
+    last = db.scalar(
+        select(Backup.started_at)
+        .where(Backup.kind == "scheduled")
+        .order_by(Backup.started_at.desc())
+        .limit(1)
+    )
+    if not policy.next_due(last, s["time"], now, tz or _local_zone()):
+        return False
+    # The row exists before the unit starts, so a second tick does not start another.
+    db.add(
+        Backup(
+            id=uuid.uuid4(),
+            kind="scheduled",
+            started_at=now,
+            state="running",
+            path="",
+            manifest={"name": policy.stamp(now)},
+        )
+    )
+    db.commit()
+    start("run")
+    return True
+
+
+def _local_zone() -> ZoneInfo:
+    try:
+        name = Path("/etc/timezone").read_text().strip()
+        return ZoneInfo(name or "UTC")
+    except (OSError, KeyError, ValueError):
+        return ZoneInfo("UTC")
