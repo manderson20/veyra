@@ -8,6 +8,15 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.22.0 — unreleased (Milestone 16)
+
+### Added
+- **High availability** ([HIGH_AVAILABILITY.md](docs/HIGH_AVAILABILITY.md)): two nodes, active/passive. System → High availability turns a standalone installation into the primary in place (service name and address, PostgreSQL streaming replication with a slot, `wal_log_hints` and TLS from the Veyra CA, HTTPS certificate reissued for the service name and both nodes) and gives a one-time join token; `install.sh --role secondary --join <url> --token <t>` makes the second server a standby from an encrypted bundle and a base backup (migration `0029`).
+- A root **HA agent** (`veyra-ha-agent`, `/run/veyra/ha.sock`, fixed verbs) on every node holds the service address with gratuitous ARP, polls the peer every 10 s over the signed node channel (Milestone 15's message format, node keys), pulls the **file sync** every 30 s on the standby (prompts, hold music, firmware, templates, modules, releases, recordings optionally, voicemail, secrets and TLS; SHA-256 manifests, atomic writes) and runs the role sequences with every step recorded.
+- **Switchover** (from either node, preconditions checked and shown, runs on the target: freeze, engine stop, catch-up, release address, promote, epoch, migrations, deploy, address, rejoin by `pg_rewind` or base backup) and **failover** from the standby's own interface (Proxmox fencing or the operator's recorded confirmation). Epoch rules decide at boot and when the peer reappears: a stale primary demotes and rejoins; a primary that cannot reach its peer stays *isolated* without primary duties until *Resume as primary*. Nothing promotes a node without an operator.
+- The **standby's interface**: writes answer `503 ha_standby` (a frozen primary `503 ha_switchover`), platform administrators sign in with their authenticator code and an in-memory session, a banner points at the primary; dashboard HA tile; HA alert rules `node_offline`, `replication_broken`, `replication_lag`, `ha_sync_failed`, `node_isolated`, `ha_operation_failed`; `verify.sh` checks `ha-role`, `ha-replication`, `ha-sync`, `ha-peer`; `veyra ha status|switchover|failover|resume|rejoin|standalone|sync-now`.
+- HA-aware updates: *Install on the standby* from the Updates page; `upgrade.sh` on a standby skips migrations; the switchover runs them at promotion.
+
 ## 0.21.0 — 2026-10-15 (Milestone 15)
 
 ### Added

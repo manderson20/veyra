@@ -49,7 +49,9 @@ sudo installer/install.sh            # add --dry-run to see every action first
 
 Options: `--yes` (non-interactive), `--dry-run`, `--skip-telephony`,
 `--listen <address>` (repeatable), `--allow-public-admin`, and
-`--role standalone`.
+`--role standalone` (default) or `--role secondary --join https://<primary>
+--token <join token>` to join a high availability pair (see §5, High
+availability).
 
 The installer then:
 
@@ -76,7 +78,7 @@ The installer then:
 8. Applies database migrations.
 9. Creates a self-signed TLS certificate for the hostname and addresses (see §4).
 10. Configures Asterisk: ARI on `127.0.0.1:8088` only, AMI disabled, originals backed up as `*.veyra-backup-<timestamp>`; the control socket is opened to group `asterisk` (`astctlpermissions = 0660` in `asterisk.conf`) so the Veyra service account can send NOTIFY requests to phones (one Asterisk restart the first time).
-11. Installs and starts `veyra-api` (127.0.0.1:8100) and `veyra-worker`, both with systemd hardening.
+11. Installs and starts `veyra-api` (127.0.0.1:8100), `veyra-worker` and the root `veyra-ha-agent` (its socket `/run/veyra/ha.sock` is how HA is enabled later), all with systemd hardening.
 12. Configures NGINX: HTTPS with an HTTP→HTTPS redirect, the default site disabled (its file is kept), security headers, and the phone provisioning locations (`/provisioning/`, rate-limited, and `/provisioning/firmware/` from `/var/lib/veyra/firmware`; see §4a). NGINX is **restarted** (not reloaded) when the Veyra site is first installed or its addresses change, because its address-specific listeners cannot be bound while the default site's wildcard sockets are open; upgrades with an unchanged site only reload.
 13. Runs `verify.sh`.
 14. Prints a **one-time setup token** and the URL of the setup wizard.
@@ -231,6 +233,50 @@ console uses a self-signed certificate, paste its CA certificate into the
 enrollment form. An instance that loses the console keeps working; the
 console shows it as offline and can raise an alert.
 
+### High availability
+
+Optional ([HIGH_AVAILABILITY.md](HIGH_AVAILABILITY.md)). Two servers on
+the same network segment, the same Ubuntu release and the same Veyra
+release. On the server that has the data, open System → High availability
+and **Enable high availability**: give the service name (what phones and
+browsers will use; it must resolve to the service address), a free address
+on the segment with its prefix length, and the interface. PostgreSQL is
+reconfigured for replication and restarted once; the HTTPS certificate is
+reissued for the service name and both node names (if the Veyra CA had to
+be widened to permit the new names, phones and browsers must trust the new
+`veyra-ca.crt`). Then **Add node** gives a join token and the exact command
+for the second server:
+
+```
+sudo installer/install.sh --role secondary --join https://veyra-dev1 --token vyj_…
+```
+
+The second server's installer checks that the primary answers, installs
+the packages, then asks the primary for the join bundle (credentials, the
+CA and certificates, trust keys, the replication credential; encrypted with
+a key derived from the token), replaces its PostgreSQL data directory with
+a base backup of the primary and starts as a streaming standby; Asterisk is
+installed and configured but stays stopped, `veyra-deployer` and
+`veyra-pager` stay stopped, the file sync pulls prompts, hold music,
+firmware, templates, modules, downloaded releases, recordings (optional)
+and voicemail every 30 s. No migrations and no setup token on a standby:
+users and settings arrive through replication.
+
+The standby serves its own interface at `https://<its name>/` for platform
+administrators, read-only, with the HA page: that is where a **failover**
+is started when the primary is down (after fencing through Proxmox when
+configured, or the operator's confirmation that the primary is off). A
+planned **switchover** starts from either node's HA page while both are
+up. The engine units (`asterisk`, `veyra-deployer`, `veyra-pager`) are not
+enabled at boot on an HA node: the agent starts them with the primary role,
+and a primary that boots without reaching its peer waits as *isolated*
+until the operator resumes it or the peer answers.
+
+`verify.sh` adds `ha-role`, `ha-replication`, `ha-sync` and `ha-peer`;
+`sudo veyra ha status` prints the node's view. Updates on a pair follow
+[UPDATE_MANAGEMENT.md](UPDATE_MANAGEMENT.md) §8: standby first, switch
+over, then the old primary; `upgrade.sh` on a standby skips migrations.
+
 ### Firewall recovery from the server console
 
 If a firewall setting locks you out, from the console (or any SSH session
@@ -249,6 +295,7 @@ settings, the service state and the active bans.
 | `veyra-deployer` | veyra | Writes generated telephony configuration to `/etc/asterisk/veyra` and reloads Asterisk (only with a telephony engine) |
 | `veyra-pager` | veyra | Page sender: speakers' multicast and Poly group pages from one stream ([PAGING_RECORDINGS.md](PAGING_RECORDINGS.md) §2.2) |
 | `veyra-firewall` | veyra (+ CAP_NET_ADMIN) | Applies the nftables table `inet veyra` and bans attackers ([FIREWALL_TRUST.md](FIREWALL_TRUST.md) §3); off until turned on under System → Firewall |
+| `veyra-ha-agent` | root | High availability agent ([HIGH_AVAILABILITY.md](HIGH_AVAILABILITY.md) §3): holds the service address, drives PostgreSQL replication, runs switchover, failover and rejoin; fixed verbs over `/run/veyra/ha.sock`. Idle on a standalone |
 | `asterisk` | asterisk | Telephony engine; its `pjsip.conf`, `extensions.conf`, `rtp.conf`, `voicemail.conf`, `queues.conf`, `pjsip_notify.conf`, `musiconhold.conf`, `logger.conf` (with the security log the firewall reads), `cdr.conf` and `cdr_custom.conf` (call history) are Veyra-managed stubs that include the generated files. `asterisk-moh-opsound-wav` provides the built-in hold music; Veyra's hold music sets live in `<data>/moh/`, call recordings in `<data>/recordings/` |
 
 `journalctl -u veyra-deployer` shows deployments; `sudo veyra config status`

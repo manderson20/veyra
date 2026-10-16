@@ -139,6 +139,20 @@ updated first.
 ## 8. HA-aware updates (M16)
 
 Update the secondary, then switch over (planned, audited), then update the
-former primary. Both nodes are never updated at the same time. Rolling
-updates will not be described as safe until the HA test plan includes them
-and they pass.
+former primary. Both nodes are never updated at the same time
+([HIGH_AVAILABILITY.md](HIGH_AVAILABILITY.md) §12):
+
+1. On the primary's Updates page, *Install <version> on the standby*
+   (`POST /ha/standby-upgrade`): the standby starts its own
+   `veyra-upgrade@<version>` with the artifact the file sync already
+   brought it, verifies it there, and skips migrations (a replica cannot
+   write). The HA page shows the standby's version change.
+2. *Switch over* to the standby: the promotion step runs the migrations on
+   the new primary before the configuration is deployed.
+3. The old primary, now the standby, runs older code against the newer
+   schema for the minutes until *Install on <old primary>*; only its HA
+   page and read-only status are used in that window.
+4. Optionally switch back.
+
+Rolling updates will not be described as safe until the HA test plan
+includes them and they pass (stage 2, HA_ARCHITECTURE.md §10).

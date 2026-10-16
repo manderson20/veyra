@@ -2433,7 +2433,8 @@ export interface CentralCommandRow {
 }
 
 export interface CentralInstanceDetail extends CentralInstanceRow {
-  report: Record<string, unknown> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the instance report is free-form
+  report: Record<string, any> | null;
   fingerprint: string;
   revoked_at: string | null;
   samples: { at: string; registered: number | null; active_calls: number | null; alerts: number | null; status: string }[];
