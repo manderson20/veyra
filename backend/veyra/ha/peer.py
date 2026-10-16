@@ -72,9 +72,12 @@ def post(
     peer_public_key: str | None,
     ca_pem: str | None,
     timeout: float = CALL_TIMEOUT,
+    verify_tls: bool = True,
 ) -> httpx.Response:
     """A signed POST; the answer's signature is checked against the peer's
-    key when one is known (not yet at ``join``)."""
+    key when one is known (not yet at ``join``). ``verify_tls=False`` is
+    for the join only: the new node has no CA yet, and the bundle's secrecy
+    rests on the single-use token, not on TLS."""
     path = path_for(verb)
     body = encode(payload)
     ts, nonce = str(int(time.time())), protocol.new_nonce()
@@ -91,7 +94,7 @@ def post(
         with httpx.Client(
             timeout=timeout,
             follow_redirects=False,
-            verify=_verify(ca_pem),
+            verify=_verify(ca_pem) if verify_tls else False,
             transport=protocol.transport,
         ) as c:
             r = c.post(url.rstrip("/") + path, content=body, headers=headers)

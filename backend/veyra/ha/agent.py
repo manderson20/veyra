@@ -743,6 +743,11 @@ class Agent:
             addresses=[a for a in (n.address, n.service.address) if a],
             run=self.system.run,
         )
+        # The leaf followed by the CA, as the installer writes it (clients
+        # without the CA still get the chain).
+        leaf = (self.paths.tls / "veyra.crt").read_bytes()
+        if self.paths.ca_crt.exists():
+            (self.paths.tls / "veyra.crt").write_bytes(leaf + self.paths.ca_crt.read_bytes())
         os.chmod(self.paths.tls / "veyra.key", 0o600)
         certs.issue(
             self.paths.tls,
@@ -813,11 +818,12 @@ class Agent:
         peer_name = str(args["node_name"])
         peer_address = str(args["address"])
         peer_public = str(args["public_key"])
+        # Node calls go to the node address (§2), never through DNS.
         n.peer = Peer(
             node_id=str(args.get("node_id") or ""),
             node_name=peer_name,
             address=peer_address,
-            url=f"https://{peer_name}",
+            url=f"https://{peer_address}",
             public_key=peer_public,
         )
         self.state.save_node(n)
@@ -873,7 +879,7 @@ class Agent:
                     "node_id": n.node_id,
                     "node_name": n.node_name,
                     "address": n.address,
-                    "url": f"https://{n.node_name}",
+                    "url": f"https://{n.address}",
                     "public_key": self.ensure_node_key(),
                 },
                 "epoch": n.epoch,
@@ -915,8 +921,10 @@ class Agent:
                     node_id="joining",
                     private_key=self.private_key(),
                     peer_public_key=None,
-                    ca_pem=None if args.get("insecure") else self.ca_pem(),
+                    ca_pem=self.ca_pem(),
                     timeout=peer.CALL_TIMEOUT,
+                    # No CA yet on a fresh node: the token protects the bundle.
+                    verify_tls=self.ca_pem() is not None and not args.get("insecure"),
                 )
                 if r.status_code != 200:
                     raise AgentError(
