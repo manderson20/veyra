@@ -23,6 +23,7 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
   const [manufacturer, setManufacturer] = useState("");
   const [model, setModel] = useState("");
   const [label, setLabel] = useState("");
+  const [location, setLocation] = useState("");
   const [siteId, setSiteId] = useState("");
   const [profileId, setProfileId] = useState("");
   const [extensionId, setExtensionId] = useState("");
@@ -40,6 +41,7 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
       setManufacturer(seen?.manufacturer ?? "Poly");
       setModel(seen?.model ?? "");
       setLabel("");
+      setLocation("");
       setSiteId("");
       setProfileId("");
       setExtensionId("");
@@ -58,6 +60,7 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
         manufacturer: manufacturer.trim(),
         model: model.trim(),
         label: label.trim() || null,
+        location: location.trim() || null,
         site_id: siteId || null,
         profile_id: profileId || null,
         primary_extension_id: extensionId || null,
@@ -99,6 +102,8 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
             options={(extensions.data?.items ?? []).map((x) => ({ value: x.id, label: `${x.number} — ${x.display_name}` }))} onChange={(e) => setExtensionId(e.target.value)} />
           <SelectField label="Site" value={siteId} error={errors.fields.site_id} placeholder="From the profile" options={options.sites.map((s) => ({ value: s.id, label: s.name }))} onChange={(e) => setSiteId(e.target.value)} />
         </div>
+        <TextField label="Location (dispatchable)" value={location} error={errors.fields.location} placeholder="Room 101, first floor"
+          help="Floor and room for emergency calls from this phone; wins over the extension's location." onChange={(e) => setLocation(e.target.value)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>

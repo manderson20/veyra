@@ -86,6 +86,7 @@ export const NAV: NavSection[] = [
     { label: "Health", href: "/system/health/", icon: "health", permissions: ["system.health.read"], group: "Status" },
     { label: "Telephony Engine", href: "/system/telephony/", icon: "server", permissions: ["config.read"], group: "Platform" },
     { label: "High Availability", href: "/system/ha/", icon: "ha", permissions: ["ha.read"], group: "Platform" },
+    { label: "Emergency Calling", href: "/system/emergency/", icon: "alert", permissions: ["emergency.read"], group: "Status" },
     { label: "Updates", href: "/updates/", icon: "update", permissions: ["updates.read"], group: "Software" },
     { label: "Backups", href: "/system/backups/", icon: "database", permissions: ["backups.read"], group: "Software" },
     { label: "Module Manager", href: "/modules/", icon: "modules", permissions: ["modules.read"], group: "Software" },

@@ -2,6 +2,8 @@
 "use client";
 
 import { Checkbox, SelectField, Switch, TextArea, TextField } from "@/components/ui";
+import { useApiData } from "@/hooks/useApiData";
+import type { Page, Site } from "@/lib/types";
 import type { OutboundPattern, OutboundRoute, OutboundRouteInput } from "@/lib/types";
 import { EMPTY_PATTERN, PatternsEditor } from "./PatternsEditor";
 import { TrunkOrderEditor, type TrunkOption } from "./TrunkOrderEditor";
@@ -16,6 +18,8 @@ export interface OutboundRouteDraft {
   caller_id_number: string;
   /** "" = every organization (docs/MULTI_TENANCY.md §4). */
   organization_id: string;
+  /** Emergency routes only: "" = every site (docs/PRODUCTION_HARDENING.md §6). */
+  site_id: string;
 }
 
 export const EMPTY_OUTBOUND_ROUTE: OutboundRouteDraft = {
@@ -27,6 +31,7 @@ export const EMPTY_OUTBOUND_ROUTE: OutboundRouteDraft = {
   trunk_ids: [],
   caller_id_number: "",
   organization_id: "",
+  site_id: "",
 };
 
 export function outboundRouteDraft(r: OutboundRoute): OutboundRouteDraft {
@@ -39,6 +44,7 @@ export function outboundRouteDraft(r: OutboundRoute): OutboundRouteDraft {
     trunk_ids: r.trunks.map((t) => t.id),
     caller_id_number: r.caller_id_number ?? "",
     organization_id: r.organization_id ?? "",
+    site_id: r.site_id ?? "",
   };
 }
 
@@ -52,6 +58,7 @@ export function outboundRouteBody(d: OutboundRouteDraft): OutboundRouteInput {
     trunk_ids: d.trunk_ids,
     caller_id_number: d.caller_id_number.trim() || null,
     organization_id: d.organization_id || null,
+    site_id: d.is_emergency && d.site_id ? d.site_id : null,
   };
 }
 
@@ -69,6 +76,7 @@ export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled,
   /** Shown when there is more than one organization. */
   organizations?: { id: string; name: string }[];
 }) {
+  const sites = useApiData<Page<Site>>(draft.is_emergency ? "/sites" : null, { limit: 200 });
   return (
     <>
       <div className="form-grid">
@@ -85,6 +93,11 @@ export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled,
       ) : null}
       <Checkbox label="Emergency route" description="Emergency routes are evaluated before all others and cannot be moved below them. Use for 911 and similar numbers." checked={draft.is_emergency} disabled={disabled}
         onChange={(e) => onChange({ is_emergency: e.target.checked })} />
+      {draft.is_emergency ? (
+        <SelectField label="For the phones of" value={draft.site_id} disabled={disabled} placeholder="Every site"
+          help="A route bound to a site is tried first for that site's phones and hands other phones to the next emergency route."
+          options={(sites.data?.items ?? []).map((st) => ({ value: st.id, label: st.name }))} onChange={(e) => onChange({ site_id: e.target.value })} />
+      ) : null}
       <PatternsEditor patterns={draft.patterns} onChange={(patterns) => onChange({ patterns })} error={errors.patterns ?? errors.route} disabled={disabled} />
       <TrunkOrderEditor trunkIds={draft.trunk_ids} trunks={trunks} onChange={(trunk_ids) => onChange({ trunk_ids })} error={errors.trunk_ids} disabled={disabled} />
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />
