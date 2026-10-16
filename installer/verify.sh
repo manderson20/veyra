@@ -92,8 +92,13 @@ else
     check prov-location fail "NGINX site has no /provisioning/ location (re-run the installer)"
 fi
 code="$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/provisioning/000000000000.cfg 2>/dev/null || echo 000)"
-[[ "$code" == "401" ]] && check prov-auth pass "provisioning requires credentials (401)" \
-    || check prov-auth fail "https://127.0.0.1/provisioning/000000000000.cfg answered $code (expected 401)"
+if [[ "$HA_ROLE" == "secondary" ]]; then
+    [[ "$code" == "401" || "$code" == "503" ]] && check prov-auth pass "provisioning answered $code on the standby (phones use the primary)" \
+        || check prov-auth fail "https://127.0.0.1/provisioning/000000000000.cfg answered $code on the standby (expected 401 or 503)"
+else
+    [[ "$code" == "401" ]] && check prov-auth pass "provisioning requires credentials (401)" \
+        || check prov-auth fail "https://127.0.0.1/provisioning/000000000000.cfg answered $code (expected 401)"
+fi
 if grep -qs '^VEYRA_PROVISIONING_HTTP=1' "$VEYRA_ETC/veyra.env"; then
     if grep -qs '^VEYRA_PROVISIONING_HTTP_MODE=full' "$VEYRA_ETC/veyra.env"; then
         check prov-http warn "phone provisioning is also served over plain HTTP in full: SIP secrets cross the network unencrypted"
@@ -141,8 +146,11 @@ if [[ "$ENGINE" == "asterisk" ]]; then
     fi
 fi
 
-# --- engine include directory and stub files (Milestone 3)
-if [[ "$ENGINE" == "asterisk" ]]; then
+# --- engine include directory and stub files (Milestone 3); a standby's
+# engine is stopped (docs/HIGH_AVAILABILITY.md §5), so these wait for a promotion.
+if [[ "$ENGINE" == "asterisk" && "$HA_ROLE" == "secondary" ]]; then
+    check engine-standby pass "Asterisk configured and stopped on the standby; engine checks run on the primary"
+elif [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm /etc/asterisk/veyra)" == "2750 veyra:asterisk" ]] \
         && check engine-include-dir pass "2750 veyra:asterisk" \
         || check engine-include-dir fail "/etc/asterisk/veyra is $(perm /etc/asterisk/veyra) (expected 2750 veyra:asterisk)"
@@ -340,10 +348,10 @@ fi
 # peer must answer, replication must stream and the file sync must be fresh.
 if [[ "$HA_ROLE" != "standalone" ]]; then
     if ha="$(/usr/local/bin/veyra ha status --json 2>/dev/null)"; then
-        python3 - "$HA_ROLE" <<<"$ha" <<'PY' | while IFS=$'\t' read -r name status msg; do check "$name" "$status" "$msg"; done
-import json, sys
+        HA_JSON="$ha" python3 - "$HA_ROLE" <<'PY' | while IFS=$'\t' read -r name status msg; do check "$name" "$status" "$msg"; done
+import json, os, sys
 role = sys.argv[1]
-st = json.load(sys.stdin)
+st = json.loads(os.environ["HA_JSON"])
 node, rep, sync = st["node"], st.get("replication") or {}, st.get("sync") or {}
 out = []
 db_role = rep.get("db_role")

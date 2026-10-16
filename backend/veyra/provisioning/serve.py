@@ -18,6 +18,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from veyra.core.db import get_db
@@ -28,6 +29,19 @@ from veyra.provisioning import bootstrap, facts
 from veyra.provisioning.spec import TemplateError
 
 log = logging.getLogger("veyra.provisioning")
+
+
+def _commit(db: Session) -> None:
+    """The request log and the device's last-seen fields are best effort: on
+    an HA standby the database is read-only (docs/HIGH_AVAILABILITY.md §9)
+    and the phone still gets its answer."""
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        log.debug("Provisioning request not recorded (read-only database)")
+
+
 router = APIRouter(prefix="/provisioning", include_in_schema=False, tags=["provisioning-server"])
 
 _MAC_IN_NAME = re.compile(r"(?<![0-9a-f])([0-9a-f]{12})(?![0-9a-f])")
@@ -147,7 +161,7 @@ def _log(
         _m, _model, version = parse_user_agent(ua)
         if version:
             device.firmware_reported = version[:64]
-    db.commit()
+    _commit(db)
 
 
 def _mac_of(filename: str) -> str | None:
@@ -416,5 +430,5 @@ def prune_requests(db: Session, days: int = 30) -> int:
 
     cutoff = utcnow() - timedelta(days=days)
     result = db.execute(delete(ProvisioningRequest).where(ProvisioningRequest.at < cutoff))
-    db.commit()
+    _commit(db)
     return int(getattr(result, "rowcount", 0) or 0)
