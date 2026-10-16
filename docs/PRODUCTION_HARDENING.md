@@ -389,4 +389,13 @@ Where the build departs from the sections above:
 * **Security review:** `ProtectSystem=strict` for the HA agent is an
   exception until stage 2 of the HA plan; the rest of §5 is built.
 * **Secure SIP (§3.3)** is not built in this milestone (question 4).
+* **After the live checks (2026-10-16):** the security headers are one
+  included file, `/etc/veyra/nginx-security-headers.conf`, because an
+  `add_header` inside an NGINX location discards the inherited set; the
+  API's copies are hidden on proxied responses. Root-side backup steps
+  (`backup run`, `backup restore`, the delete unit) never open the
+  database as root: rows and settings go through the service account.
+  `pg_restore` runs with `--role veyra` so restored tables belong to the
+  service role. The `veyra` wrapper passes only `--force` to the key
+  rotation and installs the new key only on a reported rotation.
 

@@ -279,7 +279,12 @@ def test_runner_prunes_by_policy(world):
         world["sys"],
         now=now,
     )
-    removed = b.prune([(old.name, "scheduled"), (fresh.name.split(".")[0], "manual")])
+    removed = b.prune(
+        [
+            {"name": old.name, "kind": "scheduled"},
+            {"name": fresh.name.split(".")[0], "kind": "manual"},
+        ]
+    )
     assert removed == [old.name] and fresh.exists() and not old.exists()
 
 
