@@ -1,7 +1,7 @@
 # Security
 
-Veyra is in early development (Milestone 4b) and is **not yet suitable for
-production use**.
+Veyra is in development (Milestone 17, production hardening); the latest
+review is [docs/SECURITY_REVIEW_2026.md](docs/SECURITY_REVIEW_2026.md).
 
 ## Reporting a vulnerability
 
@@ -18,10 +18,10 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 |---|---|
 | Passwords | Argon2id; 12+ characters with weak-word and personal-information checks; constant-time handling of unknown users; administrator-set passwords are temporary |
 | Password reset | One-time links (hashed, 24 h, single use) issued by an administrator or the server console; generic failures; rate limited; signs the account out everywhere |
-| Sessions | Server-side, token hashes only; HttpOnly + Secure + SameSite=Strict cookies; 12 h absolute / 60 min idle; users and administrators can list and end sessions; expired rows purged after 30 days |
+| Sessions | Server-side, token hashes only; `__Host-` HttpOnly + Secure + SameSite=Strict cookies; 12 h absolute / 60 min idle; users and administrators can list and end sessions; expired rows purged after 30 days |
 | Two-factor authentication | TOTP (RFC 6238) with single-use Argon2id-hashed recovery codes; per-role policy with an enrolment grace window (administrators required by default); a 5-minute pre-authentication session that can reach only the MFA routes; replay protection; lockout after five wrong codes; secrets encrypted with the installation key; administrator and console resets, all audited |
 | CSRF | Double-submit token checked against a per-session hash, plus rejection of mutations the browser labels cross-site (fetch metadata) |
-| Brute force | NGINX + API rate limits; account lockout |
+| Brute force | NGINX + API rate limits per address and per account; account lockout |
 | First run | One-time console-issued setup token; setup possible only while no user exists |
 | Authorization | Scoped RBAC (platform / organization / site) enforced in the backend; platform-only permissions; last-admin protection |
 | Tenant isolation | Scoped queries, with 404 for out-of-scope objects; telephony isolation validated before multi-tenancy is enabled (M14) |
@@ -40,8 +40,8 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 * Passkeys (WebAuthn) and "remember this browser" are not implemented ([docs/MFA_DESIGN.md](docs/MFA_DESIGN.md)); SSO (OIDC, Entra ID, Google) is not yet implemented.
 * Self-service "forgot password" needs email delivery (Milestone 7); until then a reset link comes from an administrator or the server console.
 * The isolated service runtime for community and third-party modules is not yet implemented, so such modules are refused.
-* The rate limiter is per process. A shared limiter will come with HA.
-* The CSP allows `'unsafe-inline'` scripts because Next.js static export inlines its bootstrap. Moving to hashed inline scripts is planned.
+* The rate limiter is per process (one API process per node; an HA standby answers reads only).
+* The CSP allows `'unsafe-inline'` styles (scripts are allowed by hash since Milestone 17; see [docs/SECURITY_REVIEW_2026.md](docs/SECURITY_REVIEW_2026.md)).
 * No official release signing key or update server exists yet.
-* Asterisk comes from Ubuntu's `universe` component (ADR 0010), which is maintained by the community and by Ubuntu Pro `esm-apps`, not by Ubuntu's main security team. Production hosts should enable `esm-apps` or track Asterisk advisories; the production hardening milestone (M17) covers this.
-* Emergency calling is not configured and must not be relied on (see [docs/EMERGENCY_CALLING.md](docs/EMERGENCY_CALLING.md)).
+* Asterisk comes from Ubuntu's `universe` component (ADR 0010), maintained by the community and by Ubuntu Pro `esm-apps`; `preflight.sh` and `verify.sh` warn when `esm-apps` is not attached.
+* Emergency calling: Veyra reports readiness per site against its own checks; the operator validates with the carrier (see [docs/EMERGENCY_CALLING.md](docs/EMERGENCY_CALLING.md)).

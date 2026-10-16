@@ -44,7 +44,9 @@ server {
     add_header Permissions-Policy "camera=(), geolocation=(), payment=()" always;
     # Next.js static export inlines its bootstrap scripts, hence 'unsafe-inline'
     # for scripts. No third-party origins are allowed.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'@CSP_SCRIPT_SRC@; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
 
     root @VEYRA_PREFIX@/current/frontend/out;
     index index.html;

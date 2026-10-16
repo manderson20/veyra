@@ -6,7 +6,7 @@
   "description": "Veyra administrative web interface (static Next.js export)",
   "scripts": {
     "dev": "NEXT_TELEMETRY_DISABLED=1 next dev --port 3000",
-    "build": "NEXT_TELEMETRY_DISABLED=1 next build",
+    "build": "NEXT_TELEMETRY_DISABLED=1 next build && node scripts/csp-hashes.mjs out",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

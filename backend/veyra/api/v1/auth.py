@@ -433,7 +433,11 @@ def login(
     settings: Settings = Depends(get_settings),
     ctx: RequestContext = Depends(request_context),
 ) -> SessionOut | JSONResponse:
-    if not _limiter(settings).hit(ctx.ip or "unknown"):
+    # Per address and per account (docs/PRODUCTION_HARDENING.md §5): a
+    # distributed guess at one account is slowed like a burst from one address.
+    if not _limiter(settings).hit(ctx.ip or "unknown") or not _limiter(settings).hit(
+        f"account:{body.email.lower()}"
+    ):
         raise _too_many("Too many sign-in attempts. Wait a minute and try again.")
     if request.app.state.ha_guard.flags().standby:
         return standby_login(request, body, response, db, settings, ctx)

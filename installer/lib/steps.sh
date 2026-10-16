@@ -744,6 +744,20 @@ listen_directives() {
     printf '%s' "${out%$'\n'}"
 }
 
+# Hashes of the web interface's inline scripts (frontend/out/csp-hashes.txt,
+# written by the build): the CSP allows exactly those instead of
+# 'unsafe-inline' (docs/PRODUCTION_HARDENING.md §5). Without the file the
+# interface would not load, so 'unsafe-inline' stays as the fallback.
+csp_script_src() {
+    local f="$VEYRA_PREFIX/current/frontend/out/csp-hashes.txt" h out=""
+    if [[ -s "$f" ]]; then
+        while IFS= read -r h; do [[ -n "$h" ]] && out+=" $h"; done <"$f"
+        printf '%s' "$out"
+    else
+        printf " 'unsafe-inline'"
+    fi
+}
+
 do_nginx() {
     begin nginx "Configuring NGINX"
     local tmp
@@ -806,7 +820,8 @@ do_nginx() {
         curl -fsSk -m 3 https://127.0.0.1/api/v1/system/ping >/dev/null 2>&1 \
             || die "NGINX is running but https://127.0.0.1/ does not answer; see /var/log/nginx/error.log"
     fi
-    ok "NGINX serving the Veyra web interface over HTTPS"
+    ok "NGINX serving the Veyra web interface over HTTPS" \
+        "CSP_SCRIPT_SRC=$(csp_script_src)"
 }
 
 do_setup_token() {

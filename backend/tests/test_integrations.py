@@ -393,7 +393,7 @@ def test_companion_sso(admin, provider, app):
         follow_redirects=False,
     )
     assert r.status_code == 303 and r.headers["location"].startswith(redirect + "?code=")
-    assert "veyra_session" not in r.headers.get("set-cookie", "")
+    assert "__Host-veyra_session" not in r.headers.get("set-cookie", "")
     code = parse_qs(urlsplit(r.headers["location"]).query)["code"][0]
     r = c.post(
         "/api/v1/auth/companion/sso",

@@ -34,7 +34,13 @@ from veyra.api.v1.schemas import MessageOut
 from veyra.core import audit
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, current_principal, request_context, require
+from veyra.core.deps import (
+    SESSION_COOKIE,
+    RequestContext,
+    current_principal,
+    request_context,
+    require,
+)
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.models import MfaMethod, User, UserSession
 from veyra.core.models.base import utcnow
@@ -296,7 +302,7 @@ def verify(
         recovery_codes_remaining=remaining,
     )
     db.commit()
-    session_token = request.cookies.get("veyra_session", "")
+    session_token = request.cookies.get(SESSION_COOKIE, "")
     _set_cookies(response, settings, session_token, csrf)
     return _session_out(db, user, load_principal(db, user, session.id), csrf)
 
@@ -410,7 +416,7 @@ def totp_confirm(
     )
     db.commit()
     if csrf is not None:
-        _set_cookies(response, settings, request.cookies.get("veyra_session", ""), csrf)
+        _set_cookies(response, settings, request.cookies.get(SESSION_COOKIE, ""), csrf)
     return TotpConfirmOut(
         method=_method_out(method),
         recovery_codes=codes,
