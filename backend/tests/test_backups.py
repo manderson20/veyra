@@ -112,6 +112,10 @@ class FakeSystem:
                     0 if not self.fail_restore else 1, "", "boom" if self.fail_restore else ""
                 )
             return runner.Result(0, "")
+        if argv[0] == "bash" and "pg_restore" in argv[-1]:
+            return runner.Result(
+                0 if not self.fail_restore else 1, "", "boom" if self.fail_restore else ""
+            )
         if argv[0] == "bash" and "pg_dump" in argv[-1]:
             out = Path(argv[-1].split(" > ")[-1])
             out.write_bytes(b"PGDMP fake dump")

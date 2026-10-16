@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import tempfile
 from collections.abc import Callable, Sequence
@@ -125,15 +126,13 @@ def restore(
             r = run([*pg, "createdb", "-O", database, "-E", "UTF8", database])
             if not r.ok:
                 raise BackupError(f"creating the database: {r.stderr.strip()[:300]}")
+            # The backup directory is root-only, so the dump is fed on stdin.
             r = run(
                 [
-                    *pg,
-                    "pg_restore",
-                    "--no-owner",
-                    "--no-privileges",
-                    "-d",
-                    database,
-                    str(directory / "db.dump"),
+                    "bash",
+                    "-c",
+                    "runuser -u postgres -- pg_restore --no-owner --no-privileges "
+                    f"-d {shlex.quote(database)} < {shlex.quote(str(directory / 'db.dump'))}",
                 ]
             )
             if not r.ok:
