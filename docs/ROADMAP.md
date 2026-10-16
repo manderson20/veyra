@@ -36,7 +36,7 @@ completed milestones in the order below (see
 | 15 | Centralized instance management: a central console (any Veyra installation) that instances enroll with; signed check-ins every minute from the instance (no inbound connection needed), health, counts, alerts and update state per instance, policies (update policy and window, firewall allow-list, alert recipients, a notice) that the local administrator may accept or refuse, and a fixed list of commands (check, download, approve updates) | 0.21.0 | **Complete, approved 2026-10-15** ([report](milestones/MILESTONE_15_REPORT.md)); design [CENTRAL_MANAGEMENT.md](CENTRAL_MANAGEMENT.md) |
 | 16 | High availability implementation and testing | 0.22.0 | **Complete (stage 1), approved 2026-10-16** ([report](milestones/MILESTONE_16_REPORT.md)); design [HIGH_AVAILABILITY.md](HIGH_AVAILABILITY.md); stage 2 (two real servers) pending veyra-dev2 |
 | 17 | Production hardening (backups, encryption, retention, security review, emergency calling validation) | 0.23.0 | **Complete, approved 2026-10-16** ([report](milestones/MILESTONE_17_REPORT.md)); design [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) |
-| 18 | Public release preparation (license decision, disclosure policy, packaging) | 1.0.0 | |
+| 18 | Public release preparation (license decision, disclosure policy, packaging) | 1.0.0 | Not started; input: [FreePBX gap analysis](FREEPBX_GAP_ANALYSIS.md) (2026-10-16) |
 
 Planned UI areas (shown in navigation as "coming later" with their
 milestone): Extensions (M4), Devices (M9), SIP Trunks (M6), Inbound and
