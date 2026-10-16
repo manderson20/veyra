@@ -1,8 +1,8 @@
 # Milestone 17 Report — Production Hardening
 
 Branch `milestone-17` (from `main` at 0.22.0). Design:
-[PRODUCTION_HARDENING.md](../PRODUCTION_HARDENING.md). Status: **built and
-live-checked on dev1 (2026-10-16), awaiting approval → 0.23.0.**
+[PRODUCTION_HARDENING.md](../PRODUCTION_HARDENING.md). Status: **approved 2026-10-16,
+released as 0.23.0** (live-checked on dev1 the same day; browser CSP check passed).
 
 ## 1. Scope (roadmap row 17)
 
@@ -81,7 +81,7 @@ Every check passed on the final tree:
 | Key rotation | `sudo veyra installation-key rotate`: 66 rotated, `b18fd7d3…` → `f1234c3a…`, check clean, services restarted, a backup verified afterwards |
 | Retention | inventory read (10 classes), applied: nothing older than the limits |
 | Emergency | a site with address and ELIN, attested, callback 30 min: readiness shows the missing route; the notification test records a test call and queues the webhook |
-| Browser | the CSP by hash is still to be seen by a real browser (owner) |
+| Browser | the web interface loads under the CSP by hash (owner, 2026-10-16) |
 
 Defects found by the live checks, all fixed on `milestone-17`:
 
@@ -110,8 +110,8 @@ Defects found by the live checks, all fixed on `milestone-17`:
 
 ## 4. Not verified
 
-The CSP by hash in a real browser; `pg_rewind` (carried over from Milestone 16);
-Proxmox fencing; a real S3 bucket; real emergency calls with a carrier.
+`pg_rewind` (carried over from Milestone 16); Proxmox fencing; a real S3 bucket;
+real emergency calls with a carrier.
 
 ## 5. Known limitations
 

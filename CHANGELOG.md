@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.23.0 — unreleased (Milestone 17)
+## 0.23.0 — 2026-10-16 (Milestone 17)
 
 ### Added
 - **Security review** ([SECURITY_REVIEW_2026.md](docs/SECURITY_REVIEW_2026.md)): the CSP allows scripts by hash instead of `'unsafe-inline'` (the build writes `csp-hashes.txt`, the installer renders it), `Permissions-Policy` and `Cross-Origin-Opener-Policy` headers, the `__Host-` session cookie, sign-in rate limits per account as well as per address, Ubuntu Pro `esm-apps` checks in preflight and verify, a capability bound on the HA agent, a weekly dependency audit in CI, and a test that generated secrets never reach logs or audit details. The security headers are one installer-managed file, `/etc/veyra/nginx-security-headers.conf`, sent once on every response.
