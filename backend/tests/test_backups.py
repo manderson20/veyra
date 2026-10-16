@@ -458,6 +458,9 @@ def test_scheduled_run_adopts_the_pending_row(admin, recorder):
         db.commit()
         assert db.query(Backup).filter_by(kind="scheduled").count() == 1
         assert row.state == "failed" and row.path.endswith(policy.stamp(later))
+        # A deletion record carries no start: the row keeps its own.
+        service.record(db, {"name": policy.stamp(later), "kind": "scheduled", "state": "deleted"})
+        assert row.state == "deleted" and row.started_at == later
         # A second pending row that nobody reports on.
         assert service.tick(db, now + timedelta(days=1), ZoneInfo("UTC")) is True
         pending = db.query(Backup).filter_by(kind="scheduled", state="running").one()
