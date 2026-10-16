@@ -82,6 +82,21 @@ class System:
                     return True
         return False
 
+    def interface_for(self, address: str) -> str | None:
+        """The interface that carries ``address`` on this node."""
+        r = self.run(["ip", "-j", "addr", "show"])
+        if not r.ok:
+            return None
+        try:
+            data = json.loads(r.stdout or "[]")
+        except ValueError:
+            return None
+        for link in data:
+            for info in link.get("addr_info", []):
+                if info.get("local") == address:
+                    return str(link.get("ifname") or "") or None
+        return None
+
     def address_add(self, address: str, prefix: int, interface: str) -> Result:
         return self.run(
             [
@@ -509,6 +524,14 @@ class Agent:
 
     def sync_now(self) -> None:
         self.run_sync(force=True)
+
+    def ensure_peer_slot(self) -> None:
+        """The replication slot the peer will stream from once it rejoins."""
+        n = self.node()
+        if self.pg and n.peer:
+            r = self.pg.ensure_slot(postgres.slot_name(n.peer.node_name))
+            if not r.ok:
+                raise AgentError("slot_failed", r.stderr.strip()[:300])
 
     def peer_run(self, verb: str, **args: Any) -> dict[str, Any]:
         """Ask the peer's agent for a verb; returns the verb's result."""
@@ -1032,6 +1055,11 @@ class Agent:
                     public_key=str(primary["public_key"]),
                 )
                 n.service = ServiceAddress.from_dict(values.get("service"))
+                # The interface is this node's own (§13 question 1): the
+                # one that carries its node address.
+                mine = self.system.interface_for(address)
+                if mine:
+                    n.service.interface = mine
                 n.epoch = int(values.get("epoch") or 1)
                 n.node_id = str(data.get("node_id") or "")
                 n.role, n.state = "secondary", "joining"
