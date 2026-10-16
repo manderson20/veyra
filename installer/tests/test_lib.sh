@@ -37,10 +37,17 @@ t "render_template substitutes" grep -qx 'a=1 b=x y' "$TMP/out"
 # optional HTTP provisioning block (docs/DEVICE_PROVISIONING.md §3.3).
 render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx.conf" \
     "LISTEN_HTTP=    listen 127.0.0.1:80;" "LISTEN_HTTPS=    listen 127.0.0.1:443 ssl;" \
-    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra HTTP_PROVISIONING= \
-    "CSP_SCRIPT_SRC= 'sha256-abc='"
-t "nginx template renders script hashes into the CSP" grep -q "script-src 'self' 'sha256-abc=';" "$TMP/nginx.conf"
-t "nginx template sets Permissions-Policy once" test "$(grep -c 'Permissions-Policy' "$TMP/nginx.conf")" = 1
+    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra HTTP_PROVISIONING=
+render_template "$HERE/../templates/nginx/security-headers.conf.in" "$TMP/headers.conf" "CSP_SCRIPT_SRC= 'sha256-abc='"
+t "security headers render script hashes into the CSP" grep -q "script-src 'self' 'sha256-abc=';" "$TMP/headers.conf"
+t "security headers set Permissions-Policy once" test "$(grep -c 'Permissions-Policy' "$TMP/headers.conf")" = 1
+t "nginx template includes the security headers in the server block" grep -q '^    include /etc/veyra/nginx-security-headers.conf;' "$TMP/nginx.conf"
+# Every location with an add_header of its own re-includes the set (nginx
+# drops inherited add_header directives there).
+t "every location with add_header re-includes the security headers" \
+    test "$(grep -c '^        add_header' "$TMP/nginx.conf")" -gt 0 -a \
+         "$(awk '/^    location/{inc=0; add=0} /^        include \/etc\/veyra\/nginx-security-headers.conf;/{inc=1} /^        add_header/{add=1} /^    }/{if(add && !inc) bad++} END{print bad+0}' "$TMP/nginx.conf")" = 0
+t "nginx template has no security headers of its own" not grep -q '^    add_header' "$TMP/nginx.conf"
 t "nginx template has the provisioning location" grep -q 'location /provisioning/ {' "$TMP/nginx.conf"
 t "nginx template includes the HA listen files" grep -q 'include /etc/veyra/nginx-ha-listen-https.conf;' "$TMP/nginx.conf"
 t "nginx template serves firmware from the data directory" grep -q 'alias /var/lib/veyra/firmware/;' "$TMP/nginx.conf"
@@ -48,8 +55,7 @@ t "nginx template has no HTTP provisioning by default" not grep -q 'Provisioning
 block="$(sed -e 's|@VEYRA_DATA@|/var/lib/veyra|g' -e 's|@VEYRA_ETC@|/etc/veyra|g' "$HERE/../templates/nginx/provisioning-http.conf.in")"
 render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx-http.conf" \
     "LISTEN_HTTP=    listen 127.0.0.1:80;" "LISTEN_HTTPS=    listen 127.0.0.1:443 ssl;" \
-    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra "HTTP_PROVISIONING=$block" \
-    "CSP_SCRIPT_SRC= 'unsafe-inline'"
+    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra "HTTP_PROVISIONING=$block"
 t "nginx template includes the HTTP provisioning block when enabled" grep -q 'Provisioning over plain HTTP' "$TMP/nginx-http.conf"
 t "HTTP provisioning block is rendered" not grep -q '@VEYRA_DATA@' "$TMP/nginx-http.conf"
 render_template "$HERE/../templates/veyra.env.in" "$TMP/env" VEYRA_ETC=/etc/veyra VEYRA_DATA=/var/lib/veyra \

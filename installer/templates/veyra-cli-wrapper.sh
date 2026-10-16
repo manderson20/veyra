@@ -35,15 +35,35 @@ fi
 # the new key, the service account re-encrypts the database with it, root
 # installs it (keeping the previous key) and restarts the services.
 if [[ "${1:-}" == "installation-key" && "${2:-}" == "rotate" ]]; then
+    # Only --force is passed through: an unknown flag (or -h/--help, which the
+    # inner command would answer with its help text and exit 0) must never
+    # reach the step that installs the new key.
+    for a in "${@:3}"; do
+        case "$a" in
+            --force) ;;
+            -h|--help)
+                echo "Use: sudo veyra installation-key rotate [--force]"
+                echo "Generates a new installation key, re-encrypts every stored secret with it,"
+                echo "installs it (keeping the previous key as installation.key.previous) and"
+                echo "restarts the services. --force rotates even when some ciphertexts do not"
+                echo "decrypt with the current key (docs/PRODUCTION_HARDENING.md §3.1)."
+                exit 0 ;;
+            *) echo "veyra: installation-key rotate takes only --force" >&2; exit 2 ;;
+        esac
+    done
     KEY=/etc/veyra/secrets/installation.key
     NEW="$(mktemp -p /etc/veyra/secrets .installation.key.XXXXXX)"
     trap 'rm -f "$NEW"' EXIT
     od -An -N32 -tx1 /dev/urandom | tr -d ' \n' >"$NEW"; echo >>"$NEW"
     chown root:veyra "$NEW"; chmod 0640 "$NEW"
-    if ! as_veyra installation-key rotate --new-key "$NEW" "${@:3}"; then
+    # The new key is installed only when the service account reports a
+    # completed rotation ({"rotated": n, ...}); any other exit is a no-op.
+    if ! out="$(as_veyra installation-key rotate --new-key "$NEW" "${@:3}")" \
+        || [[ "$out" != *'"rotated"'* ]]; then
         echo "veyra: the database was not changed; the current key stays" >&2
         exit 1
     fi
+    printf '%s\n' "$out"
     cp -p "$KEY" "$KEY.previous"; chmod 0600 "$KEY.previous"
     mv -f "$NEW" "$KEY"; chown root:veyra "$KEY"; chmod 0640 "$KEY"
     trap - EXIT

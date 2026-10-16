@@ -772,11 +772,16 @@ do_nginx() {
             info "Plain HTTP serves the phone trust bootstrap only (the Veyra CA and the HTTPS address)"
         fi
     fi
+    local hdr
+    hdr="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/nginx/security-headers.conf.in" "$hdr" \
+        "CSP_SCRIPT_SRC=$(csp_script_src)"
+    install_managed_file "$hdr" "$VEYRA_ETC/nginx-security-headers.conf" 0644 root:root
+    rm -f "$hdr"
     render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$tmp" \
         "LISTEN_HTTP=$(listen_directives 80 '')" "LISTEN_HTTPS=$(listen_directives 443 ' ssl')" \
         "API_PORT=$VEYRA_API_PORT" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_PREFIX=$VEYRA_PREFIX" \
-        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov" \
-        "CSP_SCRIPT_SRC=$(csp_script_src)"
+        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov"
     # Veyra listens on specific addresses. A reload cannot bind them while
     # NGINX still holds wildcard sockets (the package default site) on the same
     # ports: it binds 443, fails on 80, retries for ~2 s, then drops the whole

@@ -1,0 +1,14 @@
+# Managed by Veyra installer: security headers for every response
+# (docs/PRODUCTION_HARDENING.md §5). Included by the server block of
+# veyra.conf and again by every location that sets a header of its own,
+# because an add_header in a location replaces the inherited set.
+add_header Strict-Transport-Security "max-age=31536000" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "same-origin" always;
+# The web interface's inline scripts are allowed by hash (CSP_SCRIPT_SRC
+# comes from frontend/out/csp-hashes.txt; 'unsafe-inline' only when that
+# file is missing). No third-party origins are allowed.
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'@CSP_SCRIPT_SRC@; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+add_header Cross-Origin-Opener-Policy "same-origin" always;

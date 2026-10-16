@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -253,13 +254,14 @@ class Backup:
         r = self._sql(f'CREATE DATABASE "{SCRATCH_DB}" TEMPLATE template0', "postgres")
         self._check(r, "creating the scratch database")
         try:
-            r = self._pg(
-                "pg_restore",
-                "--no-owner",
-                "--no-privileges",
-                "-d",
-                SCRATCH_DB,
-                str(self.workdir / "db.dump"),
+            # The store is root-only, so the dump is fed on stdin (as in dump()).
+            r = self.run(
+                [
+                    "bash",
+                    "-c",
+                    "runuser -u postgres -- pg_restore --no-owner --no-privileges "
+                    f"-d {SCRATCH_DB} < {shlex.quote(str(self.workdir / 'db.dump'))}",
+                ]
             )
             if not r.ok:
                 raise BackupError(f"restore test: {r.stderr.strip()[:500]}")
