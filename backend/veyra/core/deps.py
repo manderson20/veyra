@@ -19,7 +19,8 @@ from veyra.core.security import api_tokens, tokens
 from veyra.core.security.principal import Principal
 from veyra.core.security.sessions import load_principal, resolve_session
 
-SESSION_COOKIE = "veyra_session"
+# __Host-: HTTPS only, this host only, never with a Domain (PRODUCTION_HARDENING.md §5).
+SESSION_COOKIE = "__Host-veyra_session"
 CSRF_HEADER = "X-CSRF-Token"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 # A user who must change a temporary password may only use these routes.

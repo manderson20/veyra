@@ -43,6 +43,8 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "same-origin",
     "X-Frame-Options": "DENY",
     "Cache-Control": "no-store",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
 }
 
 # Fetch metadata (Sec-Fetch-Site) is sent by every current browser. The UI

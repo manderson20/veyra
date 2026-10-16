@@ -206,6 +206,15 @@ check_services() {
     fi
 }
 
+check_pro() {
+    # Asterisk comes from universe (ADR 0010); Ubuntu Pro's esm-apps covers it.
+    if command -v pro >/dev/null 2>&1 && [[ "$(pro status 2>/dev/null | awk '$1=="esm-apps"{print $2}')" == "yes" ]]; then
+        record pass esm-apps "Ubuntu Pro esm-apps attached"
+    else
+        record warn esm-apps "Ubuntu Pro esm-apps not attached; Asterisk security updates need it (sudo pro attach <token>)"
+    fi
+}
+
 check_role() {
     case "$ROLE" in
         standalone) record pass role "standalone" ;;
@@ -235,6 +244,7 @@ check_time
 check_access
 check_firewall
 check_services
+check_pro
 check_role
 
 if [[ $JSON == 1 ]]; then

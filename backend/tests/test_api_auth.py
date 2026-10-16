@@ -127,7 +127,7 @@ def test_cookies_are_httponly_and_strict(client):
         token = bootstrap.create_setup_token(db)
     r = client.post("/api/v1/setup/initialize", json=_setup_body(token))
     cookies = r.headers.get_list("set-cookie")
-    session = next(c for c in cookies if c.startswith("veyra_session="))
+    session = next(c for c in cookies if c.startswith("__Host-veyra_session="))
     assert "HttpOnly" in session and "SameSite=strict" in session
 
 

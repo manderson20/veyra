@@ -182,7 +182,7 @@ def test_password_reset_link_flow(admin, app):
         "/api/v1/auth/password-reset", json={"token": link["token"], "new_password": NEW_PASSWORD}
     )
     assert ok.status_code == 200
-    assert "veyra_session" not in ok.cookies  # the reset does not sign the user in
+    assert "__Host-veyra_session" not in ok.cookies  # the reset does not sign the user in
     assert jo_client.get("/api/v1/auth/session").status_code == 401  # old sessions revoked
 
     # single use

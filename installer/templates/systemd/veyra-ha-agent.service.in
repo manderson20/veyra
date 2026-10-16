@@ -31,6 +31,8 @@ ProtectControlGroups=yes
 RestrictRealtime=yes
 LockPersonality=yes
 SystemCallArchitectures=native
+# Root, but only what ip, arping, runuser, pg_ctlcluster, chown and systemctl need.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_CHOWN CAP_FOWNER CAP_FSETID CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_SETUID CAP_SETGID CAP_SETPCAP CAP_KILL CAP_SYS_RESOURCE
 
 [Install]
 WantedBy=multi-user.target

@@ -1,6 +1,10 @@
 name: CI
 
 on:
+  # Weekly dependency audit (docs/PRODUCTION_HARDENING.md §5): findings are
+  # triaged within a week; a fix or a dated exception goes into SECURITY.md.
+  schedule:
+    - cron: "17 6 * * 1"
   push:
     branches: [main]
   pull_request:

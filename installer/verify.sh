@@ -299,6 +299,22 @@ else
     check upgrade-unit warn "veyra-upgrade@.service, its polkit rule or /var/lib/veyra-upgrade missing: install updates with upgrade.sh"
 fi
 
+# --- security review items (docs/PRODUCTION_HARDENING.md §5)
+if grep -qs "script-src 'self' 'sha256-" /etc/nginx/sites-available/veyra.conf; then
+    check csp-hashes pass "scripts allowed by hash, no 'unsafe-inline'"
+else
+    check csp-hashes warn "the CSP still allows 'unsafe-inline' scripts (rebuild the web interface; csp-hashes.txt missing)"
+fi
+if command -v pro >/dev/null 2>&1; then
+    if [[ "$(pro status 2>/dev/null | awk '$1=="esm-apps"{print $2}')" == "yes" ]]; then
+        check esm-apps pass "Ubuntu Pro esm-apps attached (Asterisk security updates)"
+    else
+        check esm-apps warn "Ubuntu Pro esm-apps is not attached: Asterisk (universe) gets no guaranteed security updates (sudo pro attach)"
+    fi
+else
+    check esm-apps warn "ubuntu-pro-client missing; Asterisk (universe) security updates depend on esm-apps"
+fi
+
 # --- installation key: every stored ciphertext decrypts (docs/PRODUCTION_HARDENING.md §3.1)
 if ik="$(/usr/local/bin/veyra installation-key check --ciphertexts --json 2>/dev/null)"; then
     check installation-key-ciphertexts pass "$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(f"{d[\"ciphertexts\"]} ciphertext(s) readable")' <<<"$ik")"
