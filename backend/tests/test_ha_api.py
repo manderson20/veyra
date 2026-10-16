@@ -324,12 +324,34 @@ def test_peer_health_heartbeat_manifest_file_run(node):
     prompts = settings.data_dir / "prompts"
     prompts.mkdir(parents=True)
     (prompts / "hello.wav").write_bytes(b"RIFF" * 10)
-    (settings.config_dir / "secrets" / "x").write_text("s")
+    # Root-only roots come from the agent (faked: one secret file).
+    import base64 as b64
+    import hashlib as hl
+
+    fake.results["manifest-etc"] = {
+        "entries": [
+            {
+                "path": "etc/secrets/x",
+                "size": 1,
+                "mtime": 1.0,
+                "mode": 0o640,
+                "owner": "root",
+                "group": "veyra",
+                "digest": hl.sha256(b"s").hexdigest(),
+            }
+        ],
+        "roots": ["etc/secrets", "etc/tls", "etc/trust"],
+    }
+    fake.results["read-file"] = {"content": b64.b64encode(b"s").decode(), "size": 1}
     r, nonce = _signed(client, "manifest", {}, node_id=b_id, key=b_priv)
-    entries = _check_answer(r, nonce, pub)["entries"]
-    paths = [e["path"] for e in entries]
+    answer = _check_answer(r, nonce, pub)
+    paths = [e["path"] for e in answer["entries"]]
     assert "data/prompts/hello.wav" in paths and "etc/secrets/x" in paths
     assert "etc/secrets/node.key" not in paths
+    assert "data/prompts" in answer["roots"] and "etc/tls" in answer["roots"]
+    r, nonce = _signed(client, "file", {"path": "etc/secrets/x"}, node_id=b_id, key=b_priv)
+    assert r.status_code == 200 and r.content == b"s" and fake.calls[-1][0] == "read-file"
+    _verify_answer(r, nonce, pub)
     r, nonce = _signed(client, "file", {"path": "data/prompts/hello.wav"}, node_id=b_id, key=b_priv)
     assert r.status_code == 200 and r.content == b"RIFF" * 10
     _verify_answer(r, nonce, pub)  # the streamed body is covered by the signature

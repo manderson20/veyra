@@ -172,6 +172,8 @@ VERBS: dict[str, str] = {
     "standalone": "verb_standalone",
     "upgrade": "verb_upgrade",
     "event": "verb_event",
+    "manifest-etc": "verb_manifest_etc",
+    "read-file": "verb_read_file",
 }
 
 
@@ -532,9 +534,11 @@ class Agent:
             return st
         st.last_attempt_at = now_iso()
         try:
-            remote = [sync.Entry.from_dict(e) for e in self.peer_call("manifest", {})["entries"]]
+            answer = self.peer_call("manifest", {})
+            remote = [sync.Entry.from_dict(e) for e in answer["entries"]]
+            covered = answer.get("roots")  # None from an older primary: no deletions
             local = sync.manifest(self.roots(), digest_cache=self.digest_cache)
-            plan = sync.plan(local, remote)
+            plan = sync.plan(local, remote, covered if isinstance(covered, list) else [])
             st.backlog = plan.backlog
             done, errors = sync.apply(self.roots(), plan, self._fetch)
             st.transferred += done
@@ -1261,6 +1265,25 @@ class Agent:
         if not r.ok:
             raise AgentError("upgrade_start_failed", r.stderr.strip()[:300])
         return {"started": version}
+
+    def verb_manifest_etc(self, args: dict[str, Any]) -> dict[str, Any]:
+        """The root-only roots of the file sync (secrets, TLS, trust) for the
+        API, which cannot read them itself (§4.2)."""
+        _readable, privileged = sync.split_roots(self.roots())
+        entries = sync.manifest(privileged, digest_cache=self.digest_cache)
+        return {"entries": [e.to_dict() for e in entries], "roots": list(privileged)}
+
+    def verb_read_file(self, args: dict[str, Any]) -> dict[str, Any]:
+        """One file of a root-only root, base64 (they are small)."""
+        _readable, privileged = sync.split_roots(self.roots())
+        logical = str(args.get("path") or "")
+        path = sync.resolve(privileged, logical)
+        if path is None or not path.is_file() or sync.excluded(logical):
+            raise AgentError("no_file", "No such file.")
+        data = path.read_bytes()
+        if len(data) > 4 * 1024 * 1024:
+            raise AgentError("too_large", "The file is too large for the agent channel.")
+        return {"content": base64.b64encode(data).decode(), "size": len(data)}
 
     def verb_event(self, args: dict[str, Any]) -> dict[str, Any]:
         self.db_event(str(args.get("event_type") or "ha_event"), dict(args.get("details") or {}))
