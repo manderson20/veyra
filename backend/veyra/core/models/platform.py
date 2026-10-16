@@ -191,6 +191,18 @@ class ClusterNode(UUIDPrimaryKey, Timestamps, Base):
     state: Mapped[str] = mapped_column(String(16), default="unknown")
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     software_version: Mapped[str | None] = mapped_column(String(64))
+    # Milestone 16 (docs/HIGH_AVAILABILITY.md §11): the node's Ed25519 public
+    # key for the peer channel, the cluster epoch it last acted in, what its
+    # database is doing, the replication figures it last reported, the last
+    # successful file sync, and whether it holds the service address.
+    public_key: Mapped[str | None] = mapped_column(String(100))
+    fingerprint: Mapped[str | None] = mapped_column(String(64))
+    epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # primary | standby | down | unknown
+    db_role: Mapped[str] = mapped_column(String(16), default="unknown", server_default="unknown")
+    replication: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    holds_address: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class ClusterEvent(Base):

@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +31,10 @@ class Installation(UUIDPrimaryKey, Timestamps, Base):
     multi_tenancy_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     central_management_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     setup_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # High availability (docs/HIGH_AVAILABILITY.md §11): the cluster epoch,
+    # replicated so a promoted standby carries it, and the switchover freeze.
+    ha_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    ha_frozen: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class Organization(UUIDPrimaryKey, Timestamps, Base):
