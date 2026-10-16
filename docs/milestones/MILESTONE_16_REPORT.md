@@ -3,7 +3,7 @@
 Branch `milestone-16` (from `main` at 0.21.0). Design:
 [HIGH_AVAILABILITY.md](../HIGH_AVAILABILITY.md) (goals, recovery targets and
 the full test plan in [HA_ARCHITECTURE.md](../HA_ARCHITECTURE.md)). Status:
-**built and stage-1 tested 2026-10-16, awaiting approval → 0.22.0.** HA is
+**approved 2026-10-16, released as 0.22.0** (stage 2 pending veyra-dev2). HA is
 not described as available until the stage-2 table (two real servers) passes.
 
 ## 1. Scope (roadmap row 16)
