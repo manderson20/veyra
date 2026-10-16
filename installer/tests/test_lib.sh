@@ -103,9 +103,9 @@ if command -v node >/dev/null 2>&1; then
     { echo 'var polkit={Result:{YES:"yes",NOT_HANDLED:"no"},addRule:function(f){this.f=f}};'
       cat "$HERE/../templates/polkit/50-veyra-services.rules"
       echo 'function q(u,v,user){return polkit.f({id:"org.freedesktop.systemd1.manage-units",lookup:function(k){return k==="unit"?u:v}},{user:user||"veyra"})}'
-      echo 'var r=[q("veyra-upgrade@0.18.0.service","start"),q("veyra-upgrade@0.18.0.service","stop"),q("veyra-upgrade@x;y.service","start"),q("veyra-upgrade@0.18.0.service","start","www-data"),q("veyra-api.service","restart"),q("asterisk.service","restart")];'
+      echo 'var r=[q("veyra-upgrade@0.18.0.service","start"),q("veyra-upgrade@0.18.0.service","stop"),q("veyra-upgrade@x;y.service","start"),q("veyra-upgrade@0.18.0.service","start","www-data"),q("veyra-api.service","restart"),q("asterisk.service","restart"),q("veyra-backup@run.service","start"),q("veyra-backup@delete-0f0e0d0c-0b0a-0908-0706-050403020100.service","start"),q("veyra-backup@restore.service","start"),q("veyra-backup@run.service","stop")];'
       echo 'process.stdout.write(r.join(","))'; } >"$rule_js"
-    t "polkit: start upgrade only, restart Veyra units only" test "$(node "$rule_js")" = "yes,no,no,no,yes,no"
+    t "polkit: start upgrade and backups only, restart Veyra units only" test "$(node "$rule_js")" = "yes,no,no,no,yes,no,yes,yes,no,no"
 fi
 
 # High availability (Milestone 16): the agent unit renders and runs as root
@@ -125,6 +125,10 @@ echo 'not json' >"$TMP/data/ha/node.json"
 t "ha_role tolerates a broken node.json" test "$(ha_role)" = standalone
 t "install.sh accepts --role secondary with --join and --token" grep -q -- '--join) JOIN_URL=' "$HERE/../install.sh"
 t "preflight refuses --role primary" grep -q 'primary) record fail role' "$HERE/../preflight.sh"
+render_template "$HERE/../templates/systemd/veyra-backup@.service.in" "$TMP/bk.service" \
+    VEYRA_PREFIX=/opt/veyra VEYRA_ETC=/etc/veyra
+t "backup unit runs the backup runner" grep -q 'ExecStart=/opt/veyra/current/backend/.venv/bin/veyra backup unit %i' "$TMP/bk.service"
+t "backup unit umask keeps backups private" grep -qx 'UMask=0077' "$TMP/bk.service"
 
 DRY_RUN=1
 t "dry-run does not execute" run touch "$TMP/should-not-exist"

@@ -2484,3 +2484,54 @@ export interface CentralNotice {
   console_name: string | null;
   managed: Record<string, boolean>;
 }
+
+// ----------------------------------------------------------------- backups (Milestone 17)
+
+export interface BackupSettings {
+  enabled: boolean;
+  time: string;
+  keep: { daily_days: number; weekly_weeks: number; upgrades: number };
+  recordings: boolean;
+  recipients: string[];
+  copy_dir: string;
+}
+
+export interface BackupRow {
+  id: string;
+  name: string;
+  kind: "scheduled" | "manual" | "upgrade" | string;
+  started_at: string;
+  finished_at: string | null;
+  state: "running" | "verified" | "failed" | "deleted" | string;
+  path: string;
+  encrypted: boolean;
+  recipients: string[];
+  bytes: number;
+  parts: { name: string; bytes: number; sha256: string }[];
+  copies: Record<string, { state: string; at: string; error?: string }>;
+  verify: { ok?: boolean | null; restore?: boolean; schema?: boolean; parts?: Record<string, boolean> };
+  version: string | null;
+  schema: string | null;
+  error: string | null;
+  created_by: string;
+}
+
+export interface BackupSummary {
+  enabled: boolean;
+  last_good_at: string | null;
+  last_state: string | null;
+  last_error: string | null;
+  stale: boolean;
+  encrypted: boolean;
+  count: number;
+}
+
+export interface BackupStatus {
+  state: "idle" | "running" | "finished" | "failed" | string;
+  kind?: string;
+  step?: string;
+  started_at?: string;
+  finished_at?: string | null;
+  error?: string | null;
+  backup?: string | null;
+}

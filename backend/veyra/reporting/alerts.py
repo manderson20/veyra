@@ -62,6 +62,9 @@ RULES: dict[str, RuleDef] = {
         # Central console only (docs/CENTRAL_MANAGEMENT.md §6).
         RuleDef("instance_offline", "Instance not checking in", 0),
         RuleDef("instance_failed", "Instance unhealthy", 5),
+        # Backups (docs/PRODUCTION_HARDENING.md §2.6).
+        RuleDef("backup_failed", "Backup failed", 0),
+        RuleDef("backup_stale", "No recent good backup", 0),
         # High availability (docs/HIGH_AVAILABILITY.md §10).
         RuleDef("node_offline", "HA node offline", 2),
         RuleDef("replication_broken", "Replication broken", 2),
@@ -246,6 +249,27 @@ def check_central(db: Session, now: datetime) -> list[Finding]:
                     {"instance_id": str(inst.instance_id)},
                 )
             )
+    return out
+
+
+def check_backups(db: Session, now: datetime) -> list[Finding]:
+    """The last backup failed, or no verified backup within two days while
+    backups are enabled (docs/PRODUCTION_HARDENING.md §2.6)."""
+    from veyra.backups import service as backups
+
+    s = backups.summary(db)
+    out: list[Finding] = []
+    if s["last_state"] == "failed":
+        out.append(Finding("backup_failed", "backup", f"The last backup failed: {s['last_error']}"))
+    if s["stale"]:
+        out.append(
+            Finding(
+                "backup_stale",
+                "backup",
+                "No verified backup in the last two days"
+                + (f" (last good {s['last_good_at']})." if s["last_good_at"] else "."),
+            )
+        )
     return out
 
 
@@ -470,6 +494,7 @@ def run(db: Session, settings: Any, adapter: Any | None, now: datetime | None = 
         lambda: check_firewall(db, now, threshold("firewall_bans")),
         lambda: check_central(db, now),
         lambda: check_ha(db, settings, now, threshold("replication_lag")),
+        lambda: check_backups(db, now),
     ]
     if adapter is not None:
         checks += [

@@ -45,6 +45,8 @@ do_packages() {
                 openssl ca-certificates rsync curl git)
     # iputils-arping: the HA agent announces the service address (docs/HIGH_AVAILABILITY.md §2).
     pkgs+=(iputils-arping)
+    # age: backup encryption to the administrator's key (docs/PRODUCTION_HARDENING.md §3.2).
+    pkgs+=(age)
     if [[ ! -d "$SOURCE_DIR/frontend/out" ]]; then
         pkgs+=(nodejs npm)
     fi
@@ -661,6 +663,15 @@ do_services() {
         run systemctl disable --now veyra-deployer veyra-pager || true
         run rm -f /etc/systemd/system/veyra-deployer.service /etc/systemd/system/veyra-pager.service
     fi
+    # Backups from the page and the worker (docs/PRODUCTION_HARDENING.md §2.2):
+    # the root runner's unit, started only through polkit; its status directory.
+    run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-backup
+    run install -d -m 0700 -o root -g root /var/backups/veyra
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-backup@.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC"
+    install_managed_file "$tmp" "/etc/systemd/system/veyra-backup@.service" 0644 root:root
+    rm -f "$tmp"
     # The HA agent (docs/HIGH_AVAILABILITY.md §3) on every node.
     run install -d -m 2750 -o root -g "$VEYRA_USER" "$VEYRA_DATA/ha"
     tmp="$(mktemp)"

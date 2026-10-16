@@ -19,7 +19,7 @@ import {
 } from "@/components/ui";
 import { formatBytes, formatDuration, formatPercent, formatRelative } from "@/lib/format";
 import { overallStatus } from "@/lib/ha";
-import type { AuditEvent, AvailableUpdate, CallMetrics, MetricsRange, Page, SystemHealth } from "@/lib/types";
+import type { AuditEvent, AvailableUpdate, BackupSummary, CallMetrics, MetricsRange, Page, SystemHealth } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
 import { TodayCards } from "@/components/reports/TodayCards";
@@ -93,6 +93,7 @@ export default function Dashboard() {
     return () => window.clearInterval(t);
   }, [reloadHealth]);
 
+  const backups = useApiData<{ summary: BackupSummary; backups: unknown[] }>(session?.is_platform_admin ? "/backups" : null);
   const h = health.data;
   return (
     <div className="stack">
@@ -119,6 +120,13 @@ export default function Dashboard() {
               hint={h.components.telephony.message} />
             <MetricCard icon="modules" label="Modules" value={<StatusBadge status={toStatus(h.components.modules.status)} />} hint={h.components.modules.message} />
           </section>
+          {session?.is_platform_admin && backups.data ? (
+            <section aria-label="Backups" className="grid grid--4">
+              <MetricCard icon="database" label="Last good backup"
+                value={<StatusBadge status={backups.data.summary.stale ? (backups.data.summary.enabled ? "failed" : "unknown") : "ok"} label={backups.data.summary.last_good_at ? formatRelative(backups.data.summary.last_good_at) : "never"} />}
+                hint={<Link href="/system/backups/">{backups.data.summary.enabled ? (backups.data.summary.encrypted ? "scheduled, encrypted" : "scheduled, not encrypted") : "scheduled backups off"}</Link>} />
+            </section>
+          ) : null}
           {h.cluster.ha_enabled && session?.is_platform_admin ? (
             <section aria-label="High availability" className="grid grid--4">
               <MetricCard icon="ha" label="High availability"

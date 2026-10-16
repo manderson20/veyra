@@ -233,6 +233,31 @@ console uses a self-signed certificate, paste its CA certificate into the
 enrollment form. An instance that loses the console keeps working; the
 console shows it as offline and can raise an alert.
 
+### Backups and restore
+
+System → **Backups** ([PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md)
+§2). A backup is a directory under `/var/backups/veyra` (root-only) with
+the database dump, `/etc/veyra` (secrets, keys, certificates),
+`/etc/asterisk`, the data directories, the voicemail spool and optionally
+the recordings, plus a manifest; it is restored into a scratch database
+and checked before it counts. Set **recipients** (age public keys made
+with `age-keygen` on another machine) and backups leave the server as one
+encrypted `.tar.age` file; a copy directory (a mounted NAS share) receives
+each one. `sudo veyra backup run` takes one from the console.
+
+Restore on a server with the same (or a newer) Veyra release installed:
+
+```
+sudo veyra backup restore /path/to/veyra-<stamp>.tar.age --identity ~/veyra-backup-identity.txt
+sudo installer/verify.sh
+```
+
+Services stop, the database is recreated from the dump, the files come
+back with their owners and modes, migrations run when the backup is older,
+and the services start. The instance identity, keys and certificates are
+part of the backup, so phones and a central console keep recognising the
+server. A backup taken on an HA node is restored to a standalone first.
+
 ### High availability
 
 Optional ([HIGH_AVAILABILITY.md](HIGH_AVAILABILITY.md)). Two servers on
