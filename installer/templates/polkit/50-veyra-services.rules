@@ -10,7 +10,7 @@ polkit.addRule(function (action, subject) {
         return polkit.Result.NOT_HANDLED;
     }
     var units = ["veyra-api.service", "veyra-worker.service", "veyra-deployer.service",
-                 "veyra-pager.service", "veyra-firewall.service"];
+                 "veyra-pager.service", "veyra-firewall.service", "veyra-ha-agent.service"];
     var unit = action.lookup("unit"), verb = action.lookup("verb");
     if (units.indexOf(unit) >= 0 && verb === "restart") {
         return polkit.Result.YES;
