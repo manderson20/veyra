@@ -36,7 +36,19 @@ registered DID), a 120-second dial timeout, ignores trunk channel caps and
 the loop check, and logs each call at WARNING level in the Asterisk log; the
 Outbound Routes page warns when no enabled emergency route exists.
 
-Not implemented: on-site notification (Kari's Law), per-site trunk selection
-and dispatchable location (RAY BAUM'S Act), callback handling, carrier test
-records and the readiness dashboard (Milestone 17). **Emergency calling is
-still not certified and must not be relied on.**
+## Status after Milestone 17 (validation support)
+
+Built ([PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) §6): per-site
+emergency routes (a route bound to a site is tried first for that site's
+phones and chains to the installation-wide route), the site's ELIN as the
+default emergency caller ID, dispatchable location on extensions and
+devices (building and floor/room; the site's or building's civic address),
+on-site notification on every emergency call (email, a recorded page,
+responder phones, a webhook), the PSAP callback window, carrier test call
+records, and a readiness page per site with the attestation that the
+address is registered with the carrier's E911 service. Not built: a
+Buildings API (the building columns exist; addresses are entered on the
+site for now), the Companion pop-up, and NG911 location conveyance.
+
+**Veyra reports readiness against its own checks. Emergency calling is
+validated by the operator with the carrier, and is not certified by Veyra.**

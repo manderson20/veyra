@@ -75,6 +75,8 @@ class DeviceIn(BaseModel):
     model: str = Field(min_length=1, max_length=64)
     label: str | None = Field(None, max_length=200)
     site_id: uuid.UUID | None = None
+    building_id: uuid.UUID | None = None
+    location: str | None = Field(None, max_length=200)
     profile_id: uuid.UUID | None = None
     primary_extension_id: uuid.UUID | None = None
     lines: list[uuid.UUID] = Field(default_factory=list, max_length=common.MAX_LINES - 1)
@@ -105,6 +107,8 @@ class DevicePatch(BaseModel):
     model: str | None = Field(None, min_length=1, max_length=64)
     label: str | None = Field(None, max_length=200)
     site_id: uuid.UUID | None = None
+    building_id: uuid.UUID | None = None
+    location: str | None = Field(None, max_length=200)
     profile_id: uuid.UUID | None = None
     primary_extension_id: uuid.UUID | None = None
     lines: list[uuid.UUID] | None = Field(None, max_length=common.MAX_LINES - 1)
@@ -148,6 +152,8 @@ class DeviceOut(BaseModel):
     organization_id: uuid.UUID
     organization_name: str
     site_id: uuid.UUID | None
+    building_id: uuid.UUID | None = None
+    location: str | None = None
     site_name: str | None
     mac_address: str
     mac_display: str
@@ -365,6 +371,8 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
                 organization_id=r.organization_id,
                 organization_name=orgs.get(r.organization_id, ""),
                 site_id=r.site_id,
+                building_id=r.building_id,
+                location=r.location,
                 site_name=sites.get(r.site_id) if r.site_id else None,
                 mac_address=r.mac_address,
                 mac_display=mac_display(r.mac_address),
@@ -587,6 +595,8 @@ def create_device(
         manufacturer=body.manufacturer,
         model=body.model,
         label=body.label,
+        building_id=body.building_id,
+        location=body.location,
         profile_id=body.profile_id,
         primary_extension_id=body.primary_extension_id,
         lines=[{"extension_id": str(x)} for x in body.lines],
@@ -754,6 +764,10 @@ def update_device(
             if dumped != device.lines:
                 device.lines = dumped
                 details["lines"] = len(dumped)
+    for field in ("building_id", "location"):
+        if field in changes and changes[field] != getattr(device, field):
+            setattr(device, field, changes[field])
+            details[field] = str(changes[field]) if changes[field] else None
     if "site_id" in changes and changes["site_id"] != device.site_id:
         common.check_site(db, org_id, changes["site_id"])
         device.site_id = changes["site_id"]

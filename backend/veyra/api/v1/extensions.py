@@ -118,6 +118,9 @@ class ExtensionIn(BaseModel):
     caller_id_name: str | None = Field(None, max_length=80)
     caller_id_number: str | None = Field(None, max_length=32)
     emergency_caller_id_number: str | None = Field(None, max_length=32)
+    # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
+    building_id: uuid.UUID | None = None
+    location: str | None = Field(None, max_length=200)
     is_enabled: bool = True
 
     @field_validator("number")
@@ -151,6 +154,9 @@ class ExtensionPatch(BaseModel):
     caller_id_name: str | None = Field(None, max_length=80)
     caller_id_number: str | None = Field(None, max_length=32)
     emergency_caller_id_number: str | None = Field(None, max_length=32)
+    # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
+    building_id: uuid.UUID | None = None
+    location: str | None = Field(None, max_length=200)
     is_enabled: bool | None = None
 
     @field_validator("number")
@@ -201,6 +207,8 @@ class ExtensionOut(BaseModel):
     # Presented on emergency routes instead of the regular caller ID
     # (docs/TRUNKS_ROUTING.md §7).
     emergency_caller_id_number: str | None
+    building_id: uuid.UUID | None = None
+    location: str | None = None
     is_enabled: bool
     sip_secret_set: bool
     sip_secret_changed_at: datetime | None
@@ -330,6 +338,8 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 caller_id_name=r.caller_id_name,
                 caller_id_number=r.caller_id_number,
                 emergency_caller_id_number=r.emergency_caller_id_number,
+                building_id=r.building_id,
+                location=r.location,
                 is_enabled=r.is_enabled,
                 sip_secret_set=bool(r.sip_secret_ciphertext),
                 sip_secret_changed_at=r.sip_secret_changed_at,
@@ -549,6 +559,8 @@ def create_extension(
         caller_id_name=body.caller_id_name,
         caller_id_number=body.caller_id_number,
         emergency_caller_id_number=body.emergency_caller_id_number,
+        building_id=body.building_id,
+        location=body.location,
         is_enabled=body.is_enabled,
     )
     _set_secret(ext, key)
@@ -621,6 +633,8 @@ def update_extension(
         "caller_id_name",
         "caller_id_number",
         "emergency_caller_id_number",
+        "building_id",
+        "location",
         "is_enabled",
     ):
         if field in changes and changes[field] != getattr(ext, field):

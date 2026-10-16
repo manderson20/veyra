@@ -202,13 +202,9 @@ def notify(db: Session, settings: Any, adapter: Any, call: EmergencyCall) -> dic
     # Desk phones: ring them and say the extension.
     numbers = [str(n) for n in (recipients.get("extensions") or []) if str(n).strip()]
     if numbers and adapter is not None:
-        from veyra.core import tenancy
-
         rung: dict[str, str] = {}
         for n in numbers:
             try:
-                names = tenancy.names_of(db, call.organization_id) if call.organization_id else None
-                ctx = f"{NOTIFY_CONTEXT}-{names.ns}" if names and names.ns else NOTIFY_CONTEXT
                 endpoint = db.scalar(
                     select(Extension.endpoint_name).where(
                         Extension.number == n,
@@ -221,7 +217,7 @@ def notify(db: Session, settings: Any, adapter: Any, call: EmergencyCall) -> dic
                     f"PJSIP/{endpoint}",
                     call.extension_number,
                     caller_id=f"EMERGENCY {call.extension_number}",
-                    context=ctx,
+                    context=NOTIFY_CONTEXT,
                     timeout=30,
                 )
                 rung[n] = "ringing"
