@@ -138,7 +138,9 @@ if [[ "$ENGINE" == "asterisk" ]]; then
         || check ari-exposure fail "ARI (8088) is reachable from the network"
     [[ -z "$(grep -E '[:.]5038$' <<<"$listeners" || true)" ]] && check ami pass "AMI is disabled" \
         || check ami fail "AMI (5038) is listening"
-    if curl -fsS -u "veyra:$(cat "$VEYRA_ETC/secrets/ari_password")" \
+    if [[ "$HA_ROLE" == "secondary" ]]; then
+        check ari pass "engine stopped on the standby"
+    elif curl -fsS -u "veyra:$(cat "$VEYRA_ETC/secrets/ari_password")" \
         http://127.0.0.1:8088/ari/asterisk/info >/dev/null 2>&1; then
         check ari pass "ARI authenticates"
     else
