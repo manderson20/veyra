@@ -336,6 +336,7 @@ def ha_agent(tmp_path: Path):
     a = agent_mod.Agent(paths, system, pg)  # type: ignore[arg-type]
     a.sleep = lambda s: None
     a.state.dir.mkdir(parents=True)
+    a.ensure_node_key()
     a.state.save_node(
         NodeState(
             node_id="n2",
@@ -463,5 +464,6 @@ def test_agent_sync_now_uses_peer_manifest(ha_agent, monkeypatch, tmp_path):
 
     monkeypatch.setattr(peer, "post", lambda *args, **kw: R())
     st = call(a, "sync-now")
+    assert st["last_error"] == ""
     assert st["last_success_at"] and st["backlog"] == 0 and st["transferred"] == 1
     assert (a.paths.data_dir / "prompts/x.wav").read_bytes() == content

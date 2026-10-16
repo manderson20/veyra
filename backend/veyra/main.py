@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from veyra.api.v1 import api_router
 from veyra.core import bootstrap
@@ -25,6 +26,7 @@ from veyra.core.errors import PROBLEM_JSON, install_error_handlers, problem_body
 from veyra.core.events import bus
 from veyra.core.security.crypto import InstallationKeyError, load_installation_key
 from veyra.core.signing import Keyring
+from veyra.ha.standby import write_blocked
 from veyra.modules.manager import ModuleManager
 from veyra.provisioning import serve
 from veyra.provisioning.renderer import TemplateCatalog
@@ -105,6 +107,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.telephony = get_adapter(settings)
     app.state.templates = TemplateCatalog.from_paths(settings.template_paths)
     app.state.callevents = CallEventHub()
+    # High availability (docs/HIGH_AVAILABILITY.md §9): a standby (or a
+    # frozen primary) refuses writes; the standby's sign-in lives in memory.
+    from veyra.core.db import session_factory
+    from veyra.ha.standby import Guard, StandbySessions
+
+    app.state.ha_guard = Guard(lambda: session_factory()())
+    app.state.standby_sessions = StandbySessions()
     # Module events to outgoing webhooks (docs/INTEGRATIONS.md §3.2).
     from veyra.integrations import sources as webhook_sources
 
@@ -137,6 +146,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "cross_site_request",
                 ),
                 status_code=403,
+                media_type=PROBLEM_JSON,
+            )
+        elif (
+            request.method not in SAFE_METHODS
+            and request.url.path.startswith("/api/")
+            and (
+                blocked := write_blocked(
+                    request.url.path, await run_in_threadpool(app.state.ha_guard.flags)
+                )
+            )
+        ):
+            standby = blocked == "ha_standby"
+            response = JSONResponse(
+                problem_body(
+                    request,
+                    503,
+                    "Standby node" if standby else "Switchover in progress",
+                    "This node is the standby; manage the system at the primary."
+                    if standby
+                    else "The primary is frozen for a switchover; try again in a moment.",
+                    blocked,
+                ),
+                status_code=503,
                 media_type=PROBLEM_JSON,
             )
         else:

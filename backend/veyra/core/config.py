@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # Written only by the root upgrade runner (docs/SOFTWARE_UPDATES.md §3.2);
     # the service account reads its status file.
     upgrade_dir: Path = Path("/var/lib/veyra-upgrade")
+    # The HA agent's socket (docs/HIGH_AVAILABILITY.md §3).
+    ha_socket_path: Path = Path("/run/veyra/ha.sock")
     module_paths: Annotated[list[Path], NoDecode] = Field(
         default_factory=lambda: [Path("/opt/veyra/modules")]
     )

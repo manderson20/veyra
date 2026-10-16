@@ -791,6 +791,22 @@ def poll_calendars_and_ring_bells(db: Any, settings: Any, log: Any) -> None:
         log.exception("Bell scheduler pass failed")
 
 
+def standby_tick(log: Any, logged: bool) -> bool:
+    """True when this node's database is in recovery (an HA standby)."""
+    from sqlalchemy import func, select
+
+    from veyra.core.db import session_scope
+
+    try:
+        with session_scope() as db:
+            standby = bool(db.scalar(select(func.pg_is_in_recovery())))
+    except Exception:
+        return False
+    if standby and not logged:
+        log.info("This node is an HA standby; the worker is idle until promotion")
+    return standby
+
+
 def central_pass(settings: Any, log: Any) -> None:
     """Check in with the central console when due; as a console, expire
     commands and prune nonces and samples."""
@@ -908,8 +924,19 @@ def cmd_worker(args: argparse.Namespace) -> int:
     from veyra.integrations import sources as webhook_sources
 
     webhook_sources.subscribe(bus)
+    standby_logged = False
     while True:
         now = time.monotonic()
+        # On an HA standby the database is a replica: the worker does
+        # nothing but wait (docs/HIGH_AVAILABILITY.md §9); the agent sends
+        # the heartbeat. The check is a cheap query each tick.
+        if standby_tick(log, standby_logged):
+            standby_logged = True
+            if args.once:
+                return 0
+            time.sleep(args.tick)
+            continue
+        standby_logged = False
         if args.once or now - last_full >= args.interval:
             last_full = now
             try:
@@ -1304,6 +1331,153 @@ def cmd_updates_run(args: argparse.Namespace) -> int:
 # ----------------------------------------------------------------- parser
 
 
+def cmd_ha_agent(args: argparse.Namespace) -> int:
+    """The root HA agent (docs/HIGH_AVAILABILITY.md §3)."""
+    import logging
+    from pathlib import Path
+
+    from veyra.core.config import get_settings
+    from veyra.ha import agent as ha_agent
+    from veyra.ha.client import SOCKET_PATH
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    settings = get_settings()
+    log = logging.getLogger("veyra.ha.agent")
+    log.info("%s HA agent started", plain_header())
+    a = ha_agent.build(settings)
+    a.serve(Path(args.socket) if args.socket else SOCKET_PATH, once=args.once)
+    return 0
+
+
+def _ha_client(settings: Any) -> Any:
+    from veyra.ha.client import AgentClient
+
+    return AgentClient(settings.ha_socket_path)
+
+
+def cmd_ha_status(args: argparse.Namespace) -> int:
+    import json
+
+    from veyra.core.config import get_settings
+    from veyra.ha.client import AgentError
+
+    try:
+        st = _ha_client(get_settings()).call("status")
+    except AgentError as e:
+        raise RuntimeError(e.message) from e
+    if args.json:
+        print(json.dumps(st, indent=2, default=str))
+        return 0
+    node = st["node"]
+    rep = st.get("replication") or {}
+    svc = node.get("service") or {}
+    sync = st.get("sync") or {}
+    peer = node.get("peer") or {}
+    lines = [
+        f"node      {node['node_name']}  role {node['role']}  epoch {node['epoch']}  "
+        f"state {node['state']}",
+        f"database  {rep.get('db_role')}  replication "
+        f"{rep.get('state') or rep.get('receiver') or '-'}  lag {rep.get('lag_bytes')} bytes",
+        f"service   {svc.get('name') or '-'} {svc.get('address') or ''}  "
+        f"held {st.get('holds_address')}",
+        f"sync      last success {sync.get('last_success_at') or '-'}  "
+        f"backlog {sync.get('backlog')}  {sync.get('last_error') or ''}",
+    ]
+    if peer:
+        lines.insert(
+            1,
+            f"peer      {peer['node_name']} ({peer['address']})  "
+            f"reachable {st.get('peer_reachable')}",
+        )
+    print("\n".join(lines))
+    op = st.get("operation")
+    if op:
+        print(f"operation {op['kind']} {op['status']} ({op['started_at']})")
+        for step in op["steps"]:
+            secs = step.get("seconds") or ""
+            print(f"  {step['status']:7} {step['name']:18} {secs} {step.get('detail') or ''}")
+    return 0
+
+
+def cmd_ha_verb(args: argparse.Namespace, verb: str) -> int:
+    import json
+
+    from veyra.core.config import get_settings
+    from veyra.ha.client import AgentError
+
+    warnings = {
+        "switchover": "Calls in progress end; phones re-register within their expiry.",
+        "failover": "Only when the primary is OFF: two primaries corrupt the data.",
+        "resume": (
+            "Only when the peer is really down: resuming next to a live primary splits the brain."
+        ),
+        "standalone": "This node leaves the cluster and runs on its own.",
+    }
+    if verb in warnings and not args.yes:
+        print(warnings[verb])
+        answer = input(f"Run {verb} on this node? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            return 1
+    kwargs: dict[str, Any] = {"actor": "cli"}
+    if verb == "failover":
+        kwargs["confirm_fenced"] = bool(args.confirm_fenced)
+    try:
+        out = _ha_client(get_settings()).call(verb, **kwargs)
+    except AgentError as e:
+        raise RuntimeError(e.message) from e
+    print(json.dumps(out, indent=2, default=str))
+    return 0
+
+
+def cmd_ha_join_prepare(args: argparse.Namespace) -> int:
+    """Run by install.sh --role secondary: ask the agent to join, then wait."""
+    import json
+
+    from veyra.core.config import get_settings
+    from veyra.ha.client import AgentError
+
+    client = _ha_client(get_settings())
+    try:
+        client.call(
+            "join-prepare",
+            url=args.url,
+            token=args.token,
+            address=args.address,
+            insecure=bool(args.insecure),
+        )
+        while True:
+            st = client.call("status")
+            op = st.get("operation") or {}
+            if op.get("kind") == "join" and op.get("status") != "running":
+                break
+            time.sleep(2)
+    except AgentError as e:
+        raise RuntimeError(e.message) from e
+    for step in op.get("steps", []):
+        print(f"  {step['status']:7} {step['name']:16} {step.get('detail') or ''}")
+    if op.get("status") != "completed":
+        raise RuntimeError(f"join failed: {op.get('error')}")
+    print(json.dumps({"node": st["node"]["node_name"], "role": st["node"]["role"]}))
+    return 0
+
+
+def cmd_ha_db(args: argparse.Namespace) -> int:
+    """Database actions the root agent asks for, run as the service account."""
+    import json
+
+    from veyra.core.db import session_scope
+    from veyra.ha import service as ha_service
+
+    action = ha_service.ACTIONS.get(args.action)
+    if action is None:
+        raise RuntimeError(f"unknown action {args.action}")
+    payload = json.loads(args.json)
+    with session_scope() as db:
+        out = action(db, payload)
+    print(json.dumps(out, default=str))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="veyra", description="Veyra administration command")
     sub = p.add_subparsers(dest="command", metavar="<command>")
@@ -1532,6 +1706,45 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--tick", type=int, default=5, help="Seconds between bell and module passes")
     s.add_argument("--once", action="store_true")
     s.set_defaults(func=cmd_worker)
+    ha = sub.add_parser("ha", help="High availability (docs/HIGH_AVAILABILITY.md)").add_subparsers(
+        dest="ha_cmd", metavar="<action>", required=True
+    )
+    s = ha.add_parser("agent", help="Run the HA agent (root; the veyra-ha-agent unit)")
+    s.add_argument("--socket", help=argparse.SUPPRESS)
+    s.add_argument("--once", action="store_true", help=argparse.SUPPRESS)
+    s.set_defaults(func=cmd_ha_agent)
+    s = ha.add_parser("status", help="This node's HA state (from the agent)")
+    s.add_argument("--json", action="store_true", help="Print JSON")
+    s.set_defaults(func=cmd_ha_status)
+    for verb, help_text in (
+        ("switchover", "Switch over to this standby (run on the standby)"),
+        ("failover", "Fail over to this standby when the primary is down"),
+        ("resume", "Resume primary duties on an isolated primary"),
+        ("rejoin", "Rejoin as the standby of the peer"),
+        ("standalone", "Leave the cluster: this node is on its own again"),
+        ("sync-now", "Run the file sync now (standby)"),
+    ):
+        s = ha.add_parser(verb, help=help_text)
+        if verb == "failover":
+            s.add_argument(
+                "--confirm-fenced",
+                action="store_true",
+                help="I confirm the primary is powered off or fenced",
+            )
+        s.add_argument("--yes", action="store_true", help="Do not ask for confirmation")
+        s.set_defaults(func=lambda a, v=verb: cmd_ha_verb(a, v))
+    s = ha.add_parser(
+        "join-prepare", help="Join a primary as the secondary (used by the installer)"
+    )
+    s.add_argument("--url", required=True, help="The primary, e.g. https://veyra-dev1")
+    s.add_argument("--token", required=True, help="Join token from the primary's HA page")
+    s.add_argument("--address", required=True, help="This node's own address")
+    s.add_argument("--insecure", action="store_true", help=argparse.SUPPRESS)
+    s.set_defaults(func=cmd_ha_join_prepare)
+    s = ha.add_parser("db", help=argparse.SUPPRESS)
+    s.add_argument("action")
+    s.add_argument("--json", default="{}")
+    s.set_defaults(func=cmd_ha_db)
     return p
 
 
