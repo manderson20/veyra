@@ -343,9 +343,6 @@ items = [dict(zip(("status", "check", "message"), r.split("|", 2))) for r in sys
 print(json.dumps({"checks": items, "failures": sum(i["status"] == "fail" for i in items)}, indent=2))
 PY
 fi
-(( FAILURES == 0 )) || { [[ $JSON == 1 ]] || fail "$FAILURES check(s) failed."; exit 1; }
-[[ $JSON == 1 ]] || ok "Installation verified."
-
 # --- high availability (docs/HIGH_AVAILABILITY.md §5): roles must agree, the
 # peer must answer, replication must stream and the file sync must be fresh.
 if [[ "$HA_ROLE" != "standalone" ]]; then
@@ -389,3 +386,7 @@ PY
         check ha-agent fail "veyra ha status failed (journalctl -u veyra-ha-agent)"
     fi
 fi
+
+(( FAILURES == 0 )) || { [[ $JSON == 1 ]] || fail "$FAILURES check(s) failed."; exit 1; }
+[[ $JSON == 1 ]] || ok "Installation verified."
+
