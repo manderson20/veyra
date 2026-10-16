@@ -98,6 +98,7 @@ def switchover(node: Node, op: Operation, *, sleep: float = 0.5) -> Operation:
     new_epoch = old_epoch + 1
     primary_frozen = False
     engine_stopped = False
+    postgres_stopped = False
     try:
         _step(node, op, "freeze", lambda: node.peer_run("freeze"), "the primary refuses writes")
         primary_frozen = True
@@ -117,12 +118,13 @@ def switchover(node: Node, op: Operation, *, sleep: float = 0.5) -> Operation:
 
         _step(node, op, "catch-up", catch_up)
         _step(node, op, "release-address", lambda: node.peer_run("release-address"))
+        postgres_stopped = True
         _step(node, op, "postgres-stop", lambda: node.peer_run("postgres-stop"), "no writer exists")
     except Exception as e:
         # Before promotion: put A back.
         op.finish("aborted", str(e))
         node.save_operation(op)
-        _rollback(node, primary_frozen, engine_stopped)
+        _rollback(node, primary_frozen, engine_stopped, postgres_stopped)
         return op
     try:
 
@@ -156,15 +158,22 @@ def switchover(node: Node, op: Operation, *, sleep: float = 0.5) -> Operation:
     return op
 
 
-def _rollback(node: Node, frozen: bool, engine_stopped: bool) -> None:
-    try:
-        if engine_stopped:
-            node.peer_run("engine-start")
-        node.peer_run("hold-address")
-        if frozen:
-            node.peer_run("unfreeze")
-    except Exception:
-        log.exception("Could not put the primary back after the abort")
+def _rollback(node: Node, frozen: bool, engine_stopped: bool, postgres_stopped: bool) -> None:
+    """Put A back, in the order that restores service: database, engine,
+    address, writes. Each step is attempted even when an earlier one fails."""
+    steps = []
+    if postgres_stopped:
+        steps.append("postgres-start")
+    if engine_stopped:
+        steps.append("engine-start")
+    steps.append("hold-address")
+    if frozen:
+        steps.append("unfreeze")
+    for verb in steps:
+        try:
+            node.peer_run(verb)
+        except Exception:
+            log.exception("Could not run %s on the primary after the abort", verb)
 
 
 def _take_epoch(node: Node, epoch: int, how: str) -> None:

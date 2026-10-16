@@ -16,6 +16,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from veyra import __version__
@@ -600,13 +601,29 @@ def put_sync(
 PeerVerb = Literal["join", "health", "heartbeat", "manifest", "file", "run", "epoch"]
 
 
-def _calling_node(db: Session, headers: dict[str, str]) -> ClusterNode:
+def _calling_node(db: Session, headers: dict[str, str], settings: Settings) -> ClusterNode:
     raw = headers.get(protocol.H_INSTANCE.lower(), "")
     try:
         node_id = uuid.UUID(raw)
     except ValueError as e:
         raise peer.PeerError(401, "unknown_node", "The calling node is not known.") from e
-    node = db.get(ClusterNode, node_id)
+    node: ClusterNode | None = None
+    try:
+        node = db.get(ClusterNode, node_id)
+    except SQLAlchemyError:
+        db.rollback()
+    if node is None:
+        # The database may be stopped (switchover step 4): the peer recorded
+        # in node.json is still a known caller.
+        local = _state_dir(settings).node()
+        if local is not None and local.peer is not None and local.peer.node_id == str(node_id):
+            node = ClusterNode(
+                id=node_id,
+                node_name=local.peer.node_name,
+                hostname=local.peer.node_name,
+                public_key=local.peer.public_key,
+                role="secondary" if local.role == "primary" else "primary",
+            )
     if node is None or not node.public_key or node.node_name == service.local_name():
         raise peer.PeerError(401, "unknown_node", "The calling node is not known.")
     return node
@@ -633,14 +650,22 @@ async def peer_endpoint(
     try:
         if verb == "join":
             return _peer_join(db, settings, body, headers, ctx)
-        node = _calling_node(db, headers)
+        node = _calling_node(db, headers, settings)
         nonce = peer.verify_request(db, node.public_key or "", verb, body, headers)
         data = peer.parse_body(body)
         key = _node_key(settings)
         if verb == "file":
             return _peer_file(db, settings, data, key, nonce)
         payload = _peer_dispatch(verb, db, settings, node, data, ctx)
-        db.commit()
+        try:
+            db.commit()
+        except SQLAlchemyError:
+            # The verb may have stopped this node's database (a switchover);
+            # only a verb that wrote needs the commit.
+            db.rollback()
+            if verb == "heartbeat":
+                msg = "The database is not available."
+                raise peer.PeerError(503, "db_unavailable", msg) from None
         out, sig = peer.answer(key, nonce, payload)
     except (peer.PeerError, service.HAError, join.JoinError) as e:
         db.rollback()
