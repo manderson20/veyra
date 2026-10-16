@@ -29,7 +29,7 @@ def ca_permitted_names(ca_crt: Path, run: Runner | None = None) -> list[str] | N
     """The DNS names a constrained CA may vouch for; None when unconstrained."""
     run = run or subprocess_runner()
     r = run(["openssl", "x509", "-in", str(ca_crt), "-noout", "-ext", "nameConstraints"])
-    if not r.ok or "nameConstraints" not in r.stdout:
+    if not r.ok or "Name Constraints" not in r.stdout:
         return None
     return re.findall(r"DNS:([^\s,]+)", r.stdout)
 

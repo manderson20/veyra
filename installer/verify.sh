@@ -121,8 +121,13 @@ exposed() { # port → prints non-loopback listeners
 }
 [[ -z "$(exposed "$VEYRA_API_PORT")" ]] && check api-exposure pass "API listens on loopback only" \
     || check api-exposure fail "API port $VEYRA_API_PORT is reachable from the network"
-[[ -z "$(exposed 5432)" ]] && check postgres-exposure pass "PostgreSQL listens on loopback/socket only" \
-    || check postgres-exposure warn "PostgreSQL listens on a network address"
+if [[ -z "$(exposed 5432)" ]]; then
+    check postgres-exposure pass "PostgreSQL listens on loopback/socket only"
+elif [[ "$HA_ROLE" != "standalone" || -f /etc/postgresql/*/main/conf.d/veyra-ha.conf ]]; then
+    check postgres-exposure pass "PostgreSQL listens on the node address for HA replication (TLS, replication role only)"
+else
+    check postgres-exposure warn "PostgreSQL listens on a network address"
+fi
 if [[ "$ENGINE" == "asterisk" ]]; then
     [[ -z "$(exposed 8088)" ]] && check ari-exposure pass "ARI listens on loopback only" \
         || check ari-exposure fail "ARI (8088) is reachable from the network"
