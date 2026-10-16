@@ -665,21 +665,29 @@ do_services() {
     run systemctl daemon-reload
     local role
     role="$(ha_role)"
+    local restart=("${units[@]}")
     if [[ "$role" != "standalone" ]]; then
-        # The agent starts the deployer and the pager with the primary role.
-        local u kept=()
+        # The agent starts the deployer and the pager with the primary role
+        # (docs/HIGH_AVAILABILITY.md §7.3): never enabled at boot on an HA
+        # node; on the primary they run now, on a standby they stay stopped.
+        local u enable=() kept=()
         for u in "${units[@]}"; do
             case "$u" in
                 veyra-deployer|veyra-pager)
                     run systemctl disable "$u"
-                    [[ "$role" == "secondary" ]] && run systemctl stop "$u" ;;
-                *) kept+=("$u") ;;
+                    if [[ "$role" == "secondary" ]]; then
+                        run systemctl stop "$u"
+                    else
+                        kept+=("$u")
+                    fi ;;
+                *) enable+=("$u"); kept+=("$u") ;;
             esac
         done
-        units=("${kept[@]}")
+        units=("${enable[@]}")
+        restart=("${kept[@]}")
     fi
     run systemctl enable "${units[@]}"
-    run systemctl restart "${units[@]}"
+    run systemctl restart "${restart[@]}"
     if [[ "$DRY_RUN" != "1" ]]; then
 
         for _ in $(seq 1 30); do
@@ -689,7 +697,7 @@ do_services() {
         curl -fsS "http://$VEYRA_API_ADDR:$VEYRA_API_PORT/api/v1/system/ping" >/dev/null \
             || die "veyra-api did not become ready; see: journalctl -u veyra-api"
     fi
-    ok "$(IFS=,; echo "${units[*]}") running"
+    ok "$(IFS=,; echo "${restart[*]}") running"
 }
 
 listen_directives() {
