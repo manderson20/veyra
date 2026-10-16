@@ -350,7 +350,7 @@ fi
 # peer must answer, replication must stream and the file sync must be fresh.
 if [[ "$HA_ROLE" != "standalone" ]]; then
     if ha="$(/usr/local/bin/veyra ha status --json 2>/dev/null)"; then
-        HA_JSON="$ha" python3 - "$HA_ROLE" <<'PY' | while IFS=$'\t' read -r name status msg; do check "$name" "$status" "$msg"; done
+        while IFS=$'\t' read -r name status msg; do check "$name" "$status" "$msg"; done < <(HA_JSON="$ha" python3 - "$HA_ROLE" <<'PY'
 import json, os, sys
 role = sys.argv[1]
 st = json.loads(os.environ["HA_JSON"])
@@ -384,6 +384,7 @@ out.append(("ha-peer", "pass" if reach and same else ("warn" if reach else "fail
 for row in out:
     print("\t".join(row))
 PY
+)
     else
         check ha-agent fail "veyra ha status failed (journalctl -u veyra-ha-agent)"
     fi

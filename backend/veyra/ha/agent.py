@@ -158,6 +158,7 @@ VERBS: dict[str, str] = {
     "engine-start": "verb_engine_start",
     "postgres": "verb_postgres",
     "postgres-stop": "verb_postgres_stop",
+    "postgres-start": "verb_postgres_start",
     "checkpoint": "verb_checkpoint",
     "current-lsn": "verb_current_lsn",
     "hold-address": "verb_hold_address",
@@ -510,7 +511,10 @@ class Agent:
         self.run_sync(force=True)
 
     def peer_run(self, verb: str, **args: Any) -> dict[str, Any]:
-        return self.peer_call("run", {"verb": verb, "args": args})
+        """Ask the peer's agent for a verb; returns the verb's result."""
+        answer = self.peer_call("run", {"verb": verb, "args": args})
+        result = answer.get("result")
+        return result if isinstance(result, dict) else answer
 
     def peer_reachable(self) -> bool:
         return self.probe_peer().reachable
@@ -972,7 +976,6 @@ class Agent:
                 "database": self.paths.database,
             },
         }
-        self.db_event("node_joined", {"node": peer_name, "address": peer_address})
         return {
             "bundle": join.encrypt_bundle(token, bundle),
             "node_id": n.peer.node_id,
@@ -1302,6 +1305,9 @@ class Agent:
 
     def verb_postgres_stop(self, args: dict[str, Any]) -> dict[str, Any]:
         return self.verb_postgres({"action": "stop"})
+
+    def verb_postgres_start(self, args: dict[str, Any]) -> dict[str, Any]:
+        return self.verb_postgres({"action": "start"})
 
     def dispatch(self, verb: str, args: dict[str, Any]) -> Any:
         name = VERBS.get(verb)

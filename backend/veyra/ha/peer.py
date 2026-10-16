@@ -13,7 +13,7 @@ import time
 from typing import Any
 
 import httpx
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from veyra.central import protocol
@@ -32,6 +32,7 @@ RUNNABLE = (
     "rejoin",
     "release-address",
     "postgres-stop",
+    "postgres-start",
     "checkpoint",
     "current-lsn",
     "upgrade",
@@ -39,6 +40,7 @@ RUNNABLE = (
     "set-peer-epoch",
     "standalone",
 )
+MAX_SKEW = protocol.MAX_SKEW
 HEALTH_TIMEOUT = 5.0
 CALL_TIMEOUT = 120.0
 FILE_TIMEOUT = 900.0
@@ -171,15 +173,33 @@ def verify_request(
     ):
         raise PeerError(401, "bad_signature", "The request's signature is not valid.")
     if db.bind is not None and _in_recovery(db):
-        # A standby cannot record nonces; the signature and the five-minute
-        # window still hold, and a standby only answers read verbs.
+        # A standby cannot record nonces: the five-minute window and an
+        # in-memory record hold instead.
+        _remember(nonce)
         return nonce
     try:
         with db.begin_nested():
             db.add(CentralNonce(nonce=nonce, seen_at=utcnow()))
     except IntegrityError as e:
         raise PeerError(401, "replayed", "This request was already received.") from e
+    except SQLAlchemyError:
+        # The database is down (a switchover stopped it): the in-memory
+        # record keeps the node calls that follow honest.
+        db.rollback()
+        _remember(nonce)
     return nonce
+
+
+_seen: dict[str, float] = {}
+
+
+def _remember(nonce: str) -> None:
+    now = time.time()
+    for k in [k for k, t in _seen.items() if now - t > MAX_SKEW * 2]:
+        del _seen[k]
+    if nonce in _seen:
+        raise PeerError(401, "replayed", "This request was already received.")
+    _seen[nonce] = now
 
 
 def _in_recovery(db: Session) -> bool:

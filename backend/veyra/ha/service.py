@@ -492,7 +492,19 @@ def health_payload(
     local = state_dir.node()
     role_db = db_role(db)
     me = local_name()
-    row = node_by_name(db, me)
+    row: ClusterNode | None = None
+    frozen = False
+    if role_db != "down":
+        # Node calls must be answered while the database is stopped
+        # (switchover step 4); the state files carry what is needed.
+        try:
+            row = node_by_name(db, me)
+            frozen = bool(installation(db).ha_frozen) if row else False
+        except Exception:
+            db.rollback()
+            row = None
+    if row is None and local is not None:
+        frozen = local.state == "frozen"
     sync = state_dir.sync()
     op = state_dir.operation()
     return {
@@ -507,7 +519,7 @@ def health_payload(
         "replication": agent_status.get("replication") if agent_status else None,
         "sync_at": sync.last_success_at,
         "operation": op.to_dict() if op else None,
-        "frozen": bool(installation(db).ha_frozen) if row else False,
+        "frozen": frozen,
     }
 
 
