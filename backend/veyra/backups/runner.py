@@ -332,10 +332,10 @@ class Backup:
         except (OSError, BackupError) as e:
             self.copies[copy_dir] = {"state": "failed", "at": _now().isoformat(), "error": str(e)}
 
-    def prune(self, known: list[tuple[str, str]]) -> list[str]:
-        """Apply the keep policy to the store; ``known`` is (name, kind) from
-        the database so kinds are not guessed from names."""
-        kinds = dict(known)
+    def prune(self, known: list[dict[str, Any]]) -> list[str]:
+        """Apply the keep policy to the store; ``known`` are the recorded
+        backups (name, kind) so kinds are not guessed from names."""
+        kinds = {str(k["name"]): str(k.get("kind") or "scheduled") for k in known}
         entries: list[policy.Entry] = []
         for p in self.store.iterdir():
             e = policy.Entry.parse(p.name, kinds.get(p.name.split(".")[0], "scheduled"))
@@ -391,7 +391,8 @@ def load_settings(run: Runner) -> dict[str, Any]:
     return policy.settings_doc(data if isinstance(data, dict) else {})
 
 
-def known_backups(run: Runner) -> list[tuple[str, str]]:
+def known_backups(run: Runner) -> list[dict[str, Any]]:
+    """The recorded backups (id, name, kind, state) through the service account."""
     r = run(["runuser", "-u", "veyra", "--", VEYRA_CLI, "backup", "list", "--json"])
     if not r.ok:
         return []
@@ -399,7 +400,7 @@ def known_backups(run: Runner) -> list[tuple[str, str]]:
         rows = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
         return []
-    return [(str(x["name"]), str(x["kind"])) for x in rows if isinstance(x, dict)]
+    return [x for x in rows if isinstance(x, dict) and x.get("name")]
 
 
 def run_backup(

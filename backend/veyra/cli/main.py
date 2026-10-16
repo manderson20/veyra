@@ -1424,7 +1424,6 @@ def cmd_backup_unit(args: argparse.Namespace) -> int:
     import uuid
 
     from veyra.backups import runner
-    from veyra.core.db import session_scope
 
     instance = str(args.instance)
     if instance in ("run", "run-manual"):
@@ -1435,20 +1434,17 @@ def cmd_backup_unit(args: argparse.Namespace) -> int:
         print(json.dumps({k: payload.get(k) for k in ("name", "state", "bytes", "error")}))
         return 0 if payload.get("state") == "verified" else 1
     if instance.startswith("delete-"):
-        backup_id = uuid.UUID(instance[len("delete-") :])
-        settings = runner.load_settings(runner.subprocess_runner())
-        from veyra.core.models import Backup
-
-        with session_scope() as db:
-            row = db.get(Backup, backup_id)
-            name = row.manifest.get("name") if row else None
-            kind = row.kind if row else "manual"
-        if not name:
+        # Root has no database role: the row is looked up through the
+        # service account, as the settings are.
+        backup_id = str(uuid.UUID(instance[len("delete-") :]))
+        run = runner.subprocess_runner()
+        settings = runner.load_settings(run)
+        match = [b for b in runner.known_backups(run) if b.get("id") == backup_id]
+        if not match:
             raise RuntimeError("unknown backup")
-        runner.delete_backup(str(name), copy_dir=settings.get("copy_dir") or "")
-        r = runner.record(
-            runner.subprocess_runner(), {"name": name, "state": "deleted", "kind": kind}
-        )
+        name, kind = str(match[0]["name"]), str(match[0].get("kind") or "manual")
+        runner.delete_backup(name, copy_dir=settings.get("copy_dir") or "")
+        r = runner.record(run, {"name": name, "state": "deleted", "kind": kind})
         return 0 if r.ok else 1
     raise RuntimeError(f"unknown backup unit instance {instance!r}")
 
@@ -1497,7 +1493,12 @@ def cmd_backup_list(args: argparse.Namespace) -> int:
         rows = [service.row_out(b) for b in service.rows(db, 200)]
     if args.json:
         print(
-            json.dumps([{"name": r["name"], "kind": r["kind"], "state": r["state"]} for r in rows])
+            json.dumps(
+                [
+                    {"id": r["id"], "name": r["name"], "kind": r["kind"], "state": r["state"]}
+                    for r in rows
+                ]
+            )
         )
         return 0
     for r in rows:
@@ -1919,7 +1920,9 @@ def build_parser() -> argparse.ArgumentParser:
     ik = sub.add_parser(
         "installation-key", help="The key that encrypts secrets at rest"
     ).add_subparsers(dest="subcommand", metavar="<action>", required=True)
-    s = ik.add_parser("rotate", help=argparse.SUPPRESS)
+    s = ik.add_parser(
+        "rotate", help="Rotate the key and re-encrypt every secret (through sudo veyra)"
+    )
     s.add_argument("--new-key", required=True)
     s.add_argument("--force", action="store_true")
     s.set_defaults(func=cmd_installation_key_rotate)
@@ -1980,13 +1983,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--parts", help="Comma-separated: db,etc,engine,data,voicemail,recordings")
     s.add_argument("--yes", action="store_true")
     s.set_defaults(func=cmd_backup_restore)
-    s = bk.add_parser("unit", help=argparse.SUPPRESS)
+    s = bk.add_parser("unit", help="Internal: the veyra-backup@ unit")
     s.add_argument("instance")
     s.set_defaults(func=cmd_backup_unit)
-    s = bk.add_parser("record", help=argparse.SUPPRESS)
+    s = bk.add_parser("record", help="Internal: record a runner result")
     s.add_argument("--json", required=True)
     s.set_defaults(func=cmd_backup_record)
-    s = bk.add_parser("settings", help=argparse.SUPPRESS)
+    s = bk.add_parser("settings", help="Show the backup settings")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_backup_settings)
     ha = sub.add_parser("ha", help="High availability (docs/HIGH_AVAILABILITY.md)").add_subparsers(
@@ -2036,7 +2039,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--address", required=True, help="This node's own address")
     s.add_argument("--insecure", action="store_true", help=argparse.SUPPRESS)
     s.set_defaults(func=cmd_ha_join_prepare)
-    s = ha.add_parser("db", help=argparse.SUPPRESS)
+    s = ha.add_parser("db", help="Internal: database steps of the HA agent")
     s.add_argument("action")
     s.add_argument("--json", default="{}")
     s.set_defaults(func=cmd_ha_db)
