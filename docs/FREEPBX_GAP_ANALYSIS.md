@@ -473,10 +473,13 @@ stated and the four milestones published on the roadmap.
 
 ## 5. Tracking
 
-Every ✘ and ◐ row above becomes a GitHub issue labelled `gap:freepbx`
-with its priority label, grouped under four tracking issues that mirror
-section 4, so that the roadmap, the issues and this document agree. When
-a row is closed, this document is updated in the same pull request.
+Every P1 row above has its own GitHub issue labelled `gap:freepbx` and
+`P1`, grouped under four tracking issues that mirror section 4 and
+assigned to the matching candidate milestone. P2 and P3 rows are listed in
+the tracking issues (and in "Tracking: post-1.0 modules and the remaining
+P2/P3 rows") until they are scheduled, when each gets its own issue. When
+a row is closed, this document is updated in the same pull request, so the
+roadmap, the issues and this document agree.
 
 ## 6. Sources
 
