@@ -1429,6 +1429,51 @@ def cmd_ha_verb(args: argparse.Namespace, verb: str) -> int:
     return 0
 
 
+def cmd_ha_enable(args: argparse.Namespace) -> int:
+    """Standalone becomes the primary (docs/HIGH_AVAILABILITY.md §5), from the console."""
+    import json
+
+    from veyra.core.config import get_settings
+    from veyra.ha.client import AgentError
+
+    try:
+        out = _ha_client(get_settings()).call(
+            "enable",
+            service={
+                "name": args.name,
+                "address": args.address,
+                "prefix": args.prefix,
+                "interface": args.interface,
+            },
+            synchronous=bool(args.synchronous),
+            address=args.node_address or "",
+            actor="cli",
+        )
+    except AgentError as e:
+        raise RuntimeError(e.message) from e
+    print(json.dumps(out, indent=2, default=str))
+    print("Follow the steps with: veyra ha status")
+    return 0
+
+
+def cmd_ha_add_node(args: argparse.Namespace) -> int:
+    """A join token and the installer command for the second server."""
+    from veyra.core.db import session_scope
+    from veyra.ha import join
+    from veyra.ha import service as ha_service
+
+    with session_scope() as db:
+        inst = ha_service.installation(db)
+        if inst.deployment_mode != "ha":
+            raise RuntimeError("enable high availability first (veyra ha enable)")
+        raw, item = join.create_token(db, label=args.label, created_by="cli")
+        me = ha_service.node_by_name(db, ha_service.local_name())
+        address = (me.address if me and me.address else None) or ha_service.local_name()
+    print(f"Join token (valid until {item['expires_at']}, shown once):")
+    print(f"  sudo installer/install.sh --role secondary --join https://{address} --token {raw}")
+    return 0
+
+
 def cmd_ha_join_prepare(args: argparse.Namespace) -> int:
     """Run by install.sh --role secondary: ask the agent to join, then wait."""
     import json
@@ -1733,6 +1778,17 @@ def build_parser() -> argparse.ArgumentParser:
             )
         s.add_argument("--yes", action="store_true", help="Do not ask for confirmation")
         s.set_defaults(func=lambda a, v=verb: cmd_ha_verb(a, v))
+    s = ha.add_parser("enable", help="Enable high availability: this node becomes the primary")
+    s.add_argument("--name", required=True, help="Service name phones and browsers use")
+    s.add_argument("--address", required=True, help="Service address on the shared segment")
+    s.add_argument("--prefix", type=int, default=24, help="Prefix length (default 24)")
+    s.add_argument("--interface", required=True, help="Interface that carries the service address")
+    s.add_argument("--node-address", help="This node's own address (default: from the hostname)")
+    s.add_argument("--synchronous", action="store_true", help="Synchronous replication")
+    s.set_defaults(func=cmd_ha_enable)
+    s = ha.add_parser("add-node", help="Create a join token for the second server")
+    s.add_argument("--label", help="A label for the token")
+    s.set_defaults(func=cmd_ha_add_node)
     s = ha.add_parser(
         "join-prepare", help="Join a primary as the secondary (used by the installer)"
     )
