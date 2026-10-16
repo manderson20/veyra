@@ -769,6 +769,8 @@ def _peer_file(
 ) -> Response:
     logical = str(data.get("path") or "")
     readable, privileged = sync.split_roots(_roots(db, settings))
+    if sync.excluded(logical):
+        raise peer.PeerError(404, "no_file", "No such file.")
     if sync.resolve(privileged, logical) is not None:
         # Root-only file: the agent reads it (small files, base64 over the socket).
         try:
