@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -84,6 +85,27 @@ class Site(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     country: Mapped[str | None] = mapped_column(String(2))
     # Default emergency caller ID for the site's extensions (docs/TRUNKS_ROUTING.md §7).
     emergency_caller_id_number: Mapped[str | None] = mapped_column(String(32))
+    # Emergency calling validation (docs/PRODUCTION_HARDENING.md §6): the
+    # administrator's attestation that the address is registered with the
+    # carrier's E911 service, the responder the PSAP's callback reaches when
+    # the caller cannot be found, the callback window, who is told on site,
+    # and the last test call.
+    emergency_attested_by: Mapped[str | None] = mapped_column(String(320))
+    emergency_attested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    emergency_responder_extension_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extensions.id", ondelete="SET NULL", use_alter=True)
+    )
+    emergency_callback_minutes: Mapped[int] = mapped_column(
+        Integer, default=30, server_default="30"
+    )
+    emergency_recipients: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default="{}"
+    )
+    last_emergency_test_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_emergency_test_result: Mapped[str | None] = mapped_column(Text)
+    last_emergency_notification_test_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
 
 
 class Building(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
@@ -95,6 +117,12 @@ class Building(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     site_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sites.id", ondelete="RESTRICT"))
     name: Mapped[str] = mapped_column(String(200))
+    # Civic address when it differs from the site's (docs/PRODUCTION_HARDENING.md §6).
+    street: Mapped[str | None] = mapped_column(String(200))
+    city: Mapped[str | None] = mapped_column(String(100))
+    region: Mapped[str | None] = mapped_column(String(100))
+    postal_code: Mapped[str | None] = mapped_column(String(20))
+    country: Mapped[str | None] = mapped_column(String(2))
 
 
 class Department(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

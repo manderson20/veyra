@@ -63,7 +63,9 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
     PermissionDef("updates.manage", "Change update policies", platform_only=True),
     PermissionDef("updates.approve", "Approve and apply updates", platform_only=True),
     PermissionDef("backups.read", "View backups", platform_only=True),
-    PermissionDef("backups.manage", "Run, verify and delete backups; backup settings", platform_only=True),
+    PermissionDef(
+        "backups.manage", "Run, verify and delete backups; backup settings", platform_only=True
+    ),
     PermissionDef(
         "ha.read", "View high availability status", default_roles=("org_admin", "read_only")
     ),

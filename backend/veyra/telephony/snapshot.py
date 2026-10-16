@@ -140,7 +140,27 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     ext_by_id = {e.id: e for e in extensions}
     # Site defaults for the emergency caller ID (docs/TRUNKS_ROUTING.md §7) and
     # the number of phones registering each extension (docs/DEVICE_PROVISIONING.md §2).
-    site_ecid = {s.id: s.emergency_caller_id_number for s in db.scalars(select(Site))}
+    sites = list(db.scalars(select(Site)))
+    site_ecid = {s.id: s.emergency_caller_id_number for s in sites}
+    # Emergency calling (docs/PRODUCTION_HARDENING.md §6): what the generator
+    # needs per site for the PSAP callback and site-bound routes.
+    sites_out = [
+        {
+            "id": str(s.id),
+            "slug": s.slug,
+            "name": s.name,
+            "organization": org_slug.get(s.organization_id, ""),
+            "emergency_caller_id_number": s.emergency_caller_id_number,
+            "callback_minutes": int(s.emergency_callback_minutes or 30),
+            "responder": (
+                ext_by_id[s.emergency_responder_extension_id].number
+                if s.emergency_responder_extension_id in ext_by_id
+                else None
+            ),
+        }
+        for s in sites
+        if s.organization_id in active
+    ]
     contacts = _contacts(db, ext_by_id)
     ring_groups = [
         g
@@ -204,9 +224,11 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
                 "shared_mailboxes": shared_by_ext.get(e.id, []),
+                "site": str(e.site_id) if e.site_id else None,
             }
             for e in extensions
         ],
+        "sites": sites_out,
         **voicemail,
         **groups,
         **_routing(db, key, active, extensions, targets, org_slug),
@@ -746,6 +768,7 @@ def _routing(
                 "slug": r.slug,
                 "name": r.name,
                 "is_emergency": r.is_emergency,
+                "site": str(r.site_id) if r.site_id else None,
                 "patterns": list(r.patterns or []),
                 "trunks": route_trunks.get(r.id, []),
                 "caller_id_number": r.caller_id_number,
