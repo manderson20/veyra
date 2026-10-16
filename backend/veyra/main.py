@@ -11,6 +11,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -67,6 +68,16 @@ def _start_event_listener(app: FastAPI) -> AriEventListener | None:
     return listener
 
 
+def _in_recovery(db: Any) -> bool:
+    from sqlalchemy import func, select
+
+    try:
+        return bool(db.scalar(select(func.pg_is_in_recovery())))
+    except Exception:
+        db.rollback()
+        return False
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
@@ -74,10 +85,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         init_engine(settings)
         with session_scope() as db:
-            bootstrap.bootstrap(db)
-            if not bootstrap.setup_required(db):
-                bootstrap.ensure_local_node(db)
-            app.state.modules.startup(app, db)
+            # An HA standby's database is a read-only replica
+            # (docs/HIGH_AVAILABILITY.md §9): the primary did the bootstrap.
+            standby = _in_recovery(db)
+            if standby:
+                log.info("Database in recovery: this node is an HA standby; no bootstrap")
+            else:
+                bootstrap.bootstrap(db)
+                if not bootstrap.setup_required(db):
+                    bootstrap.ensure_local_node(db)
+            try:
+                app.state.modules.startup(app, db)
+            except Exception:
+                if not standby:
+                    raise
+                db.rollback()
+                log.warning("Module startup skipped on the standby")
         try:
             key = load_installation_key(settings)
             log.info("Installation key loaded (fingerprint %s)", key.fingerprint)
