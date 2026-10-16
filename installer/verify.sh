@@ -299,6 +299,13 @@ else
     check upgrade-unit warn "veyra-upgrade@.service, its polkit rule or /var/lib/veyra-upgrade missing: install updates with upgrade.sh"
 fi
 
+# --- installation key: every stored ciphertext decrypts (docs/PRODUCTION_HARDENING.md §3.1)
+if ik="$(/usr/local/bin/veyra installation-key check --ciphertexts --json 2>/dev/null)"; then
+    check installation-key-ciphertexts pass "$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(f"{d[\"ciphertexts\"]} ciphertext(s) readable")' <<<"$ik")"
+else
+    check installation-key-ciphertexts fail "some stored secrets do not decrypt with the installation key (veyra installation-key check --ciphertexts)"
+fi
+
 # --- backups (docs/PRODUCTION_HARDENING.md §2)
 if [[ -f /etc/systemd/system/veyra-backup@.service ]] \
     && grep -qs "veyra-backup@" /etc/polkit-1/rules.d/50-veyra-services.rules \

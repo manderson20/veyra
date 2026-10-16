@@ -11,6 +11,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ## 0.23.0 — unreleased (Milestone 17)
 
 ### Added
+- **Installation key rotation** (§3.1): `sudo veyra installation-key rotate` re-encrypts every stored secret (SIP, trunk, voicemail PINs, MFA, provisioning, calendars, firewall feeds, SSO, webhooks, module configuration, revision artifacts, the central and SMTP and update-source and fencing secrets) to a new key in one transaction and keeps the previous key; `installation-key check --ciphertexts` proves every ciphertext decrypts; `verify.sh` runs it.
 - **Backups** ([PRODUCTION_HARDENING.md](docs/PRODUCTION_HARDENING.md) §2): System → Backups takes, schedules (daily at a chosen time, run by the worker through a root unit), verifies (every dump is restored into a scratch database and compared), encrypts (age, to the administrator's recipients; Veyra keeps no private key), copies (a mounted directory) and prunes (daily/weekly/pre-upgrade keep policy) backups of the database, `/etc/veyra`, the engine configuration, prompts, hold music, firmware, templates, modules, voicemail and optionally recordings; `sudo veyra backup run|list|restore`; alert rules `backup_failed` and `backup_stale`; dashboard tile; migration `0030`.
 
 ## 0.22.0 — 2026-10-16 (Milestone 16)

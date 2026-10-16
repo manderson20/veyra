@@ -233,6 +233,24 @@ console uses a self-signed certificate, paste its CA certificate into the
 enrollment form. An instance that loses the console keeps working; the
 console shows it as offline and can raise an alert.
 
+### Rotating the installation key
+
+The installation key (`/etc/veyra/secrets/installation.key`) encrypts
+every stored secret ([PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md)
+§3.1). To replace it:
+
+```
+sudo veyra installation-key rotate
+sudo veyra installation-key check --ciphertexts
+```
+
+A new key is generated, every ciphertext is re-encrypted in one
+transaction (nothing changes if any of them cannot be read), the new key
+is installed, the previous one is kept as `installation.key.previous`
+(root-only) and the services restart. Take a backup afterwards, then
+remove the previous key. On an HA pair, rotate on the primary; the key
+reaches the standby through the file sync.
+
 ### Backups and restore
 
 System → **Backups** ([PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md)

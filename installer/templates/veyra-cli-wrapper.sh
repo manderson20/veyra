@@ -31,4 +31,25 @@ if [[ "${1:-}" == "firewall" && "${2:-}" == "off" ]]; then
     fi
     exit 0
 fi
+# Installation key rotation (docs/PRODUCTION_HARDENING.md §3.1): root makes
+# the new key, the service account re-encrypts the database with it, root
+# installs it (keeping the previous key) and restarts the services.
+if [[ "${1:-}" == "installation-key" && "${2:-}" == "rotate" ]]; then
+    KEY=/etc/veyra/secrets/installation.key
+    NEW="$(mktemp -p /etc/veyra/secrets .installation.key.XXXXXX)"
+    trap 'rm -f "$NEW"' EXIT
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n' >"$NEW"; echo >>"$NEW"
+    chown root:veyra "$NEW"; chmod 0640 "$NEW"
+    if ! as_veyra installation-key rotate --new-key "$NEW" "${@:3}"; then
+        echo "veyra: the database was not changed; the current key stays" >&2
+        exit 1
+    fi
+    cp -p "$KEY" "$KEY.previous"; chmod 0600 "$KEY.previous"
+    mv -f "$NEW" "$KEY"; chown root:veyra "$KEY"; chmod 0640 "$KEY"
+    trap - EXIT
+    systemctl restart veyra-api veyra-worker 2>/dev/null || true
+    systemctl try-restart veyra-deployer veyra-pager veyra-firewall veyra-ha-agent 2>/dev/null || true
+    echo "Installation key rotated; the previous key is $KEY.previous (remove it once a backup with the new key is verified)."
+    exit 0
+fi
 as_veyra "$@"
