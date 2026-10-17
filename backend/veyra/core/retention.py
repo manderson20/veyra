@@ -22,6 +22,7 @@ from veyra.core.models import (
     CallRecord,
     CallRecording,
     CallSample,
+    Capture,
     CentralSample,
     ClusterEvent,
     FirewallBan,
@@ -117,6 +118,15 @@ RULES: list[Rule] = [
         ProvisioningRequest.at,
     ),
     Rule("page_log", "Page log", 90, 7, "Pages sent.", PageLog, PageLog.at),
+    Rule(
+        "captures",
+        "Packet captures",
+        7,
+        1,
+        "Capture files and their records (docs/CALL_FEATURES.md §2.2); a running capture stays.",
+        Capture,
+        Capture.started_at,
+    ),
     Rule(
         "metrics",
         "Engine metrics samples",
@@ -227,6 +237,19 @@ def _prune(db: Session, rule: Rule, cutoff: datetime) -> int:
             )
         )
         return n
+    if rule.key == "captures":
+        from veyra.diagnostics import captures
+
+        n = 0
+        for row in db.scalars(
+            select(Capture).where(
+                Capture.started_at < cutoff, Capture.state.not_in(list(captures.ACTIVE))
+            )
+        ).all():
+            captures.remove_file(row)
+            db.delete(row)
+            n += 1
+        return n
     return _count(db.execute(delete(rule.model).where(rule.time_column < cutoff)))
 
 
@@ -292,6 +315,8 @@ def inventory(db: Session, settings_obj: Any | None = None) -> list[dict[str, An
         rows = db.scalar(select(func.count()).select_from(rule.model)) or 0
         oldest = db.scalar(select(func.min(rule.time_column)))
         size = db.scalar(text(f"SELECT pg_total_relation_size('{table}')"))
+        if rule.key == "captures":  # the files, not the table
+            size = db.scalar(select(func.sum(Capture.bytes)).where(Capture.state != "deleted"))
         out.append(
             {
                 "key": rule.key,

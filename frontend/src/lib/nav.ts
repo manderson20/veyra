@@ -83,11 +83,12 @@ export const NAV: NavSection[] = [
     { label: "Firmware", href: "/firmware/", icon: "update", permissions: ["provisioning.read"], group: "Configuration" },
   ] },
   { id: "modules", label: "Modules", icon: "modules", description: "Pages added by installed modules.", items: [] },
-  { id: "system", label: "System", icon: "settings", description: "Health, alerts, the telephony engine, high availability, the firewall, sign-in, integrations, updates, modules, audit and settings.", items: [
+  { id: "system", label: "System", icon: "settings", description: "Health, alerts, diagnostics, the telephony engine, high availability, the firewall, sign-in, integrations, updates, modules, audit and settings.", items: [
     { label: "Health", href: "/system/health/", icon: "health", permissions: ["system.health.read"], group: "Status" },
     { label: "Telephony Engine", href: "/system/telephony/", icon: "server", permissions: ["config.read"], group: "Platform" },
     { label: "High Availability", href: "/system/ha/", icon: "ha", permissions: ["ha.read"], group: "Platform" },
     { label: "Emergency Calling", href: "/system/emergency/", icon: "alert", permissions: ["emergency.read"], group: "Status" },
+    { label: "Diagnostics", href: "/system/diagnostics/", icon: "search", permissions: ["diagnostics.read"], group: "Status" },
     { label: "Updates", href: "/updates/", icon: "update", permissions: ["updates.read"], group: "Software" },
     { label: "Backups", href: "/system/backups/", icon: "database", permissions: ["backups.read"], group: "Software" },
     { label: "Module Manager", href: "/modules/", icon: "modules", permissions: ["modules.read"], group: "Software" },

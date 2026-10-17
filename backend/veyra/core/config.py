@@ -190,6 +190,12 @@ class Settings(BaseSettings):
         return self.data_dir / "module-store"
 
     @property
+    def captures_dir(self) -> Path:
+        """Packet captures (docs/CALL_FEATURES.md §2.2); owned by the service
+        account, written by the root capture unit."""
+        return self.data_dir / "captures"
+
+    @property
     def recordings_dir(self) -> Path:
         """Call recordings (docs/REPORTING.md §4): Asterisk writes WAV files to
         ``incoming/``; the worker converts them into ``<org>/<yyyy>/<mm>/``."""

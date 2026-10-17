@@ -1,0 +1,26 @@
+# Veyra packet capture (docs/CALL_FEATURES.md §2.2): one fixed tcpdump command
+# for the capture recorded under the instance id, started and stopped by the
+# service account through polkit. The runner enforces the duration and size
+# limit and hands the file to the service account.
+[Unit]
+Description=Veyra packet capture (%i)
+Documentation=file://@VEYRA_PREFIX@/current/docs/CALL_FEATURES.md
+
+[Service]
+Type=oneshot
+EnvironmentFile=@VEYRA_ETC@/veyra.env
+WorkingDirectory=/
+ExecStart=@VEYRA_PREFIX@/current/backend/.venv/bin/veyra capture unit %i
+TimeoutStartSec=35min
+# A stop reaches the runner (SIGTERM), which ends tcpdump cleanly and records.
+KillMode=mixed
+TimeoutStopSec=30
+UMask=0027
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native

@@ -1449,6 +1449,146 @@ def cmd_backup_unit(args: argparse.Namespace) -> int:
     raise RuntimeError(f"unknown backup unit instance {instance!r}")
 
 
+# ------------------------------------------------------------------ captures
+
+
+def cmd_capture_unit(args: argparse.Namespace) -> int:
+    """``veyra-capture@<id>``: root runs tcpdump for one recorded capture."""
+    import json
+
+    from veyra.diagnostics import runner
+
+    payload = runner.run_capture(str(args.instance))
+    print(json.dumps({k: payload.get(k) for k in ("id", "state", "bytes", "packets", "error")}))
+    return 0 if payload.get("state") in ("finished", "stopped") else 1
+
+
+def cmd_capture_show(args: argparse.Namespace) -> int:
+    """Internal: one capture as JSON, for the root runner."""
+    import json
+    import uuid
+
+    from veyra.core.db import session_scope
+    from veyra.core.models import Capture
+    from veyra.diagnostics import captures
+
+    with session_scope() as db:
+        row = db.get(Capture, uuid.UUID(args.capture_id))
+        if row is None:
+            raise RuntimeError("unknown capture")
+        print(json.dumps(captures.row_out(row)))
+    return 0
+
+
+def cmd_capture_record(args: argparse.Namespace) -> int:
+    import json
+
+    from veyra.core.db import session_scope
+    from veyra.diagnostics import captures
+
+    with session_scope() as db:
+        row = captures.record(db, json.loads(args.json))
+        print(json.dumps({"id": str(row.id), "state": row.state}))
+    return 0
+
+
+def cmd_capture_list(args: argparse.Namespace) -> int:
+    import json
+
+    from veyra.core.db import session_scope
+    from veyra.diagnostics import captures
+
+    with session_scope() as db:
+        rows = [captures.row_out(c) for c in captures.rows(db, 200) if c.state != "deleted"]
+    if args.json:
+        print(json.dumps(rows))
+        return 0
+    for r in rows:
+        print(
+            f"{r['started_at'][:19]}  {r['state']:9} {r['bytes'] // 1024:8} KB "
+            f"{r['packets'] if r['packets'] is not None else '-':>7}  {r['id']}  {r['label']}"
+        )
+    return 0
+
+
+def cmd_capture_start(args: argparse.Namespace) -> int:
+    """From the console: a capture by address, network or all SIP."""
+    import json
+
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.diagnostics import captures
+    from veyra.telephony.settings import load_sip_settings
+
+    with session_scope() as db:
+        sip = load_sip_settings(db)
+        spec = {
+            "hosts": args.host or [],
+            "nets": args.net or [],
+            "ports": args.port or captures.sip_ports(sip),
+            "portranges": [[sip.rtp_start, sip.rtp_end]] if args.rtp else [],
+            "rtp": bool(args.rtp),
+        }
+        try:
+            from veyra.diagnostics import filters
+
+            label = args.label or filters.describe(spec)
+            row = captures.start(
+                db,
+                spec=spec,
+                label=label,
+                directory=get_settings().captures_dir,
+                duration_seconds=args.seconds,
+                size_limit_mb=args.mb,
+                created_by="console",
+            )
+        except (captures.CaptureError, filters.FilterError) as e:
+            print(f"capture not started: {getattr(e, 'message', e)}", file=sys.stderr)
+            return 1
+        print(json.dumps({"id": str(row.id), "expression": row.expression, "path": row.path}))
+    return 0
+
+
+def cmd_capture_stop(args: argparse.Namespace) -> int:
+    import uuid
+
+    from veyra.core.db import session_scope
+    from veyra.core.models import Capture
+    from veyra.diagnostics import captures
+
+    with session_scope() as db:
+        row = db.get(Capture, uuid.UUID(args.capture_id))
+        if row is None:
+            raise RuntimeError("unknown capture")
+        try:
+            captures.stop(db, row)
+        except captures.CaptureError as e:
+            print(f"not stopped: {e.message}", file=sys.stderr)
+            return 1
+    print("stopping")
+    return 0
+
+
+def cmd_capture_delete(args: argparse.Namespace) -> int:
+    import uuid
+
+    from veyra.core.db import session_scope
+    from veyra.core.models import Capture
+    from veyra.diagnostics import captures
+
+    with session_scope() as db:
+        row = db.get(Capture, uuid.UUID(args.capture_id))
+        if row is None:
+            raise RuntimeError("unknown capture")
+        try:
+            captures.delete(db, row)
+        except captures.CaptureError as e:
+            print(f"not deleted: {e.message}", file=sys.stderr)
+            return 1
+    print("deleted")
+    return 0
+
+
 def cmd_backup_run(args: argparse.Namespace) -> int:
     """From the console (root): a manual or pre-upgrade backup, synchronously."""
     import json
@@ -1992,6 +2132,37 @@ def build_parser() -> argparse.ArgumentParser:
     s = bk.add_parser("settings", help="Show the backup settings")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_backup_settings)
+    cp = sub.add_parser(
+        "capture", help="Packet captures (docs/CALL_FEATURES.md §2.2)"
+    ).add_subparsers(dest="capture_cmd", metavar="<action>", required=True)
+    s = cp.add_parser("start", help="Start a capture (all SIP, or by address)")
+    s.add_argument("--host", action="append", help="Capture this address (repeatable)")
+    s.add_argument("--net", action="append", help="Capture this network in CIDR notation")
+    s.add_argument("--port", action="append", type=int, help="Port instead of the SIP ports")
+    s.add_argument("--rtp", action="store_true", help="Include the RTP port range")
+    s.add_argument("--seconds", type=int, default=120, help="Duration (default 120, max 1800)")
+    s.add_argument("--mb", type=int, default=50, help="Size limit in MB (default 50, max 500)")
+    s.add_argument("--label", help="Shown in the list")
+    s.set_defaults(func=cmd_capture_start)
+    s = cp.add_parser("stop", help="Stop a running capture")
+    s.add_argument("capture_id")
+    s.set_defaults(func=cmd_capture_stop)
+    s = cp.add_parser("list", help="List captures")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_capture_list)
+    s = cp.add_parser("delete", help="Delete a capture and its file")
+    s.add_argument("capture_id")
+    s.set_defaults(func=cmd_capture_delete)
+    s = cp.add_parser("unit", help="Internal: the veyra-capture@ unit")
+    s.add_argument("instance")
+    s.set_defaults(func=cmd_capture_unit)
+    s = cp.add_parser("show", help=argparse.SUPPRESS)
+    s.add_argument("capture_id")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_capture_show)
+    s = cp.add_parser("record", help=argparse.SUPPRESS)
+    s.add_argument("--json", required=True)
+    s.set_defaults(func=cmd_capture_record)
     ha = sub.add_parser("ha", help="High availability (docs/HIGH_AVAILABILITY.md)").add_subparsers(
         dest="ha_cmd", metavar="<action>", required=True
     )

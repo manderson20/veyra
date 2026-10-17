@@ -2576,6 +2576,91 @@ export interface BackupStatus {
   backup?: string | null;
 }
 
+// ----------------------------------------------------------------- packet captures (Milestone 18)
+
+export type CaptureState = "starting" | "running" | "finished" | "stopped" | "failed" | "deleted" | string;
+
+export interface CaptureFilter {
+  hosts: string[];
+  nets: string[];
+  ports: number[];
+  portranges: [number, number][];
+  rtp: boolean;
+}
+
+export interface CaptureRow {
+  id: string;
+  label: string;
+  state: CaptureState;
+  started_at: string;
+  finished_at: string | null;
+  duration_seconds: number;
+  size_limit_mb: number;
+  filter: CaptureFilter;
+  expression: string;
+  rtp: boolean;
+  bytes: number;
+  packets: number | null;
+  error: string | null;
+  created_by: string;
+  downloadable: boolean;
+}
+
+export interface CaptureList {
+  captures: CaptureRow[];
+  running: number;
+  max_running: number;
+  limits: { seconds: [number, number]; mb: [number, number] };
+}
+
+export interface CaptureTargets {
+  sip_ports: number[];
+  rtp_range: [number, number];
+  extensions: { id: string; number: string; display_name: string; organization_name: string | null; hosts: string[] }[];
+  trunks: { id: string; name: string; host: string; port: number }[];
+}
+
+export type CaptureTarget = "all_sip" | "extension" | "trunk" | "address";
+
+export interface SipMessage {
+  at: string;
+  src: string;
+  sport: number;
+  dst: string;
+  dport: number;
+  transport: string;
+  kind: "request" | "response";
+  method: string | null;
+  status: number | null;
+  reason: string | null;
+  call_id: string | null;
+  cseq: string | null;
+  from: string | null;
+  to: string | null;
+  user_agent: string | null;
+  request_uri: string | null;
+}
+
+export interface SipDialog {
+  call_id: string;
+  first_at: string;
+  last_at: string;
+  messages: number;
+  method: string | null;
+  last_status: number | null;
+  last_reason: string | null;
+  from: string | null;
+  to: string | null;
+  parties: string[];
+}
+
+export interface SipSummary {
+  packets_read: number;
+  messages: SipMessage[];
+  dialogs: SipDialog[];
+  truncated: boolean;
+}
+
 // ----------------------------------------------------------------- retention (Milestone 17)
 
 export interface RetentionRule {
