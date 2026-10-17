@@ -173,7 +173,7 @@ they differ, transport, user agent, expiry, the engine's reachability word
 (`Avail`, `Unavail`, `NonQual`) and round-trip time. The adapter reads
 PJSIP's contact store (`database show registrar/contact`, one JSON object
 per contact) and `pjsip show contacts` through the CLI socket, joins them
-on the contact URI and caches the result for five seconds; the extension
+on the contact hash and caches the result for five seconds; the extension
 list carries the same contacts under `registration.contacts`. Telephony →
 Registrations shows the list (search, organization filter, ten-second
 refresh); the Extensions page shows the source address per extension.
