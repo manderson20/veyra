@@ -2156,11 +2156,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = cp.add_parser("unit", help="Internal: the veyra-capture@ unit")
     s.add_argument("instance")
     s.set_defaults(func=cmd_capture_unit)
-    s = cp.add_parser("show", help=argparse.SUPPRESS)
+    s = cp.add_parser("show", help="Internal: one capture as JSON, for the unit")
     s.add_argument("capture_id")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_capture_show)
-    s = cp.add_parser("record", help=argparse.SUPPRESS)
+    s = cp.add_parser("record", help="Internal: record a unit result")
     s.add_argument("--json", required=True)
     s.set_defaults(func=cmd_capture_record)
     ha = sub.add_parser("ha", help="High availability (docs/HIGH_AVAILABILITY.md)").add_subparsers(
