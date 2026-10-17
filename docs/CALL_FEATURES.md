@@ -44,15 +44,23 @@ contact with `uri`, `via_addr`, `via_port`, `user_agent`, `expiration_time`,
 `reg_server`, `endpoint`) and listed with reachability and round-trip time
 by `pjsip show contacts`. Both are read over the CLI socket the service
 account already has (`veyra/telephony/asterisk/cli.py`), parsed in
-`contacts.py` without a shell, joined on the contact URI and cached for
-five seconds.
+`contacts.py` without a shell, joined on the contact hash (the store keys
+each contact by its full hash, the listing prints the first ten characters
+and cuts long URIs to its column width) and cached for five seconds.
+
+Veyra generates every endpoint with `rewrite_contact=yes`, so PJSIP stores
+the contact URI with the host and port the REGISTER actually arrived from and
+keeps the phone's own Contact address in the `x-ast-orig-host` URI parameter
+(`sip:ep@203.0.113.9:36821;x-ast-orig-host=192.168.1.20:5060`). `via_addr`
+is the Via header as the phone sent it, not the source, and is used only
+for an endpoint configured without the rewrite.
 
 Two addresses per contact, named plainly in the interface:
 
 | Field | Meaning |
 |---|---|
-| `source_host`, `source_port` | where the REGISTER actually arrived from (the Via address PJSIP recorded). Public when the phone sits behind a remote NAT; the LAN address for a local phone |
-| `contact_host`, `contact_port` | what the phone put in its Contact header: its own address, usually private |
+| `source_host`, `source_port` | where the REGISTER actually arrived from (the rewritten URI host and port). Public when the phone sits behind a remote NAT; the LAN address for a local phone |
+| `contact_host`, `contact_port` | what the phone put in its Contact header (`x-ast-orig-host`): its own address, usually private |
 | `nat` | the two differ |
 | `transport`, `user_agent`, `expires_at`, `status` (`Avail`, `Unavail`, `NonQual`), `rtt_ms` | from the URI parameters, the store and the listing |
 
