@@ -70,6 +70,16 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
     PermissionDef(
         "emergency.manage", "Emergency calling settings and tests", default_roles=("org_admin",)
     ),
+    PermissionDef(
+        "diagnostics.read",
+        "Diagnostics: packet captures, logs and engine queries",
+        platform_only=True,
+    ),
+    PermissionDef(
+        "diagnostics.capture",
+        "Start, stop, download and delete packet captures",
+        platform_only=True,
+    ),
     PermissionDef("backups.read", "View backups", platform_only=True),
     PermissionDef(
         "backups.manage", "Run, verify and delete backups; backup settings", platform_only=True

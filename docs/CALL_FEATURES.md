@@ -87,25 +87,49 @@ Diagnostics → Captures (platform administrators, permission
   host), an address or network, or "all SIP" (the SIP transports' ports);
   **RTP** is a separate tick box because media is sensitive; a duration
   (default 2 min, max 30) and a size limit (default 50 MB, max 500).
-* A root unit `veyra-capture@<id>.service`, started through polkit like
-  `veyra-backup@` ([PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) §2.2),
-  runs one fixed `tcpdump` command: `-i any -nn -s 0 -w <file> -G <seconds>
-  -W 1 -C <mb>` plus a BPF expression Veyra assembles from validated
-  fields (`host`, `net`, `port`, `portrange`); the unit refuses anything
-  else. Files land in `/var/lib/veyra/captures/<id>.pcap` (root:veyra
-  0640). `veyra capture start|stop|list` for the console.
-* The page lists captures (status, started, duration, size, packets,
-  filter, who), **stops** a running one, **downloads** the `.pcap` (audited
-  `capture.download`; a one-time notice reminds the operator that captures
-  can contain call content and personal data) and **deletes** it.
+* A root unit `veyra-capture@<id>.service`, started and stopped through
+  polkit like `veyra-backup@` ([PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) §2.2),
+  runs one fixed `tcpdump` command: `-i any -nn -s 0 -Z root -U -w <file>`
+  plus a BPF expression Veyra assembles from validated fields (`host`,
+  `net`, `port`, `portrange`; `veyra/diagnostics/filters.py`). The row
+  stores the fields, not the expression the runner uses: the root runner
+  (`veyra/diagnostics/runner.py`) reads the row through the service account
+  and rebuilds the expression with the same validation, so nothing typed
+  reaches tcpdump. The runner, not tcpdump, enforces the duration and the
+  size limit (tcpdump's `-G` only rotates when a packet arrives and `-C -W 1`
+  overwrites from the start), ends tcpdump with SIGTERM so the file is
+  complete, reads the packet count from its summary and hands the file to
+  the service account (`/var/lib/veyra/captures/<id>.pcap`, veyra:veyra
+  0640, in a directory the service account owns) so the API serves, prunes
+  and deletes it without another root step. A stop from the page is
+  `systemctl stop` of the unit; the runner records `stopped`. At most two
+  captures run at a time. `veyra capture start|stop|list|delete` for the
+  console.
+* The page (System → Diagnostics) lists captures (state, started, length,
+  size, packets, filter, who), **stops** a running one, **downloads** the
+  `.pcap` (audited `capture.download`; a one-time notice per browser
+  reminds the operator that captures can contain call content and personal
+  data) and **deletes** it. Starting is audited as `capture.start` with the
+  expression, stopping as `capture.stop`, deleting as `capture.delete`,
+  the SIP view as `capture.view`; the unit's outcome as `capture.run`.
 * A **SIP summary** is parsed from the file in Python (`dpkt`-free, own
-  minimal pcap reader): one row per SIP message (time, source, destination,
-  method or response, Call-ID, From, To, User-Agent), grouped by dialog, so
-  the common "why does this phone not register" needs no Wireshark.
-* Retention class `captures` (default 7 days, [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) §4).
+  minimal pcap reader, `veyra/diagnostics/pcap.py`: classic pcap, the Linux
+  cooked v1/v2 link types `-i any` writes, Ethernet with VLAN tags, raw IP,
+  IPv4/IPv6, UDP and TCP, the first 64 MB and 5000 messages): one row per
+  SIP message (time, source, destination, method or response, Call-ID,
+  From, To, User-Agent), grouped by dialog, so the common "why does this
+  phone not register" needs no Wireshark. TLS transports stay opaque.
+* Retention class `captures` (default 7 days, minimum 1; the job removes
+  the file with the row, running captures stay; [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) §4).
   Captures are per node and are not synced to an HA standby. `verify.sh`
-  checks the unit, the polkit rule and the directory. Model `Capture`
-  (migration `0032`), table `captures`.
+  checks the unit, the polkit rule, the directory and `tcpdump`
+  (`capture-unit`). Model `Capture` (migration `0032`), table `captures`.
+  Permissions: `diagnostics.read` (the page, the list, the SIP view) and
+  `diagnostics.capture` (start, stop, download, delete), both platform
+  only. Targets: an extension resolves to the addresses its phones
+  register from (§2.1; refused with `409 not_registered` when none is), a
+  trunk to its host and port, an address or network as given, "all SIP" to
+  the SIP transports' ports; RTP adds the RTP port range.
 
 ### 2.3 Diagnostics page
 

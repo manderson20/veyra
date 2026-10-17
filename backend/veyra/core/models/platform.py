@@ -189,6 +189,33 @@ class Backup(UUIDPrimaryKey, Base):
     created_by: Mapped[str] = mapped_column(String(320), default="scheduler")
 
 
+class Capture(UUIDPrimaryKey, Base):
+    """A packet capture taken by the root unit ``veyra-capture@<id>``
+    (docs/CALL_FEATURES.md §2.2); the runner records it through
+    ``veyra capture record``. The filter is structured data the API
+    validated; the runner builds the tcpdump expression from it again."""
+
+    __tablename__ = "captures"
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # starting | running | finished | stopped | failed | deleted
+    state: Mapped[str] = mapped_column(String(16), default="starting")
+    label: Mapped[str] = mapped_column(String(200), default="")
+    filter: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    expression: Mapped[str] = mapped_column(Text, default="")
+    duration_seconds: Mapped[int] = mapped_column(Integer, default=120)
+    size_limit_mb: Mapped[int] = mapped_column(Integer, default=50)
+    path: Mapped[str] = mapped_column(Text, default="")
+    bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    packets: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(320), default="")
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
 class UpdateCheck(Base):
     __tablename__ = "update_checks"
 

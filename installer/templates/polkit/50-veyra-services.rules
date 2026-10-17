@@ -22,5 +22,9 @@ polkit.addRule(function (action, subject) {
     if (/^veyra-backup@(run|run-manual|delete-[0-9a-f-]{36})\.service$/.test(unit) && verb === "start") {
         return polkit.Result.YES;
     }
+    // Packet captures (docs/CALL_FEATURES.md §2.2): one unit per recorded capture, start and stop.
+    if (/^veyra-capture@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.service$/.test(unit) && (verb === "start" || verb === "stop")) {
+        return polkit.Result.YES;
+    }
     return polkit.Result.NOT_HANDLED;
 });

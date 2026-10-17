@@ -330,6 +330,14 @@ if [[ -f /etc/systemd/system/veyra-backup@.service ]] \
 else
     check backup-unit warn "veyra-backup@.service, its polkit rule, /var/lib/veyra-backup or age missing"
 fi
+# --- packet captures (docs/CALL_FEATURES.md §2.2)
+if [[ -f /etc/systemd/system/veyra-capture@.service ]] \
+    && grep -qs "veyra-capture@" /etc/polkit-1/rules.d/50-veyra-services.rules \
+    && [[ "$(perm "$VEYRA_DATA/captures")" == "750 veyra:veyra" ]] && command -v tcpdump >/dev/null; then
+    check capture-unit pass "packet captures can run from the interface; tcpdump available"
+else
+    check capture-unit warn "veyra-capture@.service, its polkit rule, $VEYRA_DATA/captures or tcpdump missing"
+fi
 if last="$(/usr/local/bin/veyra backup list --json 2>/dev/null)"; then
     if python3 -c 'import json,sys; rows=json.load(sys.stdin); sys.exit(0 if any(r.get("state")=="verified" for r in rows) else 1)' <<<"$last"; then
         check backup-last pass "a verified backup exists (System > Backups shows when)"

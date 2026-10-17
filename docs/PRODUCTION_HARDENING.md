@@ -179,6 +179,7 @@ with the count removed. Today's constants become these settings:
 | Central samples | 30 days | 30 |
 | Sessions and reset tokens after expiry | 30 days | 30 |
 | Backups | §2.4 | — |
+| Packet captures (Milestone 18, [CALL_FEATURES.md](CALL_FEATURES.md) §2.2) | 7 days, minimum 1; the file goes with the row | — |
 
 A **data inventory** on the same page shows rows and bytes per class and
 the oldest record, so a retention change is made with the numbers in

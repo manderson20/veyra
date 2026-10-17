@@ -47,6 +47,8 @@ do_packages() {
     pkgs+=(iputils-arping)
     # age: backup encryption to the administrator's key (docs/PRODUCTION_HARDENING.md §3.2).
     pkgs+=(age)
+    # tcpdump: packet captures from the interface (docs/CALL_FEATURES.md §2.2).
+    pkgs+=(tcpdump)
     if [[ ! -d "$SOURCE_DIR/frontend/out" ]]; then
         pkgs+=(nodejs npm)
     fi
@@ -670,6 +672,15 @@ do_services() {
     render_template "$SCRIPT_DIR/templates/systemd/veyra-backup@.service.in" "$tmp" \
         "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC"
     install_managed_file "$tmp" "/etc/systemd/system/veyra-backup@.service" 0644 root:root
+    rm -f "$tmp"
+    # Packet captures (docs/CALL_FEATURES.md §2.2): the service account's
+    # directory (root tcpdump writes into it, the runner hands the file over)
+    # and the root unit, started and stopped only through polkit.
+    run install -d -m 0750 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/captures"
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-capture@.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC"
+    install_managed_file "$tmp" "/etc/systemd/system/veyra-capture@.service" 0644 root:root
     rm -f "$tmp"
     # The HA agent (docs/HIGH_AVAILABILITY.md §3) on every node.
     run install -d -m 2750 -o root -g "$VEYRA_USER" "$VEYRA_DATA/ha"
