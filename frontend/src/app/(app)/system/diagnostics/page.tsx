@@ -87,7 +87,7 @@ function StartForm({ targets, limits, disabled, onStarted }: { targets: CaptureT
   const trunks = targets?.trunks ?? [];
   const chosenExt = extensions.find((e) => e.id === extensionId);
   return (
-    <Card title="Start a capture" actions={<Button variant="primary" icon="plus" onClick={start} loading={busy} disabled={disabled}>Start</Button>}>
+    <Card title="Start a capture" subtitle="Capturing begins a few seconds after Start, while the row shows “Starting”; reproduce the problem once it shows “Running”." actions={<Button variant="primary" icon="plus" onClick={start} loading={busy} disabled={disabled}>Start</Button>}>
       <div className="stack stack--sm">
         <div className="grid grid--2">
           <SelectField label="Capture" value={target} options={TARGETS} onChange={(e) => setTarget(e.target.value as CaptureTarget)} />
