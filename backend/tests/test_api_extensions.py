@@ -3,6 +3,7 @@
 encrypted at rest, generated configuration and encrypted revision artifacts."""
 
 import json
+import uuid
 
 from conftest import ADMIN_PASSWORD, csrf_headers, enable_multi_tenancy, login, make_settings
 from fake_adapter import FakeAdapter
@@ -13,7 +14,7 @@ from veyra.cli.main import main
 from veyra.configmgmt import service
 from veyra.core import bootstrap
 from veyra.core.db import session_scope
-from veyra.core.models import ConfigRevision, Extension
+from veyra.core.models import ConfigRevision, Extension, Role, RolePermission
 from veyra.core.security.crypto import load_installation_key
 from veyra.telephony.snapshot import build_snapshot
 
@@ -211,6 +212,84 @@ def test_caller_id_validation(admin):
     ext = _create(admin, a, "1001", caller_id_name="  Main Office (East)  ", caller_id_number=" ")
     assert ext["caller_id_name"] == "Main Office (East)" and ext["caller_id_number"] is None
     assert ext["emergency_caller_id_number"] is None
+
+
+def test_outbound_caller_id_must_be_a_did_or_allowed(admin, app):
+    """docs/CALL_FEATURES.md §3.5: an organization administrator may present the
+    organization's own numbers or an allowed number; routing.write may set any."""
+    a = _org(admin)["id"]
+    # A platform administrator holds routing.write: any number, stored and deployed.
+    ext = _create(
+        admin, a, "1001", outbound_caller_id_number="5735550123", outbound_caller_id_name="Front"
+    )
+    assert (
+        ext["outbound_caller_id_number"] == "5735550123"
+        and ext["outbound_caller_id_name"] == "Front"
+    )
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    assert snap["extensions"][0]["outbound_caller_id_number"] == "5735550123"
+    assert snap["extensions"][0]["outbound_caller_id_name"] == "Front"
+    # A role that edits extensions but has no say in routing is bound to the DIDs
+    # (the built-in organization and site administrators hold routing.write).
+    from test_api_rbac import make_user
+
+    with session_scope() as db:
+        role = Role(id=uuid.uuid4(), key="ext_editor", name="Extension editor", is_system=False)
+        db.add(role)
+        db.flush()
+        for perm in ("organizations.read", "extensions.read", "extensions.write"):
+            db.add(RolePermission(role_id=role.id, permission_key=perm))
+    make_user(admin, "editor@example.local", a, "ext_editor")
+    oa = login(
+        TestClient(app, base_url="http://veyra.test"), "editor@example.local", ADMIN_PASSWORD
+    )
+    r = oa.patch(f"{EXT}/{ext['id']}", json={"outbound_caller_id_number": "5735550999"})
+    assert r.status_code == 422 and r.json()["code"] == "caller_id_not_allowed", r.text
+    assert r.json()["errors"][0]["field"] == "outbound_caller_id_number"
+    # A DID of the organization is fine, however it is written.
+    r = admin.post(
+        "/api/v1/trunks",
+        json={
+            "name": "Carrier",
+            "auth_mode": "registration",
+            "host": "sip.carrier.example",
+            "username": "acct1",
+            "password": "Secr3t-pass",
+        },
+    )
+    assert r.status_code == 201, r.text
+    trunk = r.json()
+    r = admin.post(
+        "/api/v1/routing/inbound",
+        json={
+            "organization_id": a,
+            "did": "+1 573 555 0999",
+            "trunk_id": trunk["id"],
+            "destination_type": "extension",
+            "destination_extension_id": ext["id"],
+        },
+    )
+    assert r.status_code == 201, r.text
+    r = oa.patch(f"{EXT}/{ext['id']}", json={"outbound_caller_id_number": "5735550999"})
+    assert r.status_code == 200, r.text
+    # The allow list widens it; changing the list itself needs routing.write.
+    r = oa.patch(f"/api/v1/organizations/{a}", json={"caller_id_allow_list": ["5735550777"]})
+    assert r.status_code == 403
+    r = admin.patch(
+        f"/api/v1/organizations/{a}", json={"caller_id_allow_list": ["5735550777", " ", "bad"]}
+    )
+    assert r.status_code == 422
+    r = admin.patch(
+        f"/api/v1/organizations/{a}", json={"caller_id_allow_list": ["5735550777", " 5735550777 "]}
+    )
+    assert r.status_code == 200 and r.json()["caller_id_allow_list"] == ["5735550777"]
+    r = oa.patch(f"{EXT}/{ext['id']}", json={"outbound_caller_id_number": "15735550777"})
+    assert r.status_code == 200 and r.json()["outbound_caller_id_number"] == "15735550777"
+    # Clearing never needs a permission; a bad name is refused like the internal one.
+    assert oa.patch(f"{EXT}/{ext['id']}", json={"outbound_caller_id_number": ""}).status_code == 200
+    r = oa.patch(f"{EXT}/{ext['id']}", json={"outbound_caller_id_name": "a;b"})
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "outbound_caller_id_name"
 
 
 def test_emergency_caller_id_is_validated_stored_and_deployed(admin, app, tmp_path):

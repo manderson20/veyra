@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
+CALLER_ID_NUMBER_RE = re.compile(r"^\+?[0-9]{2,20}$")
 SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 # Deliberately permissive: internal domains such as "district.local" are common.
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,62})(?:\.[A-Za-z0-9-]{1,63})*$")
@@ -66,11 +67,30 @@ class OrganizationPatch(BaseModel):
     # The plain-HTTP bootstrap also carries the enrollment credential
     # (docs/FIREWALL_TRUST.md §6.4).
     bootstrap_includes_credential: bool | None = None
+    # Numbers extensions may present as outbound caller ID besides the
+    # organization's DIDs (docs/CALL_FEATURES.md §3.5); needs routing.write.
+    caller_id_allow_list: list[str] | None = Field(None, max_length=100)
 
     @field_validator("timezone")
     @classmethod
     def _tz(cls, v: str | None) -> str | None:
         return check_timezone(v) if v is not None else v
+
+    @field_validator("caller_id_allow_list")
+    @classmethod
+    def _allow_list(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        out: list[str] = []
+        for raw in v:
+            n = raw.strip()
+            if not n:
+                continue
+            if not CALLER_ID_NUMBER_RE.match(n):
+                raise ValueError(f"{n!r}: digits (and a leading +) only")
+            if n not in out:
+                out.append(n)
+        return out
 
 
 class OrganizationOut(ORM):
@@ -81,6 +101,7 @@ class OrganizationOut(ORM):
     is_active: bool
     moh_class_id: uuid.UUID | None = None
     bootstrap_includes_credential: bool = False
+    caller_id_allow_list: list[str] = []
     # Prefix of the organization's engine names; empty: today's names
     # (docs/MULTI_TENANCY.md §2).
     engine_namespace: str = ""

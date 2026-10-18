@@ -606,6 +606,16 @@ def _endpoints(
         if ecid and not _NUMBER_RE.match(str(ecid)):
             raise GenerationError(f"emergency caller ID {ecid!r} is not valid")
         emergency_cid = [f"set_var=VEYRA_EMERGENCY_CID={ecid}"] if ecid else []
+        # Outbound caller ID (docs/CALL_FEATURES.md §3.5): read by the
+        # outbound routes, which apply the precedence.
+        ocid = ext.get("outbound_caller_id_number")
+        if ocid and not _NUMBER_RE.match(str(ocid)):
+            raise GenerationError(f"outbound caller ID {ocid!r} is not valid")
+        outbound_cid = [f"set_var=VEYRA_OUT_CID={ocid}"] if ocid else []
+        ocid_name = ext.get("outbound_caller_id_name")
+        if ocid_name:
+            shown = _check_value(_display(str(ocid_name)), "caller ID name")
+            outbound_cid.append(f"set_var=VEYRA_OUT_CID_NAME={shown}")
         # The phone's site, read by site-bound emergency routes
         # (docs/PRODUCTION_HARDENING.md §6).
         site = str(ext.get("site") or "")
@@ -654,6 +664,7 @@ def _endpoints(
             f'callerid="{cid_name}" <{cid_num}>',
             f"set_var=VEYRA_ORG={org}",
             *emergency_cid,
+            *outbound_cid,
             *moh,
             *mwi,
             *(["mwi_subscribe_replaces_unsolicited=yes"] if mwi else []),
@@ -908,6 +919,37 @@ def _record_inbound(
         for p in recording
         if p["inbound"] and p["organization_id"] == org_id and (p["all"] or did in p["routes"])
     ]
+
+
+def _outbound_caller_id(fallback: Any, force: bool, emergency: bool) -> list[str]:
+    """The caller ID presented on a trunk leg (docs/CALL_FEATURES.md §3.5):
+    the extension's emergency caller ID on an emergency route, else the
+    route's number when the route forces it, else the extension's outbound
+    caller ID, else the route's number, else the trunk's default. The
+    outbound name goes with the extension's number."""
+    guard = '"${VEYRA_EMERGENCY_CID}"="" & ' if emergency else ""
+    lines: list[str] = []
+    if force and fallback:
+        cond = '$["${VEYRA_EMERGENCY_CID}"=""]' if emergency else None
+        lines.append(
+            f" same => n,ExecIf({cond}?Set(CALLERID(num)={fallback}))"
+            if cond
+            else f" same => n,Set(CALLERID(num)={fallback})"
+        )
+        return lines
+    lines.append(
+        f' same => n,ExecIf($[{guard}"${{VEYRA_OUT_CID}}"!=""]'
+        "?Set(CALLERID(num)=${VEYRA_OUT_CID}))"
+    )
+    lines.append(
+        f' same => n,ExecIf($[{guard}"${{VEYRA_OUT_CID}}"!="" & "${{VEYRA_OUT_CID_NAME}}"!=""]'
+        "?Set(CALLERID(name)=${VEYRA_OUT_CID_NAME}))"
+    )
+    if fallback:
+        lines.append(
+            f' same => n,ExecIf($[{guard}"${{VEYRA_OUT_CID}}"=""]?Set(CALLERID(num)={fallback}))'
+        )
+    return lines
 
 
 def _record_outbound(recording: list[dict[str, Any]], prompts_dir: str) -> list[str]:
@@ -1242,6 +1284,7 @@ def _outbound_contexts(
         cid_override = r.get("caller_id_number")
         if cid_override and not _NUMBER_RE.match(str(cid_override)):
             raise GenerationError(f"outbound route {slug}: caller ID {cid_override!r} is not valid")
+        cid_force = bool(cid_override) and bool(r.get("caller_id_force"))
         lines += [
             f"[{CONTEXT_OUT_PREFIX}{slug}]",
             f"; {_check_value(str(r.get('name') or slug), 'route name')}"
@@ -1312,16 +1355,9 @@ def _outbound_contexts(
                         f" same => n,GotoIf($[${{GROUP_COUNT({tslug}@veyra_trunk)}} > "
                         f"{int(trunk['max_channels'])}]?{nxt})"
                     )
-                if cid:
-                    if not _NUMBER_RE.match(str(cid)):
-                        raise GenerationError(f"trunk {tslug}: caller ID {cid!r} is not valid")
-                    if emergency:
-                        step.append(
-                            ' same => n,ExecIf($["${VEYRA_EMERGENCY_CID}"=""]'
-                            f"?Set(CALLERID(num)={cid}))"
-                        )
-                    else:
-                        step.append(f" same => n,Set(CALLERID(num)={cid})")
+                if cid and not _NUMBER_RE.match(str(cid)):
+                    raise GenerationError(f"trunk {tslug}: caller ID {cid!r} is not valid")
+                step += _outbound_caller_id(cid, cid_force, emergency)
                 step += [
                     f" same => n,Dial(PJSIP/${{VEYRA_DIAL}}@{TRUNK_PREFIX}{tslug},{timeout})",
                     ' same => n,GotoIf($["${DIALSTATUS}"="CHANUNAVAIL"'

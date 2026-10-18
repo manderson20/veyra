@@ -220,6 +220,8 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "caller_id_number": e.caller_id_number,
                 "emergency_caller_id_number": e.emergency_caller_id_number
                 or (site_ecid.get(e.site_id) if e.site_id else None),
+                "outbound_caller_id_number": e.outbound_caller_id_number,
+                "outbound_caller_id_name": e.outbound_caller_id_name,
                 "max_contacts": contacts.get(e.id, 1),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
@@ -772,6 +774,7 @@ def _routing(
                 "patterns": list(r.patterns or []),
                 "trunks": route_trunks.get(r.id, []),
                 "caller_id_number": r.caller_id_number,
+                "caller_id_force": bool(r.caller_id_force),
                 # None: every organization (docs/MULTI_TENANCY.md §4).
                 "organization": org_slug.get(r.organization_id) if r.organization_id else None,
             }

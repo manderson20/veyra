@@ -877,6 +877,9 @@ class OutboundRouteIn(BaseModel):
     patterns: list[PatternIn] = Field(min_length=1, max_length=50)
     trunk_ids: list[uuid.UUID] = Field(min_length=1, max_length=20)
     caller_id_number: str | None = Field(None, max_length=32)
+    # The route's caller ID also replaces an extension's outbound caller ID
+    # (docs/CALL_FEATURES.md §3.5).
+    caller_id_force: bool = False
     # Only this organization's phones use the route; none: every organization
     # (docs/MULTI_TENANCY.md §4).
     organization_id: uuid.UUID | None = None
@@ -934,6 +937,7 @@ class OutboundRoutePatch(BaseModel):
     patterns: list[PatternIn] | None = Field(None, min_length=1, max_length=50)
     trunk_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=20)
     caller_id_number: str | None = Field(None, max_length=32)
+    caller_id_force: bool | None = None
     organization_id: uuid.UUID | None = None
 
 
@@ -957,6 +961,7 @@ class OutboundRouteOut(BaseModel):
     examples: list[str]
     trunks: list[RouteTrunkOut]
     caller_id_number: str | None
+    caller_id_force: bool = False
     organization_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
@@ -1011,6 +1016,7 @@ def _or_outs(db: Session, rows: list[OutboundRoute]) -> list[OutboundRouteOut]:
                 for t in by_route.get(r.id, [])
             ],
             caller_id_number=r.caller_id_number,
+            caller_id_force=r.caller_id_force,
             organization_id=r.organization_id,
             created_at=r.created_at,
             updated_at=r.updated_at,
@@ -1130,6 +1136,7 @@ def create_outbound(
         is_enabled=body.is_enabled,
         patterns=[p.model_dump() for p in body.patterns],
         caller_id_number=body.caller_id_number,
+        caller_id_force=body.caller_id_force,
         organization_id=body.organization_id,
     )
     db.add(route)
@@ -1220,6 +1227,7 @@ def update_outbound(
         "patterns": route.patterns,
         "trunk_ids": [t.id for t in _route_trunks(db, [route])[route.id]],
         "caller_id_number": route.caller_id_number,
+        "caller_id_force": route.caller_id_force,
         "organization_id": route.organization_id,
     }
     try:
@@ -1235,7 +1243,14 @@ def update_outbound(
         details["description"] = True
     if "organization_id" in changes:
         _check_route_org(db, validated.organization_id)
-    for field in ("is_emergency", "is_enabled", "caller_id_number", "organization_id", "site_id"):
+    for field in (
+        "is_emergency",
+        "is_enabled",
+        "caller_id_number",
+        "caller_id_force",
+        "organization_id",
+        "site_id",
+    ):
         if field in changes and getattr(validated, field) != getattr(route, field):
             value = getattr(validated, field)
             setattr(route, field, value)

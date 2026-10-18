@@ -214,14 +214,19 @@ macro-free `Gosub`. Ring groups accept external members the same way
 Today the endpoint's `caller_id_number` reaches the carrier only when
 neither the route nor the trunk sets one (gap analysis §3.1, corrected
 2026-10-16). New fields on extensions: `outbound_caller_id_number`,
-`outbound_caller_id_name`. Precedence on a trunk call: emergency caller ID
-(emergency routes) → route caller ID when the route is marked **force** →
-extension outbound caller ID → route caller ID → trunk default. Validation:
-the number must be one of the organization's DIDs (`inbound_routes`), or
-be on a per-organization allow list, or the caller must hold
-`routing.write`; otherwise `422 caller_id_not_allowed`. Generator: the
-endpoint carries `set_var=VEYRA_OUT_CID=<number>` and the outbound
-context applies the precedence with `ExecIf`.
+`outbound_caller_id_name` (migration `0033`, with `caller_id_force` on
+outbound routes and `caller_id_allow_list` on organizations). Precedence on
+a trunk call: emergency caller ID (emergency routes) → route caller ID when
+the route is marked **force** → extension outbound caller ID → route caller
+ID → trunk default. Validation: the number must be one of the
+organization's DIDs (`inbound_routes`), or be on the organization's allow
+list (editable with `routing.write` on the organization page), or the
+caller must hold `routing.write`; otherwise `422 caller_id_not_allowed`.
+Generator: the endpoint carries `set_var=VEYRA_OUT_CID=<number>` and
+`set_var=VEYRA_OUT_CID_NAME=<name>`; each trunk leg in the outbound context
+applies the precedence with `ExecIf` (`_outbound_caller_id`), and the
+outbound name is set only together with the extension's outbound number.
+Built 2026-10-18.
 
 ### 3.6 Intercom and auto-answer
 

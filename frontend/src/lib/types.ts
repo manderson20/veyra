@@ -151,6 +151,8 @@ export interface Organization {
   moh_class_id?: string | null;
   /** The plain-HTTP trust bootstrap also carries the enrollment credential. */
   bootstrap_includes_credential?: boolean;
+  /** Numbers extensions may present as outbound caller ID besides the organization's DIDs. */
+  caller_id_allow_list?: string[];
   /** Prefix of the organization's engine names; empty: today's names. */
   engine_namespace?: string;
   created_at: string;
@@ -320,6 +322,9 @@ export interface Extension {
   caller_id_number: string | null;
   /** Presented on emergency routes instead of the regular caller ID (the building's ELIN or DID). */
   emergency_caller_id_number: string | null;
+  /** Presented on trunk calls: one of the organization's numbers or an allowed number (CALL_FEATURES.md §3.5). */
+  outbound_caller_id_number?: string | null;
+  outbound_caller_id_name?: string | null;
   building_id?: string | null;
   location?: string | null;
   is_enabled: boolean;
@@ -1060,6 +1065,8 @@ export interface OutboundRoute {
   /** Failover order. */
   trunks: RouteTrunk[];
   caller_id_number: string | null;
+  /** The route's caller ID also replaces an extension's outbound caller ID. */
+  caller_id_force?: boolean;
   /** Only this organization's phones use the route; null: every organization. */
   organization_id: string | null;
   created_at: string;
@@ -1080,6 +1087,7 @@ export interface OutboundRouteInput {
   patterns?: OutboundPattern[];
   trunk_ids?: string[];
   caller_id_number?: string | null;
+  caller_id_force?: boolean;
   organization_id?: string | null;
 }
 

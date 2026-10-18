@@ -15,7 +15,7 @@ from veyra.configmgmt import service as configmgmt
 from veyra.core import audit, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
-from veyra.core.errors import conflict, not_found
+from veyra.core.errors import conflict, forbidden, not_found
 from veyra.core.events import Event, bus
 from veyra.core.models import Organization
 from veyra.core.pagination import Page, PageParams, page_params, paginate
@@ -116,6 +116,9 @@ def update_organization(
     if org is None:
         raise not_found("Organization")
     changes = body.model_dump(exclude_unset=True)
+    # The allow list widens what phones may present to the carrier: a routing matter.
+    if "caller_id_allow_list" in changes and not principal.has("routing.write", org.id):
+        raise forbidden("Changing the caller ID allow list needs routing.write.")
     if changes.get("is_active") and not org.is_active:
         tenancy.check_may_activate(db, exclude=org.id)
     if "is_active" in changes and changes["is_active"] != org.is_active:

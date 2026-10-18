@@ -52,6 +52,8 @@ function ExtensionView() {
   const [cidName, setCidName] = useState("");
   const [cidNumber, setCidNumber] = useState("");
   const [emergencyCid, setEmergencyCid] = useState("");
+  const [outCidNumber, setOutCidNumber] = useState("");
+  const [outCidName, setOutCidName] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -68,6 +70,8 @@ function ExtensionView() {
       setCidName(x.caller_id_name ?? "");
       setCidNumber(x.caller_id_number ?? "");
       setEmergencyCid(x.emergency_caller_id_number ?? "");
+      setOutCidNumber(x.outbound_caller_id_number ?? "");
+      setOutCidName(x.outbound_caller_id_name ?? "");
       setEnabled(x.is_enabled);
     }
   });
@@ -76,7 +80,7 @@ function ExtensionView() {
   if (ext.error) return <ErrorState title="Could not load extension" error={ext.error} onRetry={ext.reload} />;
   if (!ext.data) return <LoadingState />;
   const x = ext.data;
-  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || enabled !== x.is_enabled;
+  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || enabled !== x.is_enabled;
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === x.organization_id && (u.is_active || u.id === x.user_id));
 
   const save = async (e: FormEvent) => {
@@ -92,6 +96,8 @@ function ExtensionView() {
         caller_id_name: cidName.trim() || null,
         caller_id_number: cidNumber.trim() || null,
         emergency_caller_id_number: emergencyCid.trim() || null,
+        outbound_caller_id_number: outCidNumber.trim() || null,
+        outbound_caller_id_name: outCidName.trim() || null,
         is_enabled: enabled,
       }));
       setChanged((n) => n + 1);
@@ -152,8 +158,13 @@ function ExtensionView() {
               <TextField label="Assigned user" disabled value={x.user_display_name ? `${x.user_display_name} (${x.user_email})` : "Shared phone"} />
             )}
             <div className="form-grid">
-              <TextField label="Caller ID name" disabled={!editable} value={cidName} error={errors.fields.caller_id_name} help="Defaults to the name." onChange={(e) => setCidName(e.target.value)} />
-              <TextField label="Caller ID number" disabled={!editable} value={cidNumber} error={errors.fields.caller_id_number} help="Defaults to the extension number." onChange={(e) => setCidNumber(e.target.value)} />
+              <TextField label="Caller ID name" disabled={!editable} value={cidName} error={errors.fields.caller_id_name} help="Internal calls. Defaults to the name." onChange={(e) => setCidName(e.target.value)} />
+              <TextField label="Caller ID number" disabled={!editable} value={cidNumber} error={errors.fields.caller_id_number} help="Internal calls. Defaults to the extension number." onChange={(e) => setCidNumber(e.target.value)} />
+            </div>
+            <div className="form-grid">
+              <TextField label="Outbound caller ID number" inputMode="tel" disabled={!editable} value={outCidNumber} error={errors.fields.outbound_caller_id_number}
+                help="Sent to the carrier on outside calls: one of the organization's numbers (inbound routes) or a number on its allow list. Empty: the route's or the trunk's number." onChange={(e) => setOutCidNumber(e.target.value)} />
+              <TextField label="Outbound caller ID name" disabled={!editable} value={outCidName} error={errors.fields.outbound_caller_id_name} help="Sent with the outbound number; carriers may replace it." onChange={(e) => setOutCidName(e.target.value)} />
             </div>
             <TextField label="Emergency caller ID number" inputMode="tel" disabled={!editable} value={emergencyCid} error={errors.fields.emergency_caller_id_number}
               help="Presented on emergency calls (911) instead of the regular caller ID: the building's registered number. Otherwise the emergency route's number is used."

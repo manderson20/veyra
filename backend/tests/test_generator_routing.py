@@ -184,7 +184,9 @@ def test_outbound_routes_emergency_first_with_failover_and_loop_check():
     assert "Set(VEYRA_DIAL=1${EXTEN:1})" in local_ctx and "Set(VEYRA_DIAL=${EXTEN:1})" in local_ctx
     assert "GotoIf($[0${VEYRA_HOPS} > 0]?loop)" in local_ctx
     assert "GotoIf($[${GROUP_COUNT(carrier@veyra_trunk)} > 4]?t2)" in local_ctx
-    assert "Set(CALLERID(num)=5735550100)" in local_ctx  # trunk default
+    # Trunk default, unless the extension carries an outbound caller ID (§3.5).
+    assert 'ExecIf($["${VEYRA_OUT_CID}"=""]?Set(CALLERID(num)=5735550100))' in local_ctx
+    assert 'ExecIf($["${VEYRA_OUT_CID}"!=""]?Set(CALLERID(num)=${VEYRA_OUT_CID}))' in local_ctx
     assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier,60)" in local_ctx
     assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-backup,60)" in local_ctx
     assert '"${DIALSTATUS}"="CHANUNAVAIL" | "${DIALSTATUS}"="CONGESTION"]?t2' in local_ctx
@@ -193,11 +195,64 @@ def test_outbound_routes_emergency_first_with_failover_and_loop_check():
     assert "exten => 911,1," in em and "Log(WARNING,Veyra EMERGENCY call" in em
     # The extension's emergency caller ID wins; the route override applies without one.
     assert 'ExecIf($["${VEYRA_EMERGENCY_CID}"!=""]?Set(CALLERID(num)=${VEYRA_EMERGENCY_CID}))' in em
-    assert 'ExecIf($["${VEYRA_EMERGENCY_CID}"=""]?Set(CALLERID(num)=5735550199))' in em
+    guard = '$["${VEYRA_EMERGENCY_CID}"="" & "${VEYRA_OUT_CID}"=""]'
+    assert f"ExecIf({guard}?Set(CALLERID(num)=5735550199))" in em
     assert em.index('VEYRA_EMERGENCY_CID}"!=') < em.index("Dial(PJSIP/")
     assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier,120)" in em
     assert "loop" not in em and "GROUP_COUNT" not in em
-    assert "Set(CALLERID(num)=5735550100)" in local_ctx  # normal routes keep the plain Set
+
+
+def test_outbound_caller_id_precedence_and_endpoint_variables():
+    """docs/CALL_FEATURES.md §3.5: emergency → forced route → extension → route → trunk."""
+    snap = _snapshot(
+        outbound_routes=[
+            _route("plain"),
+            _route("routed", caller_id_number="5735550150"),
+            _route("forced", caller_id_number="5735550160", caller_id_force=True),
+            _route(
+                "emergency",
+                is_emergency=True,
+                patterns=[{"prefix": "", "match": "911", "prepend": ""}],
+                caller_id_number="5735550199",
+                caller_id_force=True,
+            ),
+        ]
+    )
+    snap["extensions"][0]["outbound_caller_id_number"] = "5735550123"
+    snap["extensions"][0]["outbound_caller_id_name"] = "Front Office"
+    files = _files(snap)
+    ep = files["pjsip.endpoints.conf"].content
+    assert "set_var=VEYRA_OUT_CID=5735550123" in ep
+    assert "set_var=VEYRA_OUT_CID_NAME=Front Office" in ep
+    d = files["extensions.conf"].content
+    plain = _section(d, "veyra-out-plain")
+    # Extension first, then the trunk default; the name only with the extension's number.
+    assert 'ExecIf($["${VEYRA_OUT_CID}"!=""]?Set(CALLERID(num)=${VEYRA_OUT_CID}))' in plain
+    assert (
+        'ExecIf($["${VEYRA_OUT_CID}"!="" & "${VEYRA_OUT_CID_NAME}"!=""]'
+        "?Set(CALLERID(name)=${VEYRA_OUT_CID_NAME}))" in plain
+    )
+    assert 'ExecIf($["${VEYRA_OUT_CID}"=""]?Set(CALLERID(num)=5735550100))' in plain
+    assert plain.index('VEYRA_OUT_CID}"!=') < plain.index("Dial(PJSIP/")
+    routed = _section(d, "veyra-out-routed")
+    assert 'ExecIf($["${VEYRA_OUT_CID}"=""]?Set(CALLERID(num)=5735550150))' in routed
+    assert "5735550100" not in routed
+    forced = _section(d, "veyra-out-forced")
+    assert " same => n,Set(CALLERID(num)=5735550160)" in forced
+    assert "VEYRA_OUT_CID" not in forced
+    em = _section(d, "veyra-out-emergency")
+    assert 'ExecIf($["${VEYRA_EMERGENCY_CID}"!=""]?Set(CALLERID(num)=${VEYRA_EMERGENCY_CID}))' in em
+    assert 'ExecIf($["${VEYRA_EMERGENCY_CID}"=""]?Set(CALLERID(num)=5735550199))' in em
+    assert "VEYRA_OUT_CID" not in em
+    # No trunk default and no route number: the extension's number or nothing.
+    snap = _snapshot(trunks=[_trunk(default_caller_id=None)], outbound_routes=[_route("bare")])
+    bare = _section(_files(snap)["extensions.conf"].content, "veyra-out-bare")
+    assert 'ExecIf($["${VEYRA_OUT_CID}"!=""]?Set(CALLERID(num)=${VEYRA_OUT_CID}))' in bare
+    assert 'ExecIf($["${VEYRA_OUT_CID}"=""]' not in bare
+    snap = _snapshot()
+    snap["extensions"][0]["outbound_caller_id_number"] = "573-555"
+    with pytest.raises(generator.GenerationError, match="outbound caller ID"):
+        generator.generate(snap)
 
 
 def test_extension_emergency_caller_id_is_an_endpoint_variable():

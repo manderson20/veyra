@@ -16,6 +16,7 @@ export interface OutboundRouteDraft {
   patterns: OutboundPattern[];
   trunk_ids: string[];
   caller_id_number: string;
+  caller_id_force: boolean;
   /** "" = every organization (docs/MULTI_TENANCY.md §4). */
   organization_id: string;
   /** Emergency routes only: "" = every site (docs/PRODUCTION_HARDENING.md §6). */
@@ -30,6 +31,7 @@ export const EMPTY_OUTBOUND_ROUTE: OutboundRouteDraft = {
   patterns: [{ ...EMPTY_PATTERN }],
   trunk_ids: [],
   caller_id_number: "",
+  caller_id_force: false,
   organization_id: "",
   site_id: "",
 };
@@ -43,6 +45,7 @@ export function outboundRouteDraft(r: OutboundRoute): OutboundRouteDraft {
     patterns: r.patterns.map((p) => ({ ...p })),
     trunk_ids: r.trunks.map((t) => t.id),
     caller_id_number: r.caller_id_number ?? "",
+    caller_id_force: r.caller_id_force ?? false,
     organization_id: r.organization_id ?? "",
     site_id: r.site_id ?? "",
   };
@@ -57,6 +60,7 @@ export function outboundRouteBody(d: OutboundRouteDraft): OutboundRouteInput {
     patterns: d.patterns.map((p) => ({ prefix: p.prefix.trim(), match: p.match.trim(), prepend: p.prepend.trim() })),
     trunk_ids: d.trunk_ids,
     caller_id_number: d.caller_id_number.trim() || null,
+    caller_id_force: d.caller_id_force,
     organization_id: d.organization_id || null,
     site_id: d.is_emergency && d.site_id ? d.site_id : null,
   };
@@ -83,8 +87,12 @@ export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled,
         <TextField label="Name" required autoFocus={autoFocus} disabled={disabled} value={draft.name} error={errors.name} placeholder="e.g. Local calls"
           onChange={(e) => onChange({ name: e.target.value })} />
         <TextField label="Caller ID number" inputMode="tel" disabled={disabled} value={draft.caller_id_number} error={errors.caller_id_number}
-          help="Overrides the extension's caller ID for calls on this route." onChange={(e) => onChange({ caller_id_number: e.target.value })} />
+          help="Sent on this route when the extension has no outbound caller ID of its own; otherwise the trunk's default." onChange={(e) => onChange({ caller_id_number: e.target.value })} />
       </div>
+      {draft.caller_id_number.trim() ? (
+        <Checkbox label="Always send this caller ID" description="Also replaces an extension's own outbound caller ID on this route. Without it, an extension's outbound number wins." checked={draft.caller_id_force} disabled={disabled}
+          onChange={(e) => onChange({ caller_id_force: e.target.checked })} />
+      ) : null}
       {organizations && organizations.length > 1 ? (
         <SelectField label="Used by" value={draft.organization_id} disabled={disabled} error={errors.organization_id}
           options={[{ value: "", label: "All organizations" }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]}

@@ -143,6 +143,9 @@ class OutboundRoute(UUIDPrimaryKey, Timestamps, Base):
     # [{"prefix": "9", "match": "NXXNXXXXXX", "prepend": "1"}, ...]
     patterns: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     caller_id_number: Mapped[str | None] = mapped_column(String(32))
+    # The route's caller ID replaces the extension's outbound caller ID too
+    # (docs/CALL_FEATURES.md §3.5); otherwise the extension's wins.
+    caller_id_force: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Only this organization's phones use the route; none: every organization
     # (docs/MULTI_TENANCY.md §4).
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
