@@ -144,13 +144,16 @@ class TelephonyAdapter(ABC):
     def active_calls(self) -> list[ActiveCall]:
         raise NotSupported(f"{self.name}: active calls not implemented yet")
 
-    def set_dnd(self, organization: str, number: str, on: bool) -> None:
-        """Do Not Disturb of one extension in the engine's own store, so the
-        dialplan sees it at once (docs/CALL_FEATURES.md §3.2)."""
+    def set_extension_state(
+        self, organization: str, number: str, field: str, value: str | None
+    ) -> None:
+        """One field of an extension's state (``dnd``, ``cf_always``, ``cf_busy``,
+        ``cf_no_answer``) in the engine's own store, so the dialplan sees it at
+        once (docs/CALL_FEATURES.md §3.2, §3.3); None clears it."""
         raise NotSupported("extension state is not supported by this engine")
 
-    def dnd_states(self) -> dict[tuple[str, str], bool]:
-        """(organization slug, number) -> Do Not Disturb, as the engine has it."""
+    def extension_states(self) -> dict[tuple[str, str], dict[str, str]]:
+        """(organization slug, number) -> {field: value}, as the engine has it."""
         raise NotSupported("extension state is not supported by this engine")
 
     def registrations(self) -> list[Registration]:

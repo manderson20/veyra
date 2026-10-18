@@ -175,7 +175,7 @@ function ExtensionView() {
           </form>
         </Card>
         <div className="stack">
-          <DndCard extension={x} editable={editable} onChanged={() => ext.reload()} />
+          <CallHandlingCard extension={x} editable={editable} onChanged={() => ext.reload()} />
           {can("voicemail.read") ? <VoicemailCard extension={x} editable={can("voicemail.write")} onChanged={() => setChanged((n) => n + 1)} /> : null}
           {can("groups.read") ? <CallGroupsCard extension={x} /> : null}
           {can("devices.read") ? <DevicesCard extension={x} /> : null}
@@ -271,27 +271,57 @@ function SipCredentialsCard({ extension, onRotated }: { extension: Extension; on
   );
 }
 
-function DndCard({ extension, editable, onChanged }: { extension: Extension; editable: boolean; onChanged: () => void }) {
+function CallHandlingCard({ extension, editable, onChanged }: { extension: Extension; editable: boolean; onChanged: () => void }) {
   const toast = useToast();
+  const errors = useFormErrors();
   const state = useApiData<ExtensionState>(`/extensions/${extension.id}/state`);
   const [busy, setBusy] = useState(false);
+  const [always, setAlways] = useState("");
+  const [onBusy, setOnBusy] = useState("");
+  const [noAnswer, setNoAnswer] = useState("");
+  const [ring, setRing] = useState("30");
+  useOnChange(state.data, (v) => {
+    if (v) { setAlways(v.cf_always ?? ""); setOnBusy(v.cf_busy ?? ""); setNoAnswer(v.cf_no_answer ?? ""); setRing(String(v.ring_seconds)); }
+  });
   const s = state.data;
-  const toggle = async (on: boolean) => {
+  const dirty = !!s && (always.trim() !== (s.cf_always ?? "") || onBusy.trim() !== (s.cf_busy ?? "") || noAnswer.trim() !== (s.cf_no_answer ?? "") || ring !== String(s.ring_seconds));
+  const put = async (body: Record<string, unknown>, done: string, detail?: string) => {
     setBusy(true);
+    errors.clear();
     try {
-      state.setData(await api.put<ExtensionState>(`/extensions/${extension.id}/state`, { dnd: on }));
-      toast.success(on ? "Do Not Disturb on" : "Do Not Disturb off", "Takes effect at once; no deployment needed.");
+      state.setData(await api.put<ExtensionState>(`/extensions/${extension.id}/state`, body));
+      toast.success(done, detail);
       onChanged();
     } catch (err) {
-      toast.error("Could not change Do Not Disturb", errorMessage(err));
+      errors.set(err);
+      toast.error("Could not change the call handling", errorMessage(err));
     } finally {
       setBusy(false);
     }
   };
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    const ringChanged = !!s && ring !== String(s.ring_seconds);
+    void put({ cf_always: always.trim(), cf_busy: onBusy.trim(), cf_no_answer: noAnswer.trim(), ...(ringChanged ? { ring_seconds: Number(ring) } : {}) },
+      "Call handling saved", ringChanged ? "Forwards take effect at once; the ring time needs a deployment." : "Takes effect at once; no deployment needed.");
+  };
+  const by = s?.updated_by === "phone" ? "from the phone" : s?.updated_by === "sync" ? "by the engine sync" : "here";
   return (
-    <Card title="Do Not Disturb" subtitle={s?.updated_at ? `Last changed ${formatRelative(s.updated_at)} ${s.updated_by === "phone" ? "from the phone" : s.updated_by === "sync" ? "by the engine sync" : "here"}.` : undefined}>
-      <Switch label="Do Not Disturb" checked={s?.dnd ?? extension.dnd ?? false} disabled={!editable || busy || !s} onChange={(e) => toggle(e.target.checked)}
-        description="Callers hear busy, or the busy greeting when the extension has a voicemail box. The phone can switch it too with the Do Not Disturb feature codes (Telephony → Feature Codes); a lamp key programmed to the toggle code shows the state." />
+    <Card title="Call handling" subtitle={s?.updated_at ? `Last changed ${formatRelative(s.updated_at)} ${by}.` : undefined}>
+      <form className="stack stack--sm" onSubmit={save}>
+        <Switch label="Do Not Disturb" checked={s?.dnd ?? extension.dnd ?? false} disabled={!editable || busy || !s}
+          onChange={(e) => void put({ dnd: e.target.checked }, e.target.checked ? "Do Not Disturb on" : "Do Not Disturb off", "Takes effect at once; no deployment needed.")}
+          description="Callers hear busy, or the busy greeting when the extension has a voicemail box. From the phone: the Do Not Disturb feature codes; a lamp key on the toggle code shows the state." />
+        <div className="form-grid">
+          <TextField label="Forward all calls to" inputMode="tel" disabled={!editable || !s} value={always} error={errors.fields.cf_always} onChange={(e) => setAlways(e.target.value)} help="An extension or an outside number. Empty: off." />
+          <TextField label="Forward when busy to" inputMode="tel" disabled={!editable || !s} value={onBusy} error={errors.fields.cf_busy} onChange={(e) => setOnBusy(e.target.value)} help="Also used while Do Not Disturb is on." />
+          <TextField label="Forward when unanswered to" inputMode="tel" disabled={!editable || !s} value={noAnswer} error={errors.fields.cf_no_answer} onChange={(e) => setNoAnswer(e.target.value)} help="After the ring time below." />
+          <TextField label="Ring time (seconds)" type="number" min={5} max={120} disabled={!editable || !s} value={ring} error={errors.fields.ring_seconds} onChange={(e) => setRing(e.target.value)} help="Before voicemail or the no-answer forward. Needs a deployment." />
+        </div>
+        <p className="subtle">From the phone: *72 / *73 forward all, *90 / *91 on busy, *52 / *53 unanswered (Telephony → Feature Codes). Outside numbers leave through the organization’s outbound routes with this extension’s outbound caller ID.</p>
+        {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
+        {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save forwards</Button></div> : null}
+      </form>
     </Card>
   );
 }

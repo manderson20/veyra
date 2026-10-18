@@ -46,11 +46,14 @@ WATCHED_MODULES = (
 _CHANNEL_ENDPOINT_RE = re.compile(r"^PJSIP/([A-Za-z0-9_.-]+)-[0-9a-f]+$")
 
 
-DND_FAMILY = "veyra/dnd"
-DND_DEVICE_PREFIX = "veyra-dnd-"
+STATE_FAMILY = "veyra/ext"
+STATE_FIELDS = ("dnd", "cf_always", "cf_busy", "cf_no_answer")
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
-# "/veyra/dnd/example/1001                           : 1"
-_DND_ROW_RE = re.compile(r"^/veyra/dnd/(?P<org>[^/]+)/(?P<number>[^/\s]+)\s*:\s*(?P<value>.*)$")
+_VALUE_RE = re.compile(r"^[+0-9]{0,32}$")
+# "/veyra/ext/example/1001/cf_always                 : 5735550100"
+_STATE_ROW_RE = re.compile(
+    r"^/veyra/ext/(?P<org>[^/]+)/(?P<number>[^/]+)/(?P<field>[a-z_]+)\s*:\s*(?P<value>.*)$"
+)
 
 
 def _check_token(value: str, what: str) -> str:
@@ -184,28 +187,46 @@ class AsteriskAdapter(TelephonyAdapter):
             )
         return out
 
-    def set_dnd(self, organization: str, number: str, on: bool) -> None:
-        """AstDB key read by the dialplan and the custom device state behind
-        the BLF hint (docs/CALL_FEATURES.md §3.2), both through the CLI socket."""
+    def set_extension_state(
+        self, organization: str, number: str, field: str, value: str | None
+    ) -> None:
+        """AstDB key read by the dialplan and the custom device states behind the
+        BLF hints (docs/CALL_FEATURES.md §3.2, §3.3), through the CLI socket."""
         org = _check_token(organization, "organization")
         num = _check_token(number, "extension")
-        family = f"{DND_FAMILY}/{org}"
-        cmd = f"database put {family} {num} 1" if on else f"database del {family} {num}"
+        if field not in STATE_FIELDS:
+            raise ValueError(f"unknown extension state field {field!r}")
+        if value is not None and not _VALUE_RE.match(value):
+            raise ValueError(f"state value {value!r} is not valid for the engine store")
+        family = f"{STATE_FAMILY}/{org}/{num}"
+        cmd = (
+            f"database put {family} {field} {value}" if value else f"database del {family} {field}"
+        )
         ok, out = cli.run(cmd)
-        if not ok and not (not on and "not found" in out.lower()):
-            raise EngineUnavailable(f"could not store Do Not Disturb: {out[:200]}")
-        state = "INUSE" if on else "NOT_INUSE"
-        cli.run(f"devstate change Custom:{DND_DEVICE_PREFIX}{org}-{num} {state}")
+        if not ok and not (not value and "not found" in out.lower()):
+            raise EngineUnavailable(f"could not store the extension state: {out[:200]}")
+        if field == "dnd":
+            device, on = f"Custom:veyra-dnd-{org}-{num}", bool(value)
+        else:
+            # The forwarding lamp is lit while any of the three forwards is set.
+            current = self.extension_states().get((org, num), {})
+            device = f"Custom:veyra-cf-{org}-{num}"
+            on = any(current.get(f) for f in ("cf_always", "cf_busy", "cf_no_answer"))
+        cli.run(f"devstate change {device} {'INUSE' if on else 'NOT_INUSE'}")
 
-    def dnd_states(self) -> dict[tuple[str, str], bool]:
-        ok, out = cli.run(f"database show {DND_FAMILY}")
+    def extension_states(self) -> dict[tuple[str, str], dict[str, str]]:
+        ok, out = cli.run(f"database show {STATE_FAMILY}")
         if not ok:
-            raise EngineUnavailable(f"could not read Do Not Disturb states: {out[:200]}")
-        states: dict[tuple[str, str], bool] = {}
+            raise EngineUnavailable(f"could not read the extension states: {out[:200]}")
+        states: dict[tuple[str, str], dict[str, str]] = {}
         for line in out.splitlines():
-            m = _DND_ROW_RE.match(line.strip())
-            if m:
-                states[(m.group("org"), m.group("number"))] = m.group("value").strip() == "1"
+            m = _STATE_ROW_RE.match(line.strip())
+            if m and m.group("field") in STATE_FIELDS:
+                value = m.group("value").strip()
+                if value and value != "0":
+                    states.setdefault((m.group("org"), m.group("number")), {})[m.group("field")] = (
+                        value
+                    )
         return states
 
     def registrations(self) -> list[Registration]:

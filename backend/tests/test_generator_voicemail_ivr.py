@@ -119,22 +119,35 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
     dp = files["extensions.conf"].content
     assert (
         "exten => 1001,1,NoOp(Veyra extension 1001)\n"
-        ' same => n,GotoIf($["${DB(veyra/dnd/example/1001)}"="1"]?dnd)\n'
+        ' same => n,GotoIf($["${DB(veyra/ext/example/1001/dnd)}"="1"]?dnd)\n'
+        " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_always)})\n"
+        ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n,Dial(PJSIP/example-1001,30)\n"
+        ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)\n'
+        " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_no_answer)})\n"
+        ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n,Hangup()\n"
         " same => n(dnd),NoOp(Veyra: 1001 has Do Not Disturb on)\n"
+        " same => n(busy),Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_busy)})\n"
+        ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n,Busy(10)\n"
         " same => n,Hangup()" in dp
     )
     assert (
         "exten => 1002,1,NoOp(Veyra extension 1002)\n"
-        ' same => n,GotoIf($["${DB(veyra/dnd/example/1002)}"="1"]?dnd)\n'
+        ' same => n,GotoIf($["${DB(veyra/ext/example/1002/dnd)}"="1"]?dnd)\n'
+        " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_always)})\n"
+        ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n,Dial(PJSIP/example-1002,25)\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)\n'
+        " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_no_answer)})\n"
+        ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n,VoiceMail(1002@veyra,u)\n"
         " same => n,Hangup()\n"
         " same => n(dnd),NoOp(Veyra: 1002 has Do Not Disturb on)\n"
-        " same => n(busy),VoiceMail(1002@veyra,b)\n"
+        " same => n(busy),Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_busy)})\n"
+        ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
+        " same => n,VoiceMail(1002@veyra,b)\n"
         " same => n,Hangup()" in dp
     )
     # feature codes

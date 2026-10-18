@@ -197,8 +197,9 @@ forward, follow-me and ring-time columns the next sections fill):
 
 * Every endpoint carries `set_var=VEYRA_EXT=<number>` beside `VEYRA_ORG`,
   so a feature code acts on the phone's own extension whatever its internal
-  caller ID says. The AstDB key is `veyra/dnd/<org slug>/<number>` and the
-  device state `Custom:veyra-dnd-<org slug>-<number>`.
+  caller ID says. The AstDB family is `veyra/ext/<org slug>/<number>` with
+  the keys `dnd`, `cf_always`, `cf_busy`, `cf_no_answer`; the device states
+  are `Custom:veyra-dnd-<org slug>-<number>` and `Custom:veyra-cf-…`.
 * `*78`/`*79`/`*76` answer, set the key and the device state, raise
   `UserEvent(VeyraExtState,Org,Extension,Field: dnd,Value)` and play
   `do-not-disturb` + `activated`/`de-activated`; a channel without
@@ -228,6 +229,27 @@ the organization's outbound routes (`Local/<number>@veyra-out-<org>`) with
 the extension's outbound caller ID (§3.5) and class (§3.8). An
 administrator sees and clears forwards on the extension page; a BLF hint
 shows CF state.
+
+*Built 2026-10-18:* the three targets are columns of `extension_states`
+(§3.2) and engine keys `cf_always`, `cf_busy`, `cf_no_answer` under the
+extension's family; the API (`PUT /extensions/{id}/state`, digits with an
+optional `+`, empty clears) and the feature codes write both and take
+effect at once; the ring time (`ring_seconds`) is in the dialplan and waits
+for a deployment (it wins over the voicemail box's ring time when a state
+row exists). Dialplan per extension: DND → busy branch; `cf_always` →
+forward; Dial for the ring time; BUSY → `cf_busy` → busy greeting or
+`Busy()`; otherwise `cf_no_answer` → unavailable greeting or hang-up. The
+forward leg is `Dial(Local/<target>@<internal context>/n)`, so an internal
+target rings the phone (with its own forwards) and an outside number
+leaves through the organization's outbound routes; the leg carries
+`__VEYRA_OUT_CID` of the forwarding extension (§3.5) when set, resets the
+trunk loop guard (`VEYRA_HOPS`) because an administrator's forward is
+allowed to leave again, and stops after three chained forwards
+(`VEYRA_FWD`, `number-not-answering`). Phone: `*72<number>` or `*72` then
+`vm-enter-num-to-call` (digits checked with `REGEX`, `pbx-invalid`
+otherwise), `*73` off; `*90`/`*91` busy; `*52`/`*53` no answer; the
+forwarding lamp hint `*72<ext>` is lit while any forward is set. The class
+of service check for external targets comes with §3.8.
 
 ### 3.4 Find me / follow me and external ring-group members
 

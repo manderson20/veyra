@@ -61,9 +61,9 @@ class FakeAdapter(TelephonyAdapter):
         self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="example-1001")]
         self.originated: list[tuple[str, str, str]] = []
         self.fail_originate: str | None = None
-        # (organization slug, number) -> Do Not Disturb, as "the engine" has it.
-        self.dnd: dict[tuple[str, str], bool] = {}
-        self.dnd_calls: list[tuple[str, str, bool]] = []
+        # (organization slug, number) -> {field: value}, as "the engine" has it.
+        self.states: dict[tuple[str, str], dict[str, str]] = {}
+        self.state_calls: list[tuple[str, str, str, str | None]] = []
 
     def capabilities(self) -> set[Capability]:
         return {
@@ -98,15 +98,20 @@ class FakeAdapter(TelephonyAdapter):
     def registrations(self) -> list[Registration]:
         return list(self.contacts)
 
-    def set_dnd(self, organization: str, number: str, on: bool) -> None:
-        self.dnd_calls.append((organization, number, on))
-        if on:
-            self.dnd[(organization, number)] = True
+    def set_extension_state(
+        self, organization: str, number: str, field: str, value: str | None
+    ) -> None:
+        self.state_calls.append((organization, number, field, value))
+        fields = self.states.setdefault((organization, number), {})
+        if value:
+            fields[field] = value
         else:
-            self.dnd.pop((organization, number), None)
+            fields.pop(field, None)
+        if not fields:
+            self.states.pop((organization, number), None)
 
-    def dnd_states(self) -> dict[tuple[str, str], bool]:
-        return dict(self.dnd)
+    def extension_states(self) -> dict[tuple[str, str], dict[str, str]]:
+        return {k: dict(v) for k, v in self.states.items()}
 
     def originate(
         self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30

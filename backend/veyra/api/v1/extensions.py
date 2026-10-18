@@ -774,9 +774,12 @@ def update_extension(
 
 
 class StateIn(BaseModel):
-    """Fields left out keep their value."""
+    """Fields left out keep their value; an empty forward clears it."""
 
     dnd: bool | None = None
+    cf_always: str | None = Field(None, max_length=32)
+    cf_busy: str | None = Field(None, max_length=32)
+    cf_no_answer: str | None = Field(None, max_length=32)
     ring_seconds: int | None = Field(None, ge=extension_state.RING_MIN, le=extension_state.RING_MAX)
 
 
@@ -803,17 +806,17 @@ def put_state(
     deployment is needed (docs/CALL_FEATURES.md §3.2)."""
     ext = _get_visible(db, principal, extension_id, "extensions.write")
     changes = body.model_dump(exclude_unset=True)
-    details: dict[str, Any] = {}
     row = extension_state.ensure(db, ext)
-    if "dnd" in changes and changes["dnd"] is not None and changes["dnd"] != row.dnd:
-        extension_state.set_dnd(
+    try:
+        details: dict[str, Any] = extension_state.apply(
             db,
             ext,
-            changes["dnd"],
+            {k: v for k, v in changes.items() if k != "ring_seconds"},
             by="admin",
             adapter=getattr(request.app.state, "telephony", None),
         )
-        details["dnd"] = changes["dnd"]
+    except extension_state.StateError as e:
+        raise _validation(e.field, e.message) from e
     if (
         "ring_seconds" in changes
         and changes["ring_seconds"] is not None
@@ -825,7 +828,7 @@ def put_state(
         details["ring_seconds"] = changes["ring_seconds"]
     if details:
         # The ring time is in the dialplan, so it waits for a deployment;
-        # Do Not Disturb is already in the engine.
+        # Do Not Disturb and the forwards are already in the engine.
         _record(
             db,
             ctx,

@@ -1040,6 +1040,7 @@ def _dialplan(
                 recording,
                 prompts_dir,
                 codes.get("dnd_toggle"),
+                codes.get("cf_on"),
             )
     lines += [
         f"[{CONTEXT_INVALID}]",
@@ -1119,49 +1120,132 @@ def _feature_codes(snapshot: dict[str, Any]) -> dict[str, str]:
     return codes
 
 
+STATE_KEY = "veyra/ext/${VEYRA_ORG}/${VEYRA_EXT}"
+DND_DEVICE = "Custom:veyra-dnd-${VEYRA_ORG}-${VEYRA_EXT}"
+CF_DEVICE = "Custom:veyra-cf-${VEYRA_ORG}-${VEYRA_EXT}"
+_CF_PROMPTS = {
+    "cf_always": "call-fwd-unconditional",
+    "cf_busy": "call-fwd-on-busy",
+    "cf_no_answer": "call-fwd-no-ans",
+}
+_CF_CODES = {
+    "cf_always": ("cf_on", "cf_off"),
+    "cf_busy": ("cfb_on", "cfb_off"),
+    "cf_no_answer": ("cfu_on", "cfu_off"),
+}
+
+
+def _state_event(field: str, value: str) -> str:
+    return (
+        f" same => n,UserEvent({EXTSTATE_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},"
+        f"Field: {field},Value: {value})"
+    )
+
+
+_STATE_GUARD = [
+    " same => n,Answer()",
+    ' same => n,GotoIf($["${VEYRA_EXT}"=""]?nophone)',
+]
+_STATE_TAIL = [
+    " same => n(nophone),Playback(feature-not-avail-line)",
+    " same => n,Hangup()",
+]
+# The forwarding lamp stays lit while any forward is set.
+_CF_LAMP = (
+    f' same => n,Set(DEVICE_STATE({CF_DEVICE})=${{IF($["${{DB({STATE_KEY}/cf_always)}}'
+    f'${{DB({STATE_KEY}/cf_busy)}}${{DB({STATE_KEY}/cf_no_answer)}}"=""]?NOT_INUSE:INUSE)}})'
+)
+
+
 def _dnd_codes(codes: dict[str, str]) -> list[str]:
     """``*78``/``*79``/``*76`` (docs/CALL_FEATURES.md §3.2): the phone's own
     extension (``VEYRA_EXT`` from its endpoint) switches the engine's copy, the
     BLF device state, and tells the API through a UserEvent."""
-    key = "veyra/dnd/${VEYRA_ORG}/${VEYRA_EXT}"
-    device = "Custom:veyra-dnd-${VEYRA_ORG}-${VEYRA_EXT}"
 
     def switch(on: bool) -> list[str]:
         value = "1" if on else "0"
         return [
-            f" same => n,Set(DB({key})={value})",
-            f" same => n,Set(DEVICE_STATE({device})={'INUSE' if on else 'NOT_INUSE'})",
-            f" same => n,UserEvent({EXTSTATE_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},"
-            f"Field: dnd,Value: {value})",
+            f" same => n,Set(DB({STATE_KEY}/dnd)={value})",
+            f" same => n,Set(DEVICE_STATE({DND_DEVICE})={'INUSE' if on else 'NOT_INUSE'})",
+            _state_event("dnd", value),
             f" same => n,Playback(do-not-disturb&{'activated' if on else 'de-activated'})",
             " same => n,Hangup()",
         ]
 
-    guard = [
-        " same => n,Answer()",
-        ' same => n,GotoIf($["${VEYRA_EXT}"=""]?nophone)',
-    ]
-    tail = [
-        " same => n(nophone),Playback(feature-not-avail-line)",
-        " same => n,Hangup()",
-    ]
     lines: list[str] = []
     if "dnd_on" in codes:
-        lines += [f"exten => {codes['dnd_on']},1,NoOp(Veyra DND on for ${{VEYRA_EXT}})", *guard]
-        lines += switch(True) + tail
+        lines += [
+            f"exten => {codes['dnd_on']},1,NoOp(Veyra DND on for ${{VEYRA_EXT}})",
+            *_STATE_GUARD,
+        ]
+        lines += switch(True) + _STATE_TAIL
     if "dnd_off" in codes:
-        lines += [f"exten => {codes['dnd_off']},1,NoOp(Veyra DND off for ${{VEYRA_EXT}})", *guard]
-        lines += switch(False) + tail
+        lines += [
+            f"exten => {codes['dnd_off']},1,NoOp(Veyra DND off for ${{VEYRA_EXT}})",
+            *_STATE_GUARD,
+        ]
+        lines += switch(False) + _STATE_TAIL
     if "dnd_toggle" in codes:
         lines += [
             f"exten => {codes['dnd_toggle']},1,NoOp(Veyra DND toggle for ${{VEYRA_EXT}})",
-            *guard,
-            f' same => n,GotoIf($["${{DB({key})}}"="1"]?off)',
+            *_STATE_GUARD,
+            f' same => n,GotoIf($["${{DB({STATE_KEY}/dnd)}}"="1"]?off)',
             *switch(True),
             " same => n(off),NoOp()",
             *switch(False),
-            *tail,
+            *_STATE_TAIL,
         ]
+    return lines
+
+
+def _forward_codes(codes: dict[str, str]) -> list[str]:
+    """``*72<number>`` / ``*72`` + prompt / ``*73`` and the busy and no-answer
+    pairs (docs/CALL_FEATURES.md §3.3): the target goes into the engine's copy
+    and to the API; the dialplan validates the digits."""
+    lines: list[str] = []
+    for field, (on_key, off_key) in _CF_CODES.items():
+        prompt = _CF_PROMPTS[field]
+        on = codes.get(on_key)
+        if on:
+            store = [
+                f" same => n(store),Set(DB({STATE_KEY}/{field})=${{VEYRA_NUM}})",
+                _CF_LAMP,
+                _state_event(field, "${VEYRA_NUM}"),
+                f" same => n,Playback({prompt}&activated)",
+                " same => n,Hangup()",
+                " same => n(bad),Playback(pbx-invalid)",
+                " same => n,Hangup()",
+            ]
+            check = ' same => n,GotoIf($[${REGEX("^\\+?[0-9]{2,20}$" ${VEYRA_NUM})}]?store:bad)'
+            lines += [
+                f"exten => {on},1,NoOp(Veyra forward {field} for ${{VEYRA_EXT}})",
+                *_STATE_GUARD,
+                f" same => n,Read(VEYRA_NUM,{prompt}&vm-enter-num-to-call,20,,2,10)",
+                check,
+                *store,
+                *_STATE_TAIL,
+            ]
+            lines += [
+                f"exten => _{on}.,1,NoOp(Veyra forward {field} for ${{VEYRA_EXT}} "
+                f"to ${{EXTEN:{len(on)}}})",
+                *_STATE_GUARD,
+                f" same => n,Set(VEYRA_NUM=${{EXTEN:{len(on)}}})",
+                check,
+                *store,
+                *_STATE_TAIL,
+            ]
+        off = codes.get(off_key)
+        if off:
+            lines += [
+                f"exten => {off},1,NoOp(Veyra forward {field} off for ${{VEYRA_EXT}})",
+                *_STATE_GUARD,
+                f" same => n,Set(VEYRA_GONE=${{DB_DELETE({STATE_KEY}/{field})}})",
+                _CF_LAMP,
+                _state_event(field, ""),
+                f" same => n,Playback({prompt}&de-activated)",
+                " same => n,Hangup()",
+                *_STATE_TAIL,
+            ]
     return lines
 
 
@@ -1174,6 +1258,7 @@ def _features(
     lines = [
         f"[{n.features}]",
         *_dnd_codes(codes),
+        *_forward_codes(codes),
         "; *43 echo test, *60 speaking clock: always available for phone checks.",
         "exten => *43,1,NoOp(Veyra echo test)",
         " same => n,Answer()",
@@ -1243,6 +1328,7 @@ def _internal(
     recording: list[dict[str, Any]],
     prompts_dir: str,
     dnd_toggle: str | None = None,
+    cf_code: str | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
@@ -1263,36 +1349,72 @@ def _internal(
         # The hint lets busy lamp fields follow the phone (RING_GROUPS_QUEUES.md §4.2).
         lines.append(f"exten => {number},hint,PJSIP/{endpoint}")
         org_slug = _check_value(str(ext.get("organization") or ""), "organization")
-        # A key lit while Do Not Disturb is on (docs/CALL_FEATURES.md §3.2).
+        state = f"veyra/ext/{org_slug}/{number}"
+        # Keys lit while Do Not Disturb or a forward is on (docs/CALL_FEATURES.md §3.2, §3.3).
         if dnd_toggle:
             lines.append(f"exten => {dnd_toggle}{number},hint,Custom:veyra-dnd-{org_slug}-{number}")
-        dnd = f' same => n,GotoIf($["${{DB(veyra/dnd/{org_slug}/{number})}}"="1"]?dnd)'
+        if cf_code:
+            lines.append(f"exten => {cf_code}{number},hint,Custom:veyra-cf-{org_slug}-{number}")
+        ring = int(
+            ext.get("ring_seconds") or (box or {}).get("ring_seconds") or DEFAULT_RING_SECONDS
+        )
+        if not 5 <= ring <= 120:
+            raise GenerationError(f"extension {number}: ring time {ring} is out of range")
         rec = _record_for_extension(recording, ext, prompts_dir)
+        ocid = ext.get("outbound_caller_id_number")
+        # A forwarded leg leaves as this extension's call: its outbound caller
+        # ID when it has one, else the route's and the trunk's (§3.5).
+        forward_cid = [f" same => n,Set(__VEYRA_OUT_CID={ocid})"] if ocid else []
+        forward = [
+            f" same => n(forward),NoOp(Veyra: {number} forwards to ${{VEYRA_CF}})",
+            # A forward of a forward of a forward is enough; the loop guard of
+            # the outbound routes does not apply to an administrator's forward.
+            " same => n,GotoIf($[0${VEYRA_FWD} >= 3]?toomany)",
+            " same => n,Set(__VEYRA_FWD=$[0${VEYRA_FWD} + 1])",
+            " same => n,Set(__VEYRA_HOPS=0)",
+            *forward_cid,
+            f" same => n,Dial(Local/${{VEYRA_CF}}@{n.internal}/n,{OUTBOUND_DIAL_TIMEOUT})",
+            " same => n,Hangup()",
+            f" same => n(toomany),NoOp(Veyra: {number}: too many forwards)",
+            " same => n,Playback(number-not-answering)",
+            " same => n,Hangup()",
+        ]
+        head = [
+            f"exten => {number},1,NoOp(Veyra extension {number})",
+            f' same => n,GotoIf($["${{DB({state}/dnd)}}"="1"]?dnd)',
+            f" same => n,Set(VEYRA_CF=${{DB({state}/cf_always)}})",
+            ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
+            *rec,
+            f" same => n,Dial(PJSIP/{endpoint},{ring})",
+            ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
+            f" same => n,Set(VEYRA_CF=${{DB({state}/cf_no_answer)}})",
+            ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
+        ]
+        busy_branch = [
+            f" same => n(dnd),NoOp(Veyra: {number} has Do Not Disturb on)",
+            f" same => n(busy),Set(VEYRA_CF=${{DB({state}/cf_busy)}})",
+            ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
+        ]
         if box is None:
             lines += [
-                f"exten => {number},1,NoOp(Veyra extension {number})",
-                dnd,
-                *rec,
-                f" same => n,Dial(PJSIP/{endpoint},{DEFAULT_RING_SECONDS})",
+                *head,
                 " same => n,Hangup()",
-                f" same => n(dnd),NoOp(Veyra: {number} has Do Not Disturb on)",
+                *busy_branch,
                 " same => n,Busy(10)",
                 " same => n,Hangup()",
+                *forward,
             ]
         else:
             # Unanswered and unavailable go to the unavailable greeting, busy
             # (and Do Not Disturb) to the busy greeting (docs/VOICEMAIL_IVR.md §3.2).
             lines += [
-                f"exten => {number},1,NoOp(Veyra extension {number})",
-                dnd,
-                *rec,
-                f" same => n,Dial(PJSIP/{endpoint},{int(box['ring_seconds'])})",
-                ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
+                *head,
                 f" same => n,VoiceMail({number}@{n.voicemail},u)",
                 " same => n,Hangup()",
-                f" same => n(dnd),NoOp(Veyra: {number} has Do Not Disturb on)",
-                f" same => n(busy),VoiceMail({number}@{n.voicemail},b)",
+                *busy_branch,
+                f" same => n,VoiceMail({number}@{n.voicemail},b)",
                 " same => n,Hangup()",
+                *forward,
             ]
     for number, b in sorted(by_number.items(), key=lambda kv: (len(kv[0]), kv[0])):
         if not b.get("shared"):
