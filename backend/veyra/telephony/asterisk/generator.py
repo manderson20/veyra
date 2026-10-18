@@ -2355,6 +2355,16 @@ def _ring_group_contexts(
             _check_section(str(m["endpoint_name"]), "endpoint name")
             for m in (g.get("members") or [])
         ]
+        # Outside numbers (docs/CALL_FEATURES.md §3.4): Local legs through the
+        # namespace's follow-me outbound context, confirmed with 1 when asked.
+        outside: list[str] = []
+        for number in g.get("external_members") or []:
+            if not _NUMBER_RE.match(str(number)):
+                raise GenerationError(f"ring group {slug}: outside number {number!r} is not valid")
+            outside.append(f"Local/{number}@{engine_names.current().follow_me_out}/n")
+        confirm = (
+            f"U({engine_names.current().follow_me_confirm}^s)" if g.get("confirm_external") else ""
+        )
         ring_busy = bool(g.get("ring_busy_members"))
         music = str(g.get("music") or "ring")
         if music not in QUEUE_MUSIC:
@@ -2372,7 +2382,12 @@ def _ring_group_contexts(
             lines.append(
                 f" same => n,Set(CALLERID(name)={_prefix(str(prefix))}${{CALLERID(name)}})"
             )
-        if not members:
+        if outside:
+            lines += [
+                f" same => n,Set(__VEYRA_FM_OPTS={confirm})",
+                " same => n,Set(__VEYRA_HOPS=0)",
+            ]
+        if not members and not outside:
             lines.append(" same => n,Goto(failover)")
         elif strategy == "ringall":
             lines.append(" same => n,Set(VEYRA_DIAL=)")
@@ -2386,6 +2401,8 @@ def _ring_group_contexts(
                     )
                     label = ""
                 lines.append(f" same => n{label},Set(VEYRA_DIAL=${{VEYRA_DIAL}}&PJSIP/{m})")
+            for leg in outside:
+                lines.append(f" same => n,Set(VEYRA_DIAL=${{VEYRA_DIAL}}&{leg})")
             lines += [
                 ' same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)',
                 f" same => n,Dial(${{VEYRA_DIAL:1}},{ring}{dial_opts})",
@@ -2404,6 +2421,11 @@ def _ring_group_contexts(
                     label = ""
                 lines += [
                     f" same => n{label},Dial(PJSIP/{m},{ring}{dial_opts})",
+                    ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
+                ]
+            for leg in outside:
+                lines += [
+                    f" same => n,Dial({leg},{ring}{dial_opts})",
                     ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
                 ]
             lines.append(" same => n,Goto(failover)")

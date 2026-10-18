@@ -15,6 +15,9 @@ export interface RingGroupDraft {
   strategy: RingGroupStrategy;
   ring_seconds: string;
   ring_busy_members: boolean;
+  /** One outside number per line. */
+  external_members: string;
+  confirm_external: boolean;
   caller_id_prefix: string;
   music: QueueMusic;
   moh_class_id: string;
@@ -30,6 +33,8 @@ export const EMPTY_RING_GROUP: RingGroupDraft = {
   strategy: "ringall",
   ring_seconds: "20",
   ring_busy_members: false,
+  external_members: "",
+  confirm_external: false,
   caller_id_prefix: "",
   music: "ring",
   moh_class_id: "",
@@ -51,6 +56,8 @@ export function ringGroupDraft(g: RingGroup): RingGroupDraft {
     strategy: g.strategy,
     ring_seconds: String(g.ring_seconds),
     ring_busy_members: g.ring_busy_members,
+    external_members: (g.external_members ?? []).join("\n"),
+    confirm_external: g.confirm_external ?? false,
     caller_id_prefix: g.caller_id_prefix ?? "",
     music: g.music ?? "ring",
     moh_class_id: g.moh_class_id ?? "",
@@ -68,6 +75,8 @@ export function ringGroupBody(d: RingGroupDraft): RingGroupInput {
     strategy: d.strategy,
     ring_seconds: Number(d.ring_seconds),
     ring_busy_members: d.ring_busy_members,
+    external_members: d.external_members.split("\n").map((n) => n.trim()).filter(Boolean),
+    confirm_external: d.confirm_external,
     caller_id_prefix: d.caller_id_prefix.trim() || null,
     music: d.music,
     moh_class_id: d.music === "default" ? d.moh_class_id || null : null,
@@ -106,6 +115,9 @@ export function RingGroupFields({ draft, onChange, errors, organizationId, curre
       <MemberListEditor label="Members" members={draft.members} extensions={options.extensions} loading={options.loading} onChange={(members) => onChange({ members })} ordered disabled={disabled}
         error={errors.members} emptyText="No members yet: callers go straight to the failover destination."
         help={draft.strategy === "sequential" ? "Rung in this order, each for the ring time below." : "All rung at once; the order only matters if you switch to ringing one after the other."} />
+      <TextArea label="Outside numbers" rows={2} value={draft.external_members} disabled={disabled} error={errors.external_members} placeholder="5735550100" spellCheck={false}
+        help="Mobile or other outside numbers rung with the members, one per line; they leave through the organization’s outbound routes." onChange={(e) => onChange({ external_members: e.target.value })} />
+      <Checkbox label="Outside numbers must press 1 to accept" description="Keeps a mobile’s voicemail from swallowing the call." checked={draft.confirm_external} disabled={disabled} onChange={(e) => onChange({ confirm_external: e.target.checked })} />
       <div className="form-grid">
         <SelectField label="Strategy" required disabled={disabled} value={draft.strategy} error={errors.strategy}
           options={(Object.keys(RING_STRATEGY_LABELS) as RingGroupStrategy[]).map((k) => ({ value: k, label: RING_STRATEGY_LABELS[k] }))}

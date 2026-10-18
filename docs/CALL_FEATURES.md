@@ -307,8 +307,13 @@ macro-free `Gosub`. Ring groups accept external members the same way
   extension's outbound caller ID. Nobody answers → `no_answer_destination`
   in the internal context, else the extension's own `noanswer` label
   (no-answer forward, voicemail).
-* External members of ring groups are the next slice of this item (they
-  need their own table and a member editor that takes numbers).
+* External members of ring groups (built 2026-10-18, migration `0039`):
+  `ring_groups.external_members` (up to ten numbers) and `confirm_external`;
+  the generator rings them as `Local/<number>@veyra-fm-out/n` legs with
+  `VEYRA_FM_OPTS` set to the confirmation routine when asked, together with
+  the members (`ringall`) or after them (`sequential`), and a group with
+  only outside numbers still rings. The ring group dialog has an "Outside
+  numbers" field and the press-1 option.
 
 ### 3.5 Per-extension outbound caller ID
 

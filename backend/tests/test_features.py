@@ -920,3 +920,64 @@ def test_class_of_service_api(admin, app):
     admin.patch(f"/api/v1/extensions/{ext['id']}", json={"class_of_service_id": None})
     assert admin.delete(f"/api/v1/classes-of-service/{cls['id']}").status_code == 204
     assert TestClient(app).get("/api/v1/classes-of-service").status_code in (401, 403)
+
+
+# ------------------------------------------------------------- ring group outside members (§3.4)
+
+
+def test_ring_group_outside_members_generate_local_legs():
+    from test_generator_groups import _group
+    from test_generator_groups import _snapshot as _group_snapshot
+
+    snap = _group_snapshot(
+        ring_groups=[
+            _group(
+                "front",
+                strategy="ringall",
+                external_members=["5735550100", "15735550101"],
+                confirm_external=True,
+            ),
+            _group("seq", number="2301", strategy="sequential", external_members=["5735550102"]),
+            _group("only", number="2302", members=[], external_members=["5735550103"]),
+        ]
+    )
+    d = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    front = _section(d, "veyra-rg-front")
+    assert "Set(__VEYRA_FM_OPTS=U(veyra-fm-confirm^s))" in front and "Set(__VEYRA_HOPS=0)" in front
+    assert "Set(VEYRA_DIAL=${VEYRA_DIAL}&Local/5735550100@veyra-fm-out/n)" in front
+    assert "Set(VEYRA_DIAL=${VEYRA_DIAL}&Local/15735550101@veyra-fm-out/n)" in front
+    seq = _section(d, "veyra-rg-seq")
+    assert "Set(__VEYRA_FM_OPTS=)" in seq and "Dial(Local/5735550102@veyra-fm-out/n,20)" in seq
+    only = _section(d, "veyra-rg-only")
+    assert "Goto(failover)" in only and "Local/5735550103@veyra-fm-out/n" in only
+    assert only.index("Local/5735550103") < only.index("n(failover)")
+    snap["ring_groups"][0]["external_members"] = ["55 1"]
+    with pytest.raises(generator.GenerationError, match="outside number"):
+        generator.generate(snap)
+
+
+def test_ring_group_outside_members_api(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    r = admin.post(
+        "/api/v1/ring-groups",
+        json={
+            "organization_id": org["id"],
+            "name": "Front",
+            "number": "2300",
+            "external_members": ["573-555-0100", "5735550100", " "],
+            "confirm_external": True,
+        },
+    )
+    assert r.status_code == 201, r.text
+    g = r.json()
+    assert g["external_members"] == ["5735550100"] and g["confirm_external"] is True
+    r = admin.patch(f"/api/v1/ring-groups/{g['id']}", json={"external_members": ["x"]})
+    assert r.status_code == 422
+    r = admin.patch(
+        f"/api/v1/ring-groups/{g['id']}", json={"external_members": [], "confirm_external": False}
+    )
+    assert (
+        r.status_code == 200
+        and r.json()["external_members"] == []
+        and r.json()["confirm_external"] is False
+    )

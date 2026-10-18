@@ -13,6 +13,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -53,6 +54,10 @@ class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     strategy: Mapped[str] = mapped_column(String(16), default="ringall")
     ring_seconds: Mapped[int] = mapped_column(Integer, default=20)
     ring_busy_members: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Outside numbers rung with the members (docs/CALL_FEATURES.md §3.4):
+    # ["5735550100", ...]; the leg must press 1 when confirm_external is on.
+    external_members: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    confirm_external: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
     # What callers hear while the members ring: ``ring`` (ringing) or
     # ``default`` (hold music: the set below, or the built-in one).

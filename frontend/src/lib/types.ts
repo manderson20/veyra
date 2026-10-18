@@ -1360,6 +1360,9 @@ export interface RingGroup {
   strategy: RingGroupStrategy;
   ring_seconds: number;
   ring_busy_members: boolean;
+  /** Outside numbers rung with the members (CALL_FEATURES.md §3.4); the leg presses 1 when confirm_external is on. */
+  external_members?: string[];
+  confirm_external?: boolean;
   caller_id_prefix: string | null;
   /** What callers hear while members ring. */
   music: QueueMusic;
@@ -1382,6 +1385,8 @@ export interface RingGroupInput {
   strategy?: RingGroupStrategy;
   ring_seconds?: number;
   ring_busy_members?: boolean;
+  external_members?: string[];
+  confirm_external?: boolean;
   caller_id_prefix?: string | null;
   music?: QueueMusic;
   moh_class_id?: string | null;
