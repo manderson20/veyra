@@ -8,6 +8,18 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.24.2
+
+### Added
+- **Extension page tabs** (#81): the extension page has a tab bar across the top (General, Caller ID, Call handling, Follow me, Voicemail, Phones, Groups, Credentials) instead of one long scroll; the active tab is in the link (`?tab=`), a switch that would lose unsaved call-handling or follow-me edits asks first, and the settings form keeps its values across tabs. The same pattern (`useUrlTab`) is ready for other object pages.
+- **Phones that may register** (#82): an extension's Phones tab sets how many phones may register it at once (1–16); the engine's limit is the larger of this and the number of provisioned phones, so a softphone can register beside the desk phone without a device record. The API carries `max_registrations`, `provisioned_phones` and `registration_limit`; the Registrations page shows registered phones against the limit; migration `0041`.
+
+### Security
+- The Dependabot finding on `braces` (GHSA-vfj7-8cjw-p6xm, development-only through the Next.js lint configuration, no fixed release) is recorded as a dated audit exception in SECURITY.md with its review condition.
+
+### Fixed
+- The extension page no longer discards edits in progress when its periodic registration refresh runs; the form resets only when another extension loads or the extension was saved.
+
 ## 0.24.1 — 2026-10-18
 
 ### Fixed

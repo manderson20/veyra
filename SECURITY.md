@@ -45,3 +45,9 @@ The full description is in [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-sec
 * No official release signing key or update server exists yet.
 * Asterisk comes from Ubuntu's `universe` component (ADR 0010), maintained by the community and by Ubuntu Pro `esm-apps`; `preflight.sh` and `verify.sh` warn when `esm-apps` is not attached.
 * Emergency calling: Veyra reports readiness per site against its own checks; the operator validates with the carrier (see [docs/EMERGENCY_CALLING.md](docs/EMERGENCY_CALLING.md)).
+
+## Dependency audit exceptions
+
+| Since | Finding | Why it is accepted | Review |
+|---|---|---|---|
+| 2026-10-18 | `braces` ≤ 3.0.3 ([GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), stack exhaustion on deeply nested brace patterns; no fixed release exists, 3.0.3 is the latest). Reached only through `eslint-config-next → @next/eslint-plugin-next → fast-glob → micromatch` in `frontend/package-lock.json` | Development-only: the linter expands patterns from this repository's own configuration on a developer's machine or in CI. The package is not in the built web interface and the server runs no Node.js. `npm audit --omit=dev` in CI does not report it | When a fixed `braces` or a `fast-glob` without it is published, or with the next `eslint-config-next` update |
