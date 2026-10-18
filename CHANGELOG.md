@@ -14,6 +14,9 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 - **Extension page tabs** (#81): the extension page has a tab bar across the top (General, Caller ID, Call handling, Follow me, Voicemail, Phones, Groups, Credentials) instead of one long scroll; the active tab is in the link (`?tab=`), a switch that would lose unsaved call-handling or follow-me edits asks first, and the settings form keeps its values across tabs. The same pattern (`useUrlTab`) is ready for other object pages.
 - **Phones that may register** (#82): an extension's Phones tab sets how many phones may register it at once (1–16); the engine's limit is the larger of this and the number of provisioned phones, so a softphone can register beside the desk phone without a device record. The API carries `max_registrations`, `provisioned_phones` and `registration_limit`; the Registrations page shows registered phones against the limit; migration `0041`.
 
+### Changed
+- The Telephony section of the sidebar shows two linked handsets (a handset in each corner with a line running between them), chosen by the owner over the keypad, which read too faint beside the other icons.
+
 ### Security
 - The Dependabot finding on `braces` (GHSA-vfj7-8cjw-p6xm, development-only through the Next.js lint configuration, no fixed release) is recorded as a dated audit exception in SECURITY.md with its review condition.
 

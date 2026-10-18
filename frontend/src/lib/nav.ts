@@ -53,7 +53,7 @@ export const NAV: NavSection[] = [
     { label: "Sites", href: "/sites/", icon: "building", permissions: ["organizations.read"], group: "Organizations" },
     { label: "Users", href: "/users/", icon: "users", permissions: ["users.read"], group: "People" },
   ] },
-  { id: "telephony", label: "Telephony", icon: "keypad", collapsible: true, description: "Extensions, calls, trunks, routing, voicemail, menus, groups and paging.", items: [
+  { id: "telephony", label: "Telephony", icon: "handsetLoop", collapsible: true, description: "Extensions, calls, trunks, routing, voicemail, menus, groups and paging.", items: [
     { label: "Extensions", href: "/extensions/", icon: "phone", permissions: ["extensions.read"], group: "Phones and calls" },
     { label: "Active Calls", href: "/calls/", icon: "activity", permissions: ["calls.read"], group: "Phones and calls" },
     { label: "SIP Trunks", href: "/trunks/", icon: "trunk", permissions: ["trunks.read"], group: "Routing" },
