@@ -16,16 +16,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from veyra.api.v1.extensions import RegistrationOut, _registrations, installation_key
+from veyra.api.v1.extensions import (
+    FollowMeIn,
+    RegistrationOut,
+    _follow_me_out,
+    _registrations,
+    installation_key,
+    save_follow_me,
+)
 from veyra.api.v1.voicemail import set_pin
 from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, current_principal, request_context
-from veyra.core.errors import forbidden, not_found
-from veyra.core.models import Extension, Organization, UserPreference, VoicemailBox
+from veyra.core.errors import ProblemError, forbidden, not_found
+from veyra.core.models import Extension, FollowMe, Organization, UserPreference, VoicemailBox
 from veyra.core.security.principal import Principal
-from veyra.telephony import routing
+from veyra.telephony import extension_state, features, routing
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -83,6 +90,142 @@ def my_extensions(
         )
         for r in rows
     ]
+
+
+# ------------------------------------------------ own phone (docs/CALL_FEATURES.md §3.9)
+
+
+def _own_extension(db: Session, principal: Principal, extension_id: uuid.UUID) -> Extension:
+    ext = db.scalar(
+        select(Extension).where(
+            Extension.id == extension_id, Extension.user_id == principal.user_id
+        )
+    )
+    if ext is None:
+        raise not_found("Extension")
+    return ext
+
+
+def _own_audit(
+    db: Session,
+    ctx: RequestContext,
+    principal: Principal,
+    action: str,
+    ext: Extension,
+    details: dict[str, Any],
+) -> None:
+    audit.record(
+        db,
+        action=action,
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=ext.organization_id,
+        target_type="extension",
+        target_id=ext.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"number": ext.number, "self_service": True, **details},
+    )
+
+
+class MyStateIn(BaseModel):
+    """What a user may change on their own phone; the ring time stays with
+    the administrator (it is in the dialplan)."""
+
+    dnd: bool | None = None
+    fmfm_enabled: bool | None = None
+    cf_always: str | None = Field(None, max_length=32)
+    cf_busy: str | None = Field(None, max_length=32)
+    cf_no_answer: str | None = Field(None, max_length=32)
+
+
+@router.get("/extensions/{extension_id}/state", summary="Your phone's Do Not Disturb and forwards")
+def my_state(
+    extension_id: uuid.UUID,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    ext = _own_extension(db, principal, extension_id)
+    return extension_state.out(extension_state.get(db, ext.id))
+
+
+@router.put(
+    "/extensions/{extension_id}/state", summary="Change your phone's Do Not Disturb or forwards"
+)
+def put_my_state(
+    extension_id: uuid.UUID,
+    body: MyStateIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    ext = _own_extension(db, principal, extension_id)
+    try:
+        details = extension_state.apply(
+            db,
+            ext,
+            body.model_dump(exclude_unset=True),
+            by="user",
+            adapter=getattr(request.app.state, "telephony", None),
+        )
+    except extension_state.StateError as e:
+        raise ProblemError(
+            422,
+            "Validation failed",
+            e.message,
+            code="validation_failed",
+            errors=[{"field": e.field, "message": e.message}],
+        ) from e
+    if details:
+        _own_audit(db, ctx, principal, "extension.state_update", ext, details)
+    db.commit()
+    return extension_state.out(extension_state.get(db, ext.id))
+
+
+@router.get("/extensions/{extension_id}/follow-me", summary="Your phone's find me / follow me")
+def my_follow_me(
+    extension_id: uuid.UUID,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    ext = _own_extension(db, principal, extension_id)
+    return _follow_me_out(db.get(FollowMe, ext.id), extension_state.get(db, ext.id))
+
+
+@router.put(
+    "/extensions/{extension_id}/follow-me", summary="Change your phone's find me / follow me"
+)
+def put_my_follow_me(
+    extension_id: uuid.UUID,
+    body: FollowMeIn,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """Like the administrator's endpoint, the legs wait for a deployment; the
+    change is recorded and shows as pending to administrators."""
+    ext = _own_extension(db, principal, extension_id)
+    row, details = save_follow_me(db, ext, body, by=principal.label)
+    _own_audit(db, ctx, principal, "extension.follow_me_update", ext, details)
+    configmgmt.mark_changed(db, by=principal.label, what=f"follow-me of {ext.number}")
+    db.commit()
+    return _follow_me_out(row, extension_state.get(db, ext.id))
+
+
+@router.get("/feature-codes", summary="The feature codes you can dial")
+def my_feature_codes(
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return {
+        "codes": [
+            {k: c[k] for k in ("key", "label", "description", "code", "takes_number")}
+            for c in features.load(db)
+            if c["enabled"]
+        ],
+        "fixed": dict(features.FIXED_CODES),
+    }
 
 
 # ----------------------------------------------------------------- preferences

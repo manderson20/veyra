@@ -416,6 +416,22 @@ Refusals answer with `pbx-invalid` and hang up; the call-history outcome
 counter (`cos.denied`) needs a new CDR field and waits for the report
 builder's next pass. `allow_from_group` of §3.6 is not modelled.
 
+### 3.9 My Phone (first slice of the user portal)
+
+*Built 2026-10-18 at the owner's request ("a tab on my sidebar to configure
+phones, like the UCP of FreePBX"):* every signed-in user has **My Phone** in
+the sidebar, listing the extensions assigned to them with the phone's
+registration, Do Not Disturb, the three forwards, find me / follow me,
+their voicemail boxes (from the account page) and the feature codes they
+can dial. The API is the `me` scope: `GET/PUT /me/extensions/{id}/state`
+(`dnd`, `fmfm_enabled`, the forwards; the ring time stays with the
+administrator), `GET/PUT /me/extensions/{id}/follow-me` (the legs; marks a
+deployment like the administrator's change) and `GET /me/feature-codes`;
+only extensions whose `user_id` is the caller's are reachable, changes are
+audited with `self_service: true` and `updated_by: user`. Phone keys and
+speed dials (#75, #76), personal contacts and the user's call history stay
+with Milestone 20.
+
 ## 4. Call-flow features (Milestone 19)
 
 Parking (`res_parking` lots per organization, `70` parks, `71–79` slots
