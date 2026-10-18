@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Button, Callout, Card, Checkbox, SelectField, Switch, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
@@ -11,7 +11,7 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 
 /** Find me / follow me of one extension (docs/CALL_FEATURES.md §3.4); `base` is the extension's API path. */
-export function FollowMeCard({ base, editable }: { base: string; editable: boolean }) {
+export function FollowMeCard({ base, editable, onDirty }: { base: string; editable: boolean; onDirty?: (dirty: boolean) => void }) {
   const toast = useToast();
   const errors = useFormErrors();
   const fm = useApiData<FollowMe>(`${base}/follow-me`);
@@ -28,6 +28,10 @@ export function FollowMeCard({ base, editable }: { base: string; editable: boole
   const d = fm.data;
   const body = { strategy, initial_ring_seconds: Number(initial), confirm_calls: confirm, caller_id_mode: cidMode, members: members.map((m) => ({ ...m, target: m.target.trim(), ring_seconds: Number(m.ring_seconds) })), no_answer_destination: dest.trim() || null };
   const dirty = !!d && JSON.stringify(body) !== JSON.stringify({ strategy: d.strategy, initial_ring_seconds: d.initial_ring_seconds, confirm_calls: d.confirm_calls, caller_id_mode: d.caller_id_mode, members: d.members, no_answer_destination: d.no_answer_destination });
+  useEffect(() => {
+    onDirty?.(dirty);
+    return () => onDirty?.(false);
+  }, [dirty, onDirty]);
   const toggle = async (on: boolean) => {
     setBusy(true);
     try {

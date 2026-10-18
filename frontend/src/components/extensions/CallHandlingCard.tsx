@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Button, Callout, Card, Switch, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
@@ -11,7 +11,7 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 
 /** Do Not Disturb, forwards and ring time of one extension (docs/CALL_FEATURES.md §3.2, §3.3); `base` is the extension's API path, the administrator's or the user's own. */
-export function CallHandlingCard({ base, dnd, editable, onChanged, ringTime = true }: { base: string; dnd?: boolean; editable: boolean; onChanged?: () => void; ringTime?: boolean }) {
+export function CallHandlingCard({ base, dnd, editable, onChanged, onDirty, ringTime = true }: { base: string; dnd?: boolean; editable: boolean; onChanged?: () => void; onDirty?: (dirty: boolean) => void; ringTime?: boolean }) {
   const toast = useToast();
   const errors = useFormErrors();
   const state = useApiData<ExtensionState>(`${base}/state`);
@@ -25,6 +25,11 @@ export function CallHandlingCard({ base, dnd, editable, onChanged, ringTime = tr
   });
   const s = state.data;
   const dirty = !!s && (always.trim() !== (s.cf_always ?? "") || onBusy.trim() !== (s.cf_busy ?? "") || noAnswer.trim() !== (s.cf_no_answer ?? "") || (ringTime && ring !== String(s.ring_seconds)));
+  // Tell the page (its tab bar warns before a switch would lose the edits).
+  useEffect(() => {
+    onDirty?.(dirty);
+    return () => onDirty?.(false);
+  }, [dirty, onDirty]);
   const put = async (body: Record<string, unknown>, done: string, detail?: string) => {
     setBusy(true);
     errors.clear();
