@@ -61,7 +61,7 @@ from veyra.telephony.numbering import (
     used_numbers,
 )
 from veyra.telephony.settings import load_sip_settings
-from veyra.telephony.snapshot import secret_purpose
+from veyra.telephony.snapshot import provisioned_phones, registration_limit, secret_purpose
 
 router = APIRouter(prefix="/extensions", tags=["extensions"])
 
@@ -130,6 +130,9 @@ class ExtensionIn(BaseModel):
     intercom: str = Field("default", pattern=r"^(default|allow|deny)$")
     # Class of service (docs/CALL_FEATURES.md §3.8); none: everything allowed.
     class_of_service_id: uuid.UUID | None = None
+    # Phones that may register at once (docs/EXTENSIONS.md §1); None: as many
+    # as are provisioned with the extension, at least one.
+    max_registrations: int | None = Field(None, ge=1, le=16)
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
@@ -170,6 +173,9 @@ class ExtensionPatch(BaseModel):
     outbound_caller_id_name: str | None = Field(None, max_length=80)
     intercom: str | None = Field(None, pattern=r"^(default|allow|deny)$")
     class_of_service_id: uuid.UUID | None = None
+    # Phones that may register at once (docs/EXTENSIONS.md §1); None: as many
+    # as are provisioned with the extension, at least one.
+    max_registrations: int | None = Field(None, ge=1, le=16)
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
@@ -310,6 +316,11 @@ class ExtensionOut(BaseModel):
     # Class of service (docs/CALL_FEATURES.md §3.8); none: everything allowed.
     class_of_service_id: uuid.UUID | None = None
     class_of_service_name: str | None = None
+    # Phones that may register (docs/EXTENSIONS.md §1): the administrator's
+    # limit, the provisioned-phone count and the effective limit (the larger).
+    max_registrations: int | None = None
+    provisioned_phones: int = 0
+    registration_limit: int = 1
     building_id: uuid.UUID | None = None
     location: str | None = None
     is_enabled: bool
@@ -452,6 +463,7 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
     users = (
         {u.id: u for u in db.scalars(select(User).where(User.id.in_(user_ids)))} if user_ids else {}
     )
+    phones = provisioned_phones(db, ids)
     out = []
     for r in rows:
         org = orgs.get(r.organization_id)
@@ -478,6 +490,9 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 class_of_service_name=(
                     classes.get(r.class_of_service_id) if r.class_of_service_id else None
                 ),
+                max_registrations=r.max_registrations,
+                provisioned_phones=phones.get(r.id, 0),
+                registration_limit=registration_limit(r.max_registrations, phones.get(r.id, 0)),
                 building_id=r.building_id,
                 location=r.location,
                 is_enabled=r.is_enabled,
@@ -710,6 +725,7 @@ def create_extension(
         outbound_caller_id_name=body.outbound_caller_id_name,
         intercom=body.intercom,
         class_of_service_id=body.class_of_service_id,
+        max_registrations=body.max_registrations,
         building_id=body.building_id,
         location=body.location,
         is_enabled=body.is_enabled,
@@ -797,6 +813,7 @@ def update_extension(
         "outbound_caller_id_name",
         "intercom",
         "class_of_service_id",
+        "max_registrations",
         "building_id",
         "location",
         "is_enabled",

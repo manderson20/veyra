@@ -89,7 +89,8 @@ Columns (existing in bold, new in plain text):
 Rules: a MAC can belong to one device; an extension can be line 1 of
 several devices (hot desks are *(later)*; today a shared extension simply
 registers twice, which PJSIP allows with `max_contacts` ≥ 2, set by the
-generator when an extension is on more than one device). Deleting an
+generator when an extension is on more than one device or when the
+extension's `max_registrations` says so, [EXTENSIONS.md](EXTENSIONS.md) §1). Deleting an
 extension clears the device's line and keys that pointed at it. Deleting a
 device revokes its credential; the phone keeps its last files until it is
 reset.

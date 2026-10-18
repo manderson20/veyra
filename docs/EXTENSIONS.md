@@ -18,7 +18,7 @@ classroom, hallway), and carries:
 |---|---|
 | `number` | Digits only, validated against the numbering plan (§2); unique across the installation, shared with ring group, queue, paging zone, page and shared inbox numbers ([RING_GROUPS_QUEUES.md](RING_GROUPS_QUEUES.md), [PAGING_RECORDINGS.md](PAGING_RECORDINGS.md)) |
 | `display_name` | Shown in the interface and used as the default caller ID name |
-| `endpoint_name` | The SIP user name, `<organization slug>-<number>` (for example `example-1001`). Generated, globally unique, follows the number when an extension is renumbered. Registers from one phone unless several registered devices carry the extension ([DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §2), then `max_contacts` follows |
+| `endpoint_name` | The SIP user name, `<organization slug>-<number>` (for example `example-1001`). Generated, globally unique, follows the number when an extension is renumbered. Registers from one phone unless `max_registrations` or several provisioned devices allow more (below) |
 | `user_id` | Optional. The user must belong to the same organization |
 | `site_id` | Optional site (building); its emergency caller ID is the default for the extension |
 | `caller_id_name`, `caller_id_number` | Optional overrides for internal calls (letters, digits and `. ' & ( ) -`; digits with an optional leading `+`) |
@@ -26,8 +26,13 @@ classroom, hallway), and carries:
 | `outbound_caller_id_number`, `outbound_caller_id_name` | Optional (Milestone 18, [CALL_FEATURES.md](CALL_FEATURES.md) §3.5). Presented to the carrier on outside calls. The number must be one of the organization's numbers (an inbound route's DID) or on the organization's caller ID allow list, unless the caller holds `routing.write` (`422 caller_id_not_allowed`). An outbound route whose caller ID is marked *force* replaces it; emergency routes present the emergency caller ID. Migration `0033` |
 | `intercom` | `default` (the organization's `intercom_default`), `allow` or `deny`: may another phone dial the intercom code followed by this number and have this phone answer on speaker ([CALL_FEATURES.md](CALL_FEATURES.md) §3.6; migration `0036`) |
 | `class_of_service_id` | Optional class of service ([CALL_FEATURES.md](CALL_FEATURES.md) §3.8; migration `0038`); none: everything allowed |
+| `max_registrations` | Optional, 1–16 (issue #82; migration `0041`): how many phones may register this extension at once ("Phones that may register" on the extension page's Phones tab). The engine's limit is the larger of this and the number of enabled devices provisioned with the extension ([DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) §2), at least one; the API reports both and the effective value as `provisioned_phones` and `registration_limit`, and the Registrations page shows registered phones against it. Raising it lets a softphone register beside the desk phone without a device record. Needs a deployment |
 | `is_enabled` | Disabled extensions are kept but left out of the generated configuration |
 | `sip_secret_ciphertext`, `sip_secret_changed_at` | The SIP secret, encrypted (§4), and when it was last set |
+
+The extension page shows these settings on tabs across the top (General,
+Caller ID, Call handling, Follow me, Voicemail, Phones, Groups,
+Credentials; issue #81); the active tab is in the link as `?tab=<id>`.
 
 Changing an extension changes the database only. The engine takes the
 change when a configuration revision is generated and deployed

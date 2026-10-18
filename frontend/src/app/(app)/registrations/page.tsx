@@ -53,7 +53,13 @@ export default function RegistrationsPage() {
       key: "ext",
       header: "Extension",
       render: (r) => r.extension_number
-        ? <span><span className="table__primary mono" style={{ display: "block" }}>{r.extension_number}</span><span className="table__secondary">{r.extension_name}</span></span>
+        ? (
+          <span>
+            <span className="table__primary mono" style={{ display: "block" }}>{r.extension_number}</span>
+            <span className="table__secondary">{r.extension_name}</span>
+            {r.registration_limit ? <span className="table__secondary" style={{ display: "block" }}>{r.registered ?? 1} of {r.registration_limit} {r.registration_limit === 1 ? "phone" : "phones"} registered</span> : null}
+          </span>
+        )
         : <span className="subtle mono">{r.endpoint}</span>,
     },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (r: RegistrationRow) => <span>{r.organization_name ?? "—"}</span> }] : []),

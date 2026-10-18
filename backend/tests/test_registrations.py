@@ -158,6 +158,18 @@ def test_registrations_api_scoped_and_searchable(admin, app, client):
     row = r["registrations"][0]
     assert row["extension_number"] == "1001" and row["organization_name"] == org["name"]
     assert row["source_host"] == "203.0.113.7" and row["nat"] is True
+    # Registered phones against the extension's limit (docs/EXTENSIONS.md §1).
+    assert row["registered"] == 1 and row["registration_limit"] == 1
+    assert r["registrations"][1]["registration_limit"] is None  # unknown endpoint
+    admin.patch(f"/api/v1/extensions/{ext['id']}", json={"max_registrations": 2})
+    assert (
+        admin.get("/api/v1/telephony/registrations").json()["registrations"][0]
+        | {
+            "registered": 1,
+            "registration_limit": 2,
+        }
+        == admin.get("/api/v1/telephony/registrations").json()["registrations"][0]
+    )
     assert (
         admin.get("/api/v1/telephony/registrations", params={"q": "polycom"}).json()[
             "registrations"

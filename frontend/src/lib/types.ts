@@ -281,6 +281,9 @@ export interface RegistrationRow extends RegistrationContact {
   extension_name: string | null;
   organization_id: string | null;
   organization_name: string | null;
+  /** Phones registered on this endpoint and how many it accepts (null for an unknown endpoint). */
+  registered?: number;
+  registration_limit?: number | null;
 }
 
 export interface TrunkRegistrationRow {
@@ -346,6 +349,12 @@ export interface Extension {
   /** Class of service (CALL_FEATURES.md §3.8); null: everything allowed. */
   class_of_service_id?: string | null;
   class_of_service_name?: string | null;
+  /** Phones that may register at once (EXTENSIONS.md §1); null: as many as are provisioned, at least one. */
+  max_registrations?: number | null;
+  /** Enabled devices provisioned with this extension. */
+  provisioned_phones?: number;
+  /** The effective limit: the larger of max_registrations and provisioned_phones, at least 1. */
+  registration_limit?: number;
   building_id?: string | null;
   location?: string | null;
   is_enabled: boolean;

@@ -299,7 +299,9 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "class_of_service": (
                     class_slug.get(e.class_of_service_id) if e.class_of_service_id else None
                 ),
-                "max_contacts": contacts.get(e.id, 1),
+                # Phones that may register (docs/EXTENSIONS.md §1): the larger of
+                # the administrator's limit and the provisioned-phone count.
+                "max_contacts": max(contacts.get(e.id, 1), e.max_registrations or 1),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
                 "shared_mailboxes": shared_by_ext.get(e.id, []),
@@ -449,9 +451,12 @@ def _paging(
     return {"zones": zone_rows, "pages": page_rows, "defaults": {"delay_ms": 200, "ttl": 1}}
 
 
-def _contacts(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, int]:
-    """Extensions carried by more than one device register more than once."""
+def provisioned_phones(db: Session, extension_ids: set[Any]) -> dict[Any, int]:
+    """How many enabled devices carry each extension (line 1 or an extra line,
+    docs/DEVICE_PROVISIONING.md §2). Extensions on no device are absent."""
     counts: dict[Any, int] = {}
+    if not extension_ids:
+        return counts
     for d in db.scalars(select(Device).where(Device.is_enabled.is_(True))):
         ids = [d.primary_extension_id] if d.primary_extension_id else []
         for line in d.lines or []:
@@ -460,8 +465,20 @@ def _contacts(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, int]:
             except (ValueError, AttributeError):
                 continue
         for ext_id in ids:
-            if ext_id in ext_by_id:
+            if ext_id in extension_ids:
                 counts[ext_id] = counts.get(ext_id, 0) + 1
+    return counts
+
+
+def registration_limit(max_registrations: int | None, phones: int) -> int:
+    """The number of phones an extension accepts: the administrator's limit
+    or the provisioned count, whichever is larger, at least one."""
+    return max(max_registrations or 1, phones, 1)
+
+
+def _contacts(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, int]:
+    """Extensions carried by more than one device register more than once."""
+    counts = provisioned_phones(db, set(ext_by_id))
     return {k: v for k, v in counts.items() if v > 1}
 
 

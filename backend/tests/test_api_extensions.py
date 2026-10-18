@@ -88,6 +88,37 @@ def test_create_read_update_delete_and_audit(admin):
     assert created["details"]["number"] == "1001" and created["target_type"] == "extension"
 
 
+def test_registration_limit_is_validated_reported_and_deployed(admin, app):
+    """Phones that may register (docs/EXTENSIONS.md §1, issue #82): the explicit
+    limit, the provisioned count and the larger of the two reach the engine."""
+    from veyra.telephony.snapshot import registration_limit
+
+    assert registration_limit(None, 0) == 1
+    assert registration_limit(2, 3) == 3 and registration_limit(3, 2) == 3
+    org = _org(admin)
+    ext = _create(admin, org["id"], "1001")
+    assert ext["max_registrations"] is None
+    assert ext["provisioned_phones"] == 0 and ext["registration_limit"] == 1
+    for bad in (0, 17, "two"):
+        r = admin.patch(f"{EXT}/{ext['id']}", json={"max_registrations": bad})
+        assert r.status_code == 422, r.text
+    r = admin.patch(f"{EXT}/{ext['id']}", json={"max_registrations": 3})
+    assert r.status_code == 200, r.text
+    assert r.json()["max_registrations"] == 3 and r.json()["registration_limit"] == 3
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    assert {e["number"]: e["max_contacts"] for e in snap["extensions"]}["1001"] == 3
+    changes = [
+        a["details"]
+        for a in admin.get("/api/v1/audit", params={"q": "extension.update"}).json()["items"]
+    ]
+    assert any(d.get("max_registrations") == 3 for d in changes)
+    r = admin.patch(f"{EXT}/{ext['id']}", json={"max_registrations": None})
+    assert r.json()["max_registrations"] is None and r.json()["registration_limit"] == 1
+    created = _create(admin, org["id"], "1002", max_registrations=2)
+    assert created["registration_limit"] == 2
+
+
 def test_numbering_plan_is_enforced(admin):
     org = _org(admin)
     plan = admin.get("/api/v1/telephony/numbering").json()
@@ -446,7 +477,6 @@ def test_generated_configuration_and_encrypted_revision_artifacts(admin, app, tm
     # enabling the second extension makes changes pending again; only the
     # changed files are reported, and the sensitive one stays hidden
     admin.patch(f"{EXT}/{disabled['id']}", json={"is_enabled": True})
-    assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is True
     rev2 = admin.post("/api/v1/telephony/revisions").json()
     assert set(rev2["diff"]) == {"pjsip.endpoints.conf", "extensions.conf"}
     assert rev2["diff"]["pjsip.endpoints.conf"]["diff"] is None

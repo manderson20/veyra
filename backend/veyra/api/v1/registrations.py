@@ -12,6 +12,7 @@ contact, others the contacts of extensions in their organizations.
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -25,6 +26,7 @@ from veyra.core.deps import require
 from veyra.core.models import Extension, Organization, SipTrunk
 from veyra.core.security.principal import Principal
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported, TelephonyAdapter
+from veyra.telephony.snapshot import provisioned_phones, registration_limit
 
 router = APIRouter(prefix="/telephony", tags=["telephony"])
 
@@ -36,6 +38,10 @@ class RegistrationRow(ContactOut):
     extension_name: str | None = None
     organization_id: uuid.UUID | None = None
     organization_name: str | None = None
+    # How many phones are registered on this endpoint and how many it accepts
+    # (docs/EXTENSIONS.md §1); the limit is None for an unknown endpoint.
+    registered: int = 1
+    registration_limit: int | None = None
 
 
 class TrunkRegistrationRow(BaseModel):
@@ -89,6 +95,8 @@ def list_registrations(
     exts = db.scalars(stmt).all()
     orgs = {o.id: o.name for o in db.query(Organization).all()} if exts else {}
     by_endpoint = {e.endpoint_name: e for e in exts}
+    phones = provisioned_phones(db, {e.id for e in exts})
+    registered = Counter(r.endpoint for r in rows)
     needle = (q or "").strip().lower()
     out: list[RegistrationRow] = []
     seen: set[str] = set()
@@ -105,6 +113,10 @@ def list_registrations(
             extension_name=ext.display_name if ext else None,
             organization_id=ext.organization_id if ext else None,
             organization_name=orgs.get(ext.organization_id) if ext else None,
+            registered=registered[r.endpoint],
+            registration_limit=(
+                registration_limit(ext.max_registrations, phones.get(ext.id, 0)) if ext else None
+            ),
         )
         if needle and not any(
             needle in str(v).lower()

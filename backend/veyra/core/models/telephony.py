@@ -51,6 +51,10 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     class_of_service_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("classes_of_service.id", ondelete="SET NULL", use_alter=True)
     )
+    # Phones that may register at once (docs/EXTENSIONS.md §1, issue #82). None:
+    # as many as are provisioned with the extension, at least one. The
+    # generator takes the larger of this and the provisioned count (1..16).
+    max_registrations: Mapped[int | None] = mapped_column(Integer)
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6): the building
     # and the floor/room text the on-site notification carries.
     building_id: Mapped[uuid.UUID | None] = mapped_column(
