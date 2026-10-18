@@ -5,6 +5,7 @@ from fastapi import APIRouter
 
 from veyra.api.v1 import (
     alerts,
+    announcements,
     audit,
     auth,
     auth_companion,
@@ -17,6 +18,7 @@ from veyra.api.v1 import (
     central,
     classes_of_service,
     companion,
+    conferences,
     device_profiles,
     devices,
     diagnostics,
@@ -94,9 +96,11 @@ for r in (
     voicemail,
     prompts,
     ivr,
+    announcements,
     ring_groups,
     queues,
     pickup_groups,
+    conferences,
     sites,
     paging_zones,
     pages,

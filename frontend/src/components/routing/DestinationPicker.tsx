@@ -2,8 +2,8 @@
 "use client";
 
 import { SelectField } from "@/components/ui";
-import { DESTINATION_LABELS, type DestinationDraft } from "@/lib/routing";
-import type { CallQueue, Destination, DestinationType, Extension, IvrMenu, Page, RingGroup, VoicemailBox } from "@/lib/types";
+import { DESTINATION_LABELS, emptyDestination, type DestinationDraft } from "@/lib/routing";
+import type { Announcement, CallQueue, ConferenceRoom, Destination, DestinationType, Extension, IvrMenu, Page, RingGroup, VoicemailBox } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
 /** The lists a destination picker chooses from; load once per page and share between pickers. */
@@ -13,6 +13,8 @@ export interface DestinationOptions {
   menus: IvrMenu[];
   ringGroups: RingGroup[];
   queues: CallQueue[];
+  announcements: Announcement[];
+  conferences: ConferenceRoom[];
   loading: boolean;
 }
 
@@ -23,13 +25,17 @@ export function useDestinationOptions(organizationId: string | null | undefined)
   const menus = useApiData<Page<IvrMenu>>(org ? "/ivr" : null, { organization_id: org, limit: 200 });
   const ringGroups = useApiData<Page<RingGroup>>(org ? "/ring-groups" : null, { organization_id: org, limit: 200 });
   const queues = useApiData<Page<CallQueue>>(org ? "/queues" : null, { organization_id: org, limit: 200 });
+  const announcements = useApiData<Page<Announcement>>(org ? "/announcements" : null, { organization_id: org, limit: 200 });
+  const conferences = useApiData<Page<ConferenceRoom>>(org ? "/conferences" : null, { organization_id: org, limit: 200 });
   return {
     extensions: extensions.data?.items ?? [],
     boxes: boxes.data?.items ?? [],
     menus: menus.data?.items ?? [],
     ringGroups: ringGroups.data?.items ?? [],
     queues: queues.data?.items ?? [],
-    loading: extensions.loading || boxes.loading || menus.loading || ringGroups.loading || queues.loading,
+    announcements: announcements.data?.items ?? [],
+    conferences: conferences.data?.items ?? [],
+    loading: extensions.loading || boxes.loading || menus.loading || ringGroups.loading || queues.loading || announcements.loading || conferences.loading,
   };
 }
 
@@ -55,7 +61,7 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
   exclude?: string;
   idBase?: string;
 }) {
-  const kinds: DestinationType[] = ["extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", ...(allowHangup ? ["hangup" as const] : [])];
+  const kinds: DestinationType[] = ["extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", "announcement", "conference", "directory", ...(allowHangup ? ["hangup" as const] : [])];
   const withCurrent = (opts: { value: string; label: string }[], value: string, fallback: string) =>
     value && !opts.some((o) => o.value === value) ? [...opts, { value, label: current?.label ?? fallback }] : opts;
   const targetId = idBase ? `${idBase}-target` : undefined;
@@ -112,13 +118,33 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
         help={opts.length === 0 && !options.loading ? "Create one under Telephony → Call Queues." : undefined}
         onChange={(e) => onChange({ ...draft, queue_id: e.target.value })} />
     );
+  } else if (draft.type === "announcement") {
+    const opts = options.announcements.filter((a) => a.id !== exclude).map((a) => ({ value: a.id, label: a.is_enabled ? a.name : `${a.name} (disabled)` }));
+    targetField = (
+      <SelectField id={targetId} label={srLabel("announcement")} required={required} disabled={disabled} value={draft.announcement_id} error={error}
+        placeholder={options.loading ? "Loading…" : opts.length ? "Choose an announcement" : "No announcements in this organization"}
+        options={withCurrent(opts, draft.announcement_id, "Deleted announcement")}
+        help={opts.length === 0 && !options.loading ? "Create one under Telephony → Announcements." : undefined}
+        onChange={(e) => onChange({ ...draft, announcement_id: e.target.value })} />
+    );
+  } else if (draft.type === "conference") {
+    const opts = options.conferences.map((c) => ({ value: c.id, label: groupLabel(c) }));
+    targetField = (
+      <SelectField id={targetId} label={srLabel("conference room")} required={required} disabled={disabled} value={draft.conference_id} error={error}
+        placeholder={options.loading ? "Loading…" : opts.length ? "Choose a conference room" : "No conference rooms in this organization"}
+        options={withCurrent(opts, draft.conference_id, "Deleted conference room")}
+        help={opts.length === 0 && !options.loading ? "Create one under Telephony → Conference Rooms." : undefined}
+        onChange={(e) => onChange({ ...draft, conference_id: e.target.value })} />
+    );
+  } else if (draft.type === "directory") {
+    targetField = <p className="field__help" style={{ margin: 0 }}>Callers spell a name on the keypad and reach the matching extension (extensions with a voicemail box are listed).</p>;
   }
   return (
     <div className="form-grid">
       <SelectField id={idBase ? `${idBase}-type` : undefined} label={label} required={required} disabled={disabled} value={draft.type}
         options={kinds.map((k) => ({ value: k, label: DESTINATION_LABELS[k] }))}
         help={current?.missing ? "The saved target no longer exists or is disabled; choose a new one." : undefined}
-        onChange={(e) => onChange({ type: e.target.value as DestinationType, extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "" })} />
+        onChange={(e) => onChange(emptyDestination(e.target.value as DestinationType))} />
       {targetField}
     </div>
   );

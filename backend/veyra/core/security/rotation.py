@@ -18,6 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from veyra.core.models import (
     Calendar,
+    ConferenceRoom,
     ConfigRevision,
     Device,
     Extension,
@@ -83,7 +84,12 @@ def ciphers(db: Session) -> Iterator[Cipher]:
     from veyra.core.security import mfa
     from veyra.ha import service as ha_service
     from veyra.integrations import sso, webhooks
-    from veyra.telephony.snapshot import pin_purpose, secret_purpose, trunk_secret_purpose
+    from veyra.telephony.snapshot import (
+        conference_pin_purpose,
+        pin_purpose,
+        secret_purpose,
+        trunk_secret_purpose,
+    )
     from veyra.updates import manager as updates
 
     yield from _column(
@@ -94,6 +100,20 @@ def ciphers(db: Session) -> Iterator[Cipher]:
     )
     yield from _column(
         db, VoicemailBox, "pin_ciphertext", lambda r: pin_purpose(r.id), "voicemail box"
+    )
+    yield from _column(
+        db,
+        ConferenceRoom,
+        "user_pin_ciphertext",
+        lambda r: conference_pin_purpose(r.id, "user"),
+        "conference room",
+    )
+    yield from _column(
+        db,
+        ConferenceRoom,
+        "admin_pin_ciphertext",
+        lambda r: conference_pin_purpose(r.id, "admin"),
+        "conference room",
     )
     yield from _column(
         db, MfaMethod, "secret_ciphertext", lambda r: mfa.secret_purpose(r.user_id), "MFA method"

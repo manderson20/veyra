@@ -87,6 +87,20 @@ class Names:
     def queue_context(self, slug: str) -> str:
         return self._p(f"queue-{slug}")
 
+    def announcement(self, slug: str) -> str:
+        """Plays a prompt, then goes on (docs/CALL_FEATURES.md §4.1)."""
+        return self._p(f"ann-{slug}")
+
+    def conference(self, slug: str) -> str:
+        """Context of a conference room; also the stem of its ConfBridge
+        profile names (docs/CALL_FEATURES.md §4.3)."""
+        return self._p(f"conf-{slug}")
+
+    @property
+    def directory(self) -> str:
+        """Dial-by-name directory of the namespace (docs/CALL_FEATURES.md §4.2)."""
+        return self._p("directory")
+
     # Other engine objects.
     @property
     def voicemail(self) -> str:

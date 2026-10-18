@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Call-flow objects of Milestone 19 (docs/CALL_FEATURES.md §4): announcements
+that play a recording and go on, and conference rooms. Engine-neutral; the
+generator turns them into dialplan contexts and ``confbridge.conf``.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
+
+
+class Announcement(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """Plays a prompt, then sends the call on (docs/CALL_FEATURES.md §4.1).
+    Context ``veyra-ann-<slug>`` in the engine."""
+
+    __tablename__ = "announcements"
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    prompt_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("prompts.id", ondelete="SET NULL")
+    )
+    # A key pressed while the prompt plays skips it (any key) or replays it
+    # (``repeat_key``, one of 0-9 * #); off: the prompt plays to the end.
+    allow_skip: Mapped[bool] = mapped_column(Boolean, default=False)
+    repeat_key: Mapped[str | None] = mapped_column(String(1))
+    # Where the call goes afterwards: the shared destination shape
+    # (docs/VOICEMAIL_IVR.md §6) plus the Milestone 19 kinds.
+    destination_type: Mapped[str] = mapped_column(String(16), default="hangup")
+    destination_extension_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extensions.id", ondelete="SET NULL")
+    )
+    destination_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL")
+    )
+    destination_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL")
+    )
+    destination_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL")
+    )
+    destination_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL")
+    )
+    destination_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL")
+    )
+    destination_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ConferenceRoom(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """A meet-me room (docs/CALL_FEATURES.md §4.3): dialled by its number or
+    reached as a destination; PINs are encrypted with the installation key
+    (purposes ``conference.pin:<id>:user`` and ``:admin``)."""
+
+    __tablename__ = "conference_rooms"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name"),
+        UniqueConstraint("organization_id", "number"),
+    )
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
+    # Shares the organization's number space with extensions and groups.
+    number: Mapped[str] = mapped_column(String(32))
+    description: Mapped[str | None] = mapped_column(Text)
+    user_pin_ciphertext: Mapped[str | None] = mapped_column(Text)
+    admin_pin_ciphertext: Mapped[str | None] = mapped_column(Text)
+    # 0: no limit.
+    max_participants: Mapped[int] = mapped_column(Integer, default=0)
+    record: Mapped[bool] = mapped_column(Boolean, default=False)
+    announce_join_leave: Mapped[bool] = mapped_column(Boolean, default=True)
+    music_on_hold_alone: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Participants wait with hold music until an administrator (admin PIN) joins.
+    wait_for_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    moh_class_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("moh_classes.id", ondelete="SET NULL")
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

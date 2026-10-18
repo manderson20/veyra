@@ -105,6 +105,12 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     destination_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
     )
+    destination_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
     time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("time_conditions.id", ondelete="RESTRICT")
     )
@@ -123,6 +129,12 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     after_hours_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    after_hours_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    after_hours_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
     )
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

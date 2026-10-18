@@ -156,7 +156,7 @@ elif [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm /etc/asterisk/veyra)" == "2750 veyra:asterisk" ]] \
         && check engine-include-dir pass "2750 veyra:asterisk" \
         || check engine-include-dir fail "/etc/asterisk/veyra is $(perm /etc/asterisk/veyra) (expected 2750 veyra:asterisk)"
-    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf logger.conf cdr.conf cdr_custom.conf; do
+    for f in pjsip.conf extensions.conf rtp.conf voicemail.conf queues.conf pjsip_notify.conf musiconhold.conf confbridge.conf logger.conf cdr.conf cdr_custom.conf; do
         grep -qs "Managed by Veyra" "/etc/asterisk/$f" \
             && check "engine-stub:$f" pass "Veyra-managed" \
             || check "engine-stub:$f" fail "/etc/asterisk/$f is not the Veyra-managed stub"
@@ -224,7 +224,7 @@ elif [[ "$ENGINE" == "asterisk" ]]; then
     [[ "$(perm "$VEYRA_DATA")" == "750 veyra:asterisk" ]] \
         && check data-dir pass "750 veyra:asterisk" \
         || check data-dir fail "$VEYRA_DATA is $(perm "$VEYRA_DATA") (expected 750 veyra:asterisk)"
-    for d in prompts mailqueue mailqueue/failed moh recordings recordings/incoming; do
+    for d in prompts mailqueue mailqueue/failed moh recordings recordings/incoming recordings/conferences; do
         [[ "$(perm "$VEYRA_DATA/$d")" == "2770 veyra:asterisk" ]] \
             && check "data-dir:$d" pass "2770 veyra:asterisk" \
             || check "data-dir:$d" fail "$VEYRA_DATA/$d is $(perm "$VEYRA_DATA/$d") (expected 2770 veyra:asterisk)"

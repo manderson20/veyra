@@ -8,6 +8,17 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.25.0 (Milestone 19)
+
+### Added
+- **Announcements** (#21): Telephony → Announcements plays a recording and then sends the call on; callers may skip it with any key or replay it with a chosen key. Routes, menu keys, groups and queues can point at an announcement, and announcements can chain. Migration `0042`.
+- **Dial-by-name directory** (#22): a destination that lets callers spell a first or last name on the keypad and reach the extension (extensions with a voicemail box are listed).
+- **Conference rooms** (#20): Telephony → Conference Rooms creates meet-me rooms with a dialable number, optional participant and administrator PINs, a participant limit, join/leave announcements, hold music while alone, "wait for the administrator" and recording to the server's recordings folder. In the room, `*1` mutes; administrators lock the room (`*2`), drop the last participant (`*3`) or mute everyone (`*8`). A line key with the room's number lights while the room is in use. New managed Asterisk file `confbridge.conf`.
+- Destination pickers everywhere (inbound routes, IVR menus, ring groups, queues) offer the new kinds: announcement, conference room and directory.
+
+### Fixed
+- An inbound route pointed at a shared voicemail inbox could not be saved from the interface (the inbox was dropped from the request); it is sent now.
+
 ## 0.24.2 — 2026-10-18
 
 ### Added

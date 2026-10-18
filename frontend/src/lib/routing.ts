@@ -97,6 +97,9 @@ export const DESTINATION_LABELS: Record<DestinationType, string> = {
   ivr: "IVR menu",
   ring_group: "Ring group",
   queue: "Call queue",
+  announcement: "Announcement",
+  conference: "Conference room",
+  directory: "Dial-by-name directory",
   hangup: "Hang up",
 };
 
@@ -108,18 +111,38 @@ export interface DestinationDraft {
   ring_group_id: string;
   queue_id: string;
   voicemail_box_id: string;
+  announcement_id: string;
+  conference_id: string;
 }
 
-export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "" };
-export const HANGUP: DestinationDraft = { type: "hangup", extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "" };
+const NO_TARGETS = { extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "", announcement_id: "", conference_id: "" };
+
+export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", ...NO_TARGETS };
+export const HANGUP: DestinationDraft = { type: "hangup", ...NO_TARGETS };
+
+/** A draft of `type` with every target cleared (what a kind change produces). */
+export function emptyDestination(type: DestinationType): DestinationDraft {
+  return { type, ...NO_TARGETS };
+}
 
 export function destinationDraft(d: Destination | null | undefined, fallback: DestinationDraft = EMPTY_DESTINATION): DestinationDraft {
   if (!d || d.type === "missing") return fallback;
-  return { type: d.type, extension_id: d.extension_id ?? "", ivr_id: d.ivr_id ?? "", ring_group_id: d.ring_group_id ?? "", queue_id: d.queue_id ?? "", voicemail_box_id: d.voicemail_box_id ?? "" };
+  return {
+    type: d.type,
+    extension_id: d.extension_id ?? "",
+    ivr_id: d.ivr_id ?? "",
+    ring_group_id: d.ring_group_id ?? "",
+    queue_id: d.queue_id ?? "",
+    voicemail_box_id: d.voicemail_box_id ?? "",
+    announcement_id: d.announcement_id ?? "",
+    conference_id: d.conference_id ?? "",
+  };
 }
 
-/** The draft field that holds the target of a kind (none for hang up). */
-export function destinationTargetField(type: DestinationType): "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | null {
+export type DestinationTargetField = "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | "announcement_id" | "conference_id";
+
+/** The draft field that holds the target of a kind (none for hang up and the directory). */
+export function destinationTargetField(type: DestinationType): DestinationTargetField | null {
   switch (type) {
     case "extension":
     case "voicemail":
@@ -132,6 +155,10 @@ export function destinationTargetField(type: DestinationType): "extension_id" | 
       return "ring_group_id";
     case "queue":
       return "queue_id";
+    case "announcement":
+      return "announcement_id";
+    case "conference":
+      return "conference_id";
     default:
       return null;
   }
@@ -147,6 +174,8 @@ export function destinationBody(d: DestinationDraft): DestinationInput {
     ring_group_id: field === "ring_group_id" ? d.ring_group_id || null : null,
     queue_id: field === "queue_id" ? d.queue_id || null : null,
     voicemail_box_id: field === "voicemail_box_id" ? d.voicemail_box_id || null : null,
+    announcement_id: field === "announcement_id" ? d.announcement_id || null : null,
+    conference_id: field === "conference_id" ? d.conference_id || null : null,
   };
 }
 

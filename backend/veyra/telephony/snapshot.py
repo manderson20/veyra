@@ -24,8 +24,10 @@ from sqlalchemy.orm import Session
 
 from veyra.core.mail import load_smtp_settings, sender
 from veyra.core.models import (
+    Announcement,
     CallQueue,
     ClassOfService,
+    ConferenceRoom,
     Device,
     Extension,
     ExtensionState,
@@ -76,6 +78,11 @@ def trunk_secret_purpose(trunk_id: Any) -> str:
     return f"trunk.sip_secret:{trunk_id}"
 
 
+def conference_pin_purpose(room_id: Any, which: str) -> str:
+    """Encryption purpose of a conference room's user or admin PIN."""
+    return f"conference.pin:{room_id}:{which}"
+
+
 def pin_purpose(box_id: Any) -> str:
     """Associated data that binds a voicemail PIN ciphertext to its box."""
     return f"voicemail.pin:{box_id}"
@@ -124,6 +131,73 @@ def _pin(box: VoicemailBox, number: str, key: InstallationKey | None) -> str:
         return key.decrypt(box.pin_ciphertext, pin_purpose(box.id))
     except DecryptionError as e:
         raise SnapshotError(f"the voicemail PIN of extension {number} cannot be read: {e}") from e
+
+
+def _conference_pin(room: ConferenceRoom, which: str, key: InstallationKey | None) -> str | None:
+    ciphertext = getattr(room, f"{which}_pin_ciphertext")
+    if not ciphertext:
+        return None
+    if key is None:
+        raise SnapshotError(
+            f"the conference room {room.name} has an encrypted PIN but the installation "
+            "key is not available (see 'veyra installation-key check')"
+        )
+    try:
+        return key.decrypt(ciphertext, conference_pin_purpose(room.id, which))
+    except DecryptionError as e:
+        raise SnapshotError(
+            f"the {which} PIN of conference room {room.name} cannot be read: {e}"
+        ) from e
+
+
+def _callflow(
+    db: Session,
+    key: InstallationKey | None,
+    org_slug: dict[Any, str],
+    targets: Targets,
+    announcements: list[Announcement],
+    rooms: list[ConferenceRoom],
+    moh_slug: Callable[[Any, Any], str | None],
+) -> dict[str, Any]:
+    """Announcements and conference rooms of active organizations
+    (docs/CALL_FEATURES.md §4.1, §4.3). ``targets`` already knows their slugs."""
+    prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
+
+    def prompt_slug(prompt_id: Any, org_id: Any) -> str | None:
+        p = prompts.get(prompt_id) if prompt_id else None
+        return p.slug if p is not None and p.organization_id == org_id else None
+
+    return {
+        "announcements": [
+            {
+                "slug": a.slug,
+                "name": a.name,
+                "organization": org_slug.get(a.organization_id, ""),
+                "prompt": prompt_slug(a.prompt_id, a.organization_id),
+                "allow_skip": a.allow_skip,
+                "repeat_key": a.repeat_key,
+                "destination": targets.dest(a, "destination"),
+            }
+            for a in announcements
+        ],
+        "conference_rooms": [
+            {
+                "slug": r.slug,
+                "name": r.name,
+                "number": r.number,
+                "organization": org_slug.get(r.organization_id, ""),
+                "user_pin": _conference_pin(r, "user", key),
+                "admin_pin": _conference_pin(r, "admin", key),
+                "max_participants": r.max_participants,
+                "record": r.record,
+                "announce_join_leave": r.announce_join_leave,
+                "music_on_hold_alone": r.music_on_hold_alone,
+                "wait_for_admin": r.wait_for_admin,
+                "hold_music": moh_slug(r.moh_class_id, r.organization_id),
+            }
+            for r in rooms
+        ],
+    }
 
 
 def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
@@ -215,19 +289,34 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         for q in db.scalars(select(CallQueue).order_by(CallQueue.number)).all()
         if q.is_enabled and q.organization_id in active
     ]
+    # Milestone 19 destinations (docs/CALL_FEATURES.md §4): enabled rooms and
+    # announcements of active organizations are deployable targets.
+    announcements = [
+        a
+        for a in db.scalars(select(Announcement).order_by(Announcement.slug)).all()
+        if a.is_enabled and a.organization_id in active
+    ]
+    rooms = [
+        r
+        for r in db.scalars(select(ConferenceRoom).order_by(ConferenceRoom.number)).all()
+        if r.is_enabled and r.organization_id in active
+    ]
     targets = Targets(
         number_of={e.id: e.number for e in extensions},
         box_numbers=set(),
         ivr_slug={},
         ring_group_slug={g.id: g.slug for g in ring_groups},
         queue_slug={q.id: q.slug for q in queues},
+        announcement_slug={a.id: a.slug for a in announcements},
+        conference_slug={r.id: r.slug for r in rooms},
     )
     voicemail = _voicemail_ivr(
-        db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues
+        db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues, rooms
     )
     shared_by_ext: dict[Any, list[str]] = voicemail.pop("_shared_by_extension")
     hold_music, moh_slug = _hold_music(db, active, org_slug)
     groups = _groups(db, extensions, org_slug, targets, ring_groups, queues, moh_slug)
+    callflow = _callflow(db, key, org_slug, targets, announcements, rooms, moh_slug)
     pickup = _pickup_groups(db, active, ext_by_id)
     smtp = load_smtp_settings(db)
     from_address, from_name = sender(smtp, inst.name if inst else "Veyra")
@@ -312,6 +401,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         "sites": sites_out,
         **voicemail,
         **groups,
+        **callflow,
         **_routing(db, key, active, extensions, targets, org_slug),
         "paging": _paging(db, active, org_slug, ext_by_id),
         "recording": _recording(db, active, org_slug, ext_by_id, ring_groups, queues),
@@ -485,7 +575,8 @@ def _contacts(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, int]:
 class Targets:
     """What the deployable destinations of this snapshot may point at: the
     numbers of enabled extensions, the numbers that have an enabled box,
-    the slugs of enabled menus, ring groups and queues."""
+    the slugs of enabled menus, ring groups, queues, announcements and
+    conference rooms."""
 
     def __init__(
         self,
@@ -496,6 +587,8 @@ class Targets:
         ring_group_slug: dict[Any, str],
         queue_slug: dict[Any, str],
         shared_box_number: dict[Any, str] | None = None,
+        announcement_slug: dict[Any, str] | None = None,
+        conference_slug: dict[Any, str] | None = None,
     ) -> None:
         self.number_of = number_of
         self.box_numbers = box_numbers
@@ -504,6 +597,8 @@ class Targets:
         self.ivr_slug = ivr_slug
         self.ring_group_slug = ring_group_slug
         self.queue_slug = queue_slug
+        self.announcement_slug = announcement_slug if announcement_slug is not None else {}
+        self.conference_slug = conference_slug if conference_slug is not None else {}
 
     def dest(self, obj: Any, prefix: str) -> dict[str, Any]:
         """The engine-neutral form of the destination stored in
@@ -515,6 +610,14 @@ class Targets:
         kind = getattr(obj, f"{prefix}_type")
         if kind == "hangup":
             return {"type": "hangup"}
+        if kind == "directory":
+            return {"type": "directory"}
+        if kind == "announcement":
+            slug = self.announcement_slug.get(getattr(obj, f"{prefix}_announcement_id", None))
+            return {"type": "announcement", "announcement": slug} if slug else {"type": "missing"}
+        if kind == "conference":
+            slug = self.conference_slug.get(getattr(obj, f"{prefix}_conference_id", None))
+            return {"type": "conference", "conference": slug} if slug else {"type": "missing"}
         if kind == "ivr":
             slug = self.ivr_slug.get(getattr(obj, f"{prefix}_ivr_id"))
             return {"type": "ivr", "ivr": slug} if slug else {"type": "missing"}
@@ -545,6 +648,7 @@ def _voicemail_ivr(
     targets: Targets,
     ring_groups: list[RingGroup],
     queues: list[CallQueue],
+    rooms: list[ConferenceRoom] | None = None,
 ) -> dict[str, Any]:
     """Voicemail boxes and IVR menus of active organizations
     (docs/VOICEMAIL_IVR.md §3, §5). Fills ``targets`` with the deployable
@@ -593,6 +697,8 @@ def _voicemail_ivr(
         numbers_by_org.setdefault(g.organization_id, []).append(g.number)
     for q in queues:
         numbers_by_org.setdefault(q.organization_id, []).append(q.number)
+    for r in rooms or []:
+        numbers_by_org.setdefault(r.organization_id, []).append(r.number)
 
     def prompt_slug(prompt_id: Any, org_id: Any) -> str | None:
         p = prompts.get(prompt_id) if prompt_id else None

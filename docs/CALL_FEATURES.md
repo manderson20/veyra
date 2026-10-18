@@ -451,6 +451,84 @@ attended, `##` blind transfer). Each gets its section in this document
 when Milestone 19 starts; the data model is sketched here so Milestone 18
 leaves room for it (destinations, feature codes, extension states).
 
+### 4.1 Announcements
+
+Table `announcements` (migration `0042`): `organization_id`, `name`, `slug`
+(context `veyra-ann-<slug>`), `prompt_id`, `allow_skip`, `repeat_key`, the
+shared destination columns (`destination_type` + target ids) and
+`is_enabled`. The context answers, plays the prompt and continues to the
+destination; with `allow_skip` or a `repeat_key` the prompt is a
+`Background()` with a one-second `WaitExten`, so any key skips and the
+repeat key replays; a loop guard (`VEYRA_ANN_DEPTH`, eight hops) stops
+announcements that point at each other. Without a prompt the context
+answers with congestion and the interface flags the announcement.
+
+API `GET/POST /announcements`, `GET/PATCH/DELETE /announcements/{id}`
+(`ivr.read` / `ivr.write`); deleting one that a route, menu, group or
+announcement points at is refused (`409 announcement_in_use`); a prompt
+counts announcements among its uses. Interface: Telephony → Announcements
+(list, create dialog, page with the destination picker).
+
+*Built 2026-10-18.*
+
+### 4.2 Dial-by-name directory
+
+A destination kind without an object: `{type: "directory"}` sends the call
+to `veyra-directory` (one context per engine namespace), which runs
+`Directory(<voicemail context>,<phone context>,eb)`: callers spell the
+first or the last name on the keypad over the organization's voicemail
+boxes (an extension needs a box to be listed), hear the extension number,
+and are connected; `0` and `*` leave with a goodbye. Available wherever a
+destination is chosen.
+
+*Built 2026-10-18.* Custom entries and a configurable operator are not in
+this slice.
+
+### 4.3 Conference rooms
+
+Table `conference_rooms` (migration `0042`): `organization_id`, `name`,
+`slug` (context `veyra-conf-<slug>`), `number` (shares the organization's
+number space with extensions and groups; `409 number_in_use`),
+`user_pin_ciphertext` and `admin_pin_ciphertext` (installation key,
+purposes `conference.pin:<id>:user|admin`; write-only in the API, the
+output carries `has_user_pin` / `has_admin_pin`), `max_participants` (0 =
+no limit, at most 500), `record`, `announce_join_leave`,
+`music_on_hold_alone`, `wait_for_admin`, `moh_class_id`, `is_enabled`.
+
+Generated: `confbridge.conf` (new managed file, stub installed by the
+installer, reload scope `app_confbridge.so`) with a bridge profile, a user
+profile, an administrator profile (`admin=yes`, `marked=yes`) and a key
+menu per room (`*1` mute, `*4`/`*6` listening volume, `*7`/`*9` talking
+volume, `*2` lock, `*3` kick last, `*8` mute all, the last three for
+administrators); the room's context in `extensions.conf` asks for the PIN
+(`conf-getpin`, three attempts) when a PIN is set, matches the administrator
+PIN first, lets `#` alone through when only an administrator PIN exists,
+then `ConfBridge(<room>,<bridge>,<profile>,<menu>)`. The phone context
+dials the room by number and carries `hint,confbridge:<room>` so a line key
+lights while the room is in use. Recordings go to
+`<recordings>/conferences/<org>--<slug>-<timestamp>.wav` (directory created
+by the installer, `2770 veyra:asterisk`); they are not yet listed on the
+Call Recording page.
+
+API `GET/POST /conferences`, `GET/PATCH/DELETE /conferences/{id}`
+(`groups.read` / `groups.write`); deleting a room in use is refused (`409
+conference_in_use`). Interface: Telephony → Conference Rooms.
+
+*Built 2026-10-18.* Known limitation: PINs appear in clear in the
+generated `extensions.conf` (0640 veyra:asterisk), as voicemail PINs do in
+`voicemail.conf`.
+
+### 4.4 Destination kinds
+
+`DestinationType` gains `announcement`, `conference` and `directory`; every
+destination holder (inbound routes, IVR menus and entries, ring groups,
+queues, announcements) carries `<prefix>_announcement_id` and
+`<prefix>_conference_id` (ON DELETE SET NULL). The snapshot renders
+`{type: "announcement", announcement: <slug>}`, `{type: "conference",
+conference: <slug>}` and `{type: "directory"}`; the generator emits
+`Goto(veyra-ann-<slug>,s,1)`, `Goto(veyra-conf-<slug>,s,1)` and
+`Goto(veyra-directory,s,1)` ([VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §6).
+
 ## 5. Permissions and API summary
 
 | Permission | Grants |

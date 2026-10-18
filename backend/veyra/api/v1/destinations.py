@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Call destinations shared by inbound routes, IVR menus, ring groups and
-queues (docs/VOICEMAIL_IVR.md §6, docs/RING_GROUPS_QUEUES.md §5): an
-extension, an extension's voicemail box, an IVR menu, a ring group, a call
-queue, or (where allowed) a hang-up. Validation checks that the target
-exists in the organization and is usable; output carries a label and a
-``missing`` flag so the interface can show a broken target."""
+"""Call destinations shared by inbound routes, IVR menus, ring groups,
+queues and announcements (docs/VOICEMAIL_IVR.md §6, docs/RING_GROUPS_QUEUES.md
+§5, docs/CALL_FEATURES.md §4): an extension, an extension's voicemail box, an
+IVR menu, a ring group, a call queue, an announcement, a conference room, the
+dial-by-name directory, or (where allowed) a hang-up. Validation checks that
+the target exists in the organization and is usable; output carries a label
+and a ``missing`` flag so the interface can show a broken target."""
 
 from __future__ import annotations
 
@@ -16,10 +17,27 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from veyra.core.errors import ProblemError
-from veyra.core.models import CallQueue, Extension, IvrMenu, RingGroup, VoicemailBox
+from veyra.core.models import (
+    Announcement,
+    CallQueue,
+    ConferenceRoom,
+    Extension,
+    IvrMenu,
+    RingGroup,
+    VoicemailBox,
+)
 
 DestinationType = Literal[
-    "extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", "hangup"
+    "extension",
+    "voicemail",
+    "voicemail_box",
+    "ivr",
+    "ring_group",
+    "queue",
+    "announcement",
+    "conference",
+    "directory",
+    "hangup",
 ]
 # The column suffix that holds each kind's target.
 TARGET_FIELDS: dict[str, str] = {
@@ -29,9 +47,24 @@ TARGET_FIELDS: dict[str, str] = {
     "ivr": "ivr_id",
     "ring_group": "ring_group_id",
     "queue": "queue_id",
+    "announcement": "announcement_id",
+    "conference": "conference_id",
 }
-# A reference as stored: (type, extension_id, ivr_id, ring_group_id, queue_id, voicemail_box_id).
-Ref = tuple[str | None, Any, Any, Any, Any, Any]
+# Kinds that need no target row: the dial-by-name directory of the
+# organization, and hanging up.
+TARGETLESS = frozenset({"directory", "hangup"})
+ID_FIELDS = (
+    "extension_id",
+    "ivr_id",
+    "ring_group_id",
+    "queue_id",
+    "voicemail_box_id",
+    "announcement_id",
+    "conference_id",
+)
+# A reference as stored: (type, extension_id, ivr_id, ring_group_id, queue_id,
+# voicemail_box_id, announcement_id, conference_id).
+Ref = tuple[str | None, Any, Any, Any, Any, Any, Any, Any]
 
 
 def validation(field: str, message: str) -> ProblemError:
@@ -51,11 +84,13 @@ class DestinationIn(BaseModel):
     ring_group_id: uuid.UUID | None = None
     queue_id: uuid.UUID | None = None
     voicemail_box_id: uuid.UUID | None = None
+    announcement_id: uuid.UUID | None = None
+    conference_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> DestinationIn:
         keep = TARGET_FIELDS.get(self.type)
-        for field in ("extension_id", "ivr_id", "ring_group_id", "queue_id", "voicemail_box_id"):
+        for field in ID_FIELDS:
             if field != keep:
                 setattr(self, field, None)
         return self
@@ -68,6 +103,8 @@ class DestinationIn(BaseModel):
             self.ring_group_id,
             self.queue_id,
             self.voicemail_box_id,
+            self.announcement_id,
+            self.conference_id,
         )
 
 
@@ -78,9 +115,12 @@ class DestinationOut(BaseModel):
     ring_group_id: uuid.UUID | None = None
     queue_id: uuid.UUID | None = None
     voicemail_box_id: uuid.UUID | None = None
+    announcement_id: uuid.UUID | None = None
+    conference_id: uuid.UUID | None = None
     # Human form: "2214 — Front Office", "Voicemail of 2214 (Front Office)",
     # "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)",
-    # "Hang up"; None when the target is gone.
+    # "Announcement: Closed today", "Conference: Board room (2500)",
+    # "Dial-by-name directory", "Hang up"; None when the target is gone.
     label: str | None
     missing: bool
 
@@ -94,21 +134,27 @@ def ref_of(obj: Any, prefix: str) -> Ref:
         getattr(obj, f"{prefix}_ring_group_id", None),
         getattr(obj, f"{prefix}_queue_id", None),
         getattr(obj, f"{prefix}_voicemail_box_id", None),
+        getattr(obj, f"{prefix}_announcement_id", None),
+        getattr(obj, f"{prefix}_conference_id", None),
     )
 
 
 def apply(obj: Any, prefix: str, d: DestinationIn) -> None:
     """Store a destination into ``<prefix>_type`` + target columns."""
     setattr(obj, f"{prefix}_type", d.type)
-    setattr(obj, f"{prefix}_extension_id", d.extension_id)
-    setattr(obj, f"{prefix}_ivr_id", d.ivr_id)
-    setattr(obj, f"{prefix}_ring_group_id", d.ring_group_id)
-    setattr(obj, f"{prefix}_queue_id", d.queue_id)
-    setattr(obj, f"{prefix}_voicemail_box_id", d.voicemail_box_id)
+    for field in ID_FIELDS:
+        setattr(obj, f"{prefix}_{field}", getattr(d, field))
+
+
+def has_target(ref: Ref) -> bool:
+    """Whether the stored reference is complete: a target id for kinds that
+    need one, any value for the targetless kinds."""
+    kind = ref[0] or "extension"
+    return kind in TARGETLESS or any(t is not None for t in ref[1:])
 
 
 def as_input(ref: Ref) -> dict[str, Any]:
-    kind, ext, ivr, rg, q, box = ref
+    kind, ext, ivr, rg, q, box, ann, conf = ref
     return {
         "type": kind or "extension",
         "extension_id": ext,
@@ -116,6 +162,8 @@ def as_input(ref: Ref) -> dict[str, Any]:
         "ring_group_id": rg,
         "queue_id": q,
         "voicemail_box_id": box,
+        "announcement_id": ann,
+        "conference_id": conf,
     }
 
 
@@ -129,12 +177,35 @@ def check_destination(
     exclude_ivr: uuid.UUID | None = None,
     exclude_ring_group: uuid.UUID | None = None,
     exclude_queue: uuid.UUID | None = None,
+    exclude_announcement: uuid.UUID | None = None,
 ) -> None:
     """422 when the target is absent, in another organization, unusable, or
     the object itself (``exclude_*``)."""
     if dest.type == "hangup":
         if not allow_hangup:
             raise validation(field, "choose where the call goes")
+        return
+    if dest.type == "directory":
+        return  # the organization's own directory; nothing to point at
+    if dest.type == "announcement":
+        if dest.announcement_id is None:
+            raise validation(field, "choose the announcement")
+        if exclude_announcement is not None and dest.announcement_id == exclude_announcement:
+            raise validation(field, "an announcement cannot continue to itself")
+        ann = db.get(Announcement, dest.announcement_id)
+        if ann is None or ann.organization_id != organization_id:
+            raise validation(field, "announcement not found in this organization")
+        if not ann.is_enabled:
+            raise validation(field, f"the announcement {ann.name} is disabled")
+        return
+    if dest.type == "conference":
+        if dest.conference_id is None:
+            raise validation(field, "choose the conference room")
+        room = db.get(ConferenceRoom, dest.conference_id)
+        if room is None or room.organization_id != organization_id:
+            raise validation(field, "conference room not found in this organization")
+        if not room.is_enabled:
+            raise validation(field, f"the conference room {room.name} is disabled")
         return
     if dest.type == "ivr":
         if dest.ivr_id is None:
@@ -202,20 +273,32 @@ class Resolver:
         self.ring_groups: dict[uuid.UUID, RingGroup] = {}
         self.queues: dict[uuid.UUID, CallQueue] = {}
         self.shared: dict[uuid.UUID, VoicemailBox] = {}
+        self.announcements: dict[uuid.UUID, Announcement] = {}
+        self.conferences: dict[uuid.UUID, ConferenceRoom] = {}
         self._loaded: set[uuid.UUID] = set()
 
     def load(self, refs: list[Ref]) -> None:
         full = refs
-        ext_ids = {e for t, e, _, _, _, _ in full if e and t in ("extension", "voicemail")}
-        ivr_ids = {i for t, _, i, _, _, _ in full if i and t == "ivr"}
-        rg_ids = {g for t, _, _, g, _, _ in full if g and t == "ring_group"}
-        q_ids = {q for t, _, _, _, q, _ in full if q and t == "queue"}
-        box_ids = {b for t, _, _, _, _, b in full if b and t == "voicemail_box"}
+        ext_ids = {r[1] for r in full if r[1] and r[0] in ("extension", "voicemail")}
+        ivr_ids = {r[2] for r in full if r[2] and r[0] == "ivr"}
+        rg_ids = {r[3] for r in full if r[3] and r[0] == "ring_group"}
+        q_ids = {r[4] for r in full if r[4] and r[0] == "queue"}
+        box_ids = {r[5] for r in full if r[5] and r[0] == "voicemail_box"}
+        ann_ids = {r[6] for r in full if r[6] and r[0] == "announcement"}
+        conf_ids = {r[7] for r in full if r[7] and r[0] == "conference"}
         ext_ids -= self._loaded
         ivr_ids -= self._loaded
         rg_ids -= self._loaded
         q_ids -= self._loaded
         box_ids -= self._loaded
+        ann_ids -= self._loaded
+        conf_ids -= self._loaded
+        if ann_ids:
+            for a in self.db.scalars(select(Announcement).where(Announcement.id.in_(ann_ids))):
+                self.announcements[a.id] = a
+        if conf_ids:
+            for c in self.db.scalars(select(ConferenceRoom).where(ConferenceRoom.id.in_(conf_ids))):
+                self.conferences[c.id] = c
         if box_ids:
             for b in self.db.scalars(select(VoicemailBox).where(VoicemailBox.id.in_(box_ids))):
                 self.shared[b.id] = b
@@ -236,7 +319,7 @@ class Resolver:
         if q_ids:
             for q in self.db.scalars(select(CallQueue).where(CallQueue.id.in_(q_ids))):
                 self.queues[q.id] = q
-        self._loaded |= ext_ids | ivr_ids | rg_ids | q_ids | box_ids
+        self._loaded |= ext_ids | ivr_ids | rg_ids | q_ids | box_ids | ann_ids | conf_ids
 
     def out(
         self,
@@ -246,8 +329,49 @@ class Resolver:
         ring_group_id: Any = None,
         queue_id: Any = None,
         voicemail_box_id: Any = None,
+        announcement_id: Any = None,
+        conference_id: Any = None,
     ) -> DestinationOut:
         kind = kind or "extension"
+        if kind == "directory":
+            return DestinationOut(
+                type="directory",
+                extension_id=None,
+                ivr_id=None,
+                label="Dial-by-name directory",
+                missing=False,
+            )
+        if kind == "announcement":
+            ann = self.announcements.get(announcement_id) if announcement_id else None
+            ok = ann is not None and ann.is_enabled
+            return DestinationOut(
+                type="announcement",
+                extension_id=None,
+                ivr_id=None,
+                announcement_id=announcement_id,
+                label=(
+                    f"Announcement: {ann.name}" + ("" if ann.is_enabled else " (disabled)")
+                    if ann
+                    else None
+                ),
+                missing=not ok,
+            )
+        if kind == "conference":
+            room = self.conferences.get(conference_id) if conference_id else None
+            ok = room is not None and room.is_enabled
+            return DestinationOut(
+                type="conference",
+                extension_id=None,
+                ivr_id=None,
+                conference_id=conference_id,
+                label=(
+                    f"Conference: {room.name} ({room.number})"
+                    + ("" if room.is_enabled else " (disabled)")
+                    if room
+                    else None
+                ),
+                missing=not ok,
+            )
         if kind == "voicemail_box":
             shared = self.shared.get(voicemail_box_id) if voicemail_box_id else None
             ok = shared is not None and shared.is_enabled
@@ -347,7 +471,14 @@ class Resolver:
 
 # Every place a destination is stored: (model, column prefix, label builder).
 def _holders() -> list[tuple[Any, str, str]]:
-    from veyra.core.models import CallQueue, InboundRoute, IvrEntry, IvrMenu, RingGroup
+    from veyra.core.models import (
+        Announcement,
+        CallQueue,
+        InboundRoute,
+        IvrEntry,
+        IvrMenu,
+        RingGroup,
+    )
 
     return [
         (InboundRoute, "destination", "inbound route"),
@@ -357,6 +488,7 @@ def _holders() -> list[tuple[Any, str, str]]:
         (IvrEntry, "destination", "menu"),
         (RingGroup, "failover", "ring group"),
         (CallQueue, "failover", "queue"),
+        (Announcement, "destination", "announcement"),
     ]
 
 

@@ -987,7 +987,7 @@ export interface TrunkInput {
   register_expiry?: number;
 }
 
-export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "hangup";
+export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "directory" | "hangup";
 
 /** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6, RING_GROUPS_QUEUES.md §5). */
 export interface Destination {
@@ -997,6 +997,8 @@ export interface Destination {
   ring_group_id?: string | null;
   queue_id?: string | null;
   voicemail_box_id?: string | null;
+  announcement_id?: string | null;
+  conference_id?: string | null;
   /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Shared inbox: Attendance (2900)", "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)", "Hang up"; null when the target is gone. */
   label: string | null;
   missing: boolean;
@@ -1009,9 +1011,11 @@ export interface DestinationInput {
   ring_group_id?: string | null;
   queue_id?: string | null;
   voicemail_box_id?: string | null;
+  announcement_id?: string | null;
+  conference_id?: string | null;
 }
 
-export type RouteDestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue";
+export type RouteDestinationType = Exclude<DestinationType, "hangup">;
 
 export interface InboundRoute {
   id: string;
@@ -1029,6 +1033,8 @@ export interface InboundRoute {
   destination_ring_group_id: string | null;
   destination_queue_id: string | null;
   destination_voicemail_box_id: string | null;
+  destination_announcement_id?: string | null;
+  destination_conference_id?: string | null;
   destination_number: string | null;
   destination_name: string | null;
   destination: Destination;
@@ -1041,6 +1047,8 @@ export interface InboundRoute {
   after_hours_ring_group_id: string | null;
   after_hours_queue_id: string | null;
   after_hours_voicemail_box_id: string | null;
+  after_hours_announcement_id?: string | null;
+  after_hours_conference_id?: string | null;
   after_hours_number: string | null;
   after_hours_name: string | null;
   after_hours: Destination | null;
@@ -1060,12 +1068,18 @@ export interface InboundRouteInput {
   destination_ivr_id?: string | null;
   destination_ring_group_id?: string | null;
   destination_queue_id?: string | null;
+  destination_voicemail_box_id?: string | null;
+  destination_announcement_id?: string | null;
+  destination_conference_id?: string | null;
   time_condition_id?: string | null;
   after_hours_type?: RouteDestinationType;
   after_hours_extension_id?: string | null;
   after_hours_ivr_id?: string | null;
   after_hours_ring_group_id?: string | null;
   after_hours_queue_id?: string | null;
+  after_hours_voicemail_box_id?: string | null;
+  after_hours_announcement_id?: string | null;
+  after_hours_conference_id?: string | null;
   caller_id_prefix?: string | null;
   is_enabled?: boolean;
 }
@@ -1305,6 +1319,82 @@ export interface IvrMenuInput {
   timeout_destination?: DestinationInput;
   invalid_destination?: DestinationInput;
   entries?: IvrEntryInput[];
+  is_enabled?: boolean;
+}
+
+// ---------------------------------------------------------------- call flow (docs/CALL_FEATURES.md §4)
+
+/** Plays a prompt, then continues to a destination (§4.1). */
+export interface Announcement {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  context: string;
+  description: string | null;
+  prompt_id: string | null;
+  prompt_name: string | null;
+  allow_skip: boolean;
+  repeat_key: string | null;
+  destination: Destination;
+  is_enabled: boolean;
+  problems: string[];
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnnouncementInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  prompt_id?: string | null;
+  allow_skip?: boolean;
+  repeat_key?: string | null;
+  destination?: DestinationInput;
+  is_enabled?: boolean;
+}
+
+/** A meet-me room (§4.3); PINs are write-only. */
+export interface ConferenceRoom {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  number: string;
+  context: string;
+  description: string | null;
+  has_user_pin: boolean;
+  has_admin_pin: boolean;
+  max_participants: number;
+  record: boolean;
+  announce_join_leave: boolean;
+  music_on_hold_alone: boolean;
+  wait_for_admin: boolean;
+  moh_class_id: string | null;
+  moh_class_name: string | null;
+  is_enabled: boolean;
+  problems: string[];
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConferenceRoomInput {
+  organization_id?: string;
+  name?: string;
+  number?: string;
+  description?: string | null;
+  user_pin?: string | null;
+  admin_pin?: string | null;
+  max_participants?: number;
+  record?: boolean;
+  announce_join_leave?: boolean;
+  music_on_hold_alone?: boolean;
+  wait_for_admin?: boolean;
+  moh_class_id?: string | null;
   is_enabled?: boolean;
 }
 

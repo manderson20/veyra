@@ -25,7 +25,7 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import IvrMenu, MohClass, MohClassTrack, Organization, Prompt
+from veyra.core.models import Announcement, IvrMenu, MohClass, MohClassTrack, Organization, Prompt
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import audio, routing
@@ -158,7 +158,12 @@ def _uses(db: Session, ids: set[uuid.UUID]) -> dict[Any, int]:
     counts: dict[Any, int] = {}
     if not ids:
         return counts
-    for col in (IvrMenu.prompt_id, IvrMenu.invalid_prompt_id, MohClassTrack.prompt_id):
+    for col in (
+        IvrMenu.prompt_id,
+        IvrMenu.invalid_prompt_id,
+        MohClassTrack.prompt_id,
+        Announcement.prompt_id,
+    ):
         for pid, n in db.execute(select(col, func.count()).where(col.in_(ids)).group_by(col)):
             counts[pid] = counts.get(pid, 0) + n
     return counts

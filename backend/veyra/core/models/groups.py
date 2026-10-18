@@ -31,6 +31,12 @@ class _Failover:
     failover_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ivr_menus.id", ondelete="SET NULL")
     )
+    failover_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    failover_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
 
 
 class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):

@@ -39,6 +39,7 @@ FILE_QUEUES = "queues.conf"
 FILE_NOTIFY = "pjsip_notify.conf"
 FILE_PAGING = "paging.json"
 FILE_MOH = "musiconhold.conf"
+FILE_CONFBRIDGE = "confbridge.conf"
 MANAGED_FILES = [
     FILE_TRANSPORTS,
     FILE_ENDPOINTS,
@@ -50,6 +51,7 @@ MANAGED_FILES = [
     FILE_NOTIFY,
     FILE_PAGING,
     FILE_MOH,
+    FILE_CONFBRIDGE,
 ]
 
 # Module reload per file. Order matters: transports before endpoints is the
@@ -64,6 +66,7 @@ RELOAD_SCOPES: dict[str, str] = {
     FILE_QUEUES: "app_queue.so",
     FILE_NOTIFY: "res_pjsip_notify.so",
     FILE_MOH: "res_musiconhold.so",
+    FILE_CONFBRIDGE: "app_confbridge.so",
 }
 SCOPE_ORDER = [
     "res_rtp_asterisk.so",
@@ -73,6 +76,7 @@ SCOPE_ORDER = [
     "app_queue.so",
     "res_pjsip_notify.so",
     "res_musiconhold.so",
+    "app_confbridge.so",
 ]
 
 CONTEXT_INTERNAL = "veyra-internal"
@@ -100,6 +104,11 @@ CONTEXT_IVR_PREFIX = "veyra-ivr-"
 CONTEXT_RING_GROUP_PREFIX = "veyra-rg-"
 CONTEXT_QUEUE_PREFIX = "veyra-queue-"
 QUEUE_NAME_PREFIX = "veyra-"
+# Milestone 19 (docs/CALL_FEATURES.md §4): announcements, conference rooms and
+# the dial-by-name directory, one context each (names.py).
+CONFERENCE_PIN_TRIES = 3
+CONFERENCE_MAX_MEMBERS = 500
+DEFAULT_CONFERENCES_SUBDIR = "conferences"
 MAX_GROUP_DEPTH = 6
 RING_GROUP_STRATEGIES = ("ringall", "sequential")
 QUEUE_STRATEGIES = ("ringall", "rrmemory", "leastrecent", "fewestcalls", "random", "linear")
@@ -400,7 +409,8 @@ def _generate(
     prompts = _path(prompts_dir, "prompts directory")
     ring_groups = list(snapshot.get("ring_groups") or [])
     queues = list(snapshot.get("queues") or [])
-    _check_group_numbers(extensions, ring_groups, queues)
+    rooms = list(snapshot.get("conference_rooms") or [])
+    _check_group_numbers(extensions, ring_groups, queues, rooms)
     moh = _check_moh(list(snapshot.get("hold_music") or []))
     org_moh = {
         str(o["slug"]): _moh_class(
@@ -435,6 +445,7 @@ def _generate(
         _notify_conf(),
         _paging_json(snapshot.get("paging") or {}),
         _moh_conf(moh, _path(moh_dir, "hold music directory")),
+        _confbridge(rooms, moh, _path(recordings_dir, "recordings directory")),
     ]
 
 
@@ -1010,6 +1021,8 @@ def _dialplan(
     menus = list(snapshot.get("ivr_menus") or [])
     ring_groups = list(snapshot.get("ring_groups") or [])
     queues = list(snapshot.get("queues") or [])
+    announcements = list(snapshot.get("announcements") or [])
+    rooms = list(snapshot.get("conference_rooms") or [])
     boxes = boxes if boxes is not None else {}
     conditions = {str(c["key"]): c for c in (snapshot.get("time_conditions") or [])}
     trunk_slugs = [_check_section(str(t["slug"]), "trunk slug") for t in trunks]
@@ -1063,6 +1076,7 @@ def _dialplan(
                 codes.get("cf_on"),
                 codes.get("fmfm_toggle"),
                 _cos_for(snapshot, ns),
+                mine(rooms, ns),
             )
     lines += _follow_me_contexts(spaces)
     if "intercom" in codes:
@@ -1105,6 +1119,9 @@ def _dialplan(
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _ivr_contexts(mine(menus, ns), prompts_dir)
+            lines += _announcement_contexts(mine(announcements, ns), prompts_dir)
+            lines += _conference_contexts(mine(rooms, ns))
+            lines += _directory_context()
     moh = _check_moh(list(snapshot.get("hold_music") or []))
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -1722,6 +1739,7 @@ def _internal(
     cf_code: str | None = None,
     fm_code: str | None = None,
     cos: Cos | None = None,
+    conferences: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
@@ -1855,6 +1873,16 @@ def _internal(
         lines += [
             f"exten => {number},1,NoOp(Veyra queue {name})",
             f" same => n,Goto({n.queue_context(slug)},s,1)",
+        ]
+    for room in conferences or []:
+        slug = _slug(room["slug"], "conference room slug")
+        number = str(room["number"])
+        name = _check_value(str(room.get("name") or slug), "conference room name")
+        # The lamp of a key with the room's number is lit while anyone is in it.
+        lines += [
+            f"exten => {number},hint,confbridge:{n.conference(slug)}",
+            f"exten => {number},1,NoOp(Veyra conference {name})",
+            f" same => n,Goto({n.conference(slug)},s,1)",
         ]
     lines.append("")
     return lines
@@ -2189,6 +2217,16 @@ def _goto(dest: Any) -> list[str]:
         slug = _slug(dest.get("queue"), "queue slug")
         ctx = engine_names.current().queue_context(slug)
         return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
+    if kind == "announcement":
+        slug = _slug(dest.get("announcement"), "announcement slug")
+        ctx = engine_names.current().announcement(slug)
+        return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
+    if kind == "conference":
+        slug = _slug(dest.get("conference"), "conference room slug")
+        ctx = engine_names.current().conference(slug)
+        return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
+    if kind == "directory":
+        return [f" same => n,Goto({engine_names.current().directory},s,1)", " same => n,Hangup()"]
     if kind in ("extension", "voicemail"):
         number = str(dest.get("number") or "")
         if not _NUMBER_RE.match(number):
@@ -2286,19 +2324,242 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
     return lines
 
 
+def _announcement_contexts(announcements: list[dict[str, Any]], prompts_dir: str) -> list[str]:
+    """One ``veyra-ann-<slug>`` per enabled announcement (docs/CALL_FEATURES.md
+    §4.1): play the prompt, optionally skippable or repeatable by a key, then
+    continue to the destination."""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for a in announcements:
+        slug = _slug(a["slug"], "announcement slug")
+        if slug in seen:
+            raise GenerationError(f"duplicate announcement slug {slug!r}")
+        seen.add(slug)
+        name = _check_value(str(a.get("name") or slug), "announcement name")
+        org = _slug(a.get("organization") or "", f"organization of announcement {slug}")
+        ctx = engine_names.current().announcement(slug)
+        prompt = a.get("prompt")
+        lines += [f"[{ctx}]", f"; {name} ({org})"]
+        if not prompt:
+            lines += [
+                f"exten => s,1,NoOp(Veyra announcement {name}: no prompt, not deployable)",
+                " same => n,Congestion(5)",
+                " same => n,Hangup()",
+                "",
+            ]
+            continue
+        path = f"{prompts_dir}/{org}/{_slug(prompt, 'prompt slug')}"
+        repeat = a.get("repeat_key")
+        if repeat is not None and str(repeat) not in routing.IVR_DIGITS:
+            raise GenerationError(f"announcement {slug}: repeat key {repeat!r} is not valid")
+        skip = bool(a.get("allow_skip"))
+        lines += [
+            f"exten => s,1,NoOp(Veyra announcement {name})",
+            " same => n,Set(__VEYRA_ANN_DEPTH=$[0${VEYRA_ANN_DEPTH} + 1])",
+            f" same => n,GotoIf($[${{VEYRA_ANN_DEPTH}} > {routing.MAX_IVR_DEPTH}]?toodeep)",
+            " same => n,Answer()",
+        ]
+        if skip or repeat is not None:
+            # Keys are accepted while the prompt plays: the repeat key replays
+            # it, any other key (when skipping is allowed) ends it early.
+            lines += [
+                f" same => n(play),Background({path})",
+                " same => n,WaitExten(1)",
+                " same => n,Goto(next)",
+            ]
+        else:
+            lines.append(f" same => n(play),Playback({path})")
+        lines += [
+            f" same => n(next),NoOp(Veyra announcement {name}: continuing)",
+            *_goto(a.get("destination")),
+            " same => n(toodeep),NoOp(Veyra: announcements point at each other in a loop)",
+            " same => n,Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
+        if repeat is not None:
+            lines.append(f"exten => {repeat},1,Goto(s,play)")
+        if skip:
+            lines.append("exten => _[0-9*#],1,Goto(s,next)")
+        if skip or repeat is not None:
+            lines += ["exten => t,1,Goto(s,next)", "exten => i,1,Goto(s,next)"]
+        lines.append("")
+    return lines
+
+
+def _directory_context() -> list[str]:
+    """``veyra-directory``: dial by name over the organization's voicemail
+    boxes (docs/CALL_FEATURES.md §4.2); 0 or * leave with a goodbye."""
+    n = engine_names.current()
+    return [
+        f"[{n.directory}]",
+        "exten => s,1,NoOp(Veyra dial-by-name directory)",
+        " same => n,Answer()",
+        f" same => n,Directory({n.voicemail},{n.internal},eb)",
+        " same => n,Playback(vm-goodbye)",
+        " same => n,Hangup()",
+        "exten => o,1,Playback(vm-goodbye)",
+        " same => n,Hangup()",
+        "exten => a,1,Playback(vm-goodbye)",
+        " same => n,Hangup()",
+        "",
+    ]
+
+
+def _conference_profiles(slug: str) -> tuple[str, str, str, str, str]:
+    """Room name, bridge, user, admin and menu profile names of a room."""
+    stem = engine_names.current().conference(slug)
+    return stem, f"{stem}-bridge", f"{stem}-user", f"{stem}-admin", f"{stem}-menu"
+
+
+def _conference_contexts(rooms: list[dict[str, Any]]) -> list[str]:
+    """One ``veyra-conf-<slug>`` per enabled room (docs/CALL_FEATURES.md §4.3):
+    the PIN check (user and administrator PINs, three attempts), then
+    ``ConfBridge`` with the room's profiles from ``confbridge.conf``."""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for r in rooms:
+        slug = _slug(r["slug"], "conference room slug")
+        if slug in seen:
+            raise GenerationError(f"duplicate conference room slug {slug!r}")
+        seen.add(slug)
+        name = _check_value(str(r.get("name") or slug), "conference room name")
+        org = _slug(r.get("organization") or "", f"organization of conference room {slug}")
+        room, bridge, user, admin, menu = _conference_profiles(slug)
+        user_pin = str(r.get("user_pin") or "")
+        admin_pin = str(r.get("admin_pin") or "")
+        for which, pin in (("user", user_pin), ("admin", admin_pin)):
+            if pin and not _PIN_RE.match(pin):
+                raise GenerationError(
+                    f"conference room {slug}: the {which} PIN must be 4 to 10 digits"
+                )
+        if user_pin and admin_pin and user_pin == admin_pin:
+            raise GenerationError(f"conference room {slug}: the user and admin PINs are the same")
+        lines += [
+            f"[{engine_names.current().conference(slug)}]",
+            f"exten => s,1,NoOp(Veyra conference {name} ({org}))",
+            " same => n,Answer()",
+            f" same => n,Set(VEYRA_CONF_PROFILE={user})",
+        ]
+        if user_pin or admin_pin:
+            lines += [
+                " same => n,Set(VEYRA_CONF_TRIES=0)",
+                " same => n(pin),Read(VEYRA_PIN,conf-getpin,10,,1,10)",
+            ]
+            if admin_pin:
+                lines.append(f' same => n,GotoIf($["${{VEYRA_PIN}}"="{admin_pin}"]?admin)')
+            if user_pin:
+                lines.append(f' same => n,GotoIf($["${{VEYRA_PIN}}"="{user_pin}"]?join)')
+            else:
+                # Only an administrator PIN: everyone else joins with # alone.
+                lines.append(' same => n,GotoIf($["${VEYRA_PIN}"=""]?join)')
+            lines += [
+                " same => n,Set(VEYRA_CONF_TRIES=$[${VEYRA_CONF_TRIES} + 1])",
+                f" same => n,GotoIf($[${{VEYRA_CONF_TRIES}} >= {CONFERENCE_PIN_TRIES}]?bye)",
+                " same => n,Playback(conf-invalidpin)",
+                " same => n,Goto(pin)",
+            ]
+            if admin_pin:
+                lines.append(f" same => n(admin),Set(VEYRA_CONF_PROFILE={admin})")
+        lines += [
+            f" same => n(join),ConfBridge({room},{bridge},${{VEYRA_CONF_PROFILE}},{menu})",
+            " same => n,Hangup()",
+            " same => n(bye),Playback(vm-goodbye)",
+            " same => n,Hangup()",
+            "",
+        ]
+    return lines
+
+
+def _confbridge(
+    rooms: list[dict[str, Any]], moh: MohSets | None, recordings_dir: str
+) -> GeneratedFile:
+    """``confbridge.conf`` (docs/CALL_FEATURES.md §4.3): a bridge, a user and
+    an administrator profile and the key menu of every enabled room; reloaded
+    with ``app_confbridge.so``. Recordings land in ``<recordings>/conferences``."""
+    lines = [HEADER, "[general]", ""]
+    seen: set[str] = set()
+    for r in rooms:
+        slug = _slug(r["slug"], "conference room slug")
+        org = _slug(r.get("organization") or "", f"organization of conference room {slug}")
+        n = engine_names.for_org(org)
+        with engine_names.using(n):
+            room, bridge, user, admin, menu = _conference_profiles(slug)
+        if room in seen:
+            raise GenerationError(f"duplicate conference room slug {slug!r}")
+        seen.add(room)
+        name = _check_value(str(r.get("name") or slug), "conference room name")
+        limit = int(r.get("max_participants") or 0)
+        if not 0 <= limit <= CONFERENCE_MAX_MEMBERS:
+            raise GenerationError(
+                f"conference room {slug}: participant limit {limit} is out of range"
+            )
+        join_leave = "yes" if r.get("announce_join_leave", True) else "no"
+        alone = "yes" if r.get("music_on_hold_alone", True) else "no"
+        wait = "yes" if r.get("wait_for_admin") else "no"
+        music = _moh_class(r.get("hold_music"), moh or {}, f"conference room {slug}", org)
+        lines += [
+            f"[{bridge}]",
+            f"; {name} ({org})",
+            "type=bridge",
+            f"max_members={limit}" if limit else "; max_members: no limit",
+            "record_conference=" + ("yes" if r.get("record") else "no"),
+        ]
+        if r.get("record"):
+            lines += [
+                # ConfBridge appends the timestamp and ".wav" itself.
+                f"record_file={recordings_dir}/{DEFAULT_CONFERENCES_SUBDIR}/{org}--{slug}",
+                "record_file_timestamp=yes",
+            ]
+        lines += [
+            "language=en",
+            f"[{user}]",
+            "type=user",
+            f"announce_join_leave={join_leave}",
+            f"music_on_hold_when_empty={alone}",
+            f"music_on_hold_class={music}",
+            f"wait_marked={wait}",
+            "dsp_drop_silence=yes",
+            f"[{admin}]",
+            "type=user",
+            "admin=yes",
+            "marked=yes",
+            f"announce_join_leave={join_leave}",
+            f"music_on_hold_when_empty={alone}",
+            f"music_on_hold_class={music}",
+            "dsp_drop_silence=yes",
+            f"[{menu}]",
+            "type=menu",
+            "*1=toggle_mute",
+            "*4=decrease_listening_volume",
+            "*6=increase_listening_volume",
+            "*7=decrease_talking_volume",
+            "*9=increase_talking_volume",
+            "*2=admin_toggle_conference_lock",
+            "*3=admin_kick_last",
+            "*8=admin_toggle_mute_participants",
+            "",
+        ]
+    return GeneratedFile(FILE_CONFBRIDGE, "\n".join(lines).rstrip("\n") + "\n")
+
+
 def _check_group_numbers(
     extensions: list[dict[str, Any]],
     ring_groups: list[dict[str, Any]],
     queues: list[dict[str, Any]],
+    conferences: list[dict[str, Any]] | None = None,
 ) -> None:
-    """Ring group and queue numbers share the extension number space of their
-    engine namespace (docs/MULTI_TENANCY.md §3)."""
+    """Ring group, queue and conference room numbers share the extension number
+    space of their engine namespace (docs/MULTI_TENANCY.md §3)."""
 
     def key(item: dict[str, Any], number: str) -> tuple[str, str]:
         return (engine_names.for_org(str(item.get("organization") or "")).ns, number)
 
     taken = {key(e, str(e["number"])): "extension" for e in extensions}
-    for what, items in (("ring group", ring_groups), ("queue", queues)):
+    for what, items in (
+        ("ring group", ring_groups),
+        ("queue", queues),
+        ("conference room", conferences or []),
+    ):
         for item in items:
             number = str(item.get("number") or "")
             if not _NUMBER_RE.match(number):

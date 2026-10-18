@@ -150,12 +150,13 @@ def save_numbering_plan(db: Session, plan: NumberingPlan, updated_by: Any = None
 
 def used_numbers(db: Session, organization_id: Any = None) -> set[str]:
     """Every number taken by an extension, a ring group, a queue, a paging zone,
-    a page or a shared inbox of the organization (numbers are per
+    a page, a shared inbox or a conference room of the organization (numbers are per
     organization: docs/MULTI_TENANCY.md §3); all organizations when None."""
     from sqlalchemy import select
 
     from veyra.core.models import (
         CallQueue,
+        ConferenceRoom,
         Extension,
         Page,
         PagingZone,
@@ -171,6 +172,7 @@ def used_numbers(db: Session, organization_id: Any = None) -> set[str]:
         PagingZone.number,
         Page.number,
         VoicemailBox.number,
+        ConferenceRoom.number,
     ):
         stmt = select(column)
         if organization_id is not None:
@@ -187,7 +189,8 @@ def number_owner(
     exclude: tuple[str, Any] | None = None,
 ) -> str | None:
     """What already uses ``number``: ``"extension"``, ``"ring group"``,
-    ``"queue"``, ``"paging zone"`` or ``"page"``; None when it is free. Takes
+    ``"queue"``, ``"paging zone"``, ``"page"``, ``"shared inbox"`` or
+    ``"conference room"``; None when it is free. Takes
     the advisory lock that serialises concurrent creations of the same number
     across the tables.
     ``exclude`` is ``(kind, id)`` of the object being edited."""
@@ -195,6 +198,7 @@ def number_owner(
 
     from veyra.core.models import (
         CallQueue,
+        ConferenceRoom,
         Extension,
         Page,
         PagingZone,
@@ -213,6 +217,7 @@ def number_owner(
         ("paging zone", PagingZone),
         ("page", Page),
         ("shared inbox", VoicemailBox),
+        ("conference room", ConferenceRoom),
     ):
         stmt = select(model.id).where(
             model.number == number, model.organization_id == organization_id

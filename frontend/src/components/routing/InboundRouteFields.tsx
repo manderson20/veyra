@@ -41,6 +41,8 @@ export function inboundRouteDraft(r: InboundRoute): InboundRouteDraft {
       ring_group_id: r.destination_ring_group_id ?? "",
       queue_id: r.destination_queue_id ?? "",
       voicemail_box_id: r.destination_voicemail_box_id ?? "",
+      announcement_id: r.destination_announcement_id ?? "",
+      conference_id: r.destination_conference_id ?? "",
     },
     time_condition_id: r.time_condition_id ?? "",
     after_hours: r.time_condition_id
@@ -51,6 +53,8 @@ export function inboundRouteDraft(r: InboundRoute): InboundRouteDraft {
         ring_group_id: r.after_hours_ring_group_id ?? "",
         queue_id: r.after_hours_queue_id ?? "",
         voicemail_box_id: r.after_hours_voicemail_box_id ?? "",
+        announcement_id: r.after_hours_announcement_id ?? "",
+        conference_id: r.after_hours_conference_id ?? "",
       }
       : destinationDraft(null),
     caller_id_prefix: r.caller_id_prefix ?? "",
@@ -70,12 +74,18 @@ export function inboundRouteBody(d: InboundRouteDraft): InboundRouteInput {
     destination_ivr_id: dest.ivr_id ?? null,
     destination_ring_group_id: dest.ring_group_id ?? null,
     destination_queue_id: dest.queue_id ?? null,
+    destination_voicemail_box_id: dest.voicemail_box_id ?? null,
+    destination_announcement_id: dest.announcement_id ?? null,
+    destination_conference_id: dest.conference_id ?? null,
     time_condition_id: d.time_condition_id || null,
     after_hours_type: (after?.type ?? "extension") as RouteDestinationType,
     after_hours_extension_id: after?.extension_id ?? null,
     after_hours_ivr_id: after?.ivr_id ?? null,
     after_hours_ring_group_id: after?.ring_group_id ?? null,
     after_hours_queue_id: after?.queue_id ?? null,
+    after_hours_voicemail_box_id: after?.voicemail_box_id ?? null,
+    after_hours_announcement_id: after?.announcement_id ?? null,
+    after_hours_conference_id: after?.conference_id ?? null,
     caller_id_prefix: d.caller_id_prefix.trim() || null,
     is_enabled: d.is_enabled,
   };
@@ -109,8 +119,10 @@ export function InboundRouteFields({ draft, onChange, errors, organizationId, cu
     value && !opts.some((o) => o.value === value) ? [...opts, { value, label: label ?? "Unknown" }] : opts;
   const conditionOptions = withCurrent(tcOptions, draft.time_condition_id, current?.time_condition_name ?? null);
   const canPickTrunk = !trunks.error;
-  const destError = errors.destination_extension_id ?? errors.destination_ivr_id ?? errors.destination_ring_group_id ?? errors.destination_queue_id;
-  const afterError = errors.after_hours_extension_id ?? errors.after_hours_ivr_id;
+  const destError = errors.destination_extension_id ?? errors.destination_ivr_id ?? errors.destination_ring_group_id ?? errors.destination_queue_id
+    ?? errors.destination_voicemail_box_id ?? errors.destination_announcement_id ?? errors.destination_conference_id;
+  const afterError = errors.after_hours_extension_id ?? errors.after_hours_ivr_id ?? errors.after_hours_ring_group_id ?? errors.after_hours_queue_id
+    ?? errors.after_hours_voicemail_box_id ?? errors.after_hours_announcement_id ?? errors.after_hours_conference_id;
   return (
     <>
       <div className="form-grid">

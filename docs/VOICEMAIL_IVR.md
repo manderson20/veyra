@@ -282,6 +282,9 @@ voicemail_box_id, label, missing}` (`api/v1/destinations.py`). Rendering:
 | voicemail_box | the same with the shared inbox's number; requires an enabled inbox |
 | ivr | `Goto(veyra-ivr-<slug>,s,1)`; requires an enabled menu |
 | hangup | `Playback(vm-goodbye)`, `Hangup()` |
+| announcement | `Goto(veyra-ann-<slug>,s,1)`; requires an enabled announcement (Milestone 19, [CALL_FEATURES.md](CALL_FEATURES.md) §4.1) |
+| conference | `Goto(veyra-conf-<slug>,s,1)`; requires an enabled conference room (§4.3) |
+| directory | `Goto(veyra-directory,s,1)`: the organization's dial-by-name directory (§4.2) |
 | missing | `Congestion(5)`, `Hangup()` |
 
 The API validates that the target exists in the same organization and is

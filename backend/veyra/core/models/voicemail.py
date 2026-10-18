@@ -128,6 +128,12 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     timeout_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
     )
+    timeout_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    timeout_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
     invalid_type: Mapped[str] = mapped_column(String(16), default="hangup")
     invalid_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
@@ -143,6 +149,12 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     invalid_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    invalid_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    invalid_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -171,6 +183,12 @@ class IvrEntry(Base):
     )
     destination_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
     )
 
 

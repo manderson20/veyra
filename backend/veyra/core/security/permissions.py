@@ -148,22 +148,22 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
     ),
     PermissionDef(
         "ivr.read",
-        "View IVR menus and prompts",
+        "View IVR menus, announcements and prompts",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),
     ),
     PermissionDef(
         "ivr.write",
-        "Create and edit IVR menus and prompts",
+        "Create and edit IVR menus, announcements and prompts",
         default_roles=("org_admin", "site_admin"),
     ),
     PermissionDef(
         "groups.read",
-        "View ring groups, call queues and pickup groups",
+        "View ring groups, call queues, pickup groups and conference rooms",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),
     ),
     PermissionDef(
         "groups.write",
-        "Create and edit ring groups, call queues and pickup groups",
+        "Create and edit ring groups, call queues, pickup groups and conference rooms",
         default_roles=("org_admin", "site_admin"),
     ),
     PermissionDef(
