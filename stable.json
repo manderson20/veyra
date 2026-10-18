@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "sequence": 1,
+  "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.24.1",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Migration naming fix and the Telephony sidebar icon. See https://github.com/manderson20/veyra/releases/tag/v0.24.1",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "b08e177cbb",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.24.1/veyra-0.24.1.tar.gz",
+        "sha256": "c6fc48aca0e4b11b6c22daad709e6ed55d7c2d15e6e802c0cb5f0c0d4b88943f",
+        "size": 7839141
+      }
+    }
+  ],
+  "generated_at": "2026-10-18T14:35:37+00:00",
+  "expires_at": "2027-01-16T14:35:37+00:00"
+}
