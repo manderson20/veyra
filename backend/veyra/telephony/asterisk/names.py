@@ -42,6 +42,25 @@ class Names:
     def features(self) -> str:
         return self._p("features")
 
+    def voicemail_exit(self, number: str) -> str:
+        """Where 0 and * go during a box's greeting (docs/CALL_FEATURES.md §3.7)."""
+        return self._p(f"vmx-{number}")
+
+    @property
+    def intercom(self) -> str:
+        """Intercom targets of the namespace (docs/CALL_FEATURES.md §3.6)."""
+        return self._p("intercom")
+
+    @property
+    def follow_me_confirm(self) -> str:
+        """The press-1 routine of follow-me legs (docs/CALL_FEATURES.md §3.4)."""
+        return self._p("fm-confirm")
+
+    @property
+    def intercom_headers(self) -> str:
+        """Adds the auto-answer headers on an intercom leg (docs/CALL_FEATURES.md §3.6)."""
+        return self._p("intercom-hdr")
+
     @property
     def follow_me_out(self) -> str:
         """Outside legs of find me / follow me (docs/CALL_FEATURES.md §3.4)."""

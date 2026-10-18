@@ -44,6 +44,9 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # organization's DIDs or an allowed number; the route may force its own.
     outbound_caller_id_number: Mapped[str | None] = mapped_column(String(32))
     outbound_caller_id_name: Mapped[str | None] = mapped_column(String(80))
+    # Intercom (docs/CALL_FEATURES.md §3.6): may other phones make this one
+    # answer on speaker? default | allow | deny; default = the organization's.
+    intercom: Mapped[str] = mapped_column(String(8), default="default", server_default="default")
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6): the building
     # and the floor/room text the on-site notification carries.
     building_id: Mapped[uuid.UUID | None] = mapped_column(

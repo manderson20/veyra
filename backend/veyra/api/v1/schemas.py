@@ -70,6 +70,8 @@ class OrganizationPatch(BaseModel):
     # Numbers extensions may present as outbound caller ID besides the
     # organization's DIDs (docs/CALL_FEATURES.md §3.5); needs routing.write.
     caller_id_allow_list: list[str] | None = Field(None, max_length=100)
+    # Intercom default for the organization's phones (docs/CALL_FEATURES.md §3.6).
+    intercom_default: str | None = Field(None, pattern=r"^(allow|deny)$")
 
     @field_validator("timezone")
     @classmethod
@@ -102,6 +104,7 @@ class OrganizationOut(ORM):
     moh_class_id: uuid.UUID | None = None
     bootstrap_includes_credential: bool = False
     caller_id_allow_list: list[str] = []
+    intercom_default: str = "allow"
     # Prefix of the organization's engine names; empty: today's names
     # (docs/MULTI_TENANCY.md §2).
     engine_namespace: str = ""

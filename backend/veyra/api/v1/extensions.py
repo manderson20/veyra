@@ -125,6 +125,8 @@ class ExtensionIn(BaseModel):
     # Presented on trunk calls (docs/CALL_FEATURES.md §3.5).
     outbound_caller_id_number: str | None = Field(None, max_length=32)
     outbound_caller_id_name: str | None = Field(None, max_length=80)
+    # Intercom (docs/CALL_FEATURES.md §3.6): default (the organization's), allow, deny.
+    intercom: str = Field("default", pattern=r"^(default|allow|deny)$")
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
@@ -163,6 +165,7 @@ class ExtensionPatch(BaseModel):
     emergency_caller_id_number: str | None = Field(None, max_length=32)
     outbound_caller_id_number: str | None = Field(None, max_length=32)
     outbound_caller_id_name: str | None = Field(None, max_length=80)
+    intercom: str | None = Field(None, pattern=r"^(default|allow|deny)$")
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
@@ -290,6 +293,8 @@ class ExtensionOut(BaseModel):
     # Presented on trunk calls (docs/CALL_FEATURES.md §3.5).
     outbound_caller_id_number: str | None = None
     outbound_caller_id_name: str | None = None
+    # Intercom (docs/CALL_FEATURES.md §3.6): default | allow | deny.
+    intercom: str = "default"
     building_id: uuid.UUID | None = None
     location: str | None = None
     is_enabled: bool
@@ -444,6 +449,7 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 emergency_caller_id_number=r.emergency_caller_id_number,
                 outbound_caller_id_number=r.outbound_caller_id_number,
                 outbound_caller_id_name=r.outbound_caller_id_name,
+                intercom=r.intercom,
                 building_id=r.building_id,
                 location=r.location,
                 is_enabled=r.is_enabled,
@@ -673,6 +679,7 @@ def create_extension(
         emergency_caller_id_number=body.emergency_caller_id_number,
         outbound_caller_id_number=body.outbound_caller_id_number,
         outbound_caller_id_name=body.outbound_caller_id_name,
+        intercom=body.intercom,
         building_id=body.building_id,
         location=body.location,
         is_enabled=body.is_enabled,
@@ -756,6 +763,7 @@ def update_extension(
         "emergency_caller_id_number",
         "outbound_caller_id_number",
         "outbound_caller_id_name",
+        "intercom",
         "building_id",
         "location",
         "is_enabled",

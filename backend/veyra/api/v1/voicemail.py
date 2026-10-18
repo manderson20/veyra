@@ -83,6 +83,23 @@ def _email_value(v: str | None) -> str | None:
 # ----------------------------------------------------------------- schemas
 
 
+def _operator(db: Session, organization_id: uuid.UUID, value: str | None) -> str | None:
+    """The operator extension of a box: a number of the same organization, or none."""
+    number = (value or "").strip()
+    if not number:
+        return None
+    if (
+        db.scalar(
+            select(Extension.id).where(
+                Extension.organization_id == organization_id, Extension.number == number
+            )
+        )
+        is None
+    ):
+        raise _validation("operator_extension", f"extension {number} is not in this organization")
+    return number
+
+
 class VoicemailBoxIn(BaseModel):
     # An extension's box, or (no extension) a shared inbox with its own
     # number and name (docs/PAGING_RECORDINGS.md §5).
@@ -98,6 +115,8 @@ class VoicemailBoxIn(BaseModel):
     attach_audio: bool = True
     delete_after_email: bool = False
     ring_seconds: int = Field(RING_DEFAULT, ge=RING_MIN, le=RING_MAX)
+    # Pressing 0 during the greeting reaches this extension (docs/CALL_FEATURES.md §3.7).
+    operator_extension: str | None = Field(None, max_length=32)
     is_enabled: bool = True
 
     @field_validator("pin")
@@ -120,6 +139,7 @@ class VoicemailBoxPatch(BaseModel):
     attach_audio: bool | None = None
     delete_after_email: bool | None = None
     ring_seconds: int | None = Field(None, ge=RING_MIN, le=RING_MAX)
+    operator_extension: str | None = Field(None, max_length=32)
     is_enabled: bool | None = None
 
     @field_validator("pin")
@@ -151,6 +171,7 @@ class VoicemailBoxOut(BaseModel):
     attach_audio: bool
     delete_after_email: bool
     ring_seconds: int
+    operator_extension: str | None = None
     is_enabled: bool
     # Email delivery (Settings → Email delivery) is on; without it messages
     # stay in the box and are never deleted after an email.
@@ -261,6 +282,7 @@ def _outs(db: Session, rows: list[VoicemailBox]) -> list[VoicemailBoxOut]:
                 attach_audio=r.attach_audio,
                 delete_after_email=r.delete_after_email,
                 ring_seconds=r.ring_seconds,
+                operator_extension=r.operator_extension,
                 is_enabled=r.is_enabled,
                 email_delivery_enabled=delivery,
                 in_use_by=shared_uses.get(r.id, 0) if shared else uses.get(r.extension_id, 0),
@@ -386,6 +408,7 @@ def create_box(
             attach_audio=body.attach_audio,
             delete_after_email=body.delete_after_email,
             ring_seconds=body.ring_seconds,
+            operator_extension=_operator(db, org.id, body.operator_extension),
             is_enabled=body.is_enabled,
         )
         set_pin(box, pin, key)
@@ -439,6 +462,7 @@ def create_box(
         attach_audio=body.attach_audio,
         delete_after_email=body.delete_after_email,
         ring_seconds=body.ring_seconds,
+        operator_extension=_operator(db, ext.organization_id, body.operator_extension),
         is_enabled=body.is_enabled,
     )
     set_pin(box, pin, key)
@@ -515,6 +539,11 @@ def update_box(
         if value is not None and value != getattr(box, field):
             setattr(box, field, value)
             details[field] = value
+    if "operator_extension" in changes:
+        operator = _operator(db, box.organization_id, changes["operator_extension"])
+        if operator != box.operator_extension:
+            box.operator_extension = operator
+            details["operator_extension"] = operator
     if box.delete_after_email and not box.email:
         raise _validation("delete_after_email", "needs an email address to deliver to")
     if not details:

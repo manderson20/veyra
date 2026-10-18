@@ -55,6 +55,7 @@ function ExtensionView() {
   const [emergencyCid, setEmergencyCid] = useState("");
   const [outCidNumber, setOutCidNumber] = useState("");
   const [outCidName, setOutCidName] = useState("");
+  const [intercom, setIntercom] = useState("default");
   const [enabled, setEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -73,6 +74,7 @@ function ExtensionView() {
       setEmergencyCid(x.emergency_caller_id_number ?? "");
       setOutCidNumber(x.outbound_caller_id_number ?? "");
       setOutCidName(x.outbound_caller_id_name ?? "");
+      setIntercom(x.intercom ?? "default");
       setEnabled(x.is_enabled);
     }
   });
@@ -81,7 +83,7 @@ function ExtensionView() {
   if (ext.error) return <ErrorState title="Could not load extension" error={ext.error} onRetry={ext.reload} />;
   if (!ext.data) return <LoadingState />;
   const x = ext.data;
-  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || enabled !== x.is_enabled;
+  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || enabled !== x.is_enabled;
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === x.organization_id && (u.is_active || u.id === x.user_id));
 
   const save = async (e: FormEvent) => {
@@ -99,6 +101,7 @@ function ExtensionView() {
         emergency_caller_id_number: emergencyCid.trim() || null,
         outbound_caller_id_number: outCidNumber.trim() || null,
         outbound_caller_id_name: outCidName.trim() || null,
+        intercom,
         is_enabled: enabled,
       }));
       setChanged((n) => n + 1);
@@ -170,6 +173,8 @@ function ExtensionView() {
             <TextField label="Emergency caller ID number" inputMode="tel" disabled={!editable} value={emergencyCid} error={errors.fields.emergency_caller_id_number}
               help="Presented on emergency calls (911) instead of the regular caller ID: the building's registered number. Otherwise the emergency route's number is used."
               onChange={(e) => setEmergencyCid(e.target.value)} />
+            <SelectField label="Intercom" value={intercom} disabled={!editable} options={[{ value: "default", label: "Organization default" }, { value: "allow", label: "Allow: other phones can intercom this one" }, { value: "deny", label: "Deny" }]} onChange={(e) => setIntercom(e.target.value)}
+              help="Intercom (the intercom feature code followed by this extension) makes the phone answer on speaker. Needs a deployment." />
             <Switch label="Enabled" description="Disabled extensions are left out of the engine configuration at the next deployment." checked={enabled} disabled={!editable} onChange={(e) => setEnabled(e.target.checked)} />
             {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
             {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save changes</Button></div> : null}

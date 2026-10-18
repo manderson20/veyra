@@ -24,13 +24,14 @@ interface Draft {
   attach_audio: boolean;
   delete_after_email: boolean;
   ring_seconds: string;
+  operator_extension: string;
   is_enabled: boolean;
 }
 
-const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, ring_seconds: "20", is_enabled: true };
+const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, ring_seconds: "20", operator_extension: "", is_enabled: true };
 
 function fromBox(b: VoicemailBox): Draft {
-  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, ring_seconds: String(b.ring_seconds), is_enabled: b.is_enabled };
+  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", is_enabled: b.is_enabled };
 }
 
 /** How a box is named in titles and toasts: its extension, or a shared inbox's name. */
@@ -105,6 +106,7 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
       attach_audio: draft.attach_audio,
       delete_after_email: draft.delete_after_email,
       ring_seconds: ring,
+      operator_extension: draft.operator_extension.trim() || null,
       is_enabled: draft.is_enabled,
     };
     if (shared) {
@@ -223,6 +225,8 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
               placeholder={editing ? "Leave empty to keep the current PIN" : "Leave empty for a random PIN"} help="4 to 10 digits." onChange={(e) => setDraft({ ...draft, pin: e.target.value.replace(/\D/g, "") })} />
             <TextField label="Ring time (seconds)" type="number" min={5} max={120} required value={draft.ring_seconds} error={errors.fields.ring_seconds}
               help={shared ? "Kept for consistency; a shared inbox answers at once." : "How long the phone rings before voicemail answers."} onChange={(e) => setDraft({ ...draft, ring_seconds: e.target.value })} />
+            <TextField label="Operator extension (press 0)" inputMode="numeric" value={draft.operator_extension} error={errors.fields.operator_extension}
+              help="A caller who presses 0 while the greeting plays rings this extension; * opens the box. Empty: 0 does nothing." onChange={(e) => setDraft({ ...draft, operator_extension: e.target.value })} />
           </div>
           {!editing && !shared ? (
             <Checkbox label="Use the extension user's email address" description="Unassigned extensions get no email unless one is entered below." checked={draft.defaultEmail}

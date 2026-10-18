@@ -537,3 +537,163 @@ def test_follow_me_api_and_toggle(admin, app):
         from veyra.core.models import FollowMe
 
         assert db.query(FollowMe).count() == 0
+
+
+# ------------------------------------------------------------------ intercom (§3.6)
+
+
+def test_generator_renders_intercom():
+    snap = _snapshot(feature_codes={"intercom": "*80"})
+    snap["extensions"][0]["intercom"] = "allow"
+    snap["extensions"].append(
+        {
+            "endpoint_name": "example-1002",
+            "number": "1002",
+            "display_name": "Quiet",
+            "organization": "example",
+            "secret": "s",
+            "intercom": "deny",
+        }
+    )
+    d = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    feat = _section(d, "veyra-features")
+    assert "exten => _*80.,1,NoOp(Veyra intercom from ${VEYRA_EXT} to ${EXTEN:3})" in feat
+    assert "Goto(veyra-intercom,${EXTEN:3},1)" in feat
+    ic = _section(d, "veyra-intercom")
+    assert "exten => 1001,1,NoOp(Veyra intercom to 1001)" in ic
+    assert 'GotoIf($["${DB(veyra/ext/example/1001/dnd)}"="1"]?dnd)' in ic
+    assert "Dial(PJSIP/example-1001,20,b(veyra-intercom-hdr^s^1))" in ic
+    assert "exten => 1002,1,NoOp(Veyra: intercom to 1002 is not allowed)" in ic
+    assert "Dial(PJSIP/example-1002" not in ic
+    assert "exten => _X.,1,Answer()" in ic and "Playback(pbx-invalid)" in ic
+    hdr = _section(d, "veyra-intercom-hdr")
+    assert "Set(PJSIP_HEADER(add,Alert-Info)=<http://www.notuse.com>;info=alert-autoanswer)" in hdr
+    assert "Set(PJSIP_HEADER(add,Call-Info)=<sip:veyra>;answer-after=0)" in hdr
+    # Without the code there is no intercom context at all.
+    d = {f.path: f.content for f in generator.generate(_snapshot(feature_codes={}))}[
+        "extensions.conf"
+    ]
+    assert "[veyra-intercom]" not in d and "veyra-intercom-hdr" not in d
+
+
+def test_intercom_setting_api_and_snapshot(admin, app):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    ext = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1001", "display_name": "A"},
+    ).json()
+    assert ext["intercom"] == "default"
+    r = admin.patch(f"/api/v1/extensions/{ext['id']}", json={"intercom": "maybe"})
+    assert r.status_code == 422
+    deny = admin.post(
+        "/api/v1/extensions",
+        json={
+            "organization_id": org["id"],
+            "number": "1002",
+            "display_name": "B",
+            "intercom": "deny",
+        },
+    ).json()
+    assert deny["intercom"] == "deny"
+    from veyra.core.security.crypto import load_installation_key
+    from veyra.telephony.snapshot import build_snapshot
+
+    with session_scope() as db:
+        by = {
+            e["number"]: e["intercom"]
+            for e in build_snapshot(db, load_installation_key(app.state.settings))["extensions"]
+        }
+    assert by == {"1001": "allow", "1002": "deny"}  # the organization's default is allow
+    r = admin.patch(f"/api/v1/organizations/{org['id']}", json={"intercom_default": "deny"})
+    assert r.status_code == 200 and r.json()["intercom_default"] == "deny"
+    with session_scope() as db:
+        assert (configmgmt.pending_change(db) or {}).get("what", "").startswith("intercom default")
+        by = {
+            e["number"]: e["intercom"]
+            for e in build_snapshot(db, load_installation_key(app.state.settings))["extensions"]
+        }
+    assert by == {"1001": "deny", "1002": "deny"}
+    assert (
+        admin.patch(
+            f"/api/v1/organizations/{org['id']}", json={"intercom_default": "x"}
+        ).status_code
+        == 422
+    )
+
+
+# ------------------------------------------------------------------ voicemail (§3.7)
+
+
+def test_generator_direct_voicemail_and_operator():
+    from veyra.telephony.asterisk.generator import generate
+
+    snap = _snapshot(feature_codes={"vm_direct": "*", "cf_on": "*72"})
+    snap["extensions"].append(
+        {
+            "endpoint_name": "example-1002",
+            "number": "1002",
+            "display_name": "Back",
+            "organization": "example",
+            "secret": "s",
+        }
+    )
+    box = {
+        "number": "1001",
+        "name": "Front",
+        "organization": "example",
+        "timezone": "UTC",
+        "pin": "1234",
+        "email": None,
+        "attach_audio": True,
+        "delete_after_email": False,
+        "ring_seconds": 20,
+        "operator_extension": "1002",
+    }
+    snap["voicemail_boxes"] = [box, {**box, "number": "1002", "operator_extension": None}]
+    files = {f.path: f.content for f in generate(snap)}
+    d = files["extensions.conf"]
+    feat = _section(d, "veyra-features")
+    assert "exten => *1001,1,NoOp(Veyra direct to voicemail 1001)" in feat
+    assert "VoiceMail(1001@veyra,s)" in feat and "exten => *1002,1," in feat
+    vmx = _section(d, "veyra-vmx-1001")
+    assert "exten => o,1,NoOp(Veyra: voicemail 1001 operator)" in vmx
+    assert "Goto(veyra-internal,1002,1)" in vmx and "exten => a,1,VoiceMailMain(1001@veyra)" in vmx
+    assert "[veyra-vmx-1002]" not in d
+    vm = files["voicemail.conf"]
+    assert (
+        "1001 => 1234,Front,,,attach=yes|delete=no|tz=example|saycid=yes|envelope=yes"
+        "|operator=yes|exitcontext=veyra-vmx-1001" in vm
+    )
+    assert "1002 => 1234,Front,,,attach=yes|delete=no|tz=example|saycid=yes|envelope=yes\n" in vm
+    # The code off: no direct entries; a bad operator is refused.
+    d = {f.path: f.content for f in generate({**snap, "feature_codes": {}})}["extensions.conf"]
+    assert "direct to voicemail" not in d
+    snap["voicemail_boxes"][0]["operator_extension"] = "1a"
+    with pytest.raises(generator.GenerationError, match="operator"):
+        generate(snap)
+
+
+def test_voicemail_operator_api(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    a = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1001", "display_name": "A"},
+    ).json()
+    admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1002", "display_name": "B"},
+    )
+    r = admin.post(
+        "/api/v1/voicemail", json={"extension_id": a["id"], "operator_extension": "1999"}
+    )
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "operator_extension"
+    r = admin.post(
+        "/api/v1/voicemail", json={"extension_id": a["id"], "operator_extension": " 1002 "}
+    )
+    assert r.status_code == 201, r.text
+    box = r.json()
+    assert box["operator_extension"] == "1002"
+    r = admin.patch(f"/api/v1/voicemail/{box['id']}", json={"operator_extension": ""})
+    assert r.status_code == 200 and r.json()["operator_extension"] is None
+    codes = {c["key"]: c for c in admin.get("/api/v1/telephony/feature-codes").json()["codes"]}
+    assert codes["vm_direct"]["code"] == "*" and codes["vm_direct"]["takes_number"] is True

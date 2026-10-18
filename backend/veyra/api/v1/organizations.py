@@ -131,6 +131,8 @@ def update_organization(
         setattr(org, k, v)
     if "moh_class_id" in changes:
         configmgmt.mark_changed(db, by=principal.label, what=f"hold music of {org.slug}")
+    if "intercom_default" in changes:
+        configmgmt.mark_changed(db, by=principal.label, what=f"intercom default of {org.slug}")
     audit.record(
         db,
         action="organization.update",
