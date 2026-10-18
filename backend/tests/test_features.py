@@ -356,3 +356,184 @@ def test_forward_api_and_phone_event(admin, app):
         assert extension_state.handle_userevent(db, {**base, "Value": "x"}) is None
     st = admin.get(url).json()
     assert st["cf_busy"] == "1003" and st["cf_no_answer"] is None and st["updated_by"] == "phone"
+
+
+# ------------------------------------------------------------------ find me / follow me (§3.4)
+
+
+def test_generator_renders_follow_me():
+    snap = _snapshot(feature_codes={"fmfm_toggle": "*21"})
+    snap["extensions"].append(
+        {
+            "endpoint_name": "example-1002",
+            "number": "1002",
+            "display_name": "Back",
+            "organization": "example",
+            "secret": "s",
+        }
+    )
+    snap["extensions"][0]["outbound_caller_id_number"] = "5735550123"
+    snap["extensions"][0]["follow_me"] = {
+        "strategy": "ringall",
+        "initial_ring_seconds": 10,
+        "confirm_calls": True,
+        "caller_id_mode": "extension",
+        "members": [
+            {"type": "extension", "target": "1002", "endpoint": "example-1002", "ring_seconds": 20},
+            {"type": "extension", "target": "1009", "endpoint": None, "ring_seconds": 20},
+            {"type": "external", "target": "5735550100", "ring_seconds": 30},
+        ],
+        "no_answer_destination": "1002",
+    }
+    files = {f.path: f.content for f in generator.generate(snap)}
+    d = files["extensions.conf"]
+    feat = _section(d, "veyra-features")
+    assert "exten => *21,1,NoOp(Veyra follow me toggle for ${VEYRA_EXT})" in feat
+    assert "Set(DB(veyra/ext/${VEYRA_ORG}/${VEYRA_EXT}/fmfm)=1)" in feat
+    assert "DEVICE_STATE(Custom:veyra-fm-${VEYRA_ORG}-${VEYRA_EXT})=INUSE" in feat
+    assert "Field: fmfm,Value: 1" in feat and "Playback(followme/status&activated)" in feat
+    internal = _section(d, "veyra-internal")
+    assert "exten => *211001,hint,Custom:veyra-fm-example-1001" in internal
+    assert "exten => *211002,hint" not in internal  # no follow-me configured
+    assert 'GotoIf($["${DB(veyra/ext/example/1001/fmfm)}"="1"]?fm)' in internal
+    assert (
+        internal.index("cf_always")
+        < internal.index('"1"]?fm)')
+        < internal.index("Dial(PJSIP/example-1001,30)")
+    )
+    assert "n(fm),NoOp(Veyra: 1001 follow me, ringall)" in internal
+    assert "Dial(PJSIP/example-1001,10)" in internal  # desk first
+    assert "Set(__VEYRA_FM_OPTS=U(veyra-fm-confirm^s))" in internal
+    assert "Set(__VEYRA_OUT_CID=5735550123)" in internal
+    assert "Dial(PJSIP/example-1002&Local/5735550100@veyra-fm-out/n,30)" in internal
+    assert "example-1009" not in internal
+    assert 'GotoIf($["${DIALSTATUS}"="ANSWER"]?fmdone)' in internal
+    assert "Goto(veyra-internal,1002,1)" in internal and "n(fmdone),Hangup()" in internal
+    assert "n(noanswer),Set(VEYRA_CF=" in internal
+    out = _section(d, "veyra-fm-out")
+    assert "Dial(Local/${EXTEN}@veyra-internal/n,60,${VEYRA_FM_OPTS})" in out
+    assert "Set(__VEYRA_HOPS=0)" in out
+    confirm = _section(d, "veyra-fm-confirm")
+    assert "Read(VEYRA_OK,followme/options,1,,1,6)" in confirm
+    assert "Set(GOSUB_RESULT=CONTINUE)" in confirm and "n(ok),Return()" in confirm
+    # Sequential, caller's number, no destination: one Dial per leg and the own no-answer path.
+    fm = snap["extensions"][0]["follow_me"]
+    fm.update(
+        strategy="sequential",
+        caller_id_mode="caller",
+        no_answer_destination=None,
+        initial_ring_seconds=0,
+        confirm_calls=False,
+    )
+    internal = _section(
+        {f.path: f.content for f in generator.generate(snap)}["extensions.conf"], "veyra-internal"
+    )
+    assert (
+        "Dial(PJSIP/example-1002,20)" in internal
+        and "Dial(Local/5735550100@veyra-fm-out/n,30)" in internal
+    )
+    assert (
+        "Set(__VEYRA_OUT_CID=${CALLERID(num)})" in internal and "Set(__VEYRA_FM_OPTS=)" in internal
+    )
+    assert "Goto(noanswer)" in internal and "Dial(PJSIP/example-1001,10)" not in internal
+    # No usable members: no branch, no hint; bad values are refused.
+    fm["members"] = [{"type": "extension", "target": "1009", "endpoint": None, "ring_seconds": 20}]
+    internal = _section(
+        {f.path: f.content for f in generator.generate(snap)}["extensions.conf"], "veyra-internal"
+    )
+    assert "?fm)" not in internal and "*211001" not in internal
+    fm["members"] = [{"type": "external", "target": "55 1", "ring_seconds": 20}]
+    with pytest.raises(generator.GenerationError, match="follow-me number"):
+        generator.generate(snap)
+    fm["members"] = [{"type": "external", "target": "5735550100", "ring_seconds": 2}]
+    with pytest.raises(generator.GenerationError, match="ring time"):
+        generator.generate(snap)
+
+
+def test_follow_me_api_and_toggle(admin, app):
+    adapter = FakeAdapter()
+    app.state.telephony = adapter
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    a = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1001", "display_name": "A"},
+    ).json()
+    admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1002", "display_name": "B"},
+    )
+    url = f"/api/v1/extensions/{a['id']}/follow-me"
+    assert admin.get(url).json() == {
+        "enabled": False,
+        "strategy": "ringall",
+        "initial_ring_seconds": 0,
+        "confirm_calls": False,
+        "caller_id_mode": "caller",
+        "members": [],
+        "no_answer_destination": None,
+        "updated_at": None,
+        "updated_by": None,
+    }
+    body = {
+        "strategy": "sequential",
+        "initial_ring_seconds": 10,
+        "confirm_calls": True,
+        "caller_id_mode": "extension",
+        "members": [
+            {"type": "extension", "target": "1002", "ring_seconds": 15},
+            {"type": "external", "target": "573-555-0100", "ring_seconds": 30},
+        ],
+        "no_answer_destination": "1002",
+    }
+    r = admin.put(url, json=body)
+    assert r.status_code == 200, r.text
+    assert r.json()["members"][1]["target"] == "5735550100" and r.json()["enabled"] is False
+    for bad, field in (
+        ({"members": [{"type": "extension", "target": "1001"}]}, "members.1"),
+        ({"members": [{"type": "extension", "target": "1999"}]}, "members.1"),
+        ({"members": [{"type": "external", "target": "x"}]}, "members.1"),
+        (
+            {
+                "members": [
+                    {"type": "external", "target": "55"},
+                    {"type": "external", "target": "55"},
+                ]
+            },
+            "members.2",
+        ),
+        ({"no_answer_destination": "1001"}, "no_answer_destination"),
+        ({"no_answer_destination": "1999"}, "no_answer_destination"),
+    ):
+        r = admin.put(url, json={**body, **bad})
+        assert r.status_code == 422 and r.json()["errors"][0]["field"] == field, r.text
+    with session_scope() as db:
+        assert (configmgmt.pending_change(db) or {}).get(
+            "what"
+        ) == "extension.follow_me_update 1001"
+        from veyra.core.security.crypto import load_installation_key
+        from veyra.telephony.snapshot import build_snapshot
+
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    fm = next(e for e in snap["extensions"] if e["number"] == "1001")["follow_me"]
+    assert (
+        fm["members"][0]["endpoint"] == "example-1002"
+        and fm["members"][1]["target"] == "5735550100"
+    )
+    assert fm["strategy"] == "sequential" and fm["no_answer_destination"] == "1002"
+    # On and off through the state, at once.
+    r = admin.put(f"/api/v1/extensions/{a['id']}/state", json={"fmfm_enabled": True})
+    assert r.status_code == 200 and r.json()["fmfm_enabled"] is True
+    assert adapter.state_calls[-1] == (org["slug"], "1001", "fmfm", "1")
+    assert admin.get(url).json()["enabled"] is True
+    with session_scope() as db:
+        row = extension_state.handle_userevent(
+            db, {"Org": org["slug"], "Extension": "1001", "Field": "fmfm", "Value": "0"}
+        )
+        assert row is not None and row.fmfm_enabled is False
+    assert admin.get(url).json()["enabled"] is False
+    # Removing the extension removes the follow-me.
+    assert admin.delete(f"/api/v1/extensions/{a['id']}").status_code == 204
+    with session_scope() as db:
+        from veyra.core.models import FollowMe
+
+        assert db.query(FollowMe).count() == 0

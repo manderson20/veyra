@@ -1041,7 +1041,9 @@ def _dialplan(
                 prompts_dir,
                 codes.get("dnd_toggle"),
                 codes.get("cf_on"),
+                codes.get("fmfm_toggle"),
             )
+    lines += _follow_me_contexts(spaces)
     lines += [
         f"[{CONTEXT_INVALID}]",
         "exten => _[0-9*#+].,1,NoOp(Veyra: no such extension ${EXTEN})",
@@ -1198,6 +1200,140 @@ def _dnd_codes(codes: dict[str, str]) -> list[str]:
     return lines
 
 
+FM_DEVICE = "Custom:veyra-fm-${VEYRA_ORG}-${VEYRA_EXT}"
+FM_CONFIRM_CONTEXT = "veyra-fm-confirm"
+FM_STRATEGIES = ("ringall", "sequential")
+FM_CALLER_ID_MODES = ("caller", "extension")
+
+
+def _follow_me_codes(codes: dict[str, str]) -> list[str]:
+    """``*21`` toggles find me / follow me (docs/CALL_FEATURES.md §3.4)."""
+    code = codes.get("fmfm_toggle")
+    if not code:
+        return []
+
+    def switch(on: bool) -> list[str]:
+        value = "1" if on else "0"
+        return [
+            f" same => n,Set(DB({STATE_KEY}/fmfm)={value})",
+            f" same => n,Set(DEVICE_STATE({FM_DEVICE})={'INUSE' if on else 'NOT_INUSE'})",
+            _state_event("fmfm", value),
+            f" same => n,Playback(followme/status&{'activated' if on else 'de-activated'})",
+            " same => n,Hangup()",
+        ]
+
+    return [
+        f"exten => {code},1,NoOp(Veyra follow me toggle for ${{VEYRA_EXT}})",
+        *_STATE_GUARD,
+        f' same => n,GotoIf($["${{DB({STATE_KEY}/fmfm)}}"="1"]?off)',
+        *switch(True),
+        " same => n(off),NoOp()",
+        *switch(False),
+        *_STATE_TAIL,
+    ]
+
+
+def _follow_me_contexts(spaces: list[str]) -> list[str]:
+    """The outside leg of a follow-me (one per namespace, so the number leaves
+    through that organization's routes) and the shared confirmation routine:
+    the answering party presses 1, or the leg is dropped and the others keep
+    ringing (``GOSUB_RESULT=CONTINUE``)."""
+    lines: list[str] = []
+    for ns in spaces:
+        n = Names(ns)
+        lines += [
+            f"[{n.follow_me_out}]",
+            "; Follow-me legs to outside numbers; VEYRA_FM_OPTS carries the confirmation.",
+            "exten => _[+0-9].,1,NoOp(Veyra follow-me leg to ${EXTEN})",
+            " same => n,Set(__VEYRA_HOPS=0)",
+            f" same => n,Dial(Local/${{EXTEN}}@{n.internal}/n,{OUTBOUND_DIAL_TIMEOUT},"
+            "${VEYRA_FM_OPTS})",
+            " same => n,Hangup()",
+            "",
+        ]
+    lines += [
+        f"[{FM_CONFIRM_CONTEXT}]",
+        "exten => s,1,NoOp(Veyra follow-me confirmation)",
+        " same => n,Read(VEYRA_OK,followme/options,1,,1,6)",
+        ' same => n,GotoIf($["${VEYRA_OK}"="1"]?ok)',
+        " same => n,Set(GOSUB_RESULT=CONTINUE)",
+        " same => n,Return()",
+        " same => n(ok),Return()",
+        "",
+    ]
+    return lines
+
+
+def _follow_me_branch(
+    number: str, endpoint: str, fm: dict[str, Any], internal: str, fm_out: str, ocid: Any
+) -> list[str]:
+    """The ``fm`` label of an extension (docs/CALL_FEATURES.md §3.4)."""
+    strategy = str(fm.get("strategy") or "ringall")
+    if strategy not in FM_STRATEGIES:
+        raise GenerationError(f"extension {number}: unknown follow-me strategy {strategy!r}")
+    mode = str(fm.get("caller_id_mode") or "caller")
+    if mode not in FM_CALLER_ID_MODES:
+        raise GenerationError(f"extension {number}: unknown follow-me caller ID mode {mode!r}")
+    initial = int(fm.get("initial_ring_seconds") or 0)
+    if not 0 <= initial <= 60:
+        raise GenerationError(f"extension {number}: follow-me initial ring {initial} out of range")
+    legs: list[tuple[str, int]] = []
+    for m in fm.get("members") or []:
+        ring = int(m.get("ring_seconds") or 20)
+        if not 5 <= ring <= 60:
+            raise GenerationError(f"extension {number}: follow-me ring time {ring} out of range")
+        if m.get("type") == "external":
+            target = str(m.get("target") or "")
+            if not _NUMBER_RE.match(target):
+                raise GenerationError(
+                    f"extension {number}: follow-me number {target!r} is not valid"
+                )
+            legs.append((f"Local/{target}@{fm_out}/n", ring))
+        else:
+            ep = m.get("endpoint")
+            if ep:  # a disabled or removed extension is skipped
+                legs.append((f"PJSIP/{_check_section(str(ep), 'endpoint name')}", ring))
+    if not legs:
+        return []
+    dest = fm.get("no_answer_destination")
+    if dest and not _NUMBER_RE.match(str(dest)):
+        raise GenerationError(f"extension {number}: follow-me destination {dest!r} is not valid")
+    cid = (
+        " same => n,Set(__VEYRA_OUT_CID=${CALLERID(num)})"
+        if mode == "caller"
+        else (f" same => n,Set(__VEYRA_OUT_CID={ocid})" if ocid else "")
+    )
+    opts = f"U({FM_CONFIRM_CONTEXT}^s)" if fm.get("confirm_calls") else ""
+    lines = [
+        f" same => n(fm),NoOp(Veyra: {number} follow me, {strategy})",
+        *(
+            [
+                f" same => n,Dial(PJSIP/{endpoint},{initial})",
+                ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
+            ]
+            if initial
+            else []
+        ),
+        f" same => n,Set(__VEYRA_FM_OPTS={opts})",
+        *([cid] if cid else []),
+    ]
+    if strategy == "ringall":
+        ring = max(r for _, r in legs)
+        lines.append(f" same => n,Dial({'&'.join(leg for leg, _ in legs)},{ring})")
+        lines.append(' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?fmdone)')
+    else:
+        for leg, ring in legs:
+            lines += [
+                f" same => n,Dial({leg},{ring})",
+                ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?fmdone)',
+            ]
+    lines += [
+        f" same => n,Goto({internal},{dest},1)" if dest else " same => n,Goto(noanswer)",
+        " same => n(fmdone),Hangup()",
+    ]
+    return lines
+
+
 def _forward_codes(codes: dict[str, str]) -> list[str]:
     """``*72<number>`` / ``*72`` + prompt / ``*73`` and the busy and no-answer
     pairs (docs/CALL_FEATURES.md §3.3): the target goes into the engine's copy
@@ -1259,6 +1395,7 @@ def _features(
         f"[{n.features}]",
         *_dnd_codes(codes),
         *_forward_codes(codes),
+        *_follow_me_codes(codes),
         "; *43 echo test, *60 speaking clock: always available for phone checks.",
         "exten => *43,1,NoOp(Veyra echo test)",
         " same => n,Answer()",
@@ -1329,6 +1466,7 @@ def _internal(
     prompts_dir: str,
     dnd_toggle: str | None = None,
     cf_code: str | None = None,
+    fm_code: str | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
@@ -1355,6 +1493,16 @@ def _internal(
             lines.append(f"exten => {dnd_toggle}{number},hint,Custom:veyra-dnd-{org_slug}-{number}")
         if cf_code:
             lines.append(f"exten => {cf_code}{number},hint,Custom:veyra-cf-{org_slug}-{number}")
+        fm_branch = _follow_me_branch(
+            number,
+            endpoint,
+            ext.get("follow_me") or {},
+            n.internal,
+            n.follow_me_out,
+            ext.get("outbound_caller_id_number"),
+        )
+        if fm_code and fm_branch:
+            lines.append(f"exten => {fm_code}{number},hint,Custom:veyra-fm-{org_slug}-{number}")
         ring = int(
             ext.get("ring_seconds") or (box or {}).get("ring_seconds") or DEFAULT_RING_SECONDS
         )
@@ -1385,9 +1533,10 @@ def _internal(
             f" same => n,Set(VEYRA_CF=${{DB({state}/cf_always)}})",
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
             *rec,
+            *([f' same => n,GotoIf($["${{DB({state}/fmfm)}}"="1"]?fm)'] if fm_branch else []),
             f" same => n,Dial(PJSIP/{endpoint},{ring})",
             ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
-            f" same => n,Set(VEYRA_CF=${{DB({state}/cf_no_answer)}})",
+            f" same => n(noanswer),Set(VEYRA_CF=${{DB({state}/cf_no_answer)}})",
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
         ]
         busy_branch = [
@@ -1403,6 +1552,7 @@ def _internal(
                 " same => n,Busy(10)",
                 " same => n,Hangup()",
                 *forward,
+                *fm_branch,
             ]
         else:
             # Unanswered and unavailable go to the unavailable greeting, busy
@@ -1415,6 +1565,7 @@ def _internal(
                 f" same => n,VoiceMail({number}@{n.voicemail},b)",
                 " same => n,Hangup()",
                 *forward,
+                *fm_branch,
             ]
     for number, b in sorted(by_number.items(), key=lambda kv: (len(kv[0]), kv[0])):
         if not b.get("shared"):

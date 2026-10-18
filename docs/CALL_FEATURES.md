@@ -263,6 +263,35 @@ external numbers through the outbound context, `confirm` through a short
 macro-free `Gosub`. Ring groups accept external members the same way
 (`ring_group_members.external_number`). Toggle from the phone with `*21`.
 
+*Built 2026-10-18* (migration `0035`, table `follow_me`; the on/off switch is
+`extension_states.fmfm_enabled`, engine key `fmfm`, lamp
+`Custom:veyra-fm-<org>-<ext>` with hint `*21<ext>`):
+
+* `GET/PUT /extensions/{id}/follow-me` holds the legs (`strategy`,
+  `initial_ring_seconds` 0–60, `confirm_calls`, `caller_id_mode`, up to ten
+  `members` of type `extension` (must be in the organization, not the
+  extension itself) or `external` (digits), each with `ring_seconds` 5–60,
+  and `no_answer_destination`, an extension); it needs a deployment.
+  Switching on and off is `PUT /extensions/{id}/state {fmfm_enabled}` or
+  `*21`, immediate; the page refuses to switch on without members.
+* Dialplan: after the always-forward check, `fmfm = 1` jumps to the `fm`
+  label: the desk phone alone for `initial_ring_seconds` (busy → busy
+  branch), then one `Dial` of every leg (`ringall`, for the longest ring
+  time) or one `Dial` per leg (`sequential`). Extension members are
+  `PJSIP/<endpoint>` (a disabled one is left out); outside numbers are
+  `Local/<number>@veyra-fm-out/n`, a per-namespace context that dials the
+  number into the internal context (so the organization's outbound routes
+  carry it) with `VEYRA_HOPS` reset and `VEYRA_FM_OPTS` as Dial options.
+  `confirm_calls` sets `U(veyra-fm-confirm^s)`: the answering party hears
+  `followme/options`, presses 1, or the leg returns `GOSUB_RESULT=CONTINUE`
+  and is dropped while the others keep ringing. `caller_id_mode=caller`
+  sets `__VEYRA_OUT_CID` to the caller's number, `extension` to the
+  extension's outbound caller ID. Nobody answers → `no_answer_destination`
+  in the internal context, else the extension's own `noanswer` label
+  (no-answer forward, voicemail).
+* External members of ring groups are the next slice of this item (they
+  need their own table and a member editor that takes numbers).
+
 ### 3.5 Per-extension outbound caller ID
 
 Today the endpoint's `caller_id_number` reaches the carrier only when

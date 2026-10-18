@@ -43,6 +43,11 @@ class Names:
         return self._p("features")
 
     @property
+    def follow_me_out(self) -> str:
+        """Outside legs of find me / follow me (docs/CALL_FEATURES.md §3.4)."""
+        return self._p("fm-out")
+
+    @property
     def paging(self) -> str:
         return self._p("paging")
 

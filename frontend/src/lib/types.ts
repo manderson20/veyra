@@ -2599,6 +2599,24 @@ export interface ExtensionState {
   updated_by: "phone" | "user" | "admin" | "sync" | string | null;
 }
 
+export interface FollowMeMember {
+  type: "extension" | "external";
+  target: string;
+  ring_seconds: number;
+}
+
+export interface FollowMe {
+  enabled: boolean;
+  strategy: "ringall" | "sequential" | string;
+  initial_ring_seconds: number;
+  confirm_calls: boolean;
+  caller_id_mode: "caller" | "extension" | string;
+  members: FollowMeMember[];
+  no_answer_destination: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
 export interface FeatureCode {
   key: string;
   label: string;

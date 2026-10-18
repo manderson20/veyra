@@ -177,7 +177,9 @@ DELETE /extensions/{id}                          -> 204
 GET    /extensions/{id}/sip-credentials          (audited)
 POST   /extensions/{id}/sip-credentials/rotate   (audited)
 GET    /extensions/{id}/state                    {dnd, cf_always, cf_busy, cf_no_answer, fmfm_enabled, ring_seconds, updated_at, updated_by}
-PUT    /extensions/{id}/state                    {dnd?, cf_always?, cf_busy?, cf_no_answer?, ring_seconds?}  (DND and forwards take effect at once; CALL_FEATURES.md §3.2, §3.3)
+PUT    /extensions/{id}/state                    {dnd?, fmfm_enabled?, cf_always?, cf_busy?, cf_no_answer?, ring_seconds?}  (DND, follow-me on/off and forwards take effect at once; CALL_FEATURES.md §3.2–§3.4)
+GET    /extensions/{id}/follow-me
+PUT    /extensions/{id}/follow-me                {strategy, initial_ring_seconds, confirm_calls, caller_id_mode, members:[{type, target, ring_seconds}], no_answer_destination?}  (needs a deployment; §3.4)
 GET    /telephony/numbering
 PUT    /telephony/numbering
 GET    /telephony/feature-codes

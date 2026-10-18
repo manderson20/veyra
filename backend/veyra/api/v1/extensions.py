@@ -33,6 +33,7 @@ from veyra.core.models import (
     CallQueue,
     Extension,
     ExtensionState,
+    FollowMe,
     InboundRoute,
     Organization,
     PickupGroup,
@@ -777,6 +778,7 @@ class StateIn(BaseModel):
     """Fields left out keep their value; an empty forward clears it."""
 
     dnd: bool | None = None
+    fmfm_enabled: bool | None = None
     cf_always: str | None = Field(None, max_length=32)
     cf_busy: str | None = Field(None, max_length=32)
     cf_no_answer: str | None = Field(None, max_length=32)
@@ -840,6 +842,124 @@ def put_state(
         )
     db.commit()
     return extension_state.out(row)
+
+
+class FollowMeMemberIn(BaseModel):
+    type: str = Field(pattern=r"^(extension|external)$")
+    target: str = Field(min_length=1, max_length=32)
+    ring_seconds: int = Field(20, ge=5, le=60)
+
+
+class FollowMeIn(BaseModel):
+    strategy: str = Field("ringall", pattern=r"^(ringall|sequential)$")
+    initial_ring_seconds: int = Field(0, ge=0, le=60)
+    confirm_calls: bool = False
+    caller_id_mode: str = Field("caller", pattern=r"^(caller|extension)$")
+    members: list[FollowMeMemberIn] = Field(default_factory=list, max_length=10)
+    no_answer_destination: str | None = Field(None, max_length=32)
+
+
+def _follow_me_out(row: FollowMe | None, state: ExtensionState | None) -> dict[str, Any]:
+    return {
+        "enabled": bool(state and state.fmfm_enabled),
+        "strategy": row.strategy if row else "ringall",
+        "initial_ring_seconds": row.initial_ring_seconds if row else 0,
+        "confirm_calls": row.confirm_calls if row else False,
+        "caller_id_mode": row.caller_id_mode if row else "caller",
+        "members": list(row.members or []) if row else [],
+        "no_answer_destination": row.no_answer_destination if row else None,
+        "updated_at": row.updated_at.isoformat() if row and row.updated_at else None,
+        "updated_by": row.updated_by if row else None,
+    }
+
+
+@router.get("/{extension_id}/follow-me", summary="Find me / follow me settings")
+def get_follow_me(
+    extension_id: uuid.UUID,
+    principal: Principal = Depends(require("extensions.read")),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    ext = _get_visible(db, principal, extension_id, "extensions.read")
+    return _follow_me_out(db.get(FollowMe, ext.id), extension_state.get(db, ext.id))
+
+
+@router.put("/{extension_id}/follow-me", summary="Change find me / follow me")
+def put_follow_me(
+    extension_id: uuid.UUID,
+    body: FollowMeIn,
+    principal: Principal = Depends(require("extensions.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """The legs are in the dialplan, so a change waits for a deployment;
+    switching follow-me on or off is ``PUT /state`` (docs/CALL_FEATURES.md §3.4)."""
+    ext = _get_visible(db, principal, extension_id, "extensions.write")
+    members: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for i, m in enumerate(body.members, start=1):
+        try:
+            target = extension_state.normalize_number(f"members.{i}", m.target)
+        except extension_state.StateError as e:
+            raise _validation(e.field, e.message) from e
+        if target is None:
+            raise _validation(f"members.{i}", "enter a number")
+        if m.type == "extension":
+            if target == ext.number:
+                raise _validation(f"members.{i}", "the extension cannot follow itself")
+            other = db.scalar(
+                select(Extension).where(
+                    Extension.organization_id == ext.organization_id, Extension.number == target
+                )
+            )
+            if other is None:
+                raise _validation(f"members.{i}", f"extension {target} is not in this organization")
+        if (m.type, target) in seen:
+            raise _validation(f"members.{i}", "listed twice")
+        seen.add((m.type, target))
+        members.append({"type": m.type, "target": target, "ring_seconds": m.ring_seconds})
+    try:
+        dest = extension_state.normalize_number("no_answer_destination", body.no_answer_destination)
+    except extension_state.StateError as e:
+        raise _validation(e.field, e.message) from e
+    if dest is not None and dest == ext.number:
+        raise _validation("no_answer_destination", "the extension cannot be its own destination")
+    if dest is not None and (
+        db.scalar(
+            select(Extension.id).where(
+                Extension.organization_id == ext.organization_id, Extension.number == dest
+            )
+        )
+        is None
+    ):
+        raise _validation("no_answer_destination", f"extension {dest} is not in this organization")
+    row = db.get(FollowMe, ext.id)
+    if row is None:
+        row = FollowMe(extension_id=ext.id)
+        db.add(row)
+    row.strategy = body.strategy
+    row.initial_ring_seconds = body.initial_ring_seconds
+    row.confirm_calls = body.confirm_calls
+    row.caller_id_mode = body.caller_id_mode
+    row.members = members
+    row.no_answer_destination = dest
+    row.updated_by = principal.label[:320]
+    row.updated_at = utcnow()
+    db.flush()
+    _record(
+        db,
+        ctx,
+        principal,
+        "extension.follow_me_update",
+        ext,
+        {
+            "strategy": body.strategy,
+            "members": len(members),
+            "confirm_calls": body.confirm_calls,
+            "no_answer_destination": dest,
+        },
+    )
+    db.commit()
+    return _follow_me_out(row, extension_state.get(db, ext.id))
 
 
 @router.delete("/{extension_id}", status_code=204, summary="Delete an extension")
