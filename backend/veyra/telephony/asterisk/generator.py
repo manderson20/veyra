@@ -3016,7 +3016,8 @@ def _announcement_contexts(announcements: list[dict[str, Any]], prompts_dir: str
         ]
         if skip or repeat is not None:
             # Keys are accepted while the prompt plays: the repeat key replays
-            # it, any other key (when skipping is allowed) ends it early.
+            # it, any other key ends it early when skipping is allowed and
+            # replays it otherwise (a key always stops the playback).
             lines += [
                 f" same => n(play),Background({path})",
                 " same => n,WaitExten(1)",
@@ -3036,7 +3037,8 @@ def _announcement_contexts(announcements: list[dict[str, Any]], prompts_dir: str
         if skip:
             lines.append("exten => _[0-9*#],1,Goto(s,next)")
         if skip or repeat is not None:
-            lines += ["exten => t,1,Goto(s,next)", "exten => i,1,Goto(s,next)"]
+            lines.append("exten => t,1,Goto(s,next)")
+            lines.append(f"exten => i,1,Goto(s,{'next' if skip else 'play'})")
         lines.append("")
     return lines
 

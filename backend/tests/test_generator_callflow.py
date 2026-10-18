@@ -103,6 +103,7 @@ def test_announcement_contexts_plain_skippable_and_without_prompt():
             announcements=[
                 _ann("plain", destination={"type": "extension", "number": "1001"}),
                 _ann("skip", allow_skip=True, repeat_key="9", destination={"type": "directory"}),
+                _ann("rep", repeat_key="5"),
                 _ann("bare", prompt=None),
             ]
         )
@@ -115,7 +116,10 @@ def test_announcement_contexts_plain_skippable_and_without_prompt():
     skip = _context(dp, "veyra-ann-skip")
     assert "Background(/var/lib/veyra/prompts/example/skip)" in skip and "WaitExten(1)" in skip
     assert "exten => 9,1,Goto(s,play)" in skip and "exten => _[0-9*#],1,Goto(s,next)" in skip
-    assert "Goto(veyra-directory,s,1)" in skip
+    assert "Goto(veyra-directory,s,1)" in skip and "exten => i,1,Goto(s,next)" in skip
+    rep = _context(dp, "veyra-ann-rep")  # repeat only: a wrong key replays, never skips
+    assert "exten => 5,1,Goto(s,play)" in rep and "exten => i,1,Goto(s,play)" in rep
+    assert "_[0-9*#]" not in rep
     bare = _context(dp, "veyra-ann-bare")
     assert "Congestion(5)" in bare and "Playback(" not in bare
     assert generator.validate(generator.generate(_snapshot(announcements=[_ann()]))) == []

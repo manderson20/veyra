@@ -654,6 +654,19 @@ def delete_prompt(
             code="prompt_in_use",
             errors=[{"field": "hold_music", "message": n} for n in sets],
         )
+    announcements = db.scalars(
+        select(Announcement.name)
+        .where(Announcement.prompt_id == prompt.id)
+        .order_by(Announcement.name)
+    ).all()
+    if announcements:
+        raise ProblemError(
+            409,
+            "Recording in use",
+            f"These announcements play it: {', '.join(announcements)}.",
+            code="prompt_in_use",
+            errors=[{"field": "announcements", "message": n} for n in announcements],
+        )
     org = db.get(Organization, prompt.organization_id)
     path = prompt_path(prompts_dir(request), org.slug if org else "", prompt.slug)
     _audit(

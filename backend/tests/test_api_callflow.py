@@ -51,9 +51,11 @@ def test_announcement_crud_destinations_and_uses(admin, app):
     a = r.json()
     assert a["prompt_name"] == "Closed Today" and a["allow_skip"] and a["repeat_key"] == "9"
     assert a["destination"]["label"].startswith("3001") and a["problems"] == []
-    # The prompt counts the announcement as a use.
+    # The prompt counts the announcement as a use and cannot be deleted.
     p = admin.get(f"/api/v1/prompts/{prompt['id']}").json()
     assert p["in_use_by"] == 1
+    r = admin.delete(f"/api/v1/prompts/{prompt['id']}")
+    assert r.status_code == 409 and r.json()["code"] == "prompt_in_use" and a["name"] in r.text
     # Validation: bad repeat key, self reference, prompt of another organization.
     assert admin.patch(f"{ANN}/{a['id']}", json={"repeat_key": "A"}).status_code == 422
     r = admin.patch(
