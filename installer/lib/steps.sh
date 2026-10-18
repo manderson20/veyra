@@ -777,7 +777,7 @@ listen_directives() {
 CSP_HASHES_PER_SET=${CSP_HASHES_PER_SET:-40}
 # shellcheck disable=SC2016  # the $veyra_csp_scripts below is an NGINX variable
 csp_script_sets() {
-    local f="${1:-$VEYRA_PREFIX/current/frontend/out/csp-hashes.txt}" h chunk="" n=0
+    local f="$1" h chunk="" n=0  # the csp-hashes.txt of the active release
     local out='set $veyra_csp_scripts "";'
     if [[ -s "$f" ]]; then
         while IFS= read -r h; do
@@ -813,7 +813,7 @@ do_nginx() {
     local hdr
     hdr="$(mktemp)"
     render_template "$SCRIPT_DIR/templates/nginx/security-headers.conf.in" "$hdr" \
-        "CSP_SCRIPT_SETS=$(csp_script_sets)"
+        "CSP_SCRIPT_SETS=$(csp_script_sets "$VEYRA_PREFIX/current/frontend/out/csp-hashes.txt")"
     install_managed_file "$hdr" "$VEYRA_ETC/nginx-security-headers.conf" 0644 root:root
     rm -f "$hdr"
     render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$tmp" \
