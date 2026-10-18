@@ -177,7 +177,7 @@ DELETE /extensions/{id}                          -> 204
 GET    /extensions/{id}/sip-credentials          (audited)
 POST   /extensions/{id}/sip-credentials/rotate   (audited)
 GET    /extensions/{id}/state                    {dnd, cf_always, cf_busy, cf_no_answer, fmfm_enabled, ring_seconds, updated_at, updated_by}
-PUT    /extensions/{id}/state                    {dnd?, ring_seconds?}  (Do Not Disturb takes effect at once; CALL_FEATURES.md §3.2)
+PUT    /extensions/{id}/state                    {dnd?, cf_always?, cf_busy?, cf_no_answer?, ring_seconds?}  (DND and forwards take effect at once; CALL_FEATURES.md §3.2, §3.3)
 GET    /telephony/numbering
 PUT    /telephony/numbering
 GET    /telephony/feature-codes

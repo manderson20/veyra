@@ -27,6 +27,7 @@ from veyra.core.models import (
     CallQueue,
     Device,
     Extension,
+    ExtensionState,
     InboundRoute,
     Installation,
     IvrEntry,
@@ -138,6 +139,12 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     org_slug = {o.id: o.slug for o in orgs}
     org_tz = {o.id: o.timezone for o in orgs}
     ext_by_id = {e.id: e for e in extensions}
+    ring_seconds = {
+        s.extension_id: s.ring_seconds
+        for s in db.scalars(
+            select(ExtensionState).where(ExtensionState.extension_id.in_(list(ext_by_id)))
+        )
+    }
     # Site defaults for the emergency caller ID (docs/TRUNKS_ROUTING.md §7) and
     # the number of phones registering each extension (docs/DEVICE_PROVISIONING.md §2).
     sites = list(db.scalars(select(Site)))
@@ -224,6 +231,8 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 or (site_ecid.get(e.site_id) if e.site_id else None),
                 "outbound_caller_id_number": e.outbound_caller_id_number,
                 "outbound_caller_id_name": e.outbound_caller_id_name,
+                # Ring time (docs/CALL_FEATURES.md §3.3); None: the box's or the default.
+                "ring_seconds": ring_seconds.get(e.id),
                 "max_contacts": contacts.get(e.id, 1),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),

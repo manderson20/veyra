@@ -1,15 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Extension state (docs/CALL_FEATURES.md §3.2): Do Not Disturb set from the
-page or from the phone. The database row is the record; the engine keeps its
-own copy (an AstDB key the dialplan reads and a custom device state behind
-the BLF hint). The API writes both; a feature code writes the engine's copy
-and raises a UserEvent that updates the row; the worker reconciles the two
-so a restored backup or a failover never leaves them apart.
+"""Extension state (docs/CALL_FEATURES.md §3.2, §3.3): Do Not Disturb and the
+three call forwards, set from the page or from the phone. The database row
+is the record; the engine keeps its own copy (AstDB keys the dialplan reads
+and custom device states behind the BLF hints). The API writes both; a
+feature code writes the engine's copy and raises a UserEvent that updates
+the row; the worker reconciles the two so a restored backup or a failover
+never leaves them apart.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -24,6 +26,15 @@ from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 log = logging.getLogger("veyra.extension_state")
 
 RING_MIN, RING_MAX, RING_DEFAULT = 5, 120, 30
+FORWARD_FIELDS = ("cf_always", "cf_busy", "cf_no_answer")
+ENGINE_FIELDS = ("dnd", *FORWARD_FIELDS)
+_NUMBER_RE = re.compile(r"^\+?[0-9]{2,20}$")
+
+
+class StateError(ValueError):
+    def __init__(self, field: str, message: str) -> None:
+        super().__init__(message)
+        self.field, self.message = field, message
 
 
 def get(db: Session, extension_id: uuid.UUID) -> ExtensionState | None:
@@ -63,6 +74,27 @@ def out(row: ExtensionState | None) -> dict[str, Any]:
     }
 
 
+def normalize_number(field: str, value: Any) -> str | None:
+    """A forward target: digits with an optional leading +, or None to clear."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = re.sub(r"[\s().-]", "", text)
+    if not _NUMBER_RE.match(text):
+        raise StateError(field, "digits (and a leading +) only, 2 to 20 characters")
+    return text
+
+
+def engine_values(row: ExtensionState) -> dict[str, str | None]:
+    """What the engine's copy of a row must hold."""
+    return {
+        "dnd": "1" if row.dnd else None,
+        "cf_always": row.cf_always or None,
+        "cf_busy": row.cf_busy or None,
+        "cf_no_answer": row.cf_no_answer or None,
+    }
+
+
 def supports(adapter: Any) -> bool:
     try:
         return adapter is not None and Capability.EXTENSION_STATE in adapter.capabilities()
@@ -70,22 +102,7 @@ def supports(adapter: Any) -> bool:
         return False
 
 
-def set_dnd(
-    db: Session, extension: Extension, on: bool, *, by: str, adapter: Any = None
-) -> ExtensionState:
-    """From the page or the console: the row, then the engine (best effort; the
-    worker's sync catches a failed engine write)."""
-    row = ensure(db, extension)
-    row.dnd = bool(on)
-    row.updated_by = by
-    row.updated_at = utcnow()
-    db.flush()
-    if supports(adapter):
-        org = db.get(Organization, extension.organization_id)
-        try:
-            adapter.set_dnd(org.slug if org else "", extension.number, bool(on))
-        except (EngineUnavailable, NotSupported, ValueError) as e:
-            log.warning("Do Not Disturb of %s not written to the engine: %s", extension.number, e)
+def _publish(extension: Extension, changes: dict[str, Any], by: str) -> None:
     bus.publish(
         Event(
             "extension.state_changed",
@@ -93,13 +110,51 @@ def set_dnd(
                 "extension_id": str(extension.id),
                 "organization_id": str(extension.organization_id),
                 "number": extension.number,
-                "field": "dnd",
-                "value": bool(on),
+                "changes": changes,
                 "by": by,
             },
         )
     )
-    return row
+
+
+def apply(
+    db: Session,
+    extension: Extension,
+    changes: dict[str, Any],
+    *,
+    by: str,
+    adapter: Any = None,
+) -> dict[str, Any]:
+    """Change ``dnd`` and/or the forwards from the page or the console: the
+    row, then the engine (best effort; the worker's sync catches a failed
+    engine write). Returns what actually changed."""
+    row = ensure(db, extension)
+    applied: dict[str, Any] = {}
+    if "dnd" in changes and changes["dnd"] is not None and bool(changes["dnd"]) != row.dnd:
+        row.dnd = bool(changes["dnd"])
+        applied["dnd"] = row.dnd
+    for field in FORWARD_FIELDS:
+        if field in changes:
+            value = normalize_number(field, changes[field])
+            if value != getattr(row, field):
+                setattr(row, field, value)
+                applied[field] = value
+    if not applied:
+        return applied
+    row.updated_by = by
+    row.updated_at = utcnow()
+    db.flush()
+    if supports(adapter):
+        org = db.get(Organization, extension.organization_id)
+        slug = org.slug if org else ""
+        values = engine_values(row)
+        for field in applied:
+            try:
+                adapter.set_extension_state(slug, extension.number, field, values[field])
+            except (EngineUnavailable, NotSupported, ValueError) as e:
+                log.warning("%s of %s not written to the engine: %s", field, extension.number, e)
+    _publish(extension, applied, by)
+    return applied
 
 
 def parse_userevent(userevent: dict[str, Any]) -> dict[str, str]:
@@ -117,7 +172,8 @@ def handle_userevent(db: Session, userevent: dict[str, Any]) -> ExtensionState |
     """A phone changed its own state through a feature code; the engine's copy
     is already written by the dialplan, so only the row and the event remain."""
     fields = parse_userevent(userevent)
-    if fields["field"] != "dnd" or not fields["extension"]:
+    field = fields["field"]
+    if field not in ENGINE_FIELDS or not fields["extension"]:
         return None
     org = db.scalar(select(Organization).where(Organization.slug == fields["org"]))
     if org is None:
@@ -129,58 +185,58 @@ def handle_userevent(db: Session, userevent: dict[str, Any]) -> ExtensionState |
     )
     if ext is None:
         return None
-    on = fields["value"] in ("1", "true", "on", "yes")
     row = ensure(db, ext)
-    row.dnd = on
+    if field == "dnd":
+        value: Any = fields["value"] in ("1", "true", "on", "yes")
+        row.dnd = value
+    else:
+        try:
+            value = normalize_number(field, fields["value"])
+        except StateError:
+            return None
+        setattr(row, field, value)
     row.updated_by = "phone"
     row.updated_at = utcnow()
     db.flush()
-    bus.publish(
-        Event(
-            "extension.state_changed",
-            {
-                "extension_id": str(ext.id),
-                "organization_id": str(ext.organization_id),
-                "number": ext.number,
-                "field": "dnd",
-                "value": on,
-                "by": "phone",
-            },
-        )
-    )
+    _publish(ext, {field: value}, "phone")
     return row
 
 
 def sync(db: Session, adapter: Any) -> int:
-    """Make the engine's Do Not Disturb copies match the rows (worker, every
-    pass). Returns how many were corrected."""
+    """Make the engine's copies match the rows (worker, every pass). Returns
+    how many fields were corrected."""
     if not supports(adapter):
         return 0
     try:
-        engine = adapter.dnd_states()
+        engine = adapter.extension_states()
     except (EngineUnavailable, NotSupported):
         return 0
     slugs = {o.id: o.slug for o in db.scalars(select(Organization))}
-    wanted: dict[tuple[str, str], bool] = {}
+    wanted: dict[tuple[str, str], dict[str, str | None]] = {}
     for ext, state in db.execute(
         select(Extension, ExtensionState)
         .join(ExtensionState, ExtensionState.extension_id == Extension.id, isouter=True)
         .where(Extension.is_enabled.is_(True))
     ):
-        wanted[(slugs.get(ext.organization_id, ""), ext.number)] = bool(state and state.dnd)
+        key = (slugs.get(ext.organization_id, ""), ext.number)
+        wanted[key] = engine_values(state) if state else dict.fromkeys(ENGINE_FIELDS)
     fixed = 0
-    for key, on in wanted.items():
-        if bool(engine.get(key)) != on:
-            try:
-                adapter.set_dnd(key[0], key[1], on)
-                fixed += 1
-            except (EngineUnavailable, NotSupported, ValueError) as e:
-                log.warning("Could not sync Do Not Disturb of %s: %s", key[1], e)
+    for key, values in wanted.items():
+        have = engine.get(key, {})
+        for field, value in values.items():
+            if (have.get(field) or None) != value:
+                try:
+                    adapter.set_extension_state(key[0], key[1], field, value)
+                    fixed += 1
+                except (EngineUnavailable, NotSupported, ValueError) as e:
+                    log.warning("Could not sync %s of %s: %s", field, key[1], e)
     # Keys of extensions that no longer exist are cleared too.
-    for key, on in engine.items():
-        if on and key not in wanted:
+    for key, have in engine.items():
+        if key in wanted:
+            continue
+        for field in have:
             try:
-                adapter.set_dnd(key[0], key[1], False)
+                adapter.set_extension_state(key[0], key[1], field, None)
                 fixed += 1
             except (EngineUnavailable, NotSupported, ValueError):
                 pass
