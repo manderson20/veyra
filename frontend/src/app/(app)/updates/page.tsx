@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
   Callout,
+  Icon,
   Card,
   Checkbox,
   DataTable,
@@ -239,27 +240,49 @@ export default function UpdatesPage() {
   );
 }
 
-/** Elapsed installer time as m:ss (installs take a minute or two). */
+/** Elapsed time as m:ss (installs take a minute or two). */
 function elapsedLabel(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-/** Progress of the root upgrade runner, live: the status file is polled every
- * 3 seconds from the moment an installation is approved (before the runner
- * has started, the card says so), the installer output follows the run, and
+function secondsBetween(from: string | null | undefined, to: number): number | null {
+  const t = from ? Date.parse(from) : NaN;
+  return Number.isFinite(t) ? Math.max(0, Math.round((to - t) / 1000)) : null;
+}
+
+type StageState = "done" | "current" | "later";
+
+/** One stage of an installation on the timeline below. */
+function Stage({ state, title, note, index }: { state: StageState; title: string; note?: ReactNode; index: number }) {
+  const cls = ["stepper__item", state === "done" && "stepper__item--done", state === "later" && "stepper__item--later"].filter(Boolean).join(" ");
+  return (
+    <li className={cls} aria-current={state === "current" ? "step" : undefined} style={{ alignItems: "flex-start" }}>
+      <span className="stepper__marker" aria-hidden="true">{state === "done" ? <Icon name="check" size={12} strokeWidth={3} /> : index}</span>
+      <span>
+        {title}
+        {note ? <span className="subtle" style={{ display: "block", fontWeight: "normal" }}>{note}</span> : null}
+      </span>
+    </li>
+  );
+}
+
+/** Progress of an installation, live from the approval: the stages before
+ * the installer prints anything (queued for the worker, release verified and
+ * unpacked by the root unit) come from `pending`, the installer's step and
+ * output from the runner's status file; both are polled every 3 seconds, and
  * the API's restart during the upgrade reads as "restarting", not as an
  * error. */
-function InstallProgress({ pending, onFinished }: { pending: AvailableUpdate | undefined; onFinished: () => void }) {
+function InstallProgress({ pending: listed, onFinished }: { pending: AvailableUpdate | undefined; onFinished: () => void }) {
   const toast = useToast();
   const [status, setStatus] = useState<UpgradeStatus | null>(null);
   const [unreachable, setUnreachable] = useState(false);
-  const [watching, setWatching] = useState(!!pending);
+  const [watching, setWatching] = useState(!!listed);
   const [now, setNow] = useState(() => Date.now());
   const finished = useRef(onFinished);
   const logRef = useRef<HTMLPreElement>(null);
   useEffect(() => { finished.current = onFinished; }, [onFinished]);
 
-  useOnChange(!!pending, (a) => { if (a) setWatching(true); });
+  useOnChange(!!listed, (a) => { if (a) setWatching(true); });
 
   useEffect(() => {
     let stop = false;
@@ -269,6 +292,7 @@ function InstallProgress({ pending, onFinished }: { pending: AvailableUpdate | u
         if (stop) return;
         setUnreachable(false);
         setNow(Date.now());
+        if (s.pending) setWatching(true);
         setStatus((prev) => {
           if (prev?.run?.state === "running" && s.run && s.run.state !== "running") {
             if (s.run.state === "succeeded") toast.success(`Veyra ${s.run.version} installed`, "Reload the page to use the new version.");
@@ -278,7 +302,7 @@ function InstallProgress({ pending, onFinished }: { pending: AvailableUpdate | u
           return s;
         });
       } catch {
-        if (!stop) setUnreachable(true);
+        if (!stop) { setUnreachable(true); setNow(Date.now()); }
       }
     };
     void poll();
@@ -287,53 +311,83 @@ function InstallProgress({ pending, onFinished }: { pending: AvailableUpdate | u
     return () => { stop = true; window.clearInterval(t); };
   }, [watching, toast]);
 
-  const run = status?.run;
-  // A status file from an earlier run (another version, or finished before
-  // this approval) is not this installation's progress.
-  const stale = !!run && !!pending && run.state !== "running"
-    && (run.version !== pending.version || (!!pending.approved_at && run.started_at < pending.approved_at));
-  const lines = run && !stale ? run.log_tail : [];
+  // The log keeps showing its newest line.
+  const run = status?.run ?? null;
+  const lines = run?.log_tail ?? [];
   const lastLine = lines[lines.length - 1];
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [lastLine, lines.length]);
 
-  if (watching && (!run || stale)) {
-    return (
-      <Callout tone="info" title={`Installing Veyra ${pending?.version ?? ""}`}>
-        <p>{unreachable ? "Veyra is restarting; this page reconnects by itself." : "Waiting for the installer to start (the background worker picks approved installations up within a minute). Calls are not affected."}</p>
-      </Callout>
-    );
-  }
-  if (!run || (!watching && run.state !== "running")) return null;
-  const tone = run.state === "failed" ? "danger" : run.state === "succeeded" ? "ok" : "info";
-  const started = Date.parse(run.started_at);
-  const elapsed = Number.isFinite(started) ? Math.max(0, Math.round(((run.finished_at ? Date.parse(run.finished_at) : now) - started) / 1000)) : null;
+  const pending = status?.pending ?? null;
+  if (!pending && (!run || (!watching && run.state !== "running"))) return null;
+
+  const version = pending?.version ?? run?.version ?? listed?.version ?? "";
+  const outcome = !pending && run ? run.state : null; // succeeded | failed once the list has caught up
+  const phase = pending?.phase ?? (run?.state === "running" ? "running" : null);
+  const tone = outcome === "failed" ? "danger" : outcome === "succeeded" ? "ok" : "info";
+  const title = outcome === "succeeded" ? `Veyra ${version} is installed`
+    : outcome === "failed" ? `Installing Veyra ${version} failed`
+      : `Installing Veyra ${version}`;
+
+  // Stage states along the timeline.
+  const order = ["queued", "starting", "running", "finishing"] as const;
+  const at = (p: typeof order[number]) => {
+    if (outcome) return "done" as StageState;
+    const cur = phase === "window" ? -1 : order.indexOf((phase ?? "running") as typeof order[number]);
+    const i = order.indexOf(p);
+    return i < cur ? "done" : i === cur ? "current" : "later";
+  };
+  const approvedAt = pending?.approved_at ?? null;
+  const total = secondsBetween(approvedAt ?? run?.started_at, outcome && run?.finished_at ? Date.parse(run.finished_at) : now);
+  const sinceWorker = secondsBetween(pending?.worker_last_pass_at, now);
+  const interval = pending?.worker_interval_seconds ?? 60;
+  const waitLeft = sinceWorker === null ? null : Math.max(0, interval - sinceWorker);
+  const installerSteps = lines.filter((l) => l.startsWith("==> ")).map((l) => l.slice(4));
+
   return (
-    <Callout tone={tone} title={
-      run.state === "running" ? `Installing Veyra ${run.version}`
-        : run.state === "succeeded" ? `Veyra ${run.version} is installed`
-          : `Installing Veyra ${run.version} failed`
-    }>
+    <Callout tone={tone} title={title}>
       <div className="stack stack--sm">
-        {run.state === "running" ? (
-          <p>
-            {unreachable ? "Veyra is restarting; this page reconnects by itself." : <>Step: <strong>{run.step}</strong></>}
-            {elapsed !== null ? <> · {elapsedLabel(elapsed)} so far</> : null} · Calls are not affected.
-          </p>
+        <p>
+          {unreachable ? <strong>Veyra is restarting; this page reconnects by itself.</strong> : null}
+          {unreachable ? " " : ""}
+          {total !== null ? <>{outcome ? "Took" : "Running for"} {elapsedLabel(total)}{approvedAt ? " since the approval" : ""}. </> : null}
+          Calls are not affected.
+        </p>
+        <ol className="stepper" aria-label="Installation stages">
+          <Stage index={1} state="done" title="Approved"
+            note={pending?.approved_by || approvedAt ? <>{pending?.approved_by ? `by ${pending.approved_by}` : ""}{approvedAt ? ` at ${formatDateTime(approvedAt)}` : ""}</> : undefined} />
+          {phase === "window" ? (
+            <Stage index={2} state="current" title="Waiting for the maintenance window"
+              note={pending?.next_window ? `Next window ${formatDateTime(pending.next_window)}; starts when no call is in progress.` : "Starts in the next window when no call is in progress."} />
+          ) : (
+            <Stage index={2} state={at("queued")} title="Picked up by the background worker"
+              note={at("queued") === "current"
+                ? `The worker checks for approved installations every ${interval} s${waitLeft !== null ? `; next pass in about ${waitLeft} s` : ""}. It then runs the pre-checks (disk space, modules, no other upgrade) and starts the upgrade service.`
+                : pending?.install_started_at ? `at ${formatDateTime(pending.install_started_at)}` : undefined} />
+          )}
+          <Stage index={3} state={at("starting")} title="Release verified and unpacked"
+            note={at("starting") === "current" ? "The upgrade service checks the signature, size and checksum of the downloaded release and unpacks it into a private directory." : undefined} />
+          <Stage index={4} state={at("running")} title="Installer running"
+            note={run && run.state === "running" ? <>Step: <strong>{run.step}</strong></>
+              : outcome ? `${installerSteps.length || "all"} steps` : undefined} />
+          <Stage index={5} state={outcome ? "done" : at("finishing")} title={outcome === "failed" ? "Failed" : "Finished"}
+            note={outcome === "succeeded" && run?.finished_at ? `at ${formatDateTime(run.finished_at)}`
+              : at("finishing") === "current" ? "The new version is recording the result and sending the notification." : undefined} />
+        </ol>
+        {outcome === "succeeded" ? (
+          <p><Button size="sm" onClick={() => window.location.reload()}>Reload the page</Button> to use the new version.</p>
         ) : null}
-        {run.state === "succeeded" ? (
-          <p>Installed {run.finished_at ? formatRelative(run.finished_at) : ""}{elapsed !== null ? ` in ${elapsedLabel(elapsed)}` : ""}. <Button size="sm" onClick={() => window.location.reload()}>Reload the page</Button></p>
-        ) : null}
-        {run.error ? <p>{run.error}</p> : null}
-        {run.log_tail.length ? (
-          <details open={run.state !== "succeeded"}>
-            <summary>Installer output{run.state === "running" ? " (live)" : ""}</summary>
-            <pre ref={logRef} className="mono" style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap" }}>{run.log_tail.join("\n")}</pre>
+        {run?.error ? <p>{run.error}</p> : null}
+        {pending?.error ? <p>{pending.error}</p> : null}
+        {lines.length ? (
+          <details open={outcome !== "succeeded"}>
+            <summary>Installer output{run?.state === "running" ? " (live)" : ""}</summary>
+            <pre ref={logRef} className="mono" style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap" }}>{lines.join("\n")}</pre>
           </details>
         ) : null}
-        {run.log_file ? <p className="subtle">Full log on the server: <code>{run.log_file}</code></p> : null}
+        {run?.log_file ? <p className="subtle">Full log on the server: <code>{run.log_file}</code></p> : null}
       </div>
     </Callout>
   );

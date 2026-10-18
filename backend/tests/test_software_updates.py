@@ -185,6 +185,12 @@ def test_download_approve_start_and_finish(admin, app, tmp_path, served, monkeyp
     assert r.json()["code"] == "no_window"
     r = admin.post(f"/api/v1/updates/available/{uid}/approve", json={"when": "now"})
     assert r.status_code == 200 and r.json()["state"] == "approved"
+    # The status endpoint reports the stage before the installer prints anything
+    # (§3.4): queued for the worker's next pass, with the worker's heartbeat.
+    st = admin.get("/api/v1/updates/status").json()
+    assert st["run"] is None
+    assert st["pending"]["version"] == NEW and st["pending"]["phase"] == "queued"
+    assert st["pending"]["worker_interval_seconds"] == 60 and st["pending"]["approved_at"]
 
     calls = []
 
@@ -206,6 +212,30 @@ def test_download_approve_start_and_finish(admin, app, tmp_path, served, monkeyp
     with session_scope() as db:
         manager.process(db, settings, app.state.keyring, lambda: 0, run=run)
     assert calls == [["systemctl", "start", "--no-block", f"veyra-upgrade@{NEW}.service"]]
+    # Unit started, no status file yet: "starting"; a stale file from another
+    # version is not this installation's run.
+    settings.upgrade_dir.mkdir(parents=True, exist_ok=True)
+    (settings.upgrade_dir / "status.json").write_text(
+        json.dumps(
+            {"version": "0.0.1", "state": "failed", "started_at": "2020-01-01T00:00:00+00:00"}
+        )
+    )
+    st = admin.get("/api/v1/updates/status").json()
+    assert st["pending"]["phase"] == "starting" and st["run"] is None
+    (settings.upgrade_dir / "status.json").write_text(
+        json.dumps(
+            {
+                "version": NEW,
+                "state": "running",
+                "step": "Applying database migrations",
+                "started_at": datetime.now(UTC).isoformat(),
+                "log_tail": [],
+            }
+        )
+    )
+    st = admin.get("/api/v1/updates/status").json()
+    assert st["pending"]["phase"] == "running"
+    assert st["run"]["step"] == "Applying database migrations"
 
     # The runner's status file finishes it (the new worker runs NEW).
     settings.upgrade_dir.mkdir(parents=True, exist_ok=True)
@@ -218,7 +248,8 @@ def test_download_approve_start_and_finish(admin, app, tmp_path, served, monkeyp
         manager.process(db, settings, app.state.keyring, lambda: 0, run=run)
     assert admin.get("/api/v1/updates/available").json()[0]["state"] == "installed"
     assert sent == ["installed"] and not stored.exists()
-    assert admin.get("/api/v1/updates/status").json()["run"]["state"] == "succeeded"
+    st = admin.get("/api/v1/updates/status").json()
+    assert st["run"]["state"] == "succeeded" and st["pending"] is None
 
 
 def test_failed_start_and_policy_modes(admin, app, tmp_path, served, monkeypatch):

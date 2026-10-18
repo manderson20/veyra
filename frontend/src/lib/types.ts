@@ -824,9 +824,26 @@ export interface UpgradeRun {
   log_file: string | null;
 }
 
+/** An approved or starting installation before (and while) the installer runs. */
+export interface UpgradePending {
+  id: string;
+  version: string;
+  state: "approved" | "installing";
+  install_when: "now" | "window" | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  install_started_at: string | null;
+  error: string | null;
+  phase: "queued" | "window" | "starting" | "running" | "finishing";
+  worker_last_pass_at: string | null;
+  worker_interval_seconds: number;
+  next_window: string | null;
+}
+
 export interface UpgradeStatus {
   installed_version: string;
   run: UpgradeRun | null;
+  pending: UpgradePending | null;
 }
 
 export interface SystemPackage {

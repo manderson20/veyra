@@ -146,11 +146,20 @@ another upgrade is running.
 
 ### 3.4 During and after
 
-The Updates page follows the installation from the approval on: it polls
-`GET /updates/status` every 3 seconds (and the update list every 5) and
-shows "Waiting for the installer to start" until the worker has started the
-unit, then the step, the elapsed time and the installer output scrolled to
-the newest line; while the API restarts the requests fail and the page says
+The Updates page follows the installation from the approval on as a
+timeline: it polls `GET /updates/status` every 3 seconds (and the update
+list every 5). The endpoint returns the runner's status file (`run`) and,
+while an installation is approved or starting, `pending` with the stage
+before the installer prints anything (`manager.install_progress`):
+`queued` (approved for "now", waiting for the worker's next housekeeping
+pass; the worker's last heartbeat and its 60 s interval say how long),
+`window` (approved for the maintenance window, with the next window),
+`starting` (pre-checks done, root unit started, release being verified and
+unpacked), `running` (installer step and output) and `finishing` (the new
+worker records the result). The page shows these as stages — approved,
+picked up by the worker, release verified and unpacked, installer running
+(current step), finished — with the time since the approval and the
+installer output scrolled to the newest line; while the API restarts the requests fail and the page says
 "Veyra is restarting" and keeps polling. A status file left by an earlier
 run (another version, or finished before this approval) is not shown as
 this installation's progress. The page doing the watching belongs to the

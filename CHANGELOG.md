@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.25.3 — 2026-10-18
+
+### Changed
+- **The installation card shows every stage from the approval on**, not only the installer's output: approved (by whom, when), picked up by the background worker (which checks for approved installations every 60 seconds; the card says how long until its next pass and what it checks), release verified and unpacked by the upgrade service, installer running (current step), finished — with the time since the approval. Nothing in the process changed; the stages that used to pass silently are now visible, so an installation no longer looks stalled while the worker and the upgrade service do their part. `GET /updates/status` carries the stage in a new `pending` object.
+
 ## 0.25.2 — 2026-10-18
 
 ### Fixed

@@ -436,14 +436,13 @@ def cancel_update(
     return AvailableOut.model_validate(row)
 
 
-@router.get("/status", summary="Progress of the running or last installation")
+@router.get("/status", summary="Progress of the pending, running or last installation")
 def install_status(
     principal: Principal = Depends(require("updates.read")),
     settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    from veyra.version import __version__
-
-    return {"installed_version": __version__, "run": manager.read_status(settings)}
+    return manager.install_progress(db, settings)
 
 
 @router.get("/system-packages", summary="Operating system packages that could be upgraded")

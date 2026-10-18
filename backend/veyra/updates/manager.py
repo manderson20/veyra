@@ -17,6 +17,7 @@ import json
 import logging
 import re
 import shutil
+import socket
 import subprocess
 import urllib.parse
 import urllib.request
@@ -32,6 +33,7 @@ from sqlalchemy.orm import Session
 from veyra.core.config import Settings
 from veyra.core.models import AvailableUpdate, InstalledModule, SystemSetting, UpdatePolicy
 from veyra.core.models.base import utcnow
+from veyra.core.models.platform import ClusterNode
 from veyra.core.semver import Version, VersionRange
 from veyra.core.signing import Keyring
 from veyra.updates.metadata import MetadataError, Release, UpdateMetadata, verify_metadata
@@ -373,6 +375,87 @@ def read_status(settings: Settings) -> dict[str, Any] | None:
         return dict(json.loads((settings.upgrade_dir / "status.json").read_text()))
     except (OSError, ValueError):
         return None
+
+
+# installer/templates/systemd/veyra-worker.service.in starts the worker with
+# `--interval 60`: approved installations wait for its next housekeeping pass.
+WORKER_INTERVAL_SECONDS = 60
+
+
+def _parse_ts(value: Any) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value)) if value else None
+    except ValueError:
+        return None
+
+
+def install_progress(
+    db: Session, settings: Settings, now: datetime | None = None
+) -> dict[str, Any]:
+    """What `GET /updates/status` returns (§3.4): the runner's status file and,
+    while an installation is approved or starting, the stage it is in before
+    the installer prints anything — so the interface can show a live
+    timeline from the approval on instead of a page that does not change:
+
+    * ``queued``: approved for "now", waiting for the worker's next pass
+      (``worker_last_pass_at`` + ``worker_interval_seconds`` say when);
+    * ``window``: approved for the maintenance window (``next_window``);
+    * ``starting``: the worker ran the pre-checks and started the root unit,
+      which is verifying and unpacking the release (no status file yet);
+    * ``running``: the installer is running (``run`` has the step and output);
+    * ``finishing``: the installer is done, the new worker is recording it.
+
+    A status file from an earlier run (another version, or older than this
+    approval) is not reported as this installation's ``run``."""
+    now = now or utcnow()
+    run = read_status(settings)
+    row = db.scalar(
+        select(AvailableUpdate)
+        .where(
+            AvailableUpdate.component == "veyra_core",
+            AvailableUpdate.state.in_(["approved", "installing"]),
+        )
+        .order_by(AvailableUpdate.approved_at)
+    )
+    pending: dict[str, Any] | None = None
+    if row is not None:
+        started = _parse_ts(run.get("started_at")) if run else None
+        this_run = (
+            run is not None
+            and run.get("version") == row.version
+            and started is not None
+            and row.approved_at is not None
+            and started >= row.approved_at - timedelta(seconds=5)
+        )
+        if row.state == "approved":
+            phase = "queued" if row.install_when == "now" else "window"
+        elif this_run and run is not None and run.get("state") == "running":
+            phase = "running"
+        elif this_run:
+            phase = "finishing"
+        else:
+            phase = "starting"
+        if not this_run:
+            run = None
+        node = db.scalar(select(ClusterNode).where(ClusterNode.node_name == socket.gethostname()))
+        policy = db.get(UpdatePolicy, "veyra_core")
+        pending = {
+            "id": str(row.id),
+            "version": row.version,
+            "state": row.state,
+            "install_when": row.install_when,
+            "approved_at": row.approved_at,
+            "approved_by": row.approved_by,
+            "install_started_at": row.install_started_at,
+            "error": row.error,
+            "phase": phase,
+            "worker_last_pass_at": node.last_heartbeat_at if node else None,
+            "worker_interval_seconds": WORKER_INTERVAL_SECONDS,
+            "next_window": next_window_start(policy.maintenance_window, now)
+            if policy is not None and row.install_when == "window"
+            else None,
+        }
+    return {"installed_version": __version__, "run": run, "pending": pending}
 
 
 def start_install(
