@@ -144,7 +144,7 @@ def _site_and_ext(admin, **site_over):
             "organization_id": org_id,
             "name": "Main Campus",
             "street": "1 Example St",
-            "city": "Example",
+            "city": "Exampleville",
             "region": "MO",
             "postal_code": "65000",
             "country": "US",
@@ -203,7 +203,7 @@ def test_service_records_notifies_and_readiness(admin, app, tmp_path):
         )
         db.commit()
         assert call.site_id == uuid.UUID(site["id"]) and call.extension_id == uuid.UUID(ext["id"])
-        assert call.location == "Room 101, first floor, 1 Example St, Example, MO, 65000, US"
+        assert call.location == "Room 101, first floor, 1 Example St, Exampleville, MO, 65000, US"
         assert call.caller_id == "5735550101" and call.callback_until > utcnow()
         assert call.notifications["email"]["state"] == "queued"
         assert call.notifications["extensions"] == {"1000": "ringing"}

@@ -142,7 +142,7 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
               <p className="subtle">{d.settings.last_test_at ? `Last successful test ${formatDateTime(d.settings.last_test_at)}: ${d.settings.last_test_result}` : d.settings.last_test_result ?? "No test call recorded. Coordinate a 933 or 911 test with the carrier and record what the PSAP read back."}</p>
               {manage ? (
                 <>
-                  <TextField label="Result" value={testResult} onChange={(e) => setTestResult(e.target.value)} placeholder="933 read back 1 Example St, Example" />
+                  <TextField label="Result" value={testResult} onChange={(e) => setTestResult(e.target.value)} placeholder="933 read back 1 Example St, Exampleville" />
                   <span className="row" style={{ gap: 6 }}>
                     <Button onClick={() => recordTest(true)} disabled={!testResult.trim()} loading={busy}>Record as passed</Button>
                     <Button variant="danger" onClick={() => recordTest(false)} disabled={!testResult.trim()} loading={busy}>Record as failed</Button>
