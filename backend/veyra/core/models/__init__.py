@@ -79,7 +79,13 @@ from veyra.core.models.routing import (
     TimeCondition,
 )
 from veyra.core.models.saved_reports import SavedReport
-from veyra.core.models.telephony import Device, Extension, ExtensionState, FollowMe
+from veyra.core.models.telephony import (
+    ClassOfService,
+    Device,
+    Extension,
+    ExtensionState,
+    FollowMe,
+)
 from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
 from veyra.core.models.voicemail import (
     IvrEntry,
@@ -117,6 +123,7 @@ __all__ = [
     "CentralNonce",
     "CentralPolicy",
     "CentralSample",
+    "ClassOfService",
     "ClusterEvent",
     "ClusterNode",
     "ConfigRevision",

@@ -665,6 +665,11 @@ def _endpoints(
             f'callerid="{cid_name}" <{cid_num}>',
             f"set_var=VEYRA_ORG={org}",
             f"set_var=VEYRA_EXT={number}",
+            *(
+                [f"set_var=VEYRA_COS={_slug(str(ext['class_of_service']), 'class of service')}"]
+                if ext.get("class_of_service")
+                else []
+            ),
             *emergency_cid,
             *outbound_cid,
             *moh,
@@ -1035,9 +1040,15 @@ def _dialplan(
             if engine_names.for_org(owner).ns == ns
         ]
 
+    cos_all = Cos(
+        list(snapshot.get("classes_of_service") or []),
+        int((snapshot.get("numbering") or {}).get("extension_length") or 4),
+    )
     for ns in spaces:
         with engine_names.using(Names(ns)):
-            lines += _features(mine(extensions, ns), prompts_dir, codes, my_boxes(ns))
+            lines += _features(
+                mine(extensions, ns), prompts_dir, codes, my_boxes(ns), _cos_for(snapshot, ns)
+            )
             lines += _voicemail_exit_contexts(my_boxes(ns))
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -1051,6 +1062,7 @@ def _dialplan(
                 codes.get("dnd_toggle"),
                 codes.get("cf_on"),
                 codes.get("fmfm_toggle"),
+                _cos_for(snapshot, ns),
             )
     lines += _follow_me_contexts(spaces)
     if "intercom" in codes:
@@ -1086,7 +1098,7 @@ def _dialplan(
         " same => n,Hangup()",
         "",
     ]
-    lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir, spaces)
+    lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir, spaces, cos_all)
     lines += _inbound_contexts(
         inbound, conditions, trunk_slugs, recording, prompts_dir, list(snapshot.get("sites") or [])
     )
@@ -1166,6 +1178,14 @@ _STATE_TAIL = [
     " same => n(nophone),Playback(feature-not-avail-line)",
     " same => n,Hangup()",
 ]
+
+
+def _code_block(head: str, body: list[str], cos: Cos | None, key: str) -> list[str]:
+    """One feature code: the phone check, the class guard, the body, the tails."""
+    guard = cos.code_guard(key) if cos else []
+    return [head, *_STATE_GUARD, *guard, *body, *_STATE_TAIL, *(COS_DENIED if guard else [])]
+
+
 # The forwarding lamp stays lit while any forward is set.
 _CF_LAMP = (
     f' same => n,Set(DEVICE_STATE({CF_DEVICE})=${{IF($["${{DB({STATE_KEY}/cf_always)}}'
@@ -1173,7 +1193,100 @@ _CF_LAMP = (
 )
 
 
-def _dnd_codes(codes: dict[str, str]) -> list[str]:
+class Cos:
+    """The classes of service of one namespace (docs/CALL_FEATURES.md §3.8) and
+    the dialplan guards they produce. A phone without a class (empty
+    ``VEYRA_COS``) is never denied."""
+
+    def __init__(self, classes: list[dict[str, Any]], extension_length: int) -> None:
+        self.classes = classes
+        self.extension_length = extension_length
+        for c in classes:
+            _slug(str(c.get("slug") or ""), "class of service slug")
+
+    def _denied(self, predicate: Any) -> list[str]:
+        return sorted(str(c["slug"]) for c in self.classes if predicate(c))
+
+    @staticmethod
+    def guard(denied: list[str], label: str = "cosdenied", extra: str = "") -> list[str]:
+        if not denied:
+            return []
+        alternatives = "|".join(re.escape(d) for d in denied)
+        cond = f'${{REGEX("^({alternatives})$" ${{VEYRA_COS}})}}'
+        if extra:
+            cond = f"{cond} & {extra}"
+        return [f" same => n,GotoIf($[{cond}]?{label})"]
+
+    def route_guard(self, route_slug: str) -> list[str]:
+        return self.guard(self._denied(lambda c: route_slug not in (c.get("allowed_routes") or [])))
+
+    def route_limits(self) -> list[str]:
+        """Simultaneous outside calls per class: the channel joins the class's
+        group and is refused when the count is above the limit."""
+        limited = [c for c in self.classes if c.get("max_outbound_calls")]
+        if not limited:
+            return []
+        lines = [" same => n,Set(GROUP(veyra_cos)=${VEYRA_COS})"]
+        for c in limited:
+            slug = str(c["slug"])
+            lines.append(
+                f' same => n,GotoIf($["${{VEYRA_COS}}"="{slug}" & '
+                f"${{GROUP_COUNT({slug}@veyra_cos)}} > {int(c['max_outbound_calls'])}]?cosbusy)"
+            )
+        return lines
+
+    def code_guard(self, key: str) -> list[str]:
+        return self.guard(
+            self._denied(
+                lambda c: (
+                    c.get("allowed_feature_codes") is not None
+                    and key not in c["allowed_feature_codes"]
+                )
+            )
+        )
+
+    def forward_guard(self) -> list[str]:
+        """An outside forward target (longer than an extension number) by a
+        class that may not forward outside."""
+        return self.guard(
+            self._denied(lambda c: not c.get("allow_external_forwards", True)),
+            extra=f"${{LEN(${{VEYRA_CF}})}} > {self.extension_length}",
+        )
+
+    def intercom_guard(self) -> list[str]:
+        return self.guard(self._denied(lambda c: not c.get("allow_intercom", True)))
+
+    def allows_external_follow_me(self, class_slug: Any) -> bool:
+        for c in self.classes:
+            if c.get("slug") == class_slug:
+                return bool(c.get("allow_external_follow_me", True))
+        return True
+
+
+COS_DENIED = [
+    " same => n(cosdenied),NoOp(Veyra: not allowed by the class of service)",
+    " same => n,Answer()",
+    " same => n,Playback(pbx-invalid)",
+    " same => n,Hangup(21)",
+]
+COS_BUSY = [
+    " same => n(cosbusy),NoOp(Veyra: the class of service has too many outside calls up)",
+    " same => n,Busy(10)",
+    " same => n,Hangup()",
+]
+
+
+def _cos_for(snapshot: dict[str, Any], ns: str) -> Cos:
+    classes = [
+        c
+        for c in (snapshot.get("classes_of_service") or [])
+        if engine_names.for_org(str(c.get("organization") or "")).ns == ns
+    ]
+    length = int((snapshot.get("numbering") or {}).get("extension_length") or 4)
+    return Cos(classes, length)
+
+
+def _dnd_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     """``*78``/``*79``/``*76`` (docs/CALL_FEATURES.md §3.2): the phone's own
     extension (``VEYRA_EXT`` from its endpoint) switches the engine's copy, the
     BLF device state, and tells the API through a UserEvent."""
@@ -1190,27 +1303,20 @@ def _dnd_codes(codes: dict[str, str]) -> list[str]:
 
     lines: list[str] = []
     if "dnd_on" in codes:
-        lines += [
-            f"exten => {codes['dnd_on']},1,NoOp(Veyra DND on for ${{VEYRA_EXT}})",
-            *_STATE_GUARD,
-        ]
-        lines += switch(True) + _STATE_TAIL
+        head = f"exten => {codes['dnd_on']},1,NoOp(Veyra DND on for ${{VEYRA_EXT}})"
+        lines += _code_block(head, switch(True), cos, "dnd_on")
     if "dnd_off" in codes:
-        lines += [
-            f"exten => {codes['dnd_off']},1,NoOp(Veyra DND off for ${{VEYRA_EXT}})",
-            *_STATE_GUARD,
-        ]
-        lines += switch(False) + _STATE_TAIL
+        head = f"exten => {codes['dnd_off']},1,NoOp(Veyra DND off for ${{VEYRA_EXT}})"
+        lines += _code_block(head, switch(False), cos, "dnd_off")
     if "dnd_toggle" in codes:
-        lines += [
-            f"exten => {codes['dnd_toggle']},1,NoOp(Veyra DND toggle for ${{VEYRA_EXT}})",
-            *_STATE_GUARD,
+        head = f"exten => {codes['dnd_toggle']},1,NoOp(Veyra DND toggle for ${{VEYRA_EXT}})"
+        body = [
             f' same => n,GotoIf($["${{DB({STATE_KEY}/dnd)}}"="1"]?off)',
             *switch(True),
             " same => n(off),NoOp()",
             *switch(False),
-            *_STATE_TAIL,
         ]
+        lines += _code_block(head, body, cos, "dnd_toggle")
     return lines
 
 
@@ -1219,7 +1325,7 @@ FM_STRATEGIES = ("ringall", "sequential")
 FM_CALLER_ID_MODES = ("caller", "extension")
 
 
-def _follow_me_codes(codes: dict[str, str]) -> list[str]:
+def _follow_me_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     """``*21`` toggles find me / follow me (docs/CALL_FEATURES.md §3.4)."""
     code = codes.get("fmfm_toggle")
     if not code:
@@ -1235,15 +1341,17 @@ def _follow_me_codes(codes: dict[str, str]) -> list[str]:
             " same => n,Hangup()",
         ]
 
-    return [
+    return _code_block(
         f"exten => {code},1,NoOp(Veyra follow me toggle for ${{VEYRA_EXT}})",
-        *_STATE_GUARD,
-        f' same => n,GotoIf($["${{DB({STATE_KEY}/fmfm)}}"="1"]?off)',
-        *switch(True),
-        " same => n(off),NoOp()",
-        *switch(False),
-        *_STATE_TAIL,
-    ]
+        [
+            f' same => n,GotoIf($["${{DB({STATE_KEY}/fmfm)}}"="1"]?off)',
+            *switch(True),
+            " same => n(off),NoOp()",
+            *switch(False),
+        ],
+        cos,
+        "fmfm_toggle",
+    )
 
 
 def _follow_me_contexts(spaces: list[str]) -> list[str]:
@@ -1277,9 +1385,17 @@ def _follow_me_contexts(spaces: list[str]) -> list[str]:
 
 
 def _follow_me_branch(
-    number: str, endpoint: str, fm: dict[str, Any], internal: str, fm_out: str, ocid: Any
+    number: str,
+    endpoint: str,
+    fm: dict[str, Any],
+    internal: str,
+    fm_out: str,
+    ocid: Any,
+    *,
+    external_allowed: bool = True,
 ) -> list[str]:
-    """The ``fm`` label of an extension (docs/CALL_FEATURES.md §3.4)."""
+    """The ``fm`` label of an extension (docs/CALL_FEATURES.md §3.4). Outside
+    legs are left out when the class of service forbids them (§3.8)."""
     strategy = str(fm.get("strategy") or "ringall")
     if strategy not in FM_STRATEGIES:
         raise GenerationError(f"extension {number}: unknown follow-me strategy {strategy!r}")
@@ -1300,7 +1416,8 @@ def _follow_me_branch(
                 raise GenerationError(
                     f"extension {number}: follow-me number {target!r} is not valid"
                 )
-            legs.append((f"Local/{target}@{fm_out}/n", ring))
+            if external_allowed:
+                legs.append((f"Local/{target}@{fm_out}/n", ring))
         else:
             ep = m.get("endpoint")
             if ep:  # a disabled or removed extension is skipped
@@ -1349,20 +1466,24 @@ def _follow_me_branch(
 INTERCOM_RING_SECONDS = 20
 
 
-def _intercom_code(codes: dict[str, str]) -> list[str]:
+def _intercom_code(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     """``*80<ext>`` (docs/CALL_FEATURES.md §3.6): into the namespace's intercom
-    context, which knows which phones may be made to answer on speaker."""
+    context, which knows which phones may be made to answer on speaker. The
+    caller's class may forbid intercom altogether."""
     code = codes.get("intercom")
     if not code:
         return []
     n = engine_names.current()
+    guard = (cos.code_guard("intercom") + cos.intercom_guard()) if cos else []
     return [
         f"exten => _{code}.,1,NoOp(Veyra intercom from ${{VEYRA_EXT}} to ${{EXTEN:{len(code)}}})",
         ' same => n,GotoIf($["${VEYRA_EXT}"=""]?nophone)',
+        *guard,
         f" same => n,Goto({n.intercom},${{EXTEN:{len(code)}}},1)",
         " same => n(nophone),Answer()",
         " same => n,Playback(feature-not-avail-line)",
         " same => n,Hangup()",
+        *(COS_DENIED if guard else []),
     ]
 
 
@@ -1415,21 +1536,27 @@ def _intercom_headers_context() -> list[str]:
     ]
 
 
-def _voicemail_direct(codes: dict[str, str], boxes: list[tuple[str, dict[str, Any]]]) -> list[str]:
+def _voicemail_direct(
+    codes: dict[str, str], boxes: list[tuple[str, dict[str, Any]]], cos: Cos | None = None
+) -> list[str]:
     """``*<ext>`` (docs/CALL_FEATURES.md §3.7): straight to the box's unavailable
     greeting, dialled or as a transfer target. One exact entry per box, so no
-    pattern can shadow another feature code."""
+    pattern can shadow another feature code. No phone check: a transferred
+    caller's channel carries no ``VEYRA_EXT``."""
     code = codes.get("vm_direct")
     if not code:
         return []
     n = engine_names.current()
+    guard = cos.code_guard("vm_direct") if cos else []
     lines: list[str] = []
     for number, _b in sorted(boxes, key=lambda kv: (len(kv[0]), kv[0])):
         lines += [
             f"exten => {code}{number},1,NoOp(Veyra direct to voicemail {number})",
+            *guard,
             " same => n,Answer()",
             f" same => n,VoiceMail({number}@{n.voicemail},s)",
             " same => n,Hangup()",
+            *(COS_DENIED if guard else []),
         ]
     return lines
 
@@ -1453,7 +1580,7 @@ def _voicemail_exit_contexts(boxes: list[tuple[str, dict[str, Any]]]) -> list[st
     return lines
 
 
-def _forward_codes(codes: dict[str, str]) -> list[str]:
+def _forward_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     """``*72<number>`` / ``*72`` + prompt / ``*73`` and the busy and no-answer
     pairs (docs/CALL_FEATURES.md §3.3): the target goes into the engine's copy
     and to the API; the dialplan validates the digits."""
@@ -1472,35 +1599,37 @@ def _forward_codes(codes: dict[str, str]) -> list[str]:
                 " same => n,Hangup()",
             ]
             check = ' same => n,GotoIf($[${REGEX("^\\+?[0-9]{2,20}$" ${VEYRA_NUM})}]?store:bad)'
-            lines += [
+            lines += _code_block(
                 f"exten => {on},1,NoOp(Veyra forward {field} for ${{VEYRA_EXT}})",
-                *_STATE_GUARD,
-                f" same => n,Read(VEYRA_NUM,{prompt}&vm-enter-num-to-call,20,,2,10)",
-                check,
-                *store,
-                *_STATE_TAIL,
-            ]
-            lines += [
+                [
+                    f" same => n,Read(VEYRA_NUM,{prompt}&vm-enter-num-to-call,20,,2,10)",
+                    check,
+                    *store,
+                ],
+                cos,
+                on_key,
+            )
+            lines += _code_block(
                 f"exten => _{on}.,1,NoOp(Veyra forward {field} for ${{VEYRA_EXT}} "
                 f"to ${{EXTEN:{len(on)}}})",
-                *_STATE_GUARD,
-                f" same => n,Set(VEYRA_NUM=${{EXTEN:{len(on)}}})",
-                check,
-                *store,
-                *_STATE_TAIL,
-            ]
+                [f" same => n,Set(VEYRA_NUM=${{EXTEN:{len(on)}}})", check, *store],
+                cos,
+                on_key,
+            )
         off = codes.get(off_key)
         if off:
-            lines += [
+            lines += _code_block(
                 f"exten => {off},1,NoOp(Veyra forward {field} off for ${{VEYRA_EXT}})",
-                *_STATE_GUARD,
-                f" same => n,Set(VEYRA_GONE=${{DB_DELETE({STATE_KEY}/{field})}})",
-                _CF_LAMP,
-                _state_event(field, ""),
-                f" same => n,Playback({prompt}&de-activated)",
-                " same => n,Hangup()",
-                *_STATE_TAIL,
-            ]
+                [
+                    f" same => n,Set(VEYRA_GONE=${{DB_DELETE({STATE_KEY}/{field})}})",
+                    _CF_LAMP,
+                    _state_event(field, ""),
+                    f" same => n,Playback({prompt}&de-activated)",
+                    " same => n,Hangup()",
+                ],
+                cos,
+                off_key,
+            )
     return lines
 
 
@@ -1509,17 +1638,18 @@ def _features(
     prompts_dir: str,
     codes: dict[str, str] | None = None,
     boxes: list[tuple[str, dict[str, Any]]] | None = None,
+    cos: Cos | None = None,
 ) -> list[str]:
     """Feature codes of one namespace; ``**<ext>`` reaches only its phones."""
     n = engine_names.current()
     codes = codes or {}
     lines = [
         f"[{n.features}]",
-        *_dnd_codes(codes),
-        *_forward_codes(codes),
-        *_follow_me_codes(codes),
-        *_intercom_code(codes),
-        *_voicemail_direct(codes, boxes or []),
+        *_dnd_codes(codes, cos),
+        *_forward_codes(codes, cos),
+        *_follow_me_codes(codes, cos),
+        *_intercom_code(codes, cos),
+        *_voicemail_direct(codes, boxes or [], cos),
         "; *43 echo test, *60 speaking clock: always available for phone checks.",
         "exten => *43,1,NoOp(Veyra echo test)",
         " same => n,Answer()",
@@ -1591,6 +1721,7 @@ def _internal(
     dnd_toggle: str | None = None,
     cf_code: str | None = None,
     fm_code: str | None = None,
+    cos: Cos | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
@@ -1624,7 +1755,12 @@ def _internal(
             n.internal,
             n.follow_me_out,
             ext.get("outbound_caller_id_number"),
+            external_allowed=(
+                cos.allows_external_follow_me(ext.get("class_of_service")) if cos else True
+            ),
         )
+        # A class that may not forward outside (docs/CALL_FEATURES.md §3.8).
+        forward_guard = cos.forward_guard() if cos else []
         if fm_code and fm_branch:
             lines.append(f"exten => {fm_code}{number},hint,Custom:veyra-fm-{org_slug}-{number}")
         ring = int(
@@ -1639,6 +1775,7 @@ def _internal(
         forward_cid = [f" same => n,Set(__VEYRA_OUT_CID={ocid})"] if ocid else []
         forward = [
             f" same => n(forward),NoOp(Veyra: {number} forwards to ${{VEYRA_CF}})",
+            *forward_guard,
             # A forward of a forward of a forward is enough; the loop guard of
             # the outbound routes does not apply to an administrator's forward.
             " same => n,GotoIf($[0${VEYRA_FWD} >= 3]?toomany)",
@@ -1650,6 +1787,7 @@ def _internal(
             f" same => n(toomany),NoOp(Veyra: {number}: too many forwards)",
             " same => n,Playback(number-not-answering)",
             " same => n,Hangup()",
+            *(COS_DENIED if forward_guard else []),
         ]
         head = [
             f"exten => {number},1,NoOp(Veyra extension {number})",
@@ -1728,6 +1866,7 @@ def _outbound_contexts(
     recording: list[dict[str, Any]] | None = None,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
     spaces: list[str] | None = None,
+    cos: Cos | None = None,
 ) -> list[str]:
     """``veyra-outbound`` of each namespace and one shared ``veyra-out-<slug>``
     per route, emergency routes first (docs/TRUNKS_ROUTING.md §4, §6, §7). A
@@ -1771,6 +1910,8 @@ def _outbound_contexts(
             f"; {_check_value(str(r.get('name') or slug), 'route name')}"
             + (" (emergency)" if emergency else ""),
         ]
+        cos_guard = cos.route_guard(slug) if cos else []
+        cos_limits = cos.route_limits() if cos else []
         for pat in r.get("patterns") or []:
             try:
                 prefix, match, prepend = routing.check_pattern(
@@ -1785,6 +1926,9 @@ def _outbound_contexts(
             lines += [
                 f"exten => {exten},1,NoOp(Veyra outbound route {slug})",
                 f" same => n,Set(__VEYRA_ROUTE={slug})",
+                # The class of service (docs/CALL_FEATURES.md §3.8) never blocks an emergency route.
+                *(cos_guard if not emergency else []),
+                *(cos_limits if not emergency else []),
                 *_record_outbound(recording or [], prompts_dir),
             ]
             if emergency:
@@ -1856,6 +2000,8 @@ def _outbound_contexts(
                 lines += [
                     " same => n(loop),NoOp(Veyra: a trunk call may not leave through a trunk)",
                     " same => n,Hangup(21)",
+                    *(COS_DENIED if cos_guard else []),
+                    *(COS_BUSY if cos_limits else []),
                 ]
         lines.append("")
     return lines

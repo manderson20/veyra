@@ -31,6 +31,7 @@ from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
 from veyra.core.models import (
     CallQueue,
+    ClassOfService,
     Extension,
     ExtensionState,
     FollowMe,
@@ -127,6 +128,8 @@ class ExtensionIn(BaseModel):
     outbound_caller_id_name: str | None = Field(None, max_length=80)
     # Intercom (docs/CALL_FEATURES.md §3.6): default (the organization's), allow, deny.
     intercom: str = Field("default", pattern=r"^(default|allow|deny)$")
+    # Class of service (docs/CALL_FEATURES.md §3.8); none: everything allowed.
+    class_of_service_id: uuid.UUID | None = None
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
@@ -166,6 +169,7 @@ class ExtensionPatch(BaseModel):
     outbound_caller_id_number: str | None = Field(None, max_length=32)
     outbound_caller_id_name: str | None = Field(None, max_length=80)
     intercom: str | None = Field(None, pattern=r"^(default|allow|deny)$")
+    class_of_service_id: uuid.UUID | None = None
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
@@ -195,6 +199,14 @@ class ExtensionPatch(BaseModel):
     @classmethod
     def _cid_number(cls, v: str | None) -> str | None:
         return _caller_id_number(v)
+
+
+def _check_class(db: Session, organization_id: uuid.UUID, class_id: uuid.UUID | None) -> None:
+    if class_id is None:
+        return
+    row = db.get(ClassOfService, class_id)
+    if row is None or row.organization_id != organization_id:
+        raise _validation("class_of_service_id", "the class of service is not in this organization")
 
 
 def check_outbound_caller_id(
@@ -295,6 +307,9 @@ class ExtensionOut(BaseModel):
     outbound_caller_id_name: str | None = None
     # Intercom (docs/CALL_FEATURES.md §3.6): default | allow | deny.
     intercom: str = "default"
+    # Class of service (docs/CALL_FEATURES.md §3.8); none: everything allowed.
+    class_of_service_id: uuid.UUID | None = None
+    class_of_service_name: str | None = None
     building_id: uuid.UUID | None = None
     location: str | None = None
     is_enabled: bool
@@ -410,6 +425,15 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
     live = _registrations(request)
     groups = _memberships(db, {r.id for r in rows})
     ids = {r.id for r in rows}
+    class_ids = {r.class_of_service_id for r in rows if r.class_of_service_id}
+    classes = (
+        {
+            c.id: c.name
+            for c in db.scalars(select(ClassOfService).where(ClassOfService.id.in_(class_ids)))
+        }
+        if class_ids
+        else {}
+    )
     states = (
         {
             s.extension_id: s.dnd
@@ -450,6 +474,10 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 outbound_caller_id_number=r.outbound_caller_id_number,
                 outbound_caller_id_name=r.outbound_caller_id_name,
                 intercom=r.intercom,
+                class_of_service_id=r.class_of_service_id,
+                class_of_service_name=(
+                    classes.get(r.class_of_service_id) if r.class_of_service_id else None
+                ),
                 building_id=r.building_id,
                 location=r.location,
                 is_enabled=r.is_enabled,
@@ -667,6 +695,7 @@ def create_extension(
     _check_number(db, load_numbering_plan(db), body.number, None, org.id)
     _check_user(db, body.user_id, body.organization_id)
     check_outbound_caller_id(db, principal, org.id, body.outbound_caller_id_number)
+    _check_class(db, org.id, body.class_of_service_id)
     ext = Extension(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -680,6 +709,7 @@ def create_extension(
         outbound_caller_id_number=body.outbound_caller_id_number,
         outbound_caller_id_name=body.outbound_caller_id_name,
         intercom=body.intercom,
+        class_of_service_id=body.class_of_service_id,
         building_id=body.building_id,
         location=body.location,
         is_enabled=body.is_enabled,
@@ -749,6 +779,8 @@ def update_extension(
         _check_user(db, changes["user_id"], ext.organization_id)
         ext.user_id = changes["user_id"]
         details["user_id"] = str(ext.user_id) if ext.user_id else None
+    if "class_of_service_id" in changes:
+        _check_class(db, ext.organization_id, changes["class_of_service_id"])
     if (
         "outbound_caller_id_number" in changes
         and changes["outbound_caller_id_number"] != ext.outbound_caller_id_number
@@ -764,6 +796,7 @@ def update_extension(
         "outbound_caller_id_number",
         "outbound_caller_id_name",
         "intercom",
+        "class_of_service_id",
         "building_id",
         "location",
         "is_enabled",

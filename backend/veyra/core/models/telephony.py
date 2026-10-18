@@ -47,6 +47,10 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # Intercom (docs/CALL_FEATURES.md §3.6): may other phones make this one
     # answer on speaker? default | allow | deny; default = the organization's.
     intercom: Mapped[str] = mapped_column(String(8), default="default", server_default="default")
+    # Class of service (docs/CALL_FEATURES.md §3.8); none: everything allowed.
+    class_of_service_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("classes_of_service.id", ondelete="SET NULL", use_alter=True)
+    )
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6): the building
     # and the floor/room text the on-site notification carries.
     building_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -54,6 +58,36 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     location: Mapped[str | None] = mapped_column(String(200))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ClassOfService(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """What an organization's phones may do (docs/CALL_FEATURES.md §3.8). An
+    extension without a class may do everything; a class restricts."""
+
+    __tablename__ = "classes_of_service"
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    # Outbound route ids the class may use; the emergency routes always work.
+    allowed_outbound_route_ids: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default="[]"
+    )
+    # Feature code keys the class may dial; None: every code.
+    allowed_feature_code_keys: Mapped[list[str] | None] = mapped_column(JSONB)
+    allow_external_forwards: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true"
+    )
+    allow_external_follow_me: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true"
+    )
+    allow_intercom: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # Simultaneous outside calls of the class's phones together; None: no limit.
+    max_outbound_calls: Mapped[int | None] = mapped_column(Integer)
 
 
 class ExtensionState(Base):
