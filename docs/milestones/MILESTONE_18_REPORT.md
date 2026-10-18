@@ -1,8 +1,8 @@
 # Milestone 18 Report — Diagnostics and extension call features
 
 Branch `milestone-18` (from `main` at 0.23.1). Design:
-[CALL_FEATURES.md](../CALL_FEATURES.md). Status: **built 2026-10-18, awaiting
-live checks and approval** (becomes 0.24.0). Issues: #73, #74, #17, #14, #15,
+[CALL_FEATURES.md](../CALL_FEATURES.md). Status: **approved 2026-10-18, released
+as 0.24.0** (phone-side checks with the owner after the release). Issues: #73, #74, #17, #14, #15,
 #16, #18, #23, #24, #30, #45 under milestone "M18 — Diagnostics and extension
 call features"; progress comments on each.
 
