@@ -449,7 +449,7 @@ def test_generated_configuration_and_encrypted_revision_artifacts(admin, app, tm
     assert ep["sensitive"] and ep["content"] is None
     assert rev["diff"]["pjsip.endpoints.conf"] == {"changed": True, "diff": None, "sensitive": True}
     dial = next(f for f in rev["files"] if f["path"] == "extensions.conf")
-    assert "Dial(PJSIP/example-1001,30)" in dial["content"]
+    assert "Dial(PJSIP/example-1001,30,${VEYRA_XFER})" in dial["content"]
     assert "1002" not in dial["content"]
     with session_scope() as db:
         row = db.get(ConfigRevision, rev["id"])

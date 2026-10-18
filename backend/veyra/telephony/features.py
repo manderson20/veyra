@@ -142,6 +142,27 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         True,
     ),
     FeatureCodeDef(
+        "record_toggle",
+        "*1",
+        "Record this call",
+        "Pressed during a call: starts recording (a beep); pressed again, stops it.",
+        19,
+    ),
+    FeatureCodeDef(
+        "attended_transfer",
+        "*2",
+        "Attended transfer",
+        "Pressed during a call, then the number: talk first, hang up to connect.",
+        19,
+    ),
+    FeatureCodeDef(
+        "blind_transfer",
+        "##",
+        "Blind transfer",
+        "Pressed during a call, then the number: the call goes straight across.",
+        19,
+    ),
+    FeatureCodeDef(
         "vm_direct",
         "*",
         "Direct to voicemail",

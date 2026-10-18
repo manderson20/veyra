@@ -568,7 +568,7 @@ def test_routing_reaches_the_generated_configuration(admin, app, tmp_path):
         and "GotoIfTime(08:00-17:00,mon-tue,*,*,America/Chicago?open)" in dialplan
     )
     assert "[veyra-out-emergency]" in dialplan and "[veyra-out-local]" in dialplan
-    assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier-a,60)" in dialplan
+    assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier-a,60,${VEYRA_XFER_OUT})" in dialplan
     assert "set_var=VEYRA_ORG=example" in (cfg / "pjsip.endpoints.conf").read_text()
     assert "res_pjsip.so" in adapter.reloads and "pbx_config.so" in adapter.reloads
     engine = admin.get("/api/v1/telephony/engine").json()

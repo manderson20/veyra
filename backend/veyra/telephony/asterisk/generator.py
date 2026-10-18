@@ -41,6 +41,7 @@ FILE_PAGING = "paging.json"
 FILE_MOH = "musiconhold.conf"
 FILE_CONFBRIDGE = "confbridge.conf"
 FILE_PARKING = "res_parking.conf"
+FILE_FEATURES = "features.conf"
 MANAGED_FILES = [
     FILE_TRANSPORTS,
     FILE_ENDPOINTS,
@@ -54,6 +55,7 @@ MANAGED_FILES = [
     FILE_MOH,
     FILE_CONFBRIDGE,
     FILE_PARKING,
+    FILE_FEATURES,
 ]
 
 # Module reload per file. Order matters: transports before endpoints is the
@@ -70,6 +72,8 @@ RELOAD_SCOPES: dict[str, str] = {
     FILE_MOH: "res_musiconhold.so",
     FILE_CONFBRIDGE: "app_confbridge.so",
     FILE_PARKING: "res_parking.so",
+    # Not a module: the adapter runs "features reload" for this scope.
+    FILE_FEATURES: "features",
 }
 SCOPE_ORDER = [
     "res_rtp_asterisk.so",
@@ -81,6 +85,7 @@ SCOPE_ORDER = [
     "res_musiconhold.so",
     "app_confbridge.so",
     "res_parking.so",
+    "features",
 ]
 
 CONTEXT_INTERNAL = "veyra-internal"
@@ -130,6 +135,11 @@ ANONYMOUS_VALUES = ("", "anonymous", "restricted", "unavailable", "unknown", "pr
 # Queue dynamic agents (docs/CALL_FEATURES.md §4.9).
 AGENT_FAMILY = "veyra/agent"
 AGENT_EVENT = "VeyraAgent"
+# In-call codes (docs/CALL_FEATURES.md §4.11): the applicationmap feature and
+# the pseudo policy id of on-demand recordings (no policy row).
+CONTEXT_ONDEMAND = "veyra-ondemand"
+ONDEMAND_FEATURE = "veyra-record"
+ONDEMAND_POLICY = "00000000-0000-0000-0000-000000000000"
 MAX_GROUP_DEPTH = 6
 RING_GROUP_STRATEGIES = ("ringall", "sequential")
 QUEUE_STRATEGIES = ("ringall", "rrmemory", "leastrecent", "fewestcalls", "random", "linear")
@@ -469,6 +479,7 @@ def _generate(
         _moh_conf(moh, _path(moh_dir, "hold music directory")),
         _confbridge(rooms, moh, _path(recordings_dir, "recordings directory")),
         _parking_conf(lots),
+        _features_conf(_feature_codes(snapshot)),
     ]
 
 
@@ -1007,6 +1018,57 @@ def _record_outbound(recording: list[dict[str, Any]], prompts_dir: str) -> list[
     return out
 
 
+def _features_conf(codes: dict[str, str]) -> GeneratedFile:
+    """``features.conf`` (docs/CALL_FEATURES.md §4.11): the DTMF transfer keys
+    (featuremap) and the on-demand recording feature (applicationmap). Applied
+    with ``features reload``."""
+    lines = [
+        HEADER,
+        "[general]",
+        "transferdigittimeout=3",
+        "xfersound=beep",
+        "xferfailsound=beeperr",
+        "atxfernoanswertimeout=15",
+        "atxferdropcall=no",
+        "featuredigittimeout=1000",
+        "",
+        "[featuremap]",
+    ]
+    if "blind_transfer" in codes:
+        lines.append(f"blindxfer={codes['blind_transfer']}")
+    if "attended_transfer" in codes:
+        lines.append(f"atxfer={codes['attended_transfer']}")
+    lines += ["", "[applicationmap]"]
+    if "record_toggle" in codes:
+        lines.append(
+            f"{ONDEMAND_FEATURE} => {codes['record_toggle']},self/both,Gosub,"
+            f'"{CONTEXT_ONDEMAND},s,1"'
+        )
+    return GeneratedFile(FILE_FEATURES, "\n".join(lines).rstrip("\n") + "\n")
+
+
+def _ondemand_context(recordings_dir: str) -> list[str]:
+    """On-demand recording toggle (docs/CALL_FEATURES.md §4.11): the first
+    press starts a MixMonitor into the incoming folder under the pseudo policy
+    id, the next stops it; the worker files it like any other recording."""
+    return [
+        "",
+        f"[{CONTEXT_ONDEMAND}]",
+        "exten => s,1,NoOp(Veyra on-demand recording toggle)",
+        ' same => n,GotoIf($["${VEYRA_CALLREC}"!=""]?stop)',
+        " same => n,Set(__VEYRA_CALLREC=${UNIQUEID})",
+        " same => n,Set(CDR(veyra_rec)=${VEYRA_CALLREC})",
+        " same => n,Playback(beep)",
+        f" same => n,MixMonitor({recordings_dir}/incoming/${{VEYRA_CALLREC}}--"
+        f"{ONDEMAND_POLICY}.wav,b)",
+        " same => n,Return()",
+        " same => n(stop),StopMixMonitor()",
+        " same => n,Playback(beep)",
+        " same => n,Return()",
+        "",
+    ]
+
+
 def _record_context(recordings_dir: str, prompts_dir: str) -> list[str]:
     """ARG1 organization, ARG2 policy, ARG3 announcement (``<org>/<slug>``)."""
     return [
@@ -1068,9 +1130,17 @@ def _dialplan(
         "",
         "[globals]",
         f"VEYRA_INSTALLATION={name}",
-        "",
     ]
     codes = _feature_codes(snapshot)
+    # In-call codes (§4.11): Dial options that allow DTMF transfers, and the
+    # dynamic feature that toggles recording; globals apply to every channel.
+    transfers = "attended_transfer" in codes or "blind_transfer" in codes
+    lines += [
+        f"VEYRA_XFER={'tT' if transfers else ''}",
+        f"VEYRA_XFER_OUT={'T' if transfers else ''}",
+        f"DYNAMIC_FEATURES={ONDEMAND_FEATURE if 'record_toggle' in codes else ''}",
+        "",
+    ]
 
     def my_boxes(ns: str) -> list[tuple[str, dict[str, Any]]]:
         return [
@@ -1179,6 +1249,8 @@ def _dialplan(
             lines += _queue_contexts(mine(queues, ns), prompts_dir, recording)
     if recording:
         lines += _record_context(recordings_dir, prompts_dir)
+    if "record_toggle" in codes:
+        lines += _ondemand_context(recordings_dir)
     return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
 
 
@@ -1881,7 +1953,7 @@ def _internal(
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
             *rec,
             *([f' same => n,GotoIf($["${{DB({state}/fmfm)}}"="1"]?fm)'] if fm_branch else []),
-            f" same => n,Dial(PJSIP/{endpoint},{ring})",
+            f" same => n,Dial(PJSIP/{endpoint},{ring},${{VEYRA_XFER}})",
             ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
             f" same => n(noanswer),Set(VEYRA_CF=${{DB({state}/cf_no_answer)}})",
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
@@ -2079,7 +2151,8 @@ def _outbound_contexts(
                     raise GenerationError(f"trunk {tslug}: caller ID {cid!r} is not valid")
                 step += _outbound_caller_id(cid, cid_force, emergency)
                 step += [
-                    f" same => n,Dial(PJSIP/${{VEYRA_DIAL}}@{TRUNK_PREFIX}{tslug},{timeout})",
+                    f" same => n,Dial(PJSIP/${{VEYRA_DIAL}}@{TRUNK_PREFIX}{tslug},{timeout},"
+                    "${VEYRA_XFER_OUT})",
                     ' same => n,GotoIf($["${DIALSTATUS}"="CHANUNAVAIL"'
                     f' | "${{DIALSTATUS}}"="CONGESTION"]?{nxt})',
                     " same => n,Hangup()",
@@ -3310,10 +3383,10 @@ def _ring_group_contexts(
         if music not in QUEUE_MUSIC:
             raise GenerationError(f"ring group {slug}: unknown hold music {music!r}")
         # Callers hear ringing, or the group's (or built-in) hold music set.
-        dial_opts = ""
+        dial_opts = ",${VEYRA_XFER}"
         if music == "default":
             moh_class = _moh_class(g.get("hold_music"), moh or {}, f"ring group {slug}", org)
-            dial_opts = f",m({moh_class})"
+            dial_opts = f",${{VEYRA_XFER}}m({moh_class})"
         ctx = engine_names.current().ring_group(slug)
         lines += _group_prologue(ctx, "ring group", name, org)
         lines += _record_for_group(recording or [], org, "ring_groups", slug, prompts_dir)

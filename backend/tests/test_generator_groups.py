@@ -141,7 +141,7 @@ def test_ring_group_ringall_skips_busy_members_and_fails_over():
         '"(INUSE|BUSY|RINGINUSE)"]?dial)\n'
         " same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/example-1002)\n"
         ' same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)\n'
-        " same => n,Dial(${VEYRA_DIAL:1},20)\n"
+        " same => n,Dial(${VEYRA_DIAL:1},20,${VEYRA_XFER})\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
         " same => n,Goto(failover)\n"
         " same => n(done),Hangup()\n"
@@ -163,9 +163,9 @@ def test_ring_group_sequential_ring_busy_prefix_and_empty():
     dp = _files(_snapshot(ring_groups=[group]))["extensions.conf"].content
     assert (
         " same => n,Set(CALLERID(name)=Sales: ${CALLERID(name)})\n"
-        " same => n,Dial(PJSIP/example-1001,12)\n"
+        " same => n,Dial(PJSIP/example-1001,12,${VEYRA_XFER})\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
-        " same => n(m2),Dial(PJSIP/example-1002,12)\n"
+        " same => n(m2),Dial(PJSIP/example-1002,12,${VEYRA_XFER})\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
         " same => n,Goto(failover)\n" in dp
     )
@@ -176,8 +176,11 @@ def test_ring_group_sequential_ring_busy_prefix_and_empty():
     )
     # sequential with the busy check uses the next member as the skip target
     seq = _files(_snapshot(ring_groups=[_group(strategy="sequential")]))["extensions.conf"].content
-    assert '"(INUSE|BUSY|RINGINUSE)"]?m2)\n same => n,Dial(PJSIP/example-1001,20)' in seq
-    assert '"(INUSE|BUSY|RINGINUSE)"]?failover)\n same => n,Dial(PJSIP/example-1002,20)' in seq
+    xfer = "${VEYRA_XFER}"
+    assert f'"(INUSE|BUSY|RINGINUSE)"]?m2)\n same => n,Dial(PJSIP/example-1001,20,{xfer})' in seq
+    assert (
+        f'"(INUSE|BUSY|RINGINUSE)"]?failover)\n same => n,Dial(PJSIP/example-1002,20,{xfer})' in seq
+    )
     # no members: straight to the failover, and no hint
     empty = _files(_snapshot(ring_groups=[_group(members=[])]))["extensions.conf"].content
     assert "exten => 2300,hint" not in empty

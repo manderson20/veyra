@@ -318,7 +318,7 @@ def test_voicemail_reaches_the_generated_configuration(admin, app, tmp_path):
     ep = (cfg / "pjsip.endpoints.conf").read_text()
     assert ep.count("mailboxes=1001@veyra") == 2
     dp = (cfg / "extensions.conf").read_text()
-    assert "Dial(PJSIP/example-1001,20)" in dp and "VoiceMail(1001@veyra,u)" in dp
+    assert "Dial(PJSIP/example-1001,20,${VEYRA_XFER})" in dp and "VoiceMail(1001@veyra,u)" in dp
     assert "app_voicemail.so" in adapter.reloads
     assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is False
     # the PIN never appears in a revision's readable artifacts

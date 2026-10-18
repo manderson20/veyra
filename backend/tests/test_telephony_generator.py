@@ -38,8 +38,13 @@ def test_generation_is_deterministic_and_complete():
         f.content.startswith("; Managed by Veyra") for f in a if not f.path.endswith(".json")
     )
     assert by["paging.json"].content.startswith("{")
-    assert [f.path for f in a[-3:]] == ["musiconhold.conf", "confbridge.conf", "res_parking.conf"]
-    assert all("[veyra-" not in f.content for f in a[-3:])
+    assert [f.path for f in a[-4:]] == [
+        "musiconhold.conf",
+        "confbridge.conf",
+        "res_parking.conf",
+        "features.conf",
+    ]
+    assert all("[veyra-" not in f.content for f in a[-4:])
     assert generator.validate(a) == []
 
 
@@ -77,7 +82,7 @@ def test_extensions_render_endpoints_and_dialplan_and_mark_sensitive():
     assert "password=s3cret-value" in ep.content
     assert 'callerid="Front Office" <1001>' in ep.content
     assert "exten => 1001,1,NoOp(Veyra extension 1001)" in files["extensions.conf"].content
-    assert "Dial(PJSIP/example-1001,30)" in files["extensions.conf"].content
+    assert "Dial(PJSIP/example-1001,30,${VEYRA_XFER})" in files["extensions.conf"].content
 
 
 def test_feature_codes_are_not_shadowed_by_the_catch_all():

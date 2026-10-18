@@ -124,7 +124,7 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
         ' same => n,GotoIf($["${DB(veyra/ext/example/1001/dnd)}"="1"]?dnd)\n'
         " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_always)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
-        " same => n,Dial(PJSIP/example-1001,30)\n"
+        " same => n,Dial(PJSIP/example-1001,30,${VEYRA_XFER})\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)\n'
         " same => n(noanswer),Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_no_answer)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
@@ -142,7 +142,7 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
         ' same => n,GotoIf($["${DB(veyra/ext/example/1002/dnd)}"="1"]?dnd)\n'
         " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_always)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
-        " same => n,Dial(PJSIP/example-1002,25)\n"
+        " same => n,Dial(PJSIP/example-1002,25,${VEYRA_XFER})\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)\n'
         " same => n(noanswer),Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_no_answer)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'

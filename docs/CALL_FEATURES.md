@@ -703,6 +703,33 @@ tell callers which key does what. `queue_log` records the exit as
 
 *Built 2026-10-18.* The exit reason is not yet shown in the queue reports.
 
+### 4.11 In-call codes
+
+`features.conf` is a new managed file (stub installed by the installer;
+applied with `features reload` through the CLI, since the features are a
+core component without a module): `[featuremap]` carries `blindxfer`
+(`blind_transfer`, `##`) and `atxfer` (`attended_transfer`, `*2`), with a
+three-second transfer digit timeout, a beep on transfer and a 15-second
+no-answer limit for attended transfers; `[applicationmap]` carries
+`veyra-record` (`record_toggle`, `*1`), which runs
+`Gosub(veyra-ondemand,s,1)` on the channel that pressed it, for either
+side of the call.
+
+The dialplan's `[globals]` set `VEYRA_XFER` (`tT` while a transfer code is
+enabled, else empty), `VEYRA_XFER_OUT` (`T`) and `DYNAMIC_FEATURES`
+(`veyra-record` while the recording code is enabled); every `Dial` to a
+phone (extensions, ring groups) carries `${VEYRA_XFER}` and trunk legs
+`${VEYRA_XFER_OUT}`, so DTMF transfers work on phones and softphones that
+have no transfer key of their own while SIP transfers stay as they were. The
+`veyra-ondemand` context starts a `MixMonitor` into the recordings' incoming
+folder under the pseudo policy id `00000000-0000-0000-0000-000000000000`
+(so the worker files it with the call record, default retention, no
+policy), plays a beep, and stops the recording on the next press.
+
+*Built 2026-10-18.* Not in this slice: class-of-service guards for the
+in-call codes (the allowed-codes list applies to dialled codes), and a
+"record this call" button in the interface.
+
 ## 5. Permissions and API summary
 
 | Permission | Grants |

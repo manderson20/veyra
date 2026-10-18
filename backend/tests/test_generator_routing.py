@@ -187,8 +187,8 @@ def test_outbound_routes_emergency_first_with_failover_and_loop_check():
     # Trunk default, unless the extension carries an outbound caller ID (§3.5).
     assert 'ExecIf($["${VEYRA_OUT_CID}"=""]?Set(CALLERID(num)=5735550100))' in local_ctx
     assert 'ExecIf($["${VEYRA_OUT_CID}"!=""]?Set(CALLERID(num)=${VEYRA_OUT_CID}))' in local_ctx
-    assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier,60)" in local_ctx
-    assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-backup,60)" in local_ctx
+    assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier,60,${VEYRA_XFER_OUT})" in local_ctx
+    assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-backup,60,${VEYRA_XFER_OUT})" in local_ctx
     assert '"${DIALSTATUS}"="CHANUNAVAIL" | "${DIALSTATUS}"="CONGESTION"]?t2' in local_ctx
     assert "Playback(all-circuits-busy)" in local_ctx and "Hangup(21)" in local_ctx
     em = _section(d, "veyra-out-emergency")
@@ -198,7 +198,7 @@ def test_outbound_routes_emergency_first_with_failover_and_loop_check():
     guard = '$["${VEYRA_EMERGENCY_CID}"="" & "${VEYRA_OUT_CID}"=""]'
     assert f"ExecIf({guard}?Set(CALLERID(num)=5735550199))" in em
     assert em.index('VEYRA_EMERGENCY_CID}"!=') < em.index("Dial(PJSIP/")
-    assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier,120)" in em
+    assert "Dial(PJSIP/${VEYRA_DIAL}@trunk-carrier,120,${VEYRA_XFER_OUT})" in em
     assert "loop" not in em and "GROUP_COUNT" not in em
 
 

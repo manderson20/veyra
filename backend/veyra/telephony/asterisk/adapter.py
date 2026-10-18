@@ -477,6 +477,12 @@ class AsteriskAdapter(TelephonyAdapter):
     def reload(self, scope: str) -> None:
         if scope not in generator.SCOPE_ORDER:
             raise EngineUnavailable(f"unknown reload scope {scope!r}")
+        if scope == "features":
+            # features.conf belongs to the core, not to a module: no ARI reload.
+            ok, out = cli.run("features reload")
+            if not ok:
+                raise EngineUnavailable(f"features reload failed: {out[:200]}")
+            return
         self.ari.reload_module(scope)
 
     def verify_loaded(self, scopes: list[str]) -> list[str]:
@@ -486,6 +492,8 @@ class AsteriskAdapter(TelephonyAdapter):
         except EngineUnavailable as e:
             return [f"Asterisk did not answer after the reload: {e}"]
         for scope in scopes:
+            if scope == "features":
+                continue  # core component, no module status to check
             try:
                 status = self.ari.module(scope).get("status")
             except EngineUnavailable as e:

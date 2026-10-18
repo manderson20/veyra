@@ -302,7 +302,7 @@ def test_generator_renders_forward_codes_and_dialplan():
     internal = _section(d, "veyra-internal")
     assert "exten => *721001,hint,Custom:veyra-cf-example-1001" in internal
     assert "Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_always)})" in internal
-    assert "Dial(PJSIP/example-1001,45)" in internal  # the state's ring time
+    assert "Dial(PJSIP/example-1001,45,${VEYRA_XFER})" in internal  # the state's ring time
     assert "Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_no_answer)})" in internal
     assert "n(busy),Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_busy)})" in internal
     assert "n(forward),NoOp(Veyra: 1001 forwards to ${VEYRA_CF})" in internal
@@ -399,7 +399,7 @@ def test_generator_renders_follow_me():
     assert (
         internal.index("cf_always")
         < internal.index('"1"]?fm)')
-        < internal.index("Dial(PJSIP/example-1001,30)")
+        < internal.index("Dial(PJSIP/example-1001,30,${VEYRA_XFER})")
     )
     assert "n(fm),NoOp(Veyra: 1001 follow me, ringall)" in internal
     assert "Dial(PJSIP/example-1001,10)" in internal  # desk first
@@ -947,7 +947,10 @@ def test_ring_group_outside_members_generate_local_legs():
     assert "Set(VEYRA_DIAL=${VEYRA_DIAL}&Local/5735550100@veyra-fm-out/n)" in front
     assert "Set(VEYRA_DIAL=${VEYRA_DIAL}&Local/15735550101@veyra-fm-out/n)" in front
     seq = _section(d, "veyra-rg-seq")
-    assert "Set(__VEYRA_FM_OPTS=)" in seq and "Dial(Local/5735550102@veyra-fm-out/n,20)" in seq
+    assert (
+        "Set(__VEYRA_FM_OPTS=)" in seq
+        and "Dial(Local/5735550102@veyra-fm-out/n,20,${VEYRA_XFER})" in seq
+    )
     only = _section(d, "veyra-rg-only")
     assert "Goto(failover)" in only and "Local/5735550103@veyra-fm-out/n" in only
     assert only.index("Local/5735550103") < only.index("n(failover)")

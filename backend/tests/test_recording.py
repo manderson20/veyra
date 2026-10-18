@@ -55,7 +55,7 @@ def test_policies_reach_the_dialplan(admin, app, tmp_path):
     )
     # No policy: nothing about recording in the dialplan.
     plain = _deploy(admin, deployer, cfg)
-    assert "veyra-record" not in plain and "MixMonitor" not in plain
+    assert "[veyra-record]" not in plain and "MixMonitor(" not in plain.split("[veyra-ondemand]")[0]
 
     inbound = admin.post(POL, json={"organization_id": org["id"], "name": "All inbound"}).json()
     assert inbound["problems"] == [
