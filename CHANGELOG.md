@@ -18,7 +18,8 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 - The Telephony section of the sidebar shows two linked handsets (a handset in each corner with a line running between them), chosen by the owner over the keypad, which read too faint beside the other icons.
 
 ### Security
-- The Dependabot finding on `braces` (GHSA-vfj7-8cjw-p6xm, development-only through the Next.js lint configuration, no fixed release) is recorded as a dated audit exception in SECURITY.md with its review condition.
+- The Dependabot finding on `braces` (GHSA-vfj7-8cjw-p6xm, development-only, no fixed release) is gone from the dependency tree: the Next.js lint preset `eslint-config-next`, whose plugin pinned the `fast-glob` that pulled it in, is replaced by the React, hooks, accessibility and TypeScript plugins it composed, with the same rules. `npm audit` on the frontend reports nothing at any level.
+- Test fixtures and planning notes no longer carry the pilot site's town, postal code or domain; they use example values.
 
 ### Fixed
 - The extension page no longer discards edits in progress when its periodic registration refresh runs; the form resets only when another extension loads or the extension was saved.

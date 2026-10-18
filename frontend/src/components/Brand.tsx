@@ -29,7 +29,6 @@ export const BRANDING = {
   appleTouchIcon: "/branding/apple-touch-icon.png",
 } as const;
 
-/* eslint-disable @next/next/no-img-element -- static export; the artwork is served as-is */
 
 type LogoVariant = "compact" | "full";
 

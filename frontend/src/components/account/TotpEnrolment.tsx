@@ -7,7 +7,6 @@ import { Button, Callout, Checkbox, LoadingState, TextField } from "@/components
 import { api, errorMessage } from "@/lib/api";
 import type { SessionInfo, TotpBegin, TotpConfirm } from "@/lib/types";
 
-/* eslint-disable @next/next/no-img-element -- the QR code is a data URI rendered by our own API */
 
 /**
  * Authenticator-app enrolment: QR code (or manual key), first code, then the
