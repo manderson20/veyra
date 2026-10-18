@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, IconButton, SelectField, TextField } from "@/components/ui";
+import { Badge, Button, Checkbox, IconButton, SelectField, TextField } from "@/components/ui";
 import { moveItem } from "@/lib/routing";
 import type { Extension } from "@/lib/types";
 
@@ -10,19 +10,23 @@ export interface MemberDraft {
   extension_id: string;
   /** Queue agents only (0–9). */
   penalty: string;
+  /** Queue agents only: logs in and out with *45 or the queue page. */
+  dynamic?: boolean;
 }
 
 /**
  * Extensions of one organization as members of a ring group, queue or pickup group:
  * add from a select, remove, move up or down (`ordered`), set a penalty (`penalties`).
  */
-export function MemberListEditor({ label, members, extensions, onChange, ordered = false, penalties = false, help, error, disabled, emptyText, loading }: {
+export function MemberListEditor({ label, members, extensions, onChange, ordered = false, penalties = false, dynamics = false, help, error, disabled, emptyText, loading }: {
   label: string;
   members: MemberDraft[];
   extensions: Extension[];
   onChange: (next: MemberDraft[]) => void;
   ordered?: boolean;
   penalties?: boolean;
+  /** Offer the dynamic-agent choice per member (queues). */
+  dynamics?: boolean;
   help?: string;
   error?: string | null;
   disabled?: boolean;
@@ -35,7 +39,7 @@ export function MemberListEditor({ label, members, extensions, onChange, ordered
   const remaining = extensions.filter((x) => !chosen.has(x.id));
   const add = () => {
     if (!adding) return;
-    onChange([...members, { extension_id: adding, penalty: "0" }]);
+    onChange([...members, { extension_id: adding, penalty: "0", dynamic: false }]);
     setAdding("");
   };
   const name = (m: MemberDraft) => {
@@ -57,6 +61,10 @@ export function MemberListEditor({ label, members, extensions, onChange, ordered
                   {x && !x.is_enabled ? <Badge tone="neutral">Disabled</Badge> : null}
                 </span>
                 <span className="row" style={{ gap: 2, alignItems: "center" }}>
+                  {dynamics ? (
+                    <Checkbox label="Logs in" checked={Boolean(m.dynamic)} disabled={disabled}
+                      onChange={(e) => onChange(members.map((o, j) => (j === i ? { ...o, dynamic: e.target.checked } : o)))} />
+                  ) : null}
                   {penalties ? (
                     <TextField label={<span className="sr-only">Penalty of {name(m)}</span>} type="number" min={0} max={9} disabled={disabled} value={m.penalty} style={{ width: 70 }}
                       onChange={(e) => onChange(members.map((o, j) => (j === i ? { ...o, penalty: e.target.value } : o)))} />
@@ -90,8 +98,8 @@ export function MemberListEditor({ label, members, extensions, onChange, ordered
   );
 }
 
-export function membersFromIds(ids: { extension_id: string; penalty?: number | null }[]): MemberDraft[] {
-  return ids.map((m) => ({ extension_id: m.extension_id, penalty: String(m.penalty ?? 0) }));
+export function membersFromIds(ids: { extension_id: string; penalty?: number | null; dynamic?: boolean }[]): MemberDraft[] {
+  return ids.map((m) => ({ extension_id: m.extension_id, penalty: String(m.penalty ?? 0), dynamic: Boolean(m.dynamic) }));
 }
 
 export function membersValid(members: MemberDraft[], penalties = false): boolean {

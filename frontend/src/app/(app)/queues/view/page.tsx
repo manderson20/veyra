@@ -29,6 +29,7 @@ function QueueView() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [changed, setChanged] = useState(0);
+  const [agentBusy, setAgentBusy] = useState<string | null>(null);
 
   useOnChange(queue.data, (q) => {
     if (q) setDraft(queueDraft(q));
@@ -69,6 +70,16 @@ function QueueView() {
   };
 
   const agents = q.members.length;
+  const setAgent = async (extensionId: string, body: { logged_in?: boolean; paused?: boolean }, kind: string) => {
+    setAgentBusy(`${extensionId}:${kind}`);
+    try {
+      queue.setData(await api.post<CallQueue>(`/queues/${q.id}/agents/${extensionId}/state`, body));
+    } catch (err) {
+      toast.error("Could not change the agent", errorMessage(err));
+    } finally {
+      setAgentBusy(null);
+    }
+  };
   return (
     <div className="stack">
       <PageHeader
@@ -99,6 +110,26 @@ function QueueView() {
           </form>
         </Card>
         <div className="stack">
+          {q.members.some((m) => m.dynamic) ? (
+            <Card title="Agents" subtitle="Dynamic agents log in and out here or from their phones; changes apply at once.">
+              <ul className="list-plain">
+                {q.members.filter((m) => m.dynamic).map((m) => (
+                  <li key={m.extension_id} className="list-row" style={{ padding: "var(--space-2) 0" }}>
+                    <span className="row" style={{ gap: 8 }}>
+                      <span className="table__primary">{m.number} — {m.display_name}</span>
+                      <Badge tone={m.logged_in ? (m.paused ? "warn" : "ok") : "neutral"}>{m.logged_in ? (m.paused ? "Paused" : "Logged in") : "Logged out"}</Badge>
+                    </span>
+                    {editable ? (
+                      <span className="row" style={{ gap: 4 }}>
+                        <Button size="sm" loading={agentBusy === `${m.extension_id}:login`} disabled={agentBusy !== null} onClick={() => setAgent(m.extension_id, { logged_in: !m.logged_in }, "login")}>{m.logged_in ? "Log out" : "Log in"}</Button>
+                        <Button size="sm" variant="ghost" loading={agentBusy === `${m.extension_id}:pause`} disabled={agentBusy !== null || !m.logged_in} onClick={() => setAgent(m.extension_id, { paused: !m.paused }, "pause")}>{m.paused ? "Resume" : "Pause"}</Button>
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
           <Card title="As deployed" subtitle="What the phone system does with this queue after the next deployment.">
             <dl className="dl">
               <dt>Dial</dt><dd><span className="mono">{q.number}</span></dd>

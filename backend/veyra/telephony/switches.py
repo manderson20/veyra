@@ -31,6 +31,8 @@ log = logging.getLogger("veyra.switches")
 
 FAMILY = "veyra/switch"
 KINDS = ("flow", "tc")
+# Lamp-only kinds written by the agents module (docs/CALL_FEATURES.md §4.9).
+LAMP_KINDS = ("agent", "agentpause")
 SWITCH_EVENT = "VeyraSwitch"
 TC_STATES = ("open", "closed")
 
@@ -243,7 +245,7 @@ def sync(db: Session, adapter: Any, now: datetime | None = None) -> int:
             except (EngineUnavailable, NotSupported, ValueError) as e:
                 log.warning("Could not sync switch %s: %s", key, e)
     for key in have:
-        if key not in want:
+        if key not in want and key[0] not in LAMP_KINDS:
             try:
                 adapter.set_switch(*key, None)
                 fixed += 1

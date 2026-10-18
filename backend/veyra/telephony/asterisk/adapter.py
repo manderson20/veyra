@@ -49,7 +49,7 @@ _CHANNEL_ENDPOINT_RE = re.compile(r"^PJSIP/([A-Za-z0-9_.-]+)-[0-9a-f]+$")
 
 STATE_FAMILY = "veyra/ext"
 STATE_FIELDS = ("dnd", "cf_always", "cf_busy", "cf_no_answer", "fmfm")
-_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9+][A-Za-z0-9_.-]{0,62}$")
 _VALUE_RE = re.compile(r"^[+0-9]{0,32}$")
 # "/veyra/ext/example/1001/cf_always                 : 5735550100"
 _STATE_ROW_RE = re.compile(
@@ -57,8 +57,42 @@ _STATE_ROW_RE = re.compile(
 )
 
 
+_FAMILY_RE = re.compile(r"^veyra(/[A-Za-z0-9_.+-]{1,64}){1,3}$")
+_STORE_VALUE_RE = re.compile(r"^[A-Za-z0-9 ._+-]{1,200}$")
+
+
+def _check_family(family: str) -> str:
+    if not _FAMILY_RE.match(family):
+        raise ValueError(f"store family {family!r} is not one of Veyra's")
+    return family
+
+
+_SECTION_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
+_INTERFACE_RE = re.compile(r"^PJSIP/[A-Za-z0-9_.-]{1,63}$")
+# Member lines of "queue show", with or without a name and a penalty:
+#   PJSIP/example-1001 (ringinuse disabled) (dynamic) (paused:veyra ...) (Not in use) has taken ...
+#   Front Office (PJSIP/example-1001 from PJSIP/example-1001) with penalty 2 (dynamic) ...
+_QUEUE_MEMBER_RE = re.compile(
+    r"^\s+(?:[^()]*\()?(?P<iface>PJSIP/[A-Za-z0-9_.-]+)(?: from [^)]*)?\)?"
+    r"(?: with penalty (?P<penalty>[0-9]+))?.*\((?:Not in use|In use|Busy|Unavailable|Ringing|"
+    r"Ring\+Inuse|On Hold|Invalid|Unknown)\)"
+)
+
+
+def _check_section_name(value: str) -> str:
+    if not _SECTION_NAME_RE.match(value):
+        raise ValueError(f"queue name {value!r} is not valid")
+    return value
+
+
+def _check_interface(value: str) -> str:
+    if not _INTERFACE_RE.match(value):
+        raise ValueError(f"interface {value!r} is not a PJSIP endpoint")
+    return value
+
+
 SWITCH_FAMILY = "veyra/switch"
-SWITCH_KINDS = ("flow", "tc")
+SWITCH_KINDS = ("flow", "tc", "agent", "agentpause")
 _SWITCH_VALUE_RE = re.compile(r"^[a-z0-9]{1,16}$")
 # "/veyra/switch/flow/example/night                   : 1"
 _SWITCH_ROW_RE = re.compile(
@@ -274,6 +308,80 @@ class AsteriskAdapter(TelephonyAdapter):
         cli.run(
             f"devstate change Custom:veyra-{kind}-{org}-{k} {'INUSE' if value else 'NOT_INUSE'}"
         )
+
+    def store_entries(self, family: str) -> dict[str, str]:
+        fam = _check_family(family)
+        ok, out = cli.run(f"database show {fam}")
+        if not ok:
+            raise EngineUnavailable(f"could not read the store family {fam}: {out[:200]}")
+        found: dict[str, str] = {}
+        prefix = f"/{fam}/"
+        for line in out.splitlines():
+            line = line.strip()
+            if not line.startswith(prefix) or ":" not in line:
+                continue
+            path, _, value = line.partition(":")
+            key = path[len(prefix) :].strip()
+            if key and "/" not in key and value.strip():
+                found[key] = value.strip()
+        return found
+
+    def store_put(self, family: str, key: str, value: str | None) -> None:
+        fam = _check_family(family)
+        k = _check_token(key, "store key")
+        if value is not None and not _STORE_VALUE_RE.match(value):
+            raise ValueError(f"store value {value!r} is not valid")
+        cmd = f"database put {fam} {k} {value}" if value else f"database del {fam} {k}"
+        ok, out = cli.run(cmd)
+        if not ok and not (not value and "not found" in out.lower()):
+            raise EngineUnavailable(f"could not write the store: {out[:200]}")
+
+    def queue_members(self, queue: str) -> dict[str, dict[str, Any]]:
+        q = _check_section_name(queue)
+        ok, out = cli.run(f"queue show {q}")
+        if not ok:
+            raise EngineUnavailable(f"could not read the queue {q}: {out[:200]}")
+        if "No such queue" in out:
+            return {}
+        members: dict[str, dict[str, Any]] = {}
+        for line in out.splitlines():
+            m = _QUEUE_MEMBER_RE.match(line)
+            if m:
+                members[m.group("iface")] = {
+                    "dynamic": "(dynamic)" in line,
+                    "paused": "(paused" in line,
+                    "penalty": int(m.group("penalty") or 0),
+                }
+        return members
+
+    def set_queue_member(
+        self,
+        queue: str,
+        interface: str,
+        *,
+        present: bool,
+        paused: bool = False,
+        penalty: int = 0,
+        name: str = "",
+    ) -> None:
+        q = _check_section_name(queue)
+        iface = _check_interface(interface)
+        if present:
+            label = re.sub(r"[^A-Za-z0-9 ._-]", "", name)[:40] or iface
+            ok, out = cli.run(
+                f"queue add member {iface} to {q} penalty {int(penalty)} "
+                f'as "{label}" state_interface {iface}'
+            )
+            if not ok or ("Unable" in out and "Already" not in out):
+                raise EngineUnavailable(f"could not add {iface} to {q}: {out[:200]}")
+            verb = "pause" if paused else "unpause"
+            ok, out = cli.run(f"queue {verb} member {iface} queue {q} reason veyra")
+            if not ok or "Unable" in out:
+                raise EngineUnavailable(f"could not {verb} {iface} in {q}: {out[:200]}")
+        else:
+            ok, out = cli.run(f"queue remove member {iface} from {q}")
+            if not ok or ("Unable" in out and "not there" not in out.lower()):
+                raise EngineUnavailable(f"could not remove {iface} from {q}: {out[:200]}")
 
     def switches(self) -> dict[tuple[str, str, str], str]:
         ok, out = cli.run(f"database show {SWITCH_FAMILY}")

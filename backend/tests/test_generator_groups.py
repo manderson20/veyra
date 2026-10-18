@@ -208,7 +208,7 @@ def test_queue_context_and_queues_conf():
     assert not qc.sensitive
     assert qc.content.startswith("; Managed by Veyra")
     assert (
-        "[general]\npersistentmembers=no\nautofill=yes\nshared_lastcall=yes\nmonitor-type=\n"
+        "[general]\npersistentmembers=yes\nautofill=yes\nshared_lastcall=yes\nmonitor-type=\n"
         in qc.content
     )
     assert (

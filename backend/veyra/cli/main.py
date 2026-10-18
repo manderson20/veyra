@@ -1137,6 +1137,16 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         fixed = switches.sync(db, get_adapter(settings))
                         if fixed:
                             log.info("Synced %d switch(es) to the engine", fixed)
+                        from veyra.telephony import blacklist
+
+                        fixed = blacklist.sync(db, get_adapter(settings))
+                        if fixed:
+                            log.info("Synced %d block list entr(ies) to the engine", fixed)
+                        from veyra.telephony import agents
+
+                        fixed = agents.sync(db, get_adapter(settings))
+                        if fixed:
+                            log.info("Synced %d queue agent(s) to the engine", fixed)
                         # Samples are pruned by the retention job.
             except Exception:
                 log.exception("Worker iteration failed")

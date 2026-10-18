@@ -230,3 +230,61 @@ class ParkingLot(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class CallerBlock(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """A blocked caller number of an organization (docs/CALL_FEATURES.md
+    §4.8). The engine keeps a copy in its store (``veyra/blacklist/<org>``)
+    that inbound routes consult at call time; the worker keeps it in step."""
+
+    __tablename__ = "caller_blocks"
+    __table_args__ = (UniqueConstraint("organization_id", "number"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    # As the carrier presents it, digits with an optional leading +.
+    number: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str | None] = mapped_column(String(200))
+    # api | phone | csv
+    source: Mapped[str] = mapped_column(String(16), default="api")
+    hits: Mapped[int] = mapped_column(Integer, default=0)
+    last_hit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CallerBlockPolicy(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """Per organization: whether anonymous callers are blocked and where
+    blocked calls go (hang up with "no service" when no destination)."""
+
+    __tablename__ = "caller_block_policies"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    block_anonymous: Mapped[bool] = mapped_column(Boolean, default=False)
+    anonymous_hits: Mapped[int] = mapped_column(Integer, default=0)
+    destination_type: Mapped[str] = mapped_column(String(16), default="hangup")
+    destination_extension_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extensions.id", ondelete="SET NULL")
+    )
+    destination_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )

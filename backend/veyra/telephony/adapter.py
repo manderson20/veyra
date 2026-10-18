@@ -182,6 +182,33 @@ class TelephonyAdapter(ABC):
         """(kind, organization slug, key) -> value for every switch that is on."""
         raise NotSupported("engine switches are not supported by this engine")
 
+    def store_entries(self, family: str) -> dict[str, str]:
+        """Every key -> value below a family of the engine's store
+        (``veyra/blacklist/<org>`` and the like; Capability.EXTENSION_STATE)."""
+        raise NotSupported("the engine store is not supported by this engine")
+
+    def store_put(self, family: str, key: str, value: str | None) -> None:
+        """Write (None: delete) one entry of the engine's store."""
+        raise NotSupported("the engine store is not supported by this engine")
+
+    def queue_members(self, queue: str) -> dict[str, dict[str, Any]]:
+        """Interface -> {dynamic, paused, penalty} of a queue's current members
+        (docs/CALL_FEATURES.md §4.9; Capability.QUEUES and the CLI)."""
+        raise NotSupported("queue members are not supported by this engine")
+
+    def set_queue_member(
+        self,
+        queue: str,
+        interface: str,
+        *,
+        present: bool,
+        paused: bool = False,
+        penalty: int = 0,
+        name: str = "",
+    ) -> None:
+        """Log a dynamic agent in or out of a queue and set its pause state live."""
+        raise NotSupported("queue members are not supported by this engine")
+
     def registrations(self) -> list[Registration]:
         """Every registered contact with its addresses (Capability.REGISTRATIONS)."""
         raise NotSupported(f"{self.name}: registration details not implemented")

@@ -99,6 +99,49 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         True,
     ),
     FeatureCodeDef(
+        "blacklist_add",
+        "*30",
+        "Block a caller",
+        "Enter a number; callers from it are refused for the whole organization.",
+        19,
+    ),
+    FeatureCodeDef(
+        "blacklist_remove", "*31", "Unblock a caller", "Enter a number to remove it.", 19
+    ),
+    FeatureCodeDef(
+        "blacklist_last",
+        "*32",
+        "Block the last caller",
+        "Blocks the number of the last outside call this phone received directly.",
+        19,
+    ),
+    FeatureCodeDef(
+        "queue_login",
+        "*45",
+        "Queue log in / log out",
+        "Toggles this phone in every queue it may join; followed by a queue number, "
+        "in that queue only.",
+        19,
+        True,
+    ),
+    FeatureCodeDef(
+        "queue_pause",
+        "*46",
+        "Queue pause / unpause",
+        "Pauses or resumes this phone in its queues; followed by a queue number, "
+        "in that queue only.",
+        19,
+        True,
+    ),
+    FeatureCodeDef(
+        "queue_count",
+        "*47",
+        "Queue waiting count",
+        "Followed by a queue number: says how many callers are waiting.",
+        19,
+        True,
+    ),
+    FeatureCodeDef(
         "vm_direct",
         "*",
         "Direct to voicemail",

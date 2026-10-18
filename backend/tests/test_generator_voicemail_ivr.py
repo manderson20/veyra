@@ -119,6 +119,8 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
     dp = files["extensions.conf"].content
     assert (
         "exten => 1001,1,NoOp(Veyra extension 1001)\n"
+        ' same => n,ExecIf($["${VEYRA_DID}"!="" & "${CALLERID(num)}"!=""]'
+        "?Set(DB(veyra/lastcid/example/1001)=${CALLERID(num)}))\n"
         ' same => n,GotoIf($["${DB(veyra/ext/example/1001/dnd)}"="1"]?dnd)\n'
         " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_always)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
@@ -135,6 +137,8 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
     )
     assert (
         "exten => 1002,1,NoOp(Veyra extension 1002)\n"
+        ' same => n,ExecIf($["${VEYRA_DID}"!="" & "${CALLERID(num)}"!=""]'
+        "?Set(DB(veyra/lastcid/example/1002)=${CALLERID(num)}))\n"
         ' same => n,GotoIf($["${DB(veyra/ext/example/1002/dnd)}"="1"]?dnd)\n'
         " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_always)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'

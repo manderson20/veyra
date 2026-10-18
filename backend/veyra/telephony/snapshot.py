@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from veyra.core.mail import load_smtp_settings, sender
 from veyra.core.models import (
     Announcement,
+    CallerBlockPolicy,
     CallFlow,
     CallQueue,
     ClassOfService,
@@ -220,6 +221,17 @@ def _callflow(
                 "override_destination": targets.dest(f, "override"),
             }
             for f in flows or []
+        ],
+        # Caller block list policy per organization (docs/CALL_FEATURES.md
+        # §4.8); the numbers themselves live in the engine store.
+        "caller_block_policies": [
+            {
+                "organization": org_slug.get(p.organization_id, ""),
+                "block_anonymous": bool(p.block_anonymous),
+                "destination": targets.dest(p, "destination"),
+            }
+            for p in db.scalars(select(CallerBlockPolicy))
+            if p.organization_id in org_slug
         ],
         "parking_lots": [
             {
@@ -929,12 +941,21 @@ def _groups(
                 "music": q.music,
                 "hold_music": moh_slug(q.moh_class_id, q.organization_id),
                 "members": [
-                    {**member(ext_by_id[m.extension_id]), "penalty": m.penalty}
+                    {
+                        **member(ext_by_id[m.extension_id]),
+                        "penalty": m.penalty,
+                        "dynamic": bool(m.dynamic),
+                        "logged_in": bool(m.logged_in),
+                        "paused": bool(m.paused),
+                    }
                     for m in sorted(
                         q_members.get(q.id, []),
                         key=lambda m: (m.penalty, ext_by_id[m.extension_id].number),
                     )
                 ],
+                # Break-out menu (docs/CALL_FEATURES.md §4.10): the IVR context
+                # callers may press a key into while waiting.
+                "breakout": targets.ivr_slug.get(q.breakout_ivr_id) if q.breakout_ivr_id else None,
                 "failover": targets.dest(q, "failover"),
             }
             for q in queues

@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -18,12 +18,12 @@ from veyra.api.v1 import destinations, hold_music
 from veyra.api.v1 import group_helpers as helpers
 from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
 from veyra.api.v1.group_helpers import READ, WRITE, MemberOut
-from veyra.core import tenancy
+from veyra.core import audit, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import conflict, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import CallQueue, Prompt, QueueMember
+from veyra.core.models import CallQueue, IvrMenu, Prompt, QueueMember
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
@@ -42,6 +42,21 @@ MAX_MEMBERS = 64
 class AgentIn(BaseModel):
     extension_id: uuid.UUID
     penalty: int = Field(0, ge=0, le=9)
+    # A dynamic agent is in the queue only while logged in (docs/CALL_FEATURES.md §4.9).
+    dynamic: bool = False
+
+
+class AgentStateIn(BaseModel):
+    logged_in: bool | None = None
+    paused: bool | None = None
+
+
+class AgentOut(MemberOut):
+    dynamic: bool = False
+    logged_in: bool = True
+    paused: bool = False
+    state_by: str | None = None
+    state_at: datetime | None = None
 
 
 class QueueIn(BaseModel):
@@ -65,6 +80,8 @@ class QueueIn(BaseModel):
     # Hold music set for music=default; none = the built-in set.
     moh_class_id: uuid.UUID | None = None
     failover: DestinationIn = Field(default_factory=lambda: DestinationIn(type="hangup"))
+    # Break-out menu (docs/CALL_FEATURES.md §4.10): keys callers may press while waiting.
+    breakout_ivr_id: uuid.UUID | None = None
     members: list[AgentIn] = Field(default_factory=list, max_length=MAX_MEMBERS)
     is_enabled: bool = True
 
@@ -112,6 +129,7 @@ class QueuePatch(BaseModel):
     music: Music | None = None
     moh_class_id: uuid.UUID | None = None
     failover: DestinationIn | None = None
+    breakout_ivr_id: uuid.UUID | None = None
     members: list[AgentIn] | None = Field(None, max_length=MAX_MEMBERS)
     is_enabled: bool | None = None
 
@@ -144,7 +162,9 @@ class QueueOut(BaseModel):
     moh_class_id: uuid.UUID | None
     moh_class_name: str | None
     failover: DestinationOut
-    members: list[MemberOut]
+    breakout_ivr_id: uuid.UUID | None = None
+    breakout_ivr_name: str | None = None
+    members: list[AgentOut]
     is_enabled: bool
     problems: list[str]
     in_use_by: int
@@ -178,6 +198,12 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
         db, {m.extension_id for rows_ in members.values() for m in rows_}
     )
     prompt_ids = {r.announcement_prompt_id for r in rows} | {r.periodic_prompt_id for r in rows}
+    menu_ids = {r.breakout_ivr_id for r in rows if r.breakout_ivr_id}
+    menus = (
+        {x.id: x.name for x in db.scalars(select(IvrMenu).where(IvrMenu.id.in_(menu_ids)))}
+        if menu_ids
+        else {}
+    )
     prompt_ids.discard(None)
     prompts = (
         {p.id: p for p in db.scalars(select(Prompt).where(Prompt.id.in_(prompt_ids)))}
@@ -196,12 +222,17 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
             if ext is None:
                 continue
             member_outs.append(
-                MemberOut(
+                AgentOut(
                     extension_id=ext.id,
                     number=ext.number,
                     display_name=ext.display_name,
                     is_enabled=ext.is_enabled,
                     penalty=m.penalty,
+                    dynamic=bool(m.dynamic),
+                    logged_in=bool(m.logged_in) if m.dynamic else True,
+                    paused=bool(m.paused) if m.dynamic else False,
+                    state_by=m.state_by,
+                    state_at=m.state_at,
                 )
             )
         member_outs.sort(key=lambda mo: (mo.penalty or 0, mo.number))
@@ -240,6 +271,8 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
                 periodic_prompt_id=r.periodic_prompt_id,
                 periodic_prompt_name=per.name if per else None,
                 periodic_seconds=r.periodic_seconds,
+                breakout_ivr_id=r.breakout_ivr_id,
+                breakout_ivr_name=menus.get(r.breakout_ivr_id) if r.breakout_ivr_id else None,
                 music=r.music,
                 moh_class_id=r.moh_class_id,
                 moh_class_name=moh_names.get(r.moh_class_id) if r.moh_class_id else None,
@@ -264,11 +297,29 @@ def _get(db: Session, principal: Principal, queue_id: uuid.UUID, perm: str) -> C
 
 
 def _set_members(db: Session, queue: CallQueue, agents: list[AgentIn]) -> None:
+    """Replace the members; a dynamic agent that stays keeps its login state."""
+    state = {
+        m.extension_id: (m.logged_in, m.paused, m.state_by, m.state_at)
+        for m in db.scalars(select(QueueMember).where(QueueMember.queue_id == queue.id))
+        if m.dynamic
+    }
     for old in db.scalars(select(QueueMember).where(QueueMember.queue_id == queue.id)):
         db.delete(old)
     db.flush()
     for a in agents:
-        db.add(QueueMember(queue_id=queue.id, extension_id=a.extension_id, penalty=a.penalty))
+        kept = state.get(a.extension_id) if a.dynamic else None
+        db.add(
+            QueueMember(
+                queue_id=queue.id,
+                extension_id=a.extension_id,
+                penalty=a.penalty,
+                dynamic=a.dynamic,
+                logged_in=kept[0] if kept else False,
+                paused=kept[1] if kept else False,
+                state_by=kept[2] if kept else None,
+                state_at=kept[3] if kept else None,
+            )
+        )
     db.flush()
 
 
@@ -285,6 +336,12 @@ def _check(db: Session, org_id: uuid.UUID, body: QueueIn, self_id: uuid.UUID | N
     helpers.load_members(db, org_id, [a.extension_id for a in body.members], "members")
     _check_prompt(db, org_id, body.announcement_prompt_id, "announcement_prompt_id")
     _check_prompt(db, org_id, body.periodic_prompt_id, "periodic_prompt_id")
+    if body.breakout_ivr_id is not None:
+        menu = db.get(IvrMenu, body.breakout_ivr_id)
+        if menu is None or menu.organization_id != org_id:
+            raise helpers.validation("breakout_ivr_id", "IVR menu not found in this organization")
+        if not menu.is_enabled:
+            raise helpers.validation("breakout_ivr_id", f"the menu {menu.name} is disabled")
     hold_music.check_set(db, org_id, body.moh_class_id, "moh_class_id")
     check_destination(
         db, org_id, body.failover, field="failover", allow_hangup=True, exclude_queue=self_id
@@ -310,6 +367,7 @@ _FIELDS = (
     "announcement_prompt_id",
     "periodic_prompt_id",
     "periodic_seconds",
+    "breakout_ivr_id",
     "music",
     "moh_class_id",
     "is_enabled",
@@ -404,7 +462,7 @@ def update_queue(
     changes = body.model_dump(exclude_unset=True)
     current_members = sorted(
         (
-            {"extension_id": m.extension_id, "penalty": m.penalty}
+            {"extension_id": m.extension_id, "penalty": m.penalty, "dynamic": bool(m.dynamic)}
             for m in _members(db, {queue.id})[queue.id]
         ),
         key=lambda m: str(m["extension_id"]),
@@ -456,6 +514,67 @@ def update_queue(
     )
     db.commit()
     bus.publish(Event("queue.updated", {"id": str(queue.id)}))
+    return _outs(db, [queue])[0]
+
+
+@router.post(
+    "/{queue_id}/agents/{extension_id}/state",
+    response_model=QueueOut,
+    summary="Log a dynamic agent in or out, pause or resume it",
+)
+def set_agent_state(
+    queue_id: uuid.UUID,
+    extension_id: uuid.UUID,
+    body: AgentStateIn,
+    request: Request,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> QueueOut:
+    """Takes effect at once (the queue engine is written live); no
+    deployment is needed. Static agents have no state to change (409)."""
+    from veyra.core.models import Extension
+    from veyra.telephony import agents
+
+    queue = _get(db, principal, queue_id, WRITE)
+    member = db.scalar(
+        select(QueueMember).where(
+            QueueMember.queue_id == queue.id, QueueMember.extension_id == extension_id
+        )
+    )
+    ext = db.get(Extension, extension_id)
+    if member is None or ext is None:
+        raise not_found("Agent")
+    if not member.dynamic:
+        raise conflict("A static agent is always in the queue.", "agent_not_dynamic")
+    changed = agents.set_state(
+        db,
+        queue,
+        ext,
+        logged_in=body.logged_in,
+        paused=body.paused,
+        by=principal.label,
+        adapter=request.app.state.telephony,
+    )
+    if changed is not None:
+        audit.record(
+            db,
+            action="queue.agent_state",
+            actor_user_id=principal.user_id,
+            actor_label=principal.label,
+            organization_id=queue.organization_id,
+            target_type="queue",
+            target_id=queue.id,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={
+                "name": queue.name,
+                "extension": ext.number,
+                "logged_in": bool(changed.logged_in),
+                "paused": bool(changed.paused),
+            },
+        )
+        db.commit()
     return _outs(db, [queue])[0]
 
 

@@ -11,8 +11,9 @@ extensions, ring groups and queues of the installation.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -150,6 +151,11 @@ class CallQueue(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     failover_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
     )
+    # Break-out menu (docs/CALL_FEATURES.md §4.10): while waiting, callers may
+    # press one of this IVR menu's keys to leave the queue.
+    breakout_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL")
+    )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -163,6 +169,13 @@ class QueueMember(Base):
         ForeignKey("extensions.id", ondelete="CASCADE"), primary_key=True
     )
     penalty: Mapped[int] = mapped_column(Integer, default=0)
+    # Dynamic agents (docs/CALL_FEATURES.md §4.9) join the queue only while
+    # logged in (*45, the interface or the API); static ones are always in.
+    dynamic: Mapped[bool] = mapped_column(Boolean, default=False)
+    logged_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    state_by: Mapped[str | None] = mapped_column(String(200))
+    state_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PickupGroup(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

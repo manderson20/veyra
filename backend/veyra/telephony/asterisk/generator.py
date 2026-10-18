@@ -121,6 +121,15 @@ SWITCH_PIN_TRIES = 3
 MAX_CODE_INDEX = 99
 # Parking (docs/CALL_FEATURES.md §4.7).
 PARKING_MAX_SLOTS = 50
+# Caller block list (docs/CALL_FEATURES.md §4.8).
+BLACKLIST_FAMILY = "veyra/blacklist"
+LASTCID_FAMILY = "veyra/lastcid"
+BLACKLIST_EVENT = "VeyraBlacklist"
+BLOCKED_EVENT = "VeyraBlocked"
+ANONYMOUS_VALUES = ("", "anonymous", "restricted", "unavailable", "unknown", "private")
+# Queue dynamic agents (docs/CALL_FEATURES.md §4.9).
+AGENT_FAMILY = "veyra/agent"
+AGENT_EVENT = "VeyraAgent"
 MAX_GROUP_DEPTH = 6
 RING_GROUP_STRATEGIES = ("ringall", "sequential")
 QUEUE_STRATEGIES = ("ringall", "rrmemory", "leastrecent", "fewestcalls", "random", "linear")
@@ -1084,6 +1093,7 @@ def _dialplan(
                 _cos_for(snapshot, ns),
                 mine(flows, ns),
                 mine(tcs, ns),
+                mine(queues, ns),
             )
             lines += _voicemail_exit_contexts(my_boxes(ns))
     for ns in spaces:
@@ -1100,7 +1110,8 @@ def _dialplan(
                 codes.get("fmfm_toggle"),
                 _cos_for(snapshot, ns),
                 mine(rooms, ns),
-                _switch_hints(codes, mine(flows, ns), mine(tcs, ns)),
+                _switch_hints(codes, mine(flows, ns), mine(tcs, ns))
+                + _agent_hints(codes, mine(queues, ns)),
                 mine(lots, ns),
             )
     lines += _follow_me_contexts(spaces)
@@ -1138,8 +1149,17 @@ def _dialplan(
         "",
     ]
     lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir, spaces, cos_all)
+    policies = {
+        str(p.get("organization") or ""): p for p in (snapshot.get("caller_block_policies") or [])
+    }
     lines += _inbound_contexts(
-        inbound, conditions, trunk_slugs, recording, prompts_dir, list(snapshot.get("sites") or [])
+        inbound,
+        conditions,
+        trunk_slugs,
+        recording,
+        prompts_dir,
+        list(snapshot.get("sites") or []),
+        policies,
     )
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -1147,6 +1167,7 @@ def _dialplan(
             lines += _announcement_contexts(mine(announcements, ns), prompts_dir)
             lines += _conference_contexts(mine(rooms, ns))
             lines += _call_flow_contexts(mine(flows, ns))
+            lines += _agent_contexts(codes, mine(queues, ns))
             lines += _parking_contexts(mine(lots, ns))
             lines += _directory_context()
     moh = _check_moh(list(snapshot.get("hold_music") or []))
@@ -1685,6 +1706,7 @@ def _features(
     cos: Cos | None = None,
     flows: list[dict[str, Any]] | None = None,
     conditions: list[dict[str, Any]] | None = None,
+    queues: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """Feature codes of one namespace; ``**<ext>`` reaches only its phones."""
     n = engine_names.current()
@@ -1698,6 +1720,8 @@ def _features(
         *_voicemail_direct(codes, boxes or [], cos),
         *_call_flow_codes(codes, flows or [], cos),
         *_tc_override_codes(codes, conditions or [], cos),
+        *_blacklist_codes(codes, cos),
+        *_agent_codes(codes, queues or [], cos),
         "; *43 echo test, *60 speaking clock: always available for phone checks.",
         "exten => *43,1,NoOp(Veyra echo test)",
         " same => n,Answer()",
@@ -1849,6 +1873,9 @@ def _internal(
         ]
         head = [
             f"exten => {number},1,NoOp(Veyra extension {number})",
+            # The last outside caller, for the block-last-caller code (§4.8).
+            f' same => n,ExecIf($["${{VEYRA_DID}}"!="" & "${{CALLERID(num)}}"!=""]'
+            f"?Set(DB({LASTCID_FAMILY}/{org_slug}/{number})=${{CALLERID(num)}}))",
             f' same => n,GotoIf($["${{DB({state}/dnd)}}"="1"]?dnd)',
             f" same => n,Set(VEYRA_CF=${{DB({state}/cf_always)}})",
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
@@ -2082,6 +2109,7 @@ def _inbound_contexts(
     recording: list[dict[str, Any]] | None = None,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
     sites: list[dict[str, Any]] | None = None,
+    policies: dict[str, dict[str, Any]] | None = None,
 ) -> list[str]:
     """``veyra-from-trunk`` (shared DIDs), one ``veyra-from-trunk-<slug>`` per
     trunk (its restricted DIDs, then the shared ones, then its fallback), and
@@ -2135,16 +2163,19 @@ def _inbound_contexts(
         did = r["did"]
         if did == routing.DID_ANY:
             return []  # rendered by the fallback context
+        org = str(r.get("organization_slug") or "")
         out = [
             f"exten => {did},1,NoOp(Veyra inbound {did} via ${{VEYRA_TRUNK}})",
             " same => n,Set(__VEYRA_HOPS=1)",
             f" same => n,Set(__VEYRA_DID={did})",
+            *_blacklist_check(org, (policies or {}).get(org)),
             *_record_inbound(recording or [], r, prompts_dir),
         ]
         site = elins.get(routing.canonical_did(did))
         if site is not None:
             out += callback_lines(site, did)
         out += _destination_lines(r, conditions)
+        out += _blocked_tail(r, (policies or {}).get(org))
         for alias in routing.did_aliases(did):
             if (r.get("trunk") or None, alias) not in explicit:
                 out.append(f"exten => {alias},1,Goto({context},{did},1)")
@@ -2181,12 +2212,15 @@ def _inbound_contexts(
         lines.append(f"[{ctx}-fallback]")
         if catch is not None:
             for exten in ("_[0-9+*#].", "s"):
+                org = str(catch.get("organization_slug") or "")
                 lines += [
                     f"exten => {exten},1,NoOp(Veyra inbound ${{EXTEN}} via ${{VEYRA_TRUNK}}: any)",
                     " same => n,Set(__VEYRA_HOPS=1)",
                     " same => n,Set(__VEYRA_DID=${EXTEN})",
+                    *_blacklist_check(org, (policies or {}).get(org)),
                 ]
                 lines += _destination_lines(catch, conditions)
+                lines += _blocked_tail(catch, (policies or {}).get(org))
         else:
             lines += [
                 "exten => _[0-9+*#].,1,NoOp(Veyra: no inbound route for ${EXTEN} on trunk)",
@@ -2377,6 +2411,296 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
             lines += _goto(dest if dest is not None else {"type": "hangup"})
         lines.append("")
     return lines
+
+
+def _blacklist_check(org: str, policy: dict[str, Any] | None) -> list[str]:
+    """Refuse blocked callers at the entry of an inbound route (docs/CALL_FEATURES.md
+    §4.8): numbers in the organization's store family, and withheld numbers
+    when the policy says so."""
+    if not org:
+        return []
+    org = _slug(org, "organization")
+    lines = [
+        " same => n,Set(VEYRA_CID=${CALLERID(num)})",
+        f" same => n,GotoIf(${{DB_EXISTS({BLACKLIST_FAMILY}/{org}/${{VEYRA_CID}})}}?blocked)",
+    ]
+    if policy and policy.get("block_anonymous"):
+        tests = " | ".join(f'"${{TOLOWER(${{VEYRA_CID}})}}"="{v}"' for v in ANONYMOUS_VALUES)
+        lines.append(
+            f' same => n,GotoIf($[{tests} | "${{CALLERID(pres)}}"="prohib_passed_screen"'
+            ' | "${CALLERID(pres)}"="prohib_failed_screen" | "${CALLERID(pres)}"="prohib"'
+            ' | "${CALLERID(pres)}"="prohib_not_screened"]?blocked)'
+        )
+    return lines
+
+
+def _blocked_tail(r: dict[str, Any], policy: dict[str, Any] | None) -> list[str]:
+    """Where a refused call goes: the policy's destination, else "no service"."""
+    org = str(r.get("organization_slug") or "")
+    if not org:
+        return []
+    org = _slug(org, "organization")
+    lines = [
+        " same => n(blocked),NoOp(Veyra: blocked caller ${VEYRA_CID} on ${VEYRA_DID})",
+        f" same => n,UserEvent({BLOCKED_EVENT},Org: {org},Number: ${{VEYRA_CID}},"
+        "Did: ${VEYRA_DID})",
+    ]
+    dest = (policy or {}).get("destination")
+    if dest and dest.get("type") not in (None, "hangup", "missing"):
+        with engine_names.using(engine_names.for_org(org)):
+            lines += _goto(dest)
+    else:
+        lines += [
+            " same => n,Answer()",
+            " same => n,Wait(1)",
+            " same => n,Playback(ss-noservice)",
+            " same => n,Hangup()",
+        ]
+    return lines
+
+
+def _blacklist_event(action: str) -> str:
+    return (
+        f" same => n,UserEvent({BLACKLIST_EVENT},Action: {action},Org: ${{VEYRA_ORG}},"
+        "Number: ${VEYRA_NUM},By: ${VEYRA_EXT})"
+    )
+
+
+def _blacklist_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
+    """``*30`` block a number, ``*31`` unblock, ``*32`` block the last outside
+    caller of this phone (docs/CALL_FEATURES.md §4.8). The store is written at
+    once and the API is told with a UserEvent."""
+    lines: list[str] = []
+    store = f"{BLACKLIST_FAMILY}/${{VEYRA_ORG}}"
+    if "blacklist_add" in codes:
+        head = f"exten => {codes['blacklist_add']},1,NoOp(Veyra block a caller from ${{VEYRA_EXT}})"
+        body = [
+            " same => n,Read(VEYRA_NUM,enter-num-blacklist,32,,1,10)",
+            ' same => n,GotoIf($["${VEYRA_NUM}"=""]?nophone)',
+            f" same => n,Set(DB({store}/${{VEYRA_NUM}})=1)",
+            _blacklist_event("add"),
+            " same => n,Playback(num-was-successfully&added)",
+            " same => n,Hangup()",
+        ]
+        lines += _code_block(head, body, cos, "blacklist_add")
+    if "blacklist_remove" in codes:
+        code = codes["blacklist_remove"]
+        head = f"exten => {code},1,NoOp(Veyra unblock a caller from ${{VEYRA_EXT}})"
+        body = [
+            " same => n,Read(VEYRA_NUM,enter-num-blacklist,32,,1,10)",
+            ' same => n,GotoIf($["${VEYRA_NUM}"=""]?nophone)',
+            f" same => n,Set(VEYRA_DEL=${{DB_DELETE({store}/${{VEYRA_NUM}})}})",
+            _blacklist_event("remove"),
+            " same => n,Playback(num-was-successfully&removed)",
+            " same => n,Hangup()",
+        ]
+        lines += _code_block(head, body, cos, "blacklist_remove")
+    if "blacklist_last" in codes:
+        code = codes["blacklist_last"]
+        head = f"exten => {code},1,NoOp(Veyra block the last caller of ${{VEYRA_EXT}})"
+        body = [
+            f" same => n,Set(VEYRA_NUM=${{DB({LASTCID_FAMILY}/${{VEYRA_ORG}}/${{VEYRA_EXT}})}})",
+            ' same => n,GotoIf($["${VEYRA_NUM}"=""]?none)',
+            f" same => n,Set(DB({store}/${{VEYRA_NUM}})=1)",
+            _blacklist_event("add"),
+            " same => n,SayDigits(${VEYRA_NUM})",
+            " same => n,Playback(num-was-successfully&added)",
+            " same => n,Hangup()",
+            " same => n(none),Playback(vm-nonumber)",
+            " same => n,Hangup()",
+        ]
+        lines += _code_block(head, body, cos, "blacklist_last")
+    return lines
+
+
+def _dynamic_agents(
+    queues: list[dict[str, Any]],
+) -> dict[str, list[tuple[dict[str, Any], dict[str, Any]]]]:
+    """Extension number -> [(queue, member)] for every dynamic membership."""
+    out: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
+    for q in queues:
+        for m in q.get("members") or []:
+            if m.get("dynamic"):
+                out.setdefault(str(m["number"]), []).append((q, m))
+    return out
+
+
+def _agent_lines(
+    org: str,
+    number: str,
+    endpoint: str,
+    memberships: list[tuple[dict[str, Any], dict[str, Any]]],
+    others: list[str],
+    scope: str | None,
+) -> list[str]:
+    """The login/logout toggle of one extension over ``memberships``;
+    ``others`` are the slugs of its remaining dynamic queues (so the
+    extension-wide lamp stays lit while any of them is still logged in);
+    ``scope`` names the queue of a per-queue toggle (None: every queue)."""
+    n = engine_names.current()
+    key = f"{AGENT_FAMILY}/{org}/{number}"
+    device = f"Custom:veyra-agent-{org}-{number}"
+    adds, removes, marks, clears = [], [], [], []
+    for q, m in memberships:
+        slug = _slug(q["slug"], "queue slug")
+        qname = n.queue(slug)
+        label = _display(m.get("name")) or number
+        penalty = int(m.get("penalty") or 0)
+        adds.append(
+            f" same => n,AddQueueMember({qname},PJSIP/{endpoint},{penalty},,{label},"
+            f"PJSIP/{endpoint})"
+        )
+        removes.append(f" same => n,RemoveQueueMember({qname},PJSIP/{endpoint})")
+        marks.append(f" same => n,Set(DB({key}/{slug})=1)")
+        clears.append(f" same => n,Set(VEYRA_DEL=${{DB_DELETE({key}/{slug})}})")
+    test = f"{key}/{_slug(memberships[0][0]['slug'], 'queue slug')}" if scope else key
+    event_scope = f",Queue: {scope}" if scope else ""
+    # After a logout, the extension-wide flag follows the queues still logged in.
+    any_left = [" same => n,Set(VEYRA_ANY=0)"] + [
+        f' same => n,ExecIf($["${{DB({key}/{o})}}"="1"]?Set(VEYRA_ANY=1))' for o in others
+    ]
+    return [
+        f' same => n,GotoIf($["${{DB({test})}}"="1"]?logout)',
+        *adds,
+        *marks,
+        f" same => n,Set(DB({key})=1)",
+        f" same => n,Set(DEVICE_STATE({device})=INUSE)",
+        f" same => n,UserEvent({AGENT_EVENT},Org: {org},Extension: {number},"
+        f"Action: login{event_scope})",
+        " same => n,Playback(agent-loginok)",
+        " same => n,Hangup()",
+        f" same => n(logout),NoOp(Veyra agent {number} logs out)",
+        *removes,
+        *clears,
+        *any_left,
+        ' same => n,GotoIf($["${VEYRA_ANY}"="1"]?told)',
+        f" same => n,Set(VEYRA_DEL=${{DB_DELETE({key})}})",
+        f" same => n,Set(VEYRA_DEL=${{DB_DELETE({key}/paused)}})",
+        f" same => n,Set(DEVICE_STATE({device})=NOT_INUSE)",
+        f" same => n,Set(DEVICE_STATE(Custom:veyra-agentpause-{org}-{number})=NOT_INUSE)",
+        f" same => n(told),UserEvent({AGENT_EVENT},Org: {org},Extension: {number},"
+        f"Action: logout{event_scope})",
+        " same => n,Playback(agent-loggedoff)",
+        " same => n,Hangup()",
+    ]
+
+
+def _agent_contexts(codes: dict[str, str], queues: list[dict[str, Any]]) -> list[str]:
+    """``veyra-agent-login`` (all queues of the phone) and ``veyra-agent-login-<queue>``
+    (one queue), one extension entry each: the feature codes jump here with
+    the phone's own number (docs/CALL_FEATURES.md §4.9)."""
+    if "queue_login" not in codes:
+        return []
+    n = engine_names.current()
+    agents = _dynamic_agents(queues)
+    if not agents:
+        return []
+    lines = [f"[{n.agent_login()}]"]
+    endpoint_of = {
+        str(m["number"]): str(m["endpoint_name"]) for q in queues for m in q.get("members") or []
+    }
+    for number, memberships in sorted(agents.items()):
+        org = _slug(memberships[0][0].get("organization") or "", "organization")
+        lines.append(f"exten => {number},1,NoOp(Veyra agent {number} toggles every queue)")
+        lines += _agent_lines(org, number, endpoint_of[number], memberships, [], None)
+    lines.append("")
+    for q in queues:
+        members = [(q, m) for m in q.get("members") or [] if m.get("dynamic")]
+        if not members:
+            continue
+        slug = _slug(q["slug"], "queue slug")
+        org = _slug(q.get("organization") or "", "organization")
+        lines.append(f"[{n.agent_login(slug)}]")
+        for _, m in members:
+            number = str(m["number"])
+            others = [
+                _slug(oq["slug"], "queue slug") for oq, _ in agents.get(number, []) if oq is not q
+            ]
+            lines.append(f"exten => {number},1,NoOp(Veyra agent {number} toggles queue {slug})")
+            lines += _agent_lines(org, number, str(m["endpoint_name"]), [(q, m)], others, slug)
+        lines.append("")
+    return lines
+
+
+def _agent_codes(
+    codes: dict[str, str], queues: list[dict[str, Any]], cos: Cos | None = None
+) -> list[str]:
+    """``*45[<queue>]`` log in / out, ``*46`` pause / unpause, ``*47<queue>``
+    waiting count (docs/CALL_FEATURES.md §4.9)."""
+    n = engine_names.current()
+    lines: list[str] = []
+    agents = _dynamic_agents(queues)
+    login = codes.get("queue_login")
+    if login and agents:
+        head = f"exten => {login},1,NoOp(Veyra queue login toggle for ${{VEYRA_EXT}})"
+        body = [f" same => n,Goto({n.agent_login()},${{VEYRA_EXT}},1)"]
+        lines += _code_block(head, body, cos, "queue_login")
+        for q in queues:
+            if not any(m.get("dynamic") for m in q.get("members") or []):
+                continue
+            slug = _slug(q["slug"], "queue slug")
+            number = str(q["number"])
+            head = (
+                f"exten => {login}{number},1,NoOp(Veyra queue {slug} login toggle "
+                "for ${VEYRA_EXT})"
+            )
+            body = [f" same => n,Goto({n.agent_login(slug)},${{VEYRA_EXT}},1)"]
+            lines += _code_block(head, body, cos, "queue_login")
+    pause = codes.get("queue_pause")
+    if pause and agents:
+        key = f"{AGENT_FAMILY}/${{VEYRA_ORG}}/${{VEYRA_EXT}}"
+        device = "Custom:veyra-agentpause-${VEYRA_ORG}-${VEYRA_EXT}"
+        head = f"exten => {pause},1,NoOp(Veyra queue pause toggle for ${{VEYRA_EXT}})"
+        body = [
+            f' same => n,GotoIf($["${{DB({key})}}"!="1"]?notin)',
+            f' same => n,GotoIf($["${{DB({key}/paused)}}"="1"]?unpause)',
+            " same => n,PauseQueueMember(,PJSIP/${CHANNEL(endpoint)},,veyra)",
+            f" same => n,Set(DB({key}/paused)=1)",
+            f" same => n,Set(DEVICE_STATE({device})=INUSE)",
+            f" same => n,UserEvent({AGENT_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},"
+            "Action: pause)",
+            " same => n,Playback(dictate/pause)",
+            " same => n,Hangup()",
+            " same => n(unpause),UnpauseQueueMember(,PJSIP/${CHANNEL(endpoint)})",
+            f" same => n,Set(VEYRA_DEL=${{DB_DELETE({key}/paused)}})",
+            f" same => n,Set(DEVICE_STATE({device})=NOT_INUSE)",
+            f" same => n,UserEvent({AGENT_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},"
+            "Action: unpause)",
+            " same => n,Playback(agent-loginok)",
+            " same => n,Hangup()",
+            " same => n(notin),Playback(agent-loggedoff)",
+            " same => n,Hangup()",
+        ]
+        lines += _code_block(head, body, cos, "queue_pause")
+    count = codes.get("queue_count")
+    if count:
+        for q in queues:
+            slug = _slug(q["slug"], "queue slug")
+            number = str(q["number"])
+            qname = n.queue(slug)
+            head = f"exten => {count}{number},1,NoOp(Veyra queue {slug} waiting count)"
+            body = [
+                f" same => n,Set(VEYRA_WAITING=${{QUEUE_WAITING_COUNT({qname})}})",
+                " same => n,SayNumber(${VEYRA_WAITING})",
+                " same => n,Playback(queue-callswaiting)",
+                " same => n,Hangup()",
+            ]
+            lines += _code_block(head, body, cos, "queue_count")
+    return lines
+
+
+def _agent_hints(codes: dict[str, str], queues: list[dict[str, Any]]) -> list[str]:
+    """BLF lamps: ``*45*<ext>`` lit while the phone is logged in anywhere,
+    ``*46*<ext>`` lit while paused."""
+    hints: list[str] = []
+    login, pause = codes.get("queue_login"), codes.get("queue_pause")
+    for number, memberships in sorted(_dynamic_agents(queues).items()):
+        org = _slug(memberships[0][0].get("organization") or "", "organization")
+        if login:
+            hints.append(f"exten => {login}*{number},hint,Custom:veyra-agent-{org}-{number}")
+        if pause:
+            hints.append(f"exten => {pause}*{number},hint,Custom:veyra-agentpause-{org}-{number}")
+    return hints
 
 
 def _switch_pin_lines(pin: Any, what: str) -> list[str]:
@@ -3105,7 +3429,8 @@ def _queues(
     lines = [
         HEADER,
         "[general]",
-        "persistentmembers=no",
+        # Dynamic agents (§4.9) survive a restart; the worker reconciles anyway.
+        "persistentmembers=yes",
         "autofill=yes",
         "shared_lastcall=yes",
         "monitor-type=",
@@ -3163,10 +3488,17 @@ def _queues(
                 f"periodic-announce={prompts_dir}/{org}/{_slug(prompt, 'prompt slug')}",
                 f"periodic-announce-frequency={periodic}",
             ]
+        # Break-out menu (§4.10): a key pressed while waiting leaves to that
+        # key's extension in the menu's context.
+        breakout = q.get("breakout")
+        if breakout:
+            lines.append(f"context={n.ivr(_slug(breakout, 'IVR menu slug'))}")
         for m in q.get("members") or []:
             endpoint = _check_section(str(m["endpoint_name"]), "endpoint name")
             if endpoint not in endpoints or endpoint_org.get(endpoint) != org:
                 continue  # gone, or (never) another organization's phone
+            if m.get("dynamic"):
+                continue  # joins at login (§4.9), not from the file
             penalty = int(m.get("penalty") or 0)
             if not 0 <= penalty <= 9:
                 raise GenerationError(f"queue {slug}: penalty {penalty} is out of range")

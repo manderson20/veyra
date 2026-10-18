@@ -28,6 +28,7 @@ export interface QueueDraft {
   music: QueueMusic;
   moh_class_id: string;
   failover: DestinationDraft;
+  breakout_ivr_id: string;
   members: MemberDraft[];
   is_enabled: boolean;
 }
@@ -51,6 +52,7 @@ export const EMPTY_QUEUE: QueueDraft = {
   music: "default",
   moh_class_id: "",
   failover: HANGUP,
+  breakout_ivr_id: "",
   members: [],
   is_enabled: true,
 };
@@ -89,6 +91,7 @@ export function queueDraft(q: CallQueue): QueueDraft {
     music: q.music,
     moh_class_id: q.moh_class_id ?? "",
     failover: destinationDraft(q.failover, HANGUP),
+    breakout_ivr_id: q.breakout_ivr_id ?? "",
     members: membersFromIds(q.members),
     is_enabled: q.is_enabled,
   };
@@ -114,7 +117,8 @@ export function queueBody(d: QueueDraft): QueueInput {
     music: d.music,
     moh_class_id: d.music === "default" ? d.moh_class_id || null : null,
     failover: destinationBody(d.failover),
-    members: d.members.map((m) => ({ extension_id: m.extension_id, penalty: Number(m.penalty) })),
+    breakout_ivr_id: d.breakout_ivr_id || null,
+    members: d.members.map((m) => ({ extension_id: m.extension_id, penalty: Number(m.penalty), dynamic: Boolean(m.dynamic) })),
     is_enabled: d.is_enabled,
   };
 }
@@ -157,9 +161,12 @@ export function QueueFields({ draft, onChange, errors, organizationId, current, 
           help="From the numbering plan; dialable from any phone and from IVR menus." onChange={(e) => onChange({ number: e.target.value.replace(/\D/g, "") })} />
       </div>
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />
-      <MemberListEditor label="Agents" members={draft.members} extensions={options.extensions} loading={options.loading} onChange={(members) => onChange({ members })} penalties ordered={draft.strategy === "linear"} disabled={disabled}
+      <MemberListEditor label="Agents" members={draft.members} extensions={options.extensions} loading={options.loading} onChange={(members) => onChange({ members })} penalties dynamics ordered={draft.strategy === "linear"} disabled={disabled}
         error={errors.members} emptyText="No agents yet: callers go straight to the failover destination."
-        help="Penalty 0–9: agents with a higher penalty only ring when every agent with a lower one is busy or absent." />
+        help="Penalty 0–9: agents with a higher penalty only ring when every agent with a lower one is busy or absent. “Logs in”: the agent is in the queue only while logged in (*45 from the phone, or the queue page)." />
+      <SelectField label="Break-out menu" disabled={disabled} value={draft.breakout_ivr_id} error={errors.breakout_ivr_id} placeholder="None"
+        help="An IVR menu whose keys callers may press while waiting to leave the queue (for example 1 for voicemail); tell them in the periodic announcement."
+        options={options.menus.map((m) => ({ value: m.id, label: m.is_enabled ? m.name : `${m.name} (disabled)` }))} onChange={(e) => onChange({ breakout_ivr_id: e.target.value })} />
       <div className="form-grid">
         <SelectField label="Strategy" required disabled={disabled} value={draft.strategy} error={errors.strategy}
           options={(Object.keys(QUEUE_STRATEGY_LABELS) as QueueStrategy[]).map((k) => ({ value: k, label: QUEUE_STRATEGY_LABELS[k] }))}

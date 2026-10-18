@@ -623,6 +623,86 @@ API `GET/POST /parking-lots`, `GET/PATCH/DELETE /parking-lots/{id}`
 the provisioning templates (#40) and FreePBX's `*85<slot>` pickup code
 (dialling the slot does the same).
 
+### 4.8 Caller block list
+
+Tables `caller_blocks` (per organization: `number` as the carrier presents
+it, `description`, `source` api | phone | csv, `hits`, `last_hit_at`) and
+`caller_block_policies` (one row per organization: `block_anonymous`,
+`anonymous_hits`, the destination of blocked calls in the shared shape);
+migration `0045`. The engine keeps the numbers in its store
+(`veyra/blacklist/<org>/<number>` = `1`) and every inbound route (shared,
+per-trunk and the catch-all) starts with `DB_EXISTS` on the caller's number
+and, when the policy says so, a test for withheld numbers (`anonymous`,
+`restricted`, `unavailable`, `unknown`, `private`, empty, or a `prohib*`
+presentation); a hit jumps to the route's `blocked` label, which sends
+`UserEvent(VeyraBlocked,Org,Number,Did)` and then takes the policy's
+destination or answers with *the number you have dialled is not in service*
+(`ss-noservice`).
+
+Numbers change live: the API writes the row and the store, the phone codes
+write the store and report with `UserEvent(VeyraBlacklist,Action,Org,Number,By)`,
+and the worker's sync (`veyra/telephony/blacklist.py`) reconciles the two
+every pass. The policy (anonymous rule, destination) is dialplan and needs a
+deployment. Feature codes: `blacklist_add` `*30` (enter the number),
+`blacklist_remove` `*31`, `blacklist_last` `*32` (the last outside caller
+the phone received directly: every extension records
+`veyra/lastcid/<org>/<ext>` when a trunk call reaches it; calls that reached
+the phone through a ring group or queue are not recorded). Blocked calls are
+counted per number (`hits`) and, for withheld numbers, on the policy.
+
+API `GET/POST /caller-blocks`, `PATCH/DELETE /caller-blocks/{id}`,
+`POST /caller-blocks/import` (CSV text: `number[,description]`, a header line
+is skipped, at most 5000 lines), `GET /caller-blocks/export?organization_id`
+(CSV), `GET/PUT /caller-blocks/policy` (`routing.read` / `routing.write`).
+Interface: Telephony → Blocked Callers (list with hit counts, add, import,
+export, the rules card). Adapter: generic store access
+(`store_entries(family)`, `store_put(family, key, value)`).
+
+*Built 2026-10-18.* Not in this slice: an allow list, and the blocked count in
+the call history rows (the refused call is counted here, not as a call record).
+
+### 4.9 Queue dynamic agents
+
+`queue_members` gains `dynamic`, `logged_in`, `paused`, `state_by`,
+`state_at` (migration `0046`). A static agent is written to `queues.conf`
+as before; a dynamic agent is left out of the file and joins at login:
+from a phone with `queue_login` (`*45`: every queue the phone is a dynamic
+member of; `*45<queue number>`: that queue), from the queue's page
+(*Agents* card) or with `POST /queues/{id}/agents/{extension_id}/state
+{logged_in, paused}`; `queue_pause` (`*46`) pauses or resumes the agent in
+all its queues. `queue_count` (`*47<queue number>`) says how many callers
+wait. `persistentmembers=yes` keeps dynamic members across an engine
+restart and the worker's sync (`veyra/telephony/agents.py`) makes the
+engine's member list (parsed from `queue show`) match the rows every pass.
+
+Dialplan: the codes jump to `veyra-agent-login` (or
+`veyra-agent-login-<queue>`) at the phone's own number, where one block per
+dynamic agent runs `AddQueueMember` / `RemoveQueueMember` for its queues,
+keeps the engine store (`veyra/agent/<org>/<ext>` while logged in anywhere,
+`veyra/agent/<org>/<ext>/<queue>` per queue, `.../paused`) and the lamps
+(`Custom:veyra-agent-<org>-<ext>`, `Custom:veyra-agentpause-<org>-<ext>`;
+hints `*45*<ext>` and `*46*<ext>`), and reports with
+`UserEvent(VeyraAgent,Org,Extension,Action[,Queue])`. The API writes rows and
+the engine live (`queue add/remove/pause member` through the CLI). The queue
+page lists dynamic agents with their state and a log in / pause control; the
+members editor marks an agent as dynamic (*Logs in*). A dynamic agent keeps
+its state when the member list is edited.
+
+*Built 2026-10-18.* Not in this slice: pause reason codes, agent state in the
+queue reports, restricting who may log in beyond the member list.
+
+### 4.10 Queue break-out menu
+
+`call_queues.breakout_ivr_id` (migration `0046`): an IVR menu of the
+organization whose keys callers may press while waiting. `queues.conf` gets
+`context=veyra-ivr-<slug>`, so a digit pressed in the queue leaves to that
+key's extension in the menu's context (the menu's own destinations: voicemail,
+an extension, another menu, …); the periodic announcement is the place to
+tell callers which key does what. `queue_log` records the exit as
+`EXITWITHKEY`.
+
+*Built 2026-10-18.* The exit reason is not yet shown in the queue reports.
+
 ## 5. Permissions and API summary
 
 | Permission | Grants |

@@ -108,6 +108,10 @@ class Names:
         """Where a parked call goes when its time is up."""
         return self._p(f"park-{slug}-timeout")
 
+    def agent_login(self, queue_slug: str | None = None) -> str:
+        """Queue login toggles of the namespace's phones (docs/CALL_FEATURES.md §4.9)."""
+        return self._p(f"agent-login-{queue_slug}") if queue_slug else self._p("agent-login")
+
     @property
     def directory(self) -> str:
         """Dial-by-name directory of the namespace (docs/CALL_FEATURES.md §4.2)."""

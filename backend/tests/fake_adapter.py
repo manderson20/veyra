@@ -67,6 +67,10 @@ class FakeAdapter(TelephonyAdapter):
         self.state_calls: list[tuple[str, str, str, str | None]] = []
         self.switch_calls: list[tuple[str, str, str, str | None]] = []
         self.switch_states: dict[tuple[str, str, str], str] = {}
+        self.store: dict[str, dict[str, str]] = {}
+        self.store_calls: list[tuple[str, str, str | None]] = []
+        self.queue_state: dict[str, dict[str, dict[str, Any]]] = {}
+        self.queue_calls: list[tuple[str, str, bool, bool]] = []
         # trunk section -> registration status word, as "the engine" reports it.
         self.trunk_regs: dict[str, str] = {}
 
@@ -134,6 +138,37 @@ class FakeAdapter(TelephonyAdapter):
 
     def switches(self) -> dict[tuple[str, str, str], str]:
         return dict(self.switch_states)
+
+    def queue_members(self, queue: str) -> dict[str, dict[str, Any]]:
+        return {k: dict(v) for k, v in self.queue_state.get(queue, {}).items()}
+
+    def set_queue_member(
+        self,
+        queue: str,
+        interface: str,
+        *,
+        present: bool,
+        paused: bool = False,
+        penalty: int = 0,
+        name: str = "",
+    ) -> None:
+        self.queue_calls.append((queue, interface, present, paused))
+        members = self.queue_state.setdefault(queue, {})
+        if present:
+            members[interface] = {"dynamic": True, "paused": paused, "penalty": penalty}
+        else:
+            members.pop(interface, None)
+
+    def store_entries(self, family: str) -> dict[str, str]:
+        return dict(self.store.get(family, {}))
+
+    def store_put(self, family: str, key: str, value: str | None) -> None:
+        self.store_calls.append((family, key, value))
+        fam = self.store.setdefault(family, {})
+        if value:
+            fam[key] = value
+        else:
+            fam.pop(key, None)
 
     def originate(
         self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30

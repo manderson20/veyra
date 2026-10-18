@@ -1489,6 +1489,37 @@ export interface ParkingLotInput {
   is_enabled?: boolean;
 }
 
+/** A blocked caller number (§4.8). */
+export interface CallerBlock {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  number: string;
+  description: string | null;
+  source: "api" | "phone" | "csv";
+  hits: number;
+  last_hit_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CallerBlockPolicy {
+  organization_id: string;
+  organization_name: string;
+  block_anonymous: boolean;
+  anonymous_hits: number;
+  destination: Destination;
+  blocked_numbers: number;
+  total_hits: number;
+  updated_at: string | null;
+}
+
+export interface CallerBlockImportResult {
+  added: number;
+  updated: number;
+  skipped: string[];
+}
+
 export type SmtpSecurity = "starttls" | "tls" | "none";
 
 export interface SmtpSettings {
@@ -1534,6 +1565,12 @@ export interface GroupMember {
   is_enabled: boolean;
   position: number | null;
   penalty: number | null;
+  /** Queue agents (docs/CALL_FEATURES.md §4.9): a dynamic agent is in the queue only while logged in. */
+  dynamic?: boolean;
+  logged_in?: boolean;
+  paused?: boolean;
+  state_by?: string | null;
+  state_at?: string | null;
 }
 
 export type RingGroupStrategy = "ringall" | "sequential";
@@ -1616,6 +1653,9 @@ export interface CallQueue {
   moh_class_id: string | null;
   moh_class_name: string | null;
   failover: Destination;
+  /** Break-out menu: keys callers may press while waiting (§4.10). */
+  breakout_ivr_id: string | null;
+  breakout_ivr_name: string | null;
   members: GroupMember[];
   is_enabled: boolean;
   problems: string[];
@@ -1627,6 +1667,8 @@ export interface CallQueue {
 export interface QueueAgentInput {
   extension_id: string;
   penalty: number;
+  /** In the queue only while logged in (*45 or the queue page). */
+  dynamic?: boolean;
 }
 
 export interface QueueInput {
@@ -1649,6 +1691,7 @@ export interface QueueInput {
   music?: QueueMusic;
   moh_class_id?: string | null;
   failover?: DestinationInput;
+  breakout_ivr_id?: string | null;
   members?: QueueAgentInput[];
   is_enabled?: boolean;
 }

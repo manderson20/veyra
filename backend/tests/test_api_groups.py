@@ -210,6 +210,11 @@ def test_queue_crud_prompts_and_in_use(admin, app):
             "is_enabled": True,
             "position": None,
             "penalty": 1,
+            "dynamic": False,
+            "logged_in": True,
+            "paused": False,
+            "state_by": None,
+            "state_at": None,
         }
     ]
     assert r.json()["music"] == "ring"
