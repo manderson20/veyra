@@ -38,6 +38,7 @@ this milestone is a generated `queues.conf` and the stub that includes it.
 | `caller_id_prefix` | Optional, shown on the ringing phones before the caller's name (`Sales: Jane Doe`), so a user sees which group the call came in on |
 | `failover_*` | A destination (§5) or hang up (default) when nobody answers, every member is skipped or the group has no members |
 | `members` | Ordered extensions of the organization (table `ring_group_members`, `position`); 1–32; an extension may be in several groups |
+| `external_members`, `confirm_external` | Up to ten outside numbers rung with the members (Milestone 18, [CALL_FEATURES.md](CALL_FEATURES.md) §3.4; migration `0039`): `Local` legs through the organization's follow-me outbound context, so they leave through its outbound routes; with `confirm_external` the answering party presses 1 or the leg is dropped (a mobile's voicemail cannot take the call). Rung after the extension members in `sequential`, together with them in `ringall`; busy-member skipping does not apply to them |
 | `is_enabled` | A disabled group leaves the engine and is no longer a valid destination; its number does nothing until it is enabled again |
 
 The dialplan dials the members' endpoints directly, so a member's own

@@ -703,6 +703,8 @@ def _groups(
                 "strategy": g.strategy,
                 "ring_seconds": g.ring_seconds,
                 "ring_busy_members": g.ring_busy_members,
+                "external_members": list(g.external_members or []),
+                "confirm_external": g.confirm_external,
                 "caller_id_prefix": g.caller_id_prefix,
                 "music": g.music,
                 "hold_music": moh_slug(g.moh_class_id, g.organization_id),

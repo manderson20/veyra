@@ -27,7 +27,7 @@ from veyra.core.events import Event, bus
 from veyra.core.models import RingGroup, RingGroupMember
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
-from veyra.telephony import routing
+from veyra.telephony import extension_state, routing
 from veyra.telephony.asterisk.names import Names
 
 router = APIRouter(prefix="/ring-groups", tags=["ring-groups"])
@@ -48,6 +48,9 @@ class RingGroupIn(BaseModel):
     strategy: Strategy = "ringall"
     ring_seconds: int = Field(20, ge=5, le=120)
     ring_busy_members: bool = False
+    # Outside numbers rung with the members (docs/CALL_FEATURES.md §3.4).
+    external_members: list[str] = Field(default_factory=list, max_length=10)
+    confirm_external: bool = False
     caller_id_prefix: str | None = Field(None, max_length=40)
     # What callers hear while members ring: ringing, or hold music (the set
     # below, or the built-in one) (docs/PAGING_RECORDINGS.md §3.2).
@@ -83,6 +86,23 @@ class RingGroupIn(BaseModel):
             raise ValueError("letters, digits, spaces and . ' & ( ) - : only, at most 40")
         return v
 
+    @field_validator("external_members")
+    @classmethod
+    def _external(cls, v: list[str]) -> list[str]:
+        return _external_numbers(v)
+
+
+def _external_numbers(values: list[str]) -> list[str]:
+    out: list[str] = []
+    for i, raw in enumerate(values, start=1):
+        try:
+            number = extension_state.normalize_number(f"external_members.{i}", raw)
+        except extension_state.StateError as e:
+            raise ValueError(f"number {i}: {e.message}") from e
+        if number and number not in out:
+            out.append(number)
+    return out
+
 
 class RingGroupPatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
@@ -91,8 +111,16 @@ class RingGroupPatch(BaseModel):
     strategy: Strategy | None = None
     ring_seconds: int | None = Field(None, ge=5, le=120)
     ring_busy_members: bool | None = None
+    external_members: list[str] | None = Field(None, max_length=10)
+    confirm_external: bool | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
     music: Literal["ring", "default"] | None = None
+
+    @field_validator("external_members")
+    @classmethod
+    def _external(cls, v: list[str] | None) -> list[str] | None:
+        return _external_numbers(v) if v is not None else None
+
     moh_class_id: uuid.UUID | None = None
     failover: DestinationIn | None = None
     members: list[uuid.UUID] | None = Field(None, max_length=MAX_MEMBERS)
@@ -111,6 +139,8 @@ class RingGroupOut(BaseModel):
     strategy: str
     ring_seconds: int
     ring_busy_members: bool
+    external_members: list[str] = []
+    confirm_external: bool = False
     caller_id_prefix: str | None
     music: str
     moh_class_id: uuid.UUID | None
@@ -196,6 +226,8 @@ def _outs(db: Session, rows: list[RingGroup]) -> list[RingGroupOut]:
                 strategy=r.strategy,
                 ring_seconds=r.ring_seconds,
                 ring_busy_members=r.ring_busy_members,
+                external_members=list(r.external_members or []),
+                confirm_external=r.confirm_external,
                 caller_id_prefix=r.caller_id_prefix,
                 music=r.music,
                 moh_class_id=r.moh_class_id,
@@ -291,6 +323,8 @@ def create_group(
         strategy=body.strategy,
         ring_seconds=body.ring_seconds,
         ring_busy_members=body.ring_busy_members,
+        external_members=body.external_members,
+        confirm_external=body.confirm_external,
         caller_id_prefix=body.caller_id_prefix,
         music=body.music,
         moh_class_id=body.moh_class_id,
@@ -345,6 +379,8 @@ def update_group(
         "strategy": group.strategy,
         "ring_seconds": group.ring_seconds,
         "ring_busy_members": group.ring_busy_members,
+        "external_members": list(group.external_members or []),
+        "confirm_external": group.confirm_external,
         "caller_id_prefix": group.caller_id_prefix,
         "music": group.music,
         "moh_class_id": group.moh_class_id,
@@ -370,6 +406,8 @@ def update_group(
         "strategy",
         "ring_seconds",
         "ring_busy_members",
+        "external_members",
+        "confirm_external",
         "caller_id_prefix",
         "music",
         "moh_class_id",
