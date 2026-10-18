@@ -98,9 +98,10 @@ button.sidebar__heading:hover { color: var(--sidebar-text); }
    halves read as one control with a thin divider between them. */
 .topbar__deploy { font-weight: var(--weight-semibold); letter-spacing: 0.01em; }
 .topbar__deploy, :root[data-theme="dark"] .topbar__deploy { color: #fff; }
-.deploy-split { display: inline-flex; align-items: stretch; position: relative; border-radius: var(--radius-md); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent); }
-.deploy-split .topbar__deploy { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.deploy-split__caret { border-top-left-radius: 0; border-bottom-left-radius: 0; border-top-right-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); padding-left: 8px; padding-right: 8px; border-left-color: color-mix(in srgb, #fff 35%, transparent); }
+/* One pill: the main button is its left half, the caret its right half. */
+.deploy-split { display: inline-flex; align-items: stretch; position: relative; border-radius: var(--radius-full); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent); }
+.deploy-split .topbar__deploy { border-radius: var(--radius-full) 0 0 var(--radius-full); padding-left: var(--space-5); }
+.deploy-split .deploy-split__caret { border-radius: 0 var(--radius-full) var(--radius-full) 0; padding-left: 8px; padding-right: 12px; border-left-color: color-mix(in srgb, #fff 35%, transparent); }
 .deploy-split .menu__list { right: 0; left: auto; min-width: 300px; }
 .topbar__spacer { flex: 1; }
 .content { flex: 1; padding: var(--space-8) var(--space-6) var(--space-12); width: 100%; max-width: var(--content-max); margin: 0 auto; }
