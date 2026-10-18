@@ -8,6 +8,25 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — Milestone 18 (becomes 0.24.0 on approval)
+
+Kept current with every commit on `milestone-18`; design in [CALL_FEATURES.md](docs/CALL_FEATURES.md).
+
+### Added
+- **Registrations** (#73): Telephony → Registrations shows every registered phone with the address the registration came from and the address the phone reports (NAT when they differ), user agent, transport, reachability and expiry; `GET /telephony/registrations`; the Extensions list has a "Registers from" column; `registration.changed` webhooks carry both addresses.
+- **Packet captures** (#74): System → Diagnostics starts a tcpdump capture of all SIP, one extension (by the address its phone registers from), a trunk or an address, optionally with RTP, for a chosen time and size; lists, stops, downloads (audited) and deletes captures; a SIP summary groups the messages by dialog. Root unit `veyra-capture@`, polkit, retention class "captures" (7 days), `sudo veyra capture …`; permissions `diagnostics.read` and `diagnostics.capture`.
+- **Outbound caller ID per extension** (#17): number and name presented to the carrier, validated against the organization's DIDs or a per-organization allow list unless the caller holds `routing.write`; an outbound route can force its own number; precedence emergency → forced route → extension → route → trunk default; migration `0033`.
+- **Feature codes** (§3.1): Telephony → Feature Codes with FreePBX-style defaults (`*78/*79/*76`, `*72/*73`, `*90/*91`, `*52/*53`, `*21`, `*80`, `*`), each changeable or disabled; `GET/PUT /telephony/feature-codes`.
+- **Do Not Disturb** (#14): switch on the extension page and `*78/*79/*76` from the phone, effective at once (the engine keeps its own copy; the worker keeps it in step); a lamp hint `*76<ext>`; callers hear busy or the busy greeting; `GET/PUT /extensions/{id}/state`; migration `0034` (`extension_states`).
+- **Call forwarding** (#15): always, on busy and when unanswered, plus the extension's ring time, on the extension page and from the phone, effective at once; forwards to outside numbers leave through the organization's outbound routes with the extension's outbound caller ID; a lamp hint `*72<ext>`.
+- **Find me / follow me** (#16): legs rung together or in turn, desk phone first if wanted, press-1 confirmation for outside legs, caller ID mode, no-answer destination; `*21` toggles; `GET/PUT /extensions/{id}/follow-me`; migration `0035`.
+- **Intercom** (#18): `*80<ext>` rings a phone with the auto-answer headers so it answers on speaker; allow or deny per extension with an organization default; migration `0036`.
+- **Direct transfer to voicemail and voicemail operator** (#23, #24): `*<ext>` reaches a box's greeting, dialled or as a transfer target; a box's operator extension is reached with 0 during the greeting and `*` opens the box; migration `0037`.
+
+### Changed
+- The top bar's deploy control is one pill-shaped split button.
+- The multi-tenancy isolation test asserts the statuses it depended on.
+
 ## 0.23.1 — 2026-10-16
 
 ### Fixed
