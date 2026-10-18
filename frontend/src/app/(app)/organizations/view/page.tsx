@@ -13,6 +13,7 @@ import {
   PageHeader,
   SelectField,
   Switch,
+  TextArea,
   TextField,
   useToast,
 } from "@/components/ui";
@@ -38,6 +39,7 @@ function OrganizationView() {
   const [tz, setTz] = useState("UTC");
   const [active, setActive] = useState(true);
   const [moh, setMoh] = useState("");
+  const [allowList, setAllowList] = useState("");
   const [busy, setBusy] = useState(false);
 
   useOnChange(org.data, (o) => {
@@ -46,6 +48,7 @@ function OrganizationView() {
       setTz(o.timezone);
       setActive(o.is_active);
       setMoh(o.moh_class_id ?? "");
+      setAllowList((o.caller_id_allow_list ?? []).join("\n"));
     }
   });
 
@@ -54,14 +57,17 @@ function OrganizationView() {
   if (!org.data) return <LoadingState />;
   const o = org.data;
   const editable = can("organizations.write");
-  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "");
+  const routingEditable = editable && can("routing.write");
+  const allowListNow = allowList.split("\n").map((n) => n.trim()).filter(Boolean);
+  const allowListChanged = allowListNow.join("\n") !== (o.caller_id_allow_list ?? []).join("\n");
+  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged;
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}) });
+      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}) });
       org.setData(updated);
       toast.success("Organization saved", moh !== (o.moh_class_id ?? "") ? "Deploy changes to apply the hold music." : undefined);
     } catch (err) {
@@ -84,6 +90,8 @@ function OrganizationView() {
             <TextField label="Name" required value={name} disabled={!editable} error={errors.fields.name} onChange={(e) => setName(e.target.value)} />
             <TextField label="Short name" value={o.slug} disabled help="The short name cannot be changed." />
             <SelectField label="Time zone" value={tz} disabled={!editable} options={zones.map((z) => ({ value: z, label: z.replace(/_/g, " ") }))} onChange={(e) => setTz(e.target.value)} />
+            <TextArea label="Outbound caller ID allow list" rows={3} value={allowList} disabled={!routingEditable} error={errors.fields.caller_id_allow_list} spellCheck={false} placeholder="5735550100"
+              help="Numbers an extension may send as outbound caller ID besides the organization's own numbers (inbound routes), one per line. Changing it needs the routing permission." onChange={(e) => setAllowList(e.target.value)} />
             <HoldMusicSelect organizationId={o.id} label="Hold music" value={moh} disabled={!editable} error={errors.fields.moh_class_id}
               help="What callers hear when a phone of this organization puts them on hold. Sets are managed under Telephony → Hold Music." onChange={setMoh} />
             <Switch label="Active" description="Inactive organizations are kept but cannot be used for new configuration." checked={active} disabled={!editable} onChange={(e) => setActive(e.target.checked)} />

@@ -65,6 +65,11 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     bootstrap_includes_credential: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
+    # Numbers an extension may present as outbound caller ID besides the
+    # organization's DIDs (docs/CALL_FEATURES.md §3.5).
+    caller_id_allow_list: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default="[]"
+    )
 
 
 class Site(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

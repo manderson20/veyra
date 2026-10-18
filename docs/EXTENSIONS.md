@@ -23,6 +23,7 @@ classroom, hallway), and carries:
 | `site_id` | Optional site (building); its emergency caller ID is the default for the extension |
 | `caller_id_name`, `caller_id_number` | Optional overrides for internal calls (letters, digits and `. ' & ( ) -`; digits with an optional leading `+`) |
 | `emergency_caller_id_number` | Optional. Presented on emergency routes (`911`) instead of the regular caller ID: the building's ELIN or registered DID. Wins over the route's and the trunk's numbers ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §7; migration `0010`) |
+| `outbound_caller_id_number`, `outbound_caller_id_name` | Optional (Milestone 18, [CALL_FEATURES.md](CALL_FEATURES.md) §3.5). Presented to the carrier on outside calls. The number must be one of the organization's numbers (an inbound route's DID) or on the organization's caller ID allow list, unless the caller holds `routing.write` (`422 caller_id_not_allowed`). An outbound route whose caller ID is marked *force* replaces it; emergency routes present the emergency caller ID. Migration `0033` |
 | `is_enabled` | Disabled extensions are kept but left out of the generated configuration |
 | `sip_secret_ciphertext`, `sip_secret_changed_at` | The SIP secret, encrypted (§4), and when it was last set |
 
@@ -168,7 +169,7 @@ new extensions.
 
 ```
 GET    /extensions?q=&organization_id=&limit=&offset=
-POST   /extensions                              {organization_id, number, display_name, user_id?, caller_id_name?, caller_id_number?, emergency_caller_id_number?, is_enabled?}
+POST   /extensions                              {organization_id, number, display_name, user_id?, caller_id_name?, caller_id_number?, emergency_caller_id_number?, outbound_caller_id_number?, outbound_caller_id_name?, is_enabled?}
 GET    /extensions/next-number?after=
 GET    /extensions/{id}
 PATCH  /extensions/{id}

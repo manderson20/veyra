@@ -40,6 +40,10 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # Number presented on emergency routes instead of the regular caller ID
     # (docs/TRUNKS_ROUTING.md §7): the building's ELIN or registered DID.
     emergency_caller_id_number: Mapped[str | None] = mapped_column(String(32))
+    # Presented on trunk calls (docs/CALL_FEATURES.md §3.5): one of the
+    # organization's DIDs or an allowed number; the route may force its own.
+    outbound_caller_id_number: Mapped[str | None] = mapped_column(String(32))
+    outbound_caller_id_name: Mapped[str | None] = mapped_column(String(80))
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6): the building
     # and the floor/room text the on-site notification carries.
     building_id: Mapped[uuid.UUID | None] = mapped_column(

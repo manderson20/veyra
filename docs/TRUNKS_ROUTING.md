@@ -91,7 +91,7 @@ extension in `veyra-internal`. Unknown DIDs and calls without one get
 | `is_emergency` | Marks the route as carrying emergency numbers (§7) |
 | `patterns` | One or more `{prefix, match, prepend}`: the caller dials `prefix` + `match`; the prefix is stripped and `prepend` added before the number is sent. `match` uses Asterisk pattern letters: `X` any digit, `Z` 1–9, `N` 2–9, `.` one or more remaining characters, `[15-7]` sets. Example: prefix `9`, match `NXXNXXXXXX`, prepend `1` sends `1` + ten digits for `9` + ten digits |
 | `trunks` | Ordered list of trunks; the next one is tried when the previous answers CHANUNAVAIL or CONGESTION (busy and no-answer do not fail over). At least one trunk |
-| `caller_id_number` | Optional override for every call on this route; otherwise the trunk's `default_caller_id`; otherwise the caller's number is left as the carrier receives it |
+| `caller_id_number`, `caller_id_force` | Optional number for calls on this route. Precedence on a trunk leg (Milestone 18, [CALL_FEATURES.md](CALL_FEATURES.md) §3.5): the extension's emergency caller ID on an emergency route → this number when `caller_id_force` is set → the extension's `outbound_caller_id_number` (with its outbound name) → this number → the trunk's `default_caller_id` → the caller's number as the carrier receives it |
 | `description`, `is_enabled` | |
 
 **Matching order.** Asterisk picks the best pattern *within* a context and
@@ -210,7 +210,7 @@ PATCH  /routing/inbound/{id}
 DELETE /routing/inbound/{id}
 
 GET    /routing/outbound                  ordered; with warnings
-POST   /routing/outbound                  {name, patterns:[{prefix, match, prepend}], trunk_ids:[...], caller_id_number?, is_emergency?, description?, is_enabled?}
+POST   /routing/outbound                  {name, patterns:[{prefix, match, prepend}], trunk_ids:[...], caller_id_number?, caller_id_force?, is_emergency?, description?, is_enabled?}
 GET    /routing/outbound/{id}
 PATCH  /routing/outbound/{id}
 DELETE /routing/outbound/{id}

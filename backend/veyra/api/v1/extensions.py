@@ -32,6 +32,7 @@ from veyra.core.events import Event, bus
 from veyra.core.models import (
     CallQueue,
     Extension,
+    InboundRoute,
     Organization,
     PickupGroup,
     PickupGroupMember,
@@ -48,6 +49,7 @@ from veyra.core.security.crypto import (
     load_installation_key,
 )
 from veyra.core.security.principal import Principal
+from veyra.telephony import routing
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 from veyra.telephony.numbering import (
     NumberingPlan,
@@ -118,6 +120,9 @@ class ExtensionIn(BaseModel):
     caller_id_name: str | None = Field(None, max_length=80)
     caller_id_number: str | None = Field(None, max_length=32)
     emergency_caller_id_number: str | None = Field(None, max_length=32)
+    # Presented on trunk calls (docs/CALL_FEATURES.md §3.5).
+    outbound_caller_id_number: str | None = Field(None, max_length=32)
+    outbound_caller_id_name: str | None = Field(None, max_length=80)
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
@@ -136,12 +141,12 @@ class ExtensionIn(BaseModel):
             raise ValueError("enter a name")
         return v
 
-    @field_validator("caller_id_name")
+    @field_validator("caller_id_name", "outbound_caller_id_name")
     @classmethod
     def _cid_name(cls, v: str | None) -> str | None:
         return _caller_id_name(v)
 
-    @field_validator("caller_id_number", "emergency_caller_id_number")
+    @field_validator("caller_id_number", "emergency_caller_id_number", "outbound_caller_id_number")
     @classmethod
     def _cid_number(cls, v: str | None) -> str | None:
         return _caller_id_number(v)
@@ -154,6 +159,8 @@ class ExtensionPatch(BaseModel):
     caller_id_name: str | None = Field(None, max_length=80)
     caller_id_number: str | None = Field(None, max_length=32)
     emergency_caller_id_number: str | None = Field(None, max_length=32)
+    outbound_caller_id_number: str | None = Field(None, max_length=32)
+    outbound_caller_id_name: str | None = Field(None, max_length=80)
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
@@ -174,15 +181,50 @@ class ExtensionPatch(BaseModel):
             raise ValueError("enter a name")
         return v
 
-    @field_validator("caller_id_name")
+    @field_validator("caller_id_name", "outbound_caller_id_name")
     @classmethod
     def _cid_name(cls, v: str | None) -> str | None:
         return _caller_id_name(v)
 
-    @field_validator("caller_id_number", "emergency_caller_id_number")
+    @field_validator("caller_id_number", "emergency_caller_id_number", "outbound_caller_id_number")
     @classmethod
     def _cid_number(cls, v: str | None) -> str | None:
         return _caller_id_number(v)
+
+
+def check_outbound_caller_id(
+    db: Session, principal: Principal, organization_id: uuid.UUID, number: str | None
+) -> None:
+    """An extension may present one of its organization's DIDs or a number on
+    the organization's allow list; anyone with routing.write may set any
+    number (docs/CALL_FEATURES.md §3.5)."""
+    if not number or principal.has("routing.write", organization_id):
+        return
+    wanted = routing.canonical_did(number)
+    dids = {
+        d
+        for d in db.scalars(
+            select(InboundRoute.did_canonical).where(
+                InboundRoute.organization_id == organization_id
+            )
+        )
+        if d != routing.DID_ANY
+    }
+    org = db.get(Organization, organization_id)
+    allowed = set()
+    for raw in (org.caller_id_allow_list if org else None) or []:
+        try:
+            allowed.add(routing.canonical_did(str(raw)))
+        except ValueError:
+            continue
+    if wanted in dids or wanted in allowed:
+        return
+    raise _validation(
+        "outbound_caller_id_number",
+        "The number is not one of the organization's numbers (inbound routes) and is not on "
+        "its caller ID allow list.",
+        code="caller_id_not_allowed",
+    )
 
 
 class ContactOut(BaseModel):
@@ -243,6 +285,9 @@ class ExtensionOut(BaseModel):
     # Presented on emergency routes instead of the regular caller ID
     # (docs/TRUNKS_ROUTING.md §7).
     emergency_caller_id_number: str | None
+    # Presented on trunk calls (docs/CALL_FEATURES.md §3.5).
+    outbound_caller_id_number: str | None = None
+    outbound_caller_id_name: str | None = None
     building_id: uuid.UUID | None = None
     location: str | None = None
     is_enabled: bool
@@ -384,6 +429,8 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 caller_id_name=r.caller_id_name,
                 caller_id_number=r.caller_id_number,
                 emergency_caller_id_number=r.emergency_caller_id_number,
+                outbound_caller_id_number=r.outbound_caller_id_number,
+                outbound_caller_id_name=r.outbound_caller_id_name,
                 building_id=r.building_id,
                 location=r.location,
                 is_enabled=r.is_enabled,
@@ -595,6 +642,7 @@ def create_extension(
     key = installation_key(request)
     _check_number(db, load_numbering_plan(db), body.number, None, org.id)
     _check_user(db, body.user_id, body.organization_id)
+    check_outbound_caller_id(db, principal, org.id, body.outbound_caller_id_number)
     ext = Extension(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -605,6 +653,8 @@ def create_extension(
         caller_id_name=body.caller_id_name,
         caller_id_number=body.caller_id_number,
         emergency_caller_id_number=body.emergency_caller_id_number,
+        outbound_caller_id_number=body.outbound_caller_id_number,
+        outbound_caller_id_name=body.outbound_caller_id_name,
         building_id=body.building_id,
         location=body.location,
         is_enabled=body.is_enabled,
@@ -674,11 +724,20 @@ def update_extension(
         _check_user(db, changes["user_id"], ext.organization_id)
         ext.user_id = changes["user_id"]
         details["user_id"] = str(ext.user_id) if ext.user_id else None
+    if (
+        "outbound_caller_id_number" in changes
+        and changes["outbound_caller_id_number"] != ext.outbound_caller_id_number
+    ):
+        check_outbound_caller_id(
+            db, principal, ext.organization_id, changes["outbound_caller_id_number"]
+        )
     for field in (
         "display_name",
         "caller_id_name",
         "caller_id_number",
         "emergency_caller_id_number",
+        "outbound_caller_id_number",
+        "outbound_caller_id_name",
         "building_id",
         "location",
         "is_enabled",
