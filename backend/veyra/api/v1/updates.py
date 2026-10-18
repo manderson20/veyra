@@ -386,6 +386,7 @@ class ApproveIn(BaseModel):
 def approve_update(
     update_id: uuid.UUID,
     body: ApproveIn,
+    request: Request,
     principal: Principal = Depends(require("updates.manage")),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -413,6 +414,18 @@ def approve_update(
     row.error = None
     _audit(db, principal, ctx, "updates.approve", row, when=body.when)
     db.commit()
+    if body.when == "now":
+        # Start at once (§3.1): the API runs as the same service account as the
+        # worker and the polkit rule allows it to start the root unit, so the
+        # installer does not wait for the worker's next pass. The worker keeps
+        # starting window approvals and is the fallback if this did not run.
+        manager.start_install(
+            db,
+            settings,
+            request.app.state.keyring,
+            row,
+            run=getattr(request.app.state, "systemctl_run", None),
+        )
     return AvailableOut.model_validate(row)
 
 

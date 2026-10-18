@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.25.4 — 2026-10-18
+
+### Changed
+- **Install now starts at once.** Approving an installation for "now" used to leave it for the background worker's next housekeeping pass, up to a minute later (measured 50–56 s on the first interface-driven installs). The API now runs the pre-checks and starts the upgrade service in the same request, so the installer begins within a second or two and the progress card moves from the first moment. Nothing was removed: the same checks run, the same root unit does the work, and the worker still starts installations approved for a maintenance window (and remains the fallback). Issue #89, first item.
+
 ## 0.25.3 — 2026-10-18
 
 ### Changed

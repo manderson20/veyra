@@ -362,9 +362,9 @@ function InstallProgress({ pending: listed, onFinished }: { pending: AvailableUp
             <Stage index={2} state="current" title="Waiting for the maintenance window"
               note={pending?.next_window ? `Next window ${formatDateTime(pending.next_window)}; starts when no call is in progress.` : "Starts in the next window when no call is in progress."} />
           ) : (
-            <Stage index={2} state={at("queued")} title="Picked up by the background worker"
+            <Stage index={2} state={at("queued")} title="Pre-checks passed, upgrade service started"
               note={at("queued") === "current"
-                ? `The worker checks for approved installations every ${interval} s${waitLeft !== null ? `; next pass in about ${waitLeft} s` : ""}. It then runs the pre-checks (disk space, modules, no other upgrade) and starts the upgrade service.`
+                ? `The approval did not start the upgrade service directly; the background worker will, on its next pass (every ${interval} s${waitLeft !== null ? `, in about ${waitLeft} s` : ""}), after the pre-checks (disk space, modules, no other upgrade).`
                 : pending?.install_started_at ? `at ${formatDateTime(pending.install_started_at)}` : undefined} />
           )}
           <Stage index={3} state={at("starting")} title="Release verified and unpacked"
@@ -472,7 +472,7 @@ function ReviewDialog({ id, editable, onClose, onChanged }: { id: string; editab
         toast.info("Approval withdrawn");
       } else {
         await api.post(`/updates/available/${id}/approve`, { when: what });
-        toast.success(what === "now" ? "Installation starts within a minute" : "Will install in the next maintenance window");
+        toast.success(what === "now" ? "Installation started" : "Will install in the next maintenance window");
         onChanged();
         onClose();
         return;

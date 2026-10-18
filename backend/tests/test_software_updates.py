@@ -183,15 +183,9 @@ def test_download_approve_start_and_finish(admin, app, tmp_path, served, monkeyp
     # No window in the policy: only "now".
     r = admin.post(f"/api/v1/updates/available/{uid}/approve", json={"when": "window"})
     assert r.json()["code"] == "no_window"
-    r = admin.post(f"/api/v1/updates/available/{uid}/approve", json={"when": "now"})
-    assert r.status_code == 200 and r.json()["state"] == "approved"
-    # The status endpoint reports the stage before the installer prints anything
-    # (§3.4): queued for the worker's next pass, with the worker's heartbeat.
-    st = admin.get("/api/v1/updates/status").json()
-    assert st["run"] is None
-    assert st["pending"]["version"] == NEW and st["pending"]["phase"] == "queued"
-    assert st["pending"]["worker_interval_seconds"] == 60 and st["pending"]["approved_at"]
+    import uuid
 
+    upd_uuid = uuid.UUID(uid)
     calls = []
 
     class Done:
@@ -204,12 +198,27 @@ def test_download_approve_start_and_finish(admin, app, tmp_path, served, monkeyp
         calls.append(cmd)
         return Done()
 
-    import uuid
+    # "Install now" starts the root unit from the API at once (§3.1).
+    app.state.systemctl_run = run
+    r = admin.post(f"/api/v1/updates/available/{uid}/approve", json={"when": "now"})
+    assert r.status_code == 200 and r.json()["state"] == "installing", r.text
+    assert calls == [["systemctl", "start", "--no-block", f"veyra-upgrade@{NEW}.service"]]
+    # The status endpoint reports the stage before the installer prints anything
+    # (§3.4): "starting" now; "queued" (worker's next pass, with its heartbeat
+    # and interval) when an approval still waits for the worker.
+    st = admin.get("/api/v1/updates/status").json()
+    assert st["run"] is None
+    assert st["pending"]["version"] == NEW and st["pending"]["phase"] == "starting"
+    assert st["pending"]["worker_interval_seconds"] == 60 and st["pending"]["approved_at"]
+    with session_scope() as db:
+        db.get(AvailableUpdate, upd_uuid).state = "approved"
+    assert admin.get("/api/v1/updates/status").json()["pending"]["phase"] == "queued"
+    with session_scope() as db:
+        db.get(AvailableUpdate, upd_uuid).state = "installing"
 
-    upd_uuid = uuid.UUID(uid)
     sent = []
     monkeypatch.setattr(manager, "mail_notifier", lambda db, s: lambda what, row: sent.append(what))
-    with session_scope() as db:
+    with session_scope() as db:  # the worker's pass finds it running and starts nothing else
         manager.process(db, settings, app.state.keyring, lambda: 0, run=run)
     assert calls == [["systemctl", "start", "--no-block", f"veyra-upgrade@{NEW}.service"]]
     # Unit started, no status file yet: "starting"; a stale file from another

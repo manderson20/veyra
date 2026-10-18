@@ -100,7 +100,12 @@ match the signed size and SHA-256 before they are kept.
 
 An administrator with `updates.manage` reviews the release notes, the
 service impact and the checks (§3.3) and clicks **Install now** or
-**Install in the next maintenance window**. Both are audited.
+**Install in the next maintenance window**. Both are audited. *Install
+now* starts the root unit from the API in the same request (0.25.4: the
+API runs as the service account the polkit rule allows, like the worker),
+so the installer begins within a second or two; window approvals, and a
+"now" approval the API could not start, are started by the worker's
+housekeeping pass (every 60 s).
 
 ### 3.2 The privileged step
 
@@ -151,8 +156,9 @@ timeline: it polls `GET /updates/status` every 3 seconds (and the update
 list every 5). The endpoint returns the runner's status file (`run`) and,
 while an installation is approved or starting, `pending` with the stage
 before the installer prints anything (`manager.install_progress`):
-`queued` (approved for "now", waiting for the worker's next housekeeping
-pass; the worker's last heartbeat and its 60 s interval say how long),
+`queued` (approved for "now" but not started by the API, waiting for the
+worker's next housekeeping pass; the worker's last heartbeat and its 60 s
+interval say how long),
 `window` (approved for the maintenance window, with the next window),
 `starting` (pre-checks done, root unit started, release being verified and
 unpacked), `running` (installer step and output) and `finishing` (the new
