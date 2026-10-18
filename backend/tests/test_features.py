@@ -981,3 +981,80 @@ def test_ring_group_outside_members_api(admin):
         and r.json()["external_members"] == []
         and r.json()["confirm_external"] is False
     )
+
+
+# ------------------------------------------------------------------ my phone (own extension)
+
+
+def test_user_manages_own_phone(admin, app):
+    from conftest import ADMIN_PASSWORD, login
+    from fastapi.testclient import TestClient
+    from test_api_rbac import make_user
+
+    adapter = FakeAdapter()
+    app.state.telephony = adapter
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    uid = make_user(admin, "teacher@example.local", org["id"], "standard_user")
+    mine = admin.post(
+        "/api/v1/extensions",
+        json={
+            "organization_id": org["id"],
+            "number": "1001",
+            "display_name": "Mine",
+            "user_id": uid,
+        },
+    ).json()
+    other = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1002", "display_name": "Other"},
+    ).json()
+    me = login(
+        TestClient(app, base_url="http://veyra.test"), "teacher@example.local", ADMIN_PASSWORD
+    )
+    assert [e["number"] for e in me.get("/api/v1/me/extensions").json()] == ["1001"]
+    # The administrator's endpoints stay closed to a standard user; the own ones open.
+    assert me.get(f"/api/v1/extensions/{mine['id']}/state").status_code == 403
+    assert me.get(f"/api/v1/me/extensions/{other['id']}/state").status_code == 404
+    r = me.put(f"/api/v1/me/extensions/{mine['id']}/state", json={"dnd": True, "cf_busy": "1002"})
+    assert r.status_code == 200, r.text
+    assert (
+        r.json()["dnd"] is True
+        and r.json()["cf_busy"] == "1002"
+        and r.json()["updated_by"] == "user"
+    )
+    assert adapter.states[(org["slug"], "1001")] == {"dnd": "1", "cf_busy": "1002"}
+    # The ring time is not the user's to change.
+    r = me.put(f"/api/v1/me/extensions/{mine['id']}/state", json={"ring_seconds": 45})
+    assert r.status_code == 200 and r.json()["ring_seconds"] == 30
+    assert (
+        me.put(f"/api/v1/me/extensions/{mine['id']}/state", json={"cf_always": "x"}).status_code
+        == 422
+    )
+    # Follow-me legs and the switch.
+    r = me.put(
+        f"/api/v1/me/extensions/{mine['id']}/follow-me",
+        json={"strategy": "ringall", "members": [{"type": "extension", "target": "1002"}]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["members"][0]["target"] == "1002"
+    r = me.put(f"/api/v1/me/extensions/{mine['id']}/state", json={"fmfm_enabled": True})
+    assert r.json()["fmfm_enabled"] is True
+    assert me.get(f"/api/v1/me/extensions/{mine['id']}/follow-me").json()["enabled"] is True
+    assert (
+        me.put(f"/api/v1/me/extensions/{other['id']}/follow-me", json={"members": []}).status_code
+        == 404
+    )
+    codes = me.get("/api/v1/me/feature-codes").json()
+    assert {c["key"] for c in codes["codes"]} >= {"dnd_toggle", "cf_on"} and "*97" in codes["fixed"]
+    # Administrators see the user's change and the pending deployment for the legs.
+    assert admin.get(f"/api/v1/extensions/{mine['id']}/state").json()["updated_by"] == "user"
+    with session_scope() as db:
+        assert (configmgmt.pending_change(db) or {}).get("what") == "follow-me of 1001"
+    actions = [
+        (e["action"], (e.get("details") or {}).get("self_service"))
+        for e in admin.get("/api/v1/audit", params={"limit": 20}).json()["items"]
+    ]
+    assert ("extension.state_update", True) in actions and (
+        "extension.follow_me_update",
+        True,
+    ) in actions

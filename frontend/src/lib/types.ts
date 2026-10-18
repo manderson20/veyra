@@ -2616,6 +2616,16 @@ export interface BackupStatus {
   backup?: string | null;
 }
 
+export interface MyExtension {
+  id: string;
+  number: string;
+  display_name: string;
+  organization_id: string;
+  organization_name: string;
+  is_enabled: boolean;
+  registration: Registration | null;
+}
+
 // ----------------------------------------------------------------- extension state and feature codes (Milestone 18)
 
 export interface ExtensionState {

@@ -27,6 +27,8 @@ Kept current with every commit on `milestone-18`; design in [CALL_FEATURES.md](d
 - **Classes of service** (#30): Telephony → Classes of Service restricts an organization's phones to chosen outbound routes and feature codes, forbids outside forwards or follow-me legs and intercom, and caps simultaneous outside calls; extensions pick a class on their page; emergency routes always work; migration `0038`.
 - **Direct transfer to voicemail and voicemail operator** (#23, #24): `*<ext>` reaches a box's greeting, dialled or as a transfer target; a box's operator extension is reached with 0 during the greeting and `*` opens the box; migration `0037`.
 
+- **My Phone** (§3.9): every signed-in user has a My Phone tab with their own extensions: phone registration, Do Not Disturb, forwards, find me / follow me, voicemail and the codes they can dial; `GET/PUT /me/extensions/{id}/state|follow-me`, `GET /me/feature-codes`. The first slice of the user portal (Milestone 20).
+
 ### Changed
 - The top bar's deploy control is one pill-shaped split button.
 - The multi-tenancy isolation test asserts the statuses it depended on.

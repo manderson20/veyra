@@ -924,17 +924,11 @@ def get_follow_me(
     return _follow_me_out(db.get(FollowMe, ext.id), extension_state.get(db, ext.id))
 
 
-@router.put("/{extension_id}/follow-me", summary="Change find me / follow me")
-def put_follow_me(
-    extension_id: uuid.UUID,
-    body: FollowMeIn,
-    principal: Principal = Depends(require("extensions.write")),
-    db: Session = Depends(get_db),
-    ctx: RequestContext = Depends(request_context),
-) -> dict[str, Any]:
-    """The legs are in the dialplan, so a change waits for a deployment;
-    switching follow-me on or off is ``PUT /state`` (docs/CALL_FEATURES.md §3.4)."""
-    ext = _get_visible(db, principal, extension_id, "extensions.write")
+def save_follow_me(
+    db: Session, ext: Extension, body: FollowMeIn, *, by: str
+) -> tuple[FollowMe, dict[str, Any]]:
+    """Validate and store the legs (shared by the administrator's and the
+    user's own endpoints); returns the row and the audit details."""
     members: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for i, m in enumerate(body.members, start=1):
@@ -983,22 +977,30 @@ def put_follow_me(
     row.caller_id_mode = body.caller_id_mode
     row.members = members
     row.no_answer_destination = dest
-    row.updated_by = principal.label[:320]
+    row.updated_by = by[:320]
     row.updated_at = utcnow()
     db.flush()
-    _record(
-        db,
-        ctx,
-        principal,
-        "extension.follow_me_update",
-        ext,
-        {
-            "strategy": body.strategy,
-            "members": len(members),
-            "confirm_calls": body.confirm_calls,
-            "no_answer_destination": dest,
-        },
-    )
+    return row, {
+        "strategy": body.strategy,
+        "members": len(members),
+        "confirm_calls": body.confirm_calls,
+        "no_answer_destination": dest,
+    }
+
+
+@router.put("/{extension_id}/follow-me", summary="Change find me / follow me")
+def put_follow_me(
+    extension_id: uuid.UUID,
+    body: FollowMeIn,
+    principal: Principal = Depends(require("extensions.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """The legs are in the dialplan, so a change waits for a deployment;
+    switching follow-me on or off is ``PUT /state`` (docs/CALL_FEATURES.md §3.4)."""
+    ext = _get_visible(db, principal, extension_id, "extensions.write")
+    row, details = save_follow_me(db, ext, body, by=principal.label)
+    _record(db, ctx, principal, "extension.follow_me_update", ext, details)
     db.commit()
     return _follow_me_out(row, extension_state.get(db, ext.id))
 

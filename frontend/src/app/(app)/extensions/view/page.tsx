@@ -8,13 +8,14 @@ import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { CallGroupsCard } from "@/components/extensions/CallGroupsCard";
 import { DevicesCard } from "@/components/extensions/DevicesCard";
 import { VoicemailCard } from "@/components/extensions/VoicemailCard";
+import { CallHandlingCard } from "@/components/extensions/CallHandlingCard";
+import { FollowMeCard } from "@/components/extensions/FollowMeCard";
 import { CopyButton } from "@/components/common/CopyButton";
 import {
   Badge,
   Button,
   Callout,
   Card,
-  Checkbox,
   ConfirmDialog,
   ErrorState,
   LoadingState,
@@ -26,7 +27,7 @@ import {
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { ClassOfService, Extension, ExtensionState, FollowMe, FollowMeMember, Page, SipCredentials, User } from "@/lib/types";
+import type { ClassOfService, Extension, Page, SipCredentials, User } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useSession } from "@/hooks/useSession";
@@ -188,8 +189,8 @@ function ExtensionView() {
           </form>
         </Card>
         <div className="stack">
-          <CallHandlingCard extension={x} editable={editable} onChanged={() => ext.reload()} />
-          <FollowMeCard extension={x} editable={editable} />
+          <CallHandlingCard base={`/extensions/${x.id}`} dnd={x.dnd} editable={editable} onChanged={() => ext.reload()} />
+          <FollowMeCard base={`/extensions/${x.id}`} editable={editable} />
           {can("voicemail.read") ? <VoicemailCard extension={x} editable={can("voicemail.write")} onChanged={() => setChanged((n) => n + 1)} /> : null}
           {can("groups.read") ? <CallGroupsCard extension={x} /> : null}
           {can("devices.read") ? <DevicesCard extension={x} /> : null}
@@ -281,137 +282,6 @@ function SipCredentialsCard({ extension, onRotated }: { extension: Extension; on
         onConfirm={rotate} onCancel={() => { setConfirmRotate(false); setRotateError(null); }}>
         <p>The phone using extension <strong>{extension.number}</strong> stops registering until it is given the new secret and the configuration is deployed.</p>
       </ConfirmDialog>
-    </Card>
-  );
-}
-
-function CallHandlingCard({ extension, editable, onChanged }: { extension: Extension; editable: boolean; onChanged: () => void }) {
-  const toast = useToast();
-  const errors = useFormErrors();
-  const state = useApiData<ExtensionState>(`/extensions/${extension.id}/state`);
-  const [busy, setBusy] = useState(false);
-  const [always, setAlways] = useState("");
-  const [onBusy, setOnBusy] = useState("");
-  const [noAnswer, setNoAnswer] = useState("");
-  const [ring, setRing] = useState("30");
-  useOnChange(state.data, (v) => {
-    if (v) { setAlways(v.cf_always ?? ""); setOnBusy(v.cf_busy ?? ""); setNoAnswer(v.cf_no_answer ?? ""); setRing(String(v.ring_seconds)); }
-  });
-  const s = state.data;
-  const dirty = !!s && (always.trim() !== (s.cf_always ?? "") || onBusy.trim() !== (s.cf_busy ?? "") || noAnswer.trim() !== (s.cf_no_answer ?? "") || ring !== String(s.ring_seconds));
-  const put = async (body: Record<string, unknown>, done: string, detail?: string) => {
-    setBusy(true);
-    errors.clear();
-    try {
-      state.setData(await api.put<ExtensionState>(`/extensions/${extension.id}/state`, body));
-      toast.success(done, detail);
-      onChanged();
-    } catch (err) {
-      errors.set(err);
-      toast.error("Could not change the call handling", errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const save = (e: FormEvent) => {
-    e.preventDefault();
-    const ringChanged = !!s && ring !== String(s.ring_seconds);
-    void put({ cf_always: always.trim(), cf_busy: onBusy.trim(), cf_no_answer: noAnswer.trim(), ...(ringChanged ? { ring_seconds: Number(ring) } : {}) },
-      "Call handling saved", ringChanged ? "Forwards take effect at once; the ring time needs a deployment." : "Takes effect at once; no deployment needed.");
-  };
-  const by = s?.updated_by === "phone" ? "from the phone" : s?.updated_by === "sync" ? "by the engine sync" : "here";
-  return (
-    <Card title="Call handling" subtitle={s?.updated_at ? `Last changed ${formatRelative(s.updated_at)} ${by}.` : undefined}>
-      <form className="stack stack--sm" onSubmit={save}>
-        <Switch label="Do Not Disturb" checked={s?.dnd ?? extension.dnd ?? false} disabled={!editable || busy || !s}
-          onChange={(e) => void put({ dnd: e.target.checked }, e.target.checked ? "Do Not Disturb on" : "Do Not Disturb off", "Takes effect at once; no deployment needed.")}
-          description="Callers hear busy, or the busy greeting when the extension has a voicemail box. From the phone: the Do Not Disturb feature codes; a lamp key on the toggle code shows the state." />
-        <div className="form-grid">
-          <TextField label="Forward all calls to" inputMode="tel" disabled={!editable || !s} value={always} error={errors.fields.cf_always} onChange={(e) => setAlways(e.target.value)} help="An extension or an outside number. Empty: off." />
-          <TextField label="Forward when busy to" inputMode="tel" disabled={!editable || !s} value={onBusy} error={errors.fields.cf_busy} onChange={(e) => setOnBusy(e.target.value)} help="Also used while Do Not Disturb is on." />
-          <TextField label="Forward when unanswered to" inputMode="tel" disabled={!editable || !s} value={noAnswer} error={errors.fields.cf_no_answer} onChange={(e) => setNoAnswer(e.target.value)} help="After the ring time below." />
-          <TextField label="Ring time (seconds)" type="number" min={5} max={120} disabled={!editable || !s} value={ring} error={errors.fields.ring_seconds} onChange={(e) => setRing(e.target.value)} help="Before voicemail or the no-answer forward. Needs a deployment." />
-        </div>
-        <p className="subtle">From the phone: *72 / *73 forward all, *90 / *91 on busy, *52 / *53 unanswered (Telephony → Feature Codes). Outside numbers leave through the organization’s outbound routes with this extension’s outbound caller ID.</p>
-        {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
-        {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save forwards</Button></div> : null}
-      </form>
-    </Card>
-  );
-}
-
-function FollowMeCard({ extension, editable }: { extension: Extension; editable: boolean }) {
-  const toast = useToast();
-  const errors = useFormErrors();
-  const fm = useApiData<FollowMe>(`/extensions/${extension.id}/follow-me`);
-  const [busy, setBusy] = useState(false);
-  const [strategy, setStrategy] = useState("ringall");
-  const [initial, setInitial] = useState("0");
-  const [confirm, setConfirm] = useState(false);
-  const [cidMode, setCidMode] = useState("caller");
-  const [members, setMembers] = useState<FollowMeMember[]>([]);
-  const [dest, setDest] = useState("");
-  useOnChange(fm.data, (v) => {
-    if (v) { setStrategy(v.strategy); setInitial(String(v.initial_ring_seconds)); setConfirm(v.confirm_calls); setCidMode(v.caller_id_mode); setMembers(v.members.map((m) => ({ ...m }))); setDest(v.no_answer_destination ?? ""); }
-  });
-  const d = fm.data;
-  const body = { strategy, initial_ring_seconds: Number(initial), confirm_calls: confirm, caller_id_mode: cidMode, members: members.map((m) => ({ ...m, target: m.target.trim(), ring_seconds: Number(m.ring_seconds) })), no_answer_destination: dest.trim() || null };
-  const dirty = !!d && JSON.stringify(body) !== JSON.stringify({ strategy: d.strategy, initial_ring_seconds: d.initial_ring_seconds, confirm_calls: d.confirm_calls, caller_id_mode: d.caller_id_mode, members: d.members, no_answer_destination: d.no_answer_destination });
-  const toggle = async (on: boolean) => {
-    setBusy(true);
-    try {
-      await api.put(`/extensions/${extension.id}/state`, { fmfm_enabled: on });
-      fm.setData(d ? { ...d, enabled: on } : d);
-      toast.success(on ? "Follow me on" : "Follow me off", "Takes effect at once; no deployment needed.");
-    } catch (err) {
-      toast.error("Could not switch follow me", errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const save = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    errors.clear();
-    try {
-      fm.setData(await api.put<FollowMe>(`/extensions/${extension.id}/follow-me`, body));
-      toast.success("Follow me saved", "Deploy changes to apply the legs to the phone system.");
-    } catch (err) {
-      errors.set(err);
-      toast.error("Could not save follow me", errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const setMember = (i: number, patch: Partial<FollowMeMember>) => setMembers((ms) => ms.map((m, j) => (j === i ? { ...m, ...patch } : m)));
-  return (
-    <Card title="Find me / follow me" subtitle={d?.updated_at ? `Legs last changed ${formatRelative(d.updated_at)}.` : undefined}>
-      <form className="stack stack--sm" onSubmit={save}>
-        <Switch label="Follow me" checked={d?.enabled ?? false} disabled={!editable || busy || !d || !(d.members.length)} onChange={(e) => void toggle(e.target.checked)}
-          description={d && !d.members.length ? "Add at least one number below and save before switching it on." : "Rings the numbers below as well as the phone. From the phone: the follow-me toggle code; a lamp key on it shows the state."} />
-        <div className="grid grid--2">
-          <SelectField label="Ring" value={strategy} disabled={!editable || !d} options={[{ value: "ringall", label: "All at once" }, { value: "sequential", label: "One after another" }]} onChange={(e) => setStrategy(e.target.value)} />
-          <TextField label="Ring the phone alone first (seconds)" type="number" min={0} max={60} disabled={!editable || !d} value={initial} error={errors.fields.initial_ring_seconds} onChange={(e) => setInitial(e.target.value)} help="0 skips it." />
-        </div>
-        <div className="stack stack--sm">
-          {members.map((m, i) => (
-            <div key={i} className="row" style={{ alignItems: "flex-end", gap: 8 }}>
-              <SelectField label={i === 0 ? "Type" : <span className="sr-only">Type</span>} value={m.type} disabled={!editable} options={[{ value: "extension", label: "Extension" }, { value: "external", label: "Outside number" }]} onChange={(e) => setMember(i, { type: e.target.value as FollowMeMember["type"] })} />
-              <TextField label={i === 0 ? "Number" : <span className="sr-only">Number</span>} inputMode="tel" disabled={!editable} value={m.target} error={errors.fields[`members.${i + 1}`]} onChange={(e) => setMember(i, { target: e.target.value })} />
-              <TextField label={i === 0 ? "Ring (s)" : <span className="sr-only">Ring seconds</span>} type="number" min={5} max={60} disabled={!editable} value={String(m.ring_seconds)} onChange={(e) => setMember(i, { ring_seconds: Number(e.target.value) })} />
-              {editable ? <Button variant="ghost" size="sm" onClick={() => setMembers((ms) => ms.filter((_, j) => j !== i))} aria-label="Remove">Remove</Button> : null}
-            </div>
-          ))}
-          {editable && members.length < 10 ? <div><Button size="sm" icon="plus" onClick={() => setMembers((ms) => [...ms, { type: "external", target: "", ring_seconds: 20 }])}>Add a number</Button></div> : null}
-        </div>
-        <div className="grid grid--2">
-          <SelectField label="Outside numbers see" value={cidMode} disabled={!editable || !d} options={[{ value: "caller", label: "The caller’s number" }, { value: "extension", label: "This extension’s outbound caller ID" }]} onChange={(e) => setCidMode(e.target.value)} />
-          <TextField label="When nobody answers, send to extension" inputMode="numeric" disabled={!editable || !d} value={dest} error={errors.fields.no_answer_destination} onChange={(e) => setDest(e.target.value)} help="Empty: this extension’s own no-answer handling (forward, voicemail)." />
-        </div>
-        <Checkbox label="Outside numbers must press 1 to accept" checked={confirm} disabled={!editable || !d} onChange={(e) => setConfirm(e.target.checked)} description="Keeps a mobile’s voicemail from swallowing the call." />
-        {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
-        {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save follow me</Button></div> : null}
-      </form>
     </Card>
   );
 }

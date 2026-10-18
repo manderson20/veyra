@@ -45,6 +45,9 @@ export const NAV: NavSection[] = [
   { id: "overview", label: "Overview", icon: "dashboard", description: "System status, resources and telephony activity at a glance.", items: [
     { label: "Dashboard", href: "/", icon: "dashboard", permissions: ["system.health.read"] },
   ] },
+  { id: "me", label: "My Phone", icon: "phone", description: "Your own phone: Do Not Disturb, forwarding, follow-me, voicemail and the codes you can dial.", items: [
+    { label: "My Phone", href: "/my-phone/", icon: "phone" },
+  ] },
   { id: "directory", label: "Directory", icon: "users", description: "Organizations, their sites and the people who sign in.", items: [
     { label: "Organizations", href: "/organizations/", icon: "building", permissions: ["organizations.read"], group: "Organizations" },
     { label: "Sites", href: "/sites/", icon: "building", permissions: ["organizations.read"], group: "Organizations" },
