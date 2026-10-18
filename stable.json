@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 6,
+  "sequence": 7,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.25.4",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Install now starts the upgrade service at once instead of waiting up to a minute for the background worker's pass; the same checks run and the same root unit does the work. Notes: https://github.com/manderson20/veyra/releases/tag/v0.25.4",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "95a79b4ec9",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.25.4/veyra-0.25.4.tar.gz",
+        "sha256": "03011eface2a6788ac9ca4aa67bbfc9915f2d358ba310879bb67562cf14dc55f",
+        "size": 8007613
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -105,6 +122,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-18T23:29:48+00:00",
-  "expires_at": "2027-01-16T23:29:48+00:00"
+  "generated_at": "2026-10-18T23:42:13+00:00",
+  "expires_at": "2027-01-16T23:42:13+00:00"
 }
