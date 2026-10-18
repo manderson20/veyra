@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 2,
+  "sequence": 3,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.25.0",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Milestone 19, call-flow features: announcements, dial-by-name directory, conference rooms, call flows (day/night switches), time-condition override, call parking, blocked callers, queue dynamic agents and break-out menu, in-call recording and transfer codes. Migrations 0042-0046; new managed Asterisk files confbridge.conf, res_parking.conf and features.conf. Full notes: https://github.com/manderson20/veyra/releases/tag/v0.25.0",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted. Deploy the configuration afterwards so the new dialplan and feature codes reach the phone system.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "6d3e4e98c1",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.25.0/veyra-0.25.0.tar.gz",
+        "sha256": "51d83d6026aba5a10d5052470e88af8a2099fab140613c89e37b7282ba1b8217",
+        "size": 8002661
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -37,6 +54,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-18T14:53:45+00:00",
-  "expires_at": "2027-01-16T14:53:45+00:00"
+  "generated_at": "2026-10-18T22:45:48+00:00",
+  "expires_at": "2027-01-16T22:45:48+00:00"
 }
