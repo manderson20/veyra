@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased — 0.25.0 (Milestone 19)
+## 0.25.0 — 2026-10-18 (Milestone 19)
 
 ### Added
 - **Announcements** (#21): Telephony → Announcements plays a recording and then sends the call on; callers may skip it with any key or replay it with a chosen key. Routes, menu keys, groups and queues can point at an announcement, and announcements can chain. Migration `0042`.

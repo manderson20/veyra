@@ -1,9 +1,9 @@
 # Milestone 19 Report — Call-flow features
 
 Branch `milestone-19` (from `main` at 0.24.2). Design:
-[CALL_FEATURES.md](../CALL_FEATURES.md) §4. Status: **built 2026-10-18,
-awaiting the owner's live checks on dev1; released as 0.25.0 on the
-owner's go**. Issues: #19, #20, #21, #22, #25, #26, #27, #28, #29 under
+[CALL_FEATURES.md](../CALL_FEATURES.md) §4. Status: **released as 0.25.0 on
+2026-10-18 on the owner's go** (the first release installed from
+System → Updates). Issues: #19, #20, #21, #22, #25, #26, #27, #28, #29 under
 "Call flow features"; progress comments on each. Pull request #87.
 
 ## 1. Scope (roadmap row 19)
@@ -79,7 +79,7 @@ mypy clean. CI green on pull request #87 for every increment.
 
 ### Live checks on dev1
 
-Pending the owner's installation of the milestone build (schema 0046):
+To be run by the owner on dev1 after installing 0.25.0 from System → Updates (schema 0046):
 announcements and the directory from a route, a conference room with PINs
 from two phones, a call-flow toggle and a time-condition override from a
 phone key (BLF), parking a call by transfer and retrieving it from a slot,
