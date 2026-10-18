@@ -25,6 +25,7 @@ classroom, hallway), and carries:
 | `emergency_caller_id_number` | Optional. Presented on emergency routes (`911`) instead of the regular caller ID: the building's ELIN or registered DID. Wins over the route's and the trunk's numbers ([TRUNKS_ROUTING.md](TRUNKS_ROUTING.md) §7; migration `0010`) |
 | `outbound_caller_id_number`, `outbound_caller_id_name` | Optional (Milestone 18, [CALL_FEATURES.md](CALL_FEATURES.md) §3.5). Presented to the carrier on outside calls. The number must be one of the organization's numbers (an inbound route's DID) or on the organization's caller ID allow list, unless the caller holds `routing.write` (`422 caller_id_not_allowed`). An outbound route whose caller ID is marked *force* replaces it; emergency routes present the emergency caller ID. Migration `0033` |
 | `intercom` | `default` (the organization's `intercom_default`), `allow` or `deny`: may another phone dial the intercom code followed by this number and have this phone answer on speaker ([CALL_FEATURES.md](CALL_FEATURES.md) §3.6; migration `0036`) |
+| `class_of_service_id` | Optional class of service ([CALL_FEATURES.md](CALL_FEATURES.md) §3.8; migration `0038`); none: everything allowed |
 | `is_enabled` | Disabled extensions are kept but left out of the generated configuration |
 | `sip_secret_ciphertext`, `sip_secret_changed_at` | The SIP secret, encrypted (§4), and when it was last set |
 

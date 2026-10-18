@@ -57,6 +57,7 @@ export const NAV: NavSection[] = [
     { label: "Inbound Routes", href: "/routing/inbound/", icon: "arrowIn", permissions: ["routing.read"], group: "Routing" },
     { label: "Outbound Routes", href: "/routing/outbound/", icon: "arrowOut", permissions: ["routing.read"], group: "Routing" },
     { label: "Time Conditions", href: "/routing/time-conditions/", icon: "clock", permissions: ["routing.read"], group: "Routing" },
+    { label: "Classes of Service", href: "/routing/classes-of-service/", icon: "shield", permissions: ["routing.read"], group: "Routing" },
     { label: "Registrations", href: "/registrations/", icon: "device", permissions: ["extensions.read"], group: "Phones and calls" },
     { label: "Voicemail", href: "/voicemail/", icon: "voicemail", permissions: ["voicemail.read"], group: "Call handling" },
     { label: "IVR Menus", href: "/ivr/", icon: "ivr", permissions: ["ivr.read"], group: "Call handling" },

@@ -21,6 +21,7 @@ Kept current with every commit on `milestone-18`; design in [CALL_FEATURES.md](d
 - **Call forwarding** (#15): always, on busy and when unanswered, plus the extension's ring time, on the extension page and from the phone, effective at once; forwards to outside numbers leave through the organization's outbound routes with the extension's outbound caller ID; a lamp hint `*72<ext>`.
 - **Find me / follow me** (#16): legs rung together or in turn, desk phone first if wanted, press-1 confirmation for outside legs, caller ID mode, no-answer destination; `*21` toggles; `GET/PUT /extensions/{id}/follow-me`; migration `0035`.
 - **Intercom** (#18): `*80<ext>` rings a phone with the auto-answer headers so it answers on speaker; allow or deny per extension with an organization default; migration `0036`.
+- **Classes of service** (#30): Telephony → Classes of Service restricts an organization's phones to chosen outbound routes and feature codes, forbids outside forwards or follow-me legs and intercom, and caps simultaneous outside calls; extensions pick a class on their page; emergency routes always work; migration `0038`.
 - **Direct transfer to voicemail and voicemail operator** (#23, #24): `*<ext>` reaches a box's greeting, dialled or as a transfer target; a box's operator extension is reached with 0 during the greeting and `*` opens the box; migration `0037`.
 
 ### Changed

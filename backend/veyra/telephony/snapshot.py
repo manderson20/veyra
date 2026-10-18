@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from veyra.core.mail import load_smtp_settings, sender
 from veyra.core.models import (
     CallQueue,
+    ClassOfService,
     Device,
     Extension,
     ExtensionState,
@@ -58,6 +59,7 @@ from veyra.core.models import (
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
 from veyra.telephony import features, moh
+from veyra.telephony.numbering import load_numbering_plan
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
@@ -140,6 +142,11 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     org_slug = {o.id: o.slug for o in orgs}
     org_tz = {o.id: o.timezone for o in orgs}
     org_intercom = {o.id: o.intercom_default for o in orgs}
+    # Classes of service (docs/CALL_FEATURES.md §3.8), by id for the extensions
+    # and as a list for the generator's guards.
+    classes = list(db.scalars(select(ClassOfService).order_by(ClassOfService.slug)))
+    class_slug = {c.id: c.slug for c in classes}
+    route_slug = {r.id: r.slug for r in db.scalars(select(OutboundRoute))}
     ext_by_id = {e.id: e for e in extensions}
     ring_seconds = {
         s.extension_id: s.ring_seconds
@@ -235,6 +242,26 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         "sip": load_sip_settings(db).model_dump(mode="json"),
         # Configurable feature codes (docs/CALL_FEATURES.md §3.1).
         "feature_codes": features.active(db),
+        "numbering": {"extension_length": load_numbering_plan(db).extension_length},
+        "classes_of_service": [
+            {
+                "slug": c.slug,
+                "name": c.name,
+                "organization": org_slug.get(c.organization_id, ""),
+                "allowed_routes": sorted(
+                    route_slug[uuid.UUID(x)]
+                    for x in (c.allowed_outbound_route_ids or [])
+                    if uuid.UUID(x) in route_slug
+                ),
+                "allowed_feature_codes": c.allowed_feature_code_keys,
+                "allow_external_forwards": c.allow_external_forwards,
+                "allow_external_follow_me": c.allow_external_follow_me,
+                "allow_intercom": c.allow_intercom,
+                "max_outbound_calls": c.max_outbound_calls,
+            }
+            for c in classes
+            if c.organization_id in active
+        ],
         "smtp": {"enabled": smtp.enabled, "from_address": from_address, "from_name": from_name},
         "organizations": [
             {
@@ -268,6 +295,9 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                     e.intercom
                     if e.intercom in ("allow", "deny")
                     else org_intercom.get(e.organization_id, "allow")
+                ),
+                "class_of_service": (
+                    class_slug.get(e.class_of_service_id) if e.class_of_service_id else None
                 ),
                 "max_contacts": contacts.get(e.id, 1),
                 "secret": _secret(e, key),

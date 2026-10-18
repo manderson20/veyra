@@ -697,3 +697,226 @@ def test_voicemail_operator_api(admin):
     assert r.status_code == 200 and r.json()["operator_extension"] is None
     codes = {c["key"]: c for c in admin.get("/api/v1/telephony/feature-codes").json()["codes"]}
     assert codes["vm_direct"]["code"] == "*" and codes["vm_direct"]["takes_number"] is True
+
+
+# ------------------------------------------------------------------ class of service (§3.8)
+
+
+def test_generator_class_of_service_guards():
+    from test_generator_routing import _route, _trunk
+
+    snap = _snapshot(
+        feature_codes={"dnd_on": "*78", "cf_on": "*72", "intercom": "*80", "vm_direct": "*"},
+        trunks=[_trunk()],
+        outbound_routes=[
+            _route("local"),
+            _route("long", patterns=[{"prefix": "9", "match": "1NXXNXXXXXX", "prepend": ""}]),
+            _route(
+                "emergency",
+                is_emergency=True,
+                patterns=[{"prefix": "", "match": "911", "prepend": ""}],
+            ),
+        ],
+        numbering={"extension_length": 4},
+        classes_of_service={},
+    )
+    snap["classes_of_service"] = [
+        {
+            "slug": "classroom",
+            "name": "Classroom",
+            "organization": "example",
+            "allowed_routes": ["local"],
+            "allowed_feature_codes": ["dnd_on"],
+            "allow_external_forwards": False,
+            "allow_external_follow_me": False,
+            "allow_intercom": False,
+            "max_outbound_calls": 2,
+        },
+        {
+            "slug": "office",
+            "name": "Office",
+            "organization": "example",
+            "allowed_routes": ["local", "long"],
+            "allowed_feature_codes": None,
+            "allow_external_forwards": True,
+            "allow_external_follow_me": True,
+            "allow_intercom": True,
+            "max_outbound_calls": None,
+        },
+    ]
+    snap["extensions"][0]["class_of_service"] = "classroom"
+    snap["extensions"][0]["follow_me"] = {
+        "strategy": "ringall",
+        "members": [
+            {"type": "external", "target": "5735550100", "ring_seconds": 20},
+            {"type": "extension", "target": "1002", "endpoint": "example-1002", "ring_seconds": 20},
+        ],
+    }
+    snap["voicemail_boxes"] = [
+        {
+            "number": "1001",
+            "name": "A",
+            "organization": "example",
+            "timezone": "UTC",
+            "pin": "1234",
+            "email": None,
+            "attach_audio": True,
+            "delete_after_email": False,
+            "ring_seconds": 20,
+        }
+    ]
+    files = {f.path: f.content for f in generator.generate(snap)}
+    assert "set_var=VEYRA_COS=classroom" in files["pjsip.endpoints.conf"]
+    d = files["extensions.conf"]
+    # Routes: "long" is denied to the classroom class, "local" to nobody; emergency never.
+    long_ctx = _section(d, "veyra-out-long")
+    assert 'GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})}]?cosdenied)' in long_ctx
+    assert "n(cosdenied),NoOp(Veyra: not allowed by the class of service)" in long_ctx
+    local_ctx = _section(d, "veyra-out-local")
+    assert "cosdenied" not in local_ctx
+    # The call limit of the classroom class applies on every non-emergency route.
+    assert "Set(GROUP(veyra_cos)=${VEYRA_COS})" in local_ctx
+    assert (
+        'GotoIf($["${VEYRA_COS}"="classroom" & ${GROUP_COUNT(classroom@veyra_cos)} > 2]?cosbusy)'
+        in local_ctx
+    )
+    assert "n(cosbusy),NoOp(Veyra: the class of service has too many outside calls up)" in local_ctx
+    em = _section(d, "veyra-out-emergency")
+    assert "cos" not in em.lower().replace("noop(veyra emergency", "")
+    # Feature codes: the classroom class may use dnd_on only.
+    feat = _section(d, "veyra-features")
+    dnd_block = feat[feat.index("exten => *78,1,") : feat.index("exten => *72,1,")]
+    assert "cosdenied" not in dnd_block
+    cf_block = feat[feat.index("exten => *72,1,") : feat.index("exten => _*72.,1,")]
+    assert 'GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})}]?cosdenied)' in cf_block
+    assert (
+        cf_block.index("?nophone)")
+        < cf_block.index("?cosdenied)")
+        < cf_block.index("Read(VEYRA_NUM")
+    )
+    ic_block = feat[feat.index("exten => _*80.,1,") : feat.index("exten => *1001,1,")]
+    assert ic_block.count('GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})}]?cosdenied)') == 2
+    vm_block = feat[feat.index("exten => *1001,1,") :]
+    assert 'GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})}]?cosdenied)' in vm_block.split("\n")[1]
+    # Forwards outside (longer than an extension) are denied to the classroom class.
+    internal = _section(d, "veyra-internal")
+    assert (
+        'GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})} & ${LEN(${VEYRA_CF})} > 4]?cosdenied)'
+        in internal
+    )
+    # Follow-me of a classroom phone rings only the extension member.
+    assert (
+        "Dial(PJSIP/example-1002,20)" in internal
+        and "veyra-fm-out" not in internal.split("n(fm)")[1].split("n(fmdone)")[0]
+    )
+    # The office class and a phone without a class are never denied.
+    snap["extensions"][0]["class_of_service"] = None
+    d2 = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    assert "Local/5735550100@veyra-fm-out/n" in d2
+    # No classes at all: no guards anywhere.
+    snap["classes_of_service"] = []
+    d3 = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    assert "cosdenied" not in d3 and "veyra_cos" not in d3
+
+
+def test_class_of_service_api(admin, app):
+    from fastapi.testclient import TestClient
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    trunk = admin.post(
+        "/api/v1/trunks",
+        json={
+            "name": "Carrier",
+            "auth_mode": "registration",
+            "host": "sip.carrier.example",
+            "username": "acct1",
+            "password": "Secr3t-pass",
+        },
+    ).json()
+    route = admin.post(
+        "/api/v1/routing/outbound",
+        json={
+            "name": "Local",
+            "patterns": [{"prefix": "9", "match": "NXXNXXXXXX", "prepend": "1"}],
+            "trunk_ids": [trunk["id"]],
+        },
+    ).json()
+    emergency = admin.post(
+        "/api/v1/routing/outbound",
+        json={
+            "name": "Emergency",
+            "is_emergency": True,
+            "patterns": [{"prefix": "", "match": "911", "prepend": ""}],
+            "trunk_ids": [trunk["id"]],
+        },
+    ).json()
+    r = admin.post(
+        "/api/v1/classes-of-service",
+        json={
+            "organization_id": org["id"],
+            "name": "Classroom",
+            "allowed_outbound_route_ids": [route["id"], emergency["id"]],
+            "allowed_feature_code_keys": ["dnd_on", "dnd_off"],
+            "allow_external_forwards": False,
+            "max_outbound_calls": 3,
+        },
+    )
+    assert r.status_code == 201, r.text
+    cls = r.json()
+    assert cls["slug"] == "classroom" and [x["name"] for x in cls["allowed_outbound_routes"]] == [
+        "Local"
+    ]
+    assert cls["allowed_feature_code_keys"] == ["dnd_on", "dnd_off"] and cls["extensions"] == 0
+    r = admin.post(
+        "/api/v1/classes-of-service",
+        json={"organization_id": org["id"], "name": "Bad", "allowed_feature_code_keys": ["nope"]},
+    )
+    assert r.status_code == 422
+    r = admin.post(
+        "/api/v1/classes-of-service", json={"organization_id": org["id"], "name": "Classroom"}
+    )
+    assert r.status_code == 409
+    # An extension joins the class; a class of another organization is refused.
+    r = admin.post(
+        "/api/v1/extensions",
+        json={
+            "organization_id": org["id"],
+            "number": "1001",
+            "display_name": "A",
+            "class_of_service_id": cls["id"],
+        },
+    )
+    assert r.status_code == 201, r.text
+    ext = r.json()
+    assert ext["class_of_service_id"] == cls["id"] and ext["class_of_service_name"] == "Classroom"
+    assert admin.get(f"/api/v1/classes-of-service/{cls['id']}").json()["extensions"] == 1
+    from test_api_rbac import make_org
+
+    other = make_org(admin, "other")
+    r = admin.post(
+        "/api/v1/classes-of-service",
+        json={"organization_id": other, "name": "Elsewhere"},
+    ).json()
+    r2 = admin.patch(f"/api/v1/extensions/{ext['id']}", json={"class_of_service_id": r["id"]})
+    assert r2.status_code == 422 and r2.json()["errors"][0]["field"] == "class_of_service_id"
+    # Patch: back to every feature code, no limit; snapshot carries the class.
+    r = admin.patch(
+        f"/api/v1/classes-of-service/{cls['id']}",
+        json={"all_feature_codes": True, "no_call_limit": True},
+    )
+    assert r.status_code == 200 and r.json()["allowed_feature_code_keys"] is None
+    assert r.json()["max_outbound_calls"] is None
+    from veyra.core.security.crypto import load_installation_key
+    from veyra.telephony.snapshot import build_snapshot
+
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+        assert (configmgmt.pending_change(db) or {}).get("what") == "class of service classroom"
+    assert snap["numbering"]["extension_length"] == 4
+    assert snap["classes_of_service"][0]["allowed_routes"] == ["local"]
+    assert snap["extensions"][0]["class_of_service"] == "classroom"
+    # In use: cannot delete; moved out: can.
+    assert admin.delete(f"/api/v1/classes-of-service/{cls['id']}").status_code == 409
+    admin.patch(f"/api/v1/extensions/{ext['id']}", json={"class_of_service_id": None})
+    assert admin.delete(f"/api/v1/classes-of-service/{cls['id']}").status_code == 204
+    assert TestClient(app).get("/api/v1/classes-of-service").status_code in (401, 403)

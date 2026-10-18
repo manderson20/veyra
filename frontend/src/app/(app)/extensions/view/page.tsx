@@ -26,7 +26,7 @@ import {
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { Extension, ExtensionState, FollowMe, FollowMeMember, Page, SipCredentials, User } from "@/lib/types";
+import type { ClassOfService, Extension, ExtensionState, FollowMe, FollowMeMember, Page, SipCredentials, User } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useSession } from "@/hooks/useSession";
@@ -39,6 +39,7 @@ function ExtensionView() {
   const toast = useToast();
   const errors = useFormErrors();
   const ext = useApiData<Extension>(id ? `/extensions/${encodeURIComponent(id)}` : null);
+  const classes = useApiData<Page<ClassOfService>>(ext.data ? "/classes-of-service" : null, { organization_id: ext.data?.organization_id, limit: 200 });
   const editable = can("extensions.write");
   const users = useApiData<Page<User>>(editable && ext.data ? "/users" : null, { limit: 200 });
   const reloadExt = ext.reload;
@@ -56,6 +57,7 @@ function ExtensionView() {
   const [outCidNumber, setOutCidNumber] = useState("");
   const [outCidName, setOutCidName] = useState("");
   const [intercom, setIntercom] = useState("default");
+  const [cos, setCos] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -75,6 +77,7 @@ function ExtensionView() {
       setOutCidNumber(x.outbound_caller_id_number ?? "");
       setOutCidName(x.outbound_caller_id_name ?? "");
       setIntercom(x.intercom ?? "default");
+      setCos(x.class_of_service_id ?? "");
       setEnabled(x.is_enabled);
     }
   });
@@ -83,7 +86,7 @@ function ExtensionView() {
   if (ext.error) return <ErrorState title="Could not load extension" error={ext.error} onRetry={ext.reload} />;
   if (!ext.data) return <LoadingState />;
   const x = ext.data;
-  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || enabled !== x.is_enabled;
+  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || cos !== (x.class_of_service_id ?? "") || enabled !== x.is_enabled;
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === x.organization_id && (u.is_active || u.id === x.user_id));
 
   const save = async (e: FormEvent) => {
@@ -102,6 +105,7 @@ function ExtensionView() {
         outbound_caller_id_number: outCidNumber.trim() || null,
         outbound_caller_id_name: outCidName.trim() || null,
         intercom,
+        class_of_service_id: cos || null,
         is_enabled: enabled,
       }));
       setChanged((n) => n + 1);
@@ -173,6 +177,9 @@ function ExtensionView() {
             <TextField label="Emergency caller ID number" inputMode="tel" disabled={!editable} value={emergencyCid} error={errors.fields.emergency_caller_id_number}
               help="Presented on emergency calls (911) instead of the regular caller ID: the building's registered number. Otherwise the emergency route's number is used."
               onChange={(e) => setEmergencyCid(e.target.value)} />
+            <SelectField label="Class of service" value={cos} disabled={!editable} error={errors.fields.class_of_service_id} placeholder="None: everything allowed"
+              options={(classes.data?.items ?? []).map((c) => ({ value: c.id, label: c.name }))} onChange={(e) => setCos(e.target.value)}
+              help="Which outbound routes and feature codes this phone may use (Telephony → Classes of Service). Needs a deployment." />
             <SelectField label="Intercom" value={intercom} disabled={!editable} options={[{ value: "default", label: "Organization default" }, { value: "allow", label: "Allow: other phones can intercom this one" }, { value: "deny", label: "Deny" }]} onChange={(e) => setIntercom(e.target.value)}
               help="Intercom (the intercom feature code followed by this extension) makes the phone answer on speaker. Needs a deployment." />
             <Switch label="Enabled" description="Disabled extensions are left out of the engine configuration at the next deployment." checked={enabled} disabled={!editable} onChange={(e) => setEnabled(e.target.checked)} />

@@ -331,6 +331,9 @@ export interface Extension {
   dnd?: boolean;
   /** Intercom (CALL_FEATURES.md §3.6): may other phones make this one answer on speaker? */
   intercom?: "default" | "allow" | "deny" | string;
+  /** Class of service (CALL_FEATURES.md §3.8); null: everything allowed. */
+  class_of_service_id?: string | null;
+  class_of_service_name?: string | null;
   building_id?: string | null;
   location?: string | null;
   is_enabled: boolean;
@@ -2604,6 +2607,39 @@ export interface ExtensionState {
   ring_seconds: number;
   updated_at: string | null;
   updated_by: "phone" | "user" | "admin" | "sync" | string | null;
+}
+
+export interface ClassOfService {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  allowed_outbound_routes: { id: string; name: string }[];
+  /** null: every feature code. */
+  allowed_feature_code_keys: string[] | null;
+  allow_external_forwards: boolean;
+  allow_external_follow_me: boolean;
+  allow_intercom: boolean;
+  max_outbound_calls: number | null;
+  extensions: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClassOfServiceInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  allowed_outbound_route_ids?: string[];
+  allowed_feature_code_keys?: string[] | null;
+  all_feature_codes?: boolean;
+  allow_external_forwards?: boolean;
+  allow_external_follow_me?: boolean;
+  allow_intercom?: boolean;
+  max_outbound_calls?: number | null;
+  no_call_limit?: boolean;
 }
 
 export interface FollowMeMember {

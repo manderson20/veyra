@@ -371,6 +371,29 @@ endpoint; each outbound route context and feature code starts with a
 refusals play `pbx-invalid` and are counted (`cos.denied` in the call
 history outcome).
 
+*Built 2026-10-18* (migration `0038`, table `classes_of_service`,
+`extensions.class_of_service_id`): Telephony → Classes of Service
+(`/classes-of-service`, `routing.read`/`routing.write`) holds per
+organization the allowed non-emergency outbound routes (its own and the
+shared ones), the allowed feature codes (or all), the three allow flags and
+the simultaneous outside-call limit; the extension page assigns the class.
+The guards are generated statically, no `DB` tree: every endpoint carries
+`set_var=VEYRA_COS=<class slug>`, and a context denies with
+`GotoIf($[${REGEX("^(a|b)$" ${VEYRA_COS})}]?cosdenied)`, listing the
+classes that may *not* do the thing, so a phone without a class (empty
+`VEYRA_COS`) is never denied. Each non-emergency route block starts with
+its guard and, when a class has a limit, `Set(GROUP(veyra_cos)=${VEYRA_COS})`
+plus one `GROUP_COUNT` check per limited class (`cosbusy` → `Busy`); each
+feature code starts with its guard after the phone check (direct voicemail
+has no phone check, so a transferred caller still reaches the box); the
+forward label refuses targets longer than an extension number for classes
+without outside forwards (`numbering.extension_length` is in the snapshot);
+follow-me legs to outside numbers are left out of the dialplan for a phone
+whose class forbids them; `*80` is refused for classes without intercom.
+Refusals answer with `pbx-invalid` and hang up; the call-history outcome
+counter (`cos.denied`) needs a new CDR field and waits for the report
+builder's next pass. `allow_from_group` of §3.6 is not modelled.
+
 ## 4. Call-flow features (Milestone 19)
 
 Parking (`res_parking` lots per organization, `70` parks, `71–79` slots
