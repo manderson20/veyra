@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.24.1
+
+### Changed
+- The Telephony section of the sidebar uses the keypad icon, so My Phone alone carries the handset (owner request 2026-10-18).
+
 ## 0.24.0 — 2026-10-18 (Milestone 18)
 
 Design in [CALL_FEATURES.md](docs/CALL_FEATURES.md); report in [MILESTONE_18_REPORT.md](docs/milestones/MILESTONE_18_REPORT.md).
