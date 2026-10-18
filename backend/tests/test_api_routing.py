@@ -58,7 +58,7 @@ def test_trunk_crud_status_and_audit(admin, app, tmp_path):
     t = _trunk(admin)
     assert t["slug"] == "carrier-a" and t["has_password"] and "password" not in t
     assert t["auth_username"] is None and t["port"] == 5060 and t["transport"] == "udp"
-    assert t["status"] == {"state": "unknown", "reachable": None}  # not deployed yet
+    assert t["status"] == {"state": "unknown", "reachable": None, "registration": None}
     adapter.endpoints.append(EndpointStatus("trunk-carrier-a", True))
     assert admin.get(f"{TRUNKS}/{t['id']}").json()["status"]["state"] == "online"
     adapter.endpoints[-1] = EndpointStatus("trunk-carrier-a", False)

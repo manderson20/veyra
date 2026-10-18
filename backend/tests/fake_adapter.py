@@ -20,6 +20,7 @@ from veyra.telephony.adapter import (
     GeneratedFile,
     Registration,
     TelephonyAdapter,
+    TrunkRegistration,
 )
 from veyra.telephony.asterisk import generator
 
@@ -64,6 +65,8 @@ class FakeAdapter(TelephonyAdapter):
         # (organization slug, number) -> {field: value}, as "the engine" has it.
         self.states: dict[tuple[str, str], dict[str, str]] = {}
         self.state_calls: list[tuple[str, str, str, str | None]] = []
+        # trunk section -> registration status word, as "the engine" reports it.
+        self.trunk_regs: dict[str, str] = {}
 
     def capabilities(self) -> set[Capability]:
         return {
@@ -75,6 +78,7 @@ class FakeAdapter(TelephonyAdapter):
             Capability.CLICK_TO_DIAL,
             Capability.REGISTRATIONS,
             Capability.EXTENSION_STATE,
+            Capability.TRUNK_REGISTRATIONS,
         }
 
     def health(self) -> EngineHealth:
@@ -97,6 +101,12 @@ class FakeAdapter(TelephonyAdapter):
 
     def registrations(self) -> list[Registration]:
         return list(self.contacts)
+
+    def trunk_registrations(self) -> list[TrunkRegistration]:
+        return [
+            TrunkRegistration(section=k, server_uri=f"sip:{k}.example", status=v)
+            for k, v in self.trunk_regs.items()
+        ]
 
     def set_extension_state(
         self, organization: str, number: str, field: str, value: str | None

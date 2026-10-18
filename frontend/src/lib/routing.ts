@@ -44,11 +44,16 @@ export function parseList(text: string): string[] {
 }
 
 /** Status badge tone and label for a trunk: disabled trunks never show as online. */
-export function trunkStatus(t: Pick<Trunk, "is_enabled" | "status">): { tone: "ok" | "danger" | "neutral"; label: string } {
+export function trunkStatus(t: Pick<Trunk, "is_enabled" | "status">): { tone: "ok" | "danger" | "warn" | "neutral"; label: string } {
   if (!t.is_enabled) return { tone: "neutral", label: "Disabled" };
-  if (t.status?.state === "online") return { tone: "ok", label: "Online" };
-  if (t.status?.state === "offline") return { tone: "danger", label: "Offline" };
-  return { tone: "neutral", label: "Unknown" };
+  switch (t.status?.state) {
+    case "online": return { tone: "ok", label: "Online" };
+    case "offline": return { tone: "danger", label: "Offline" };
+    case "rejected": return { tone: "danger", label: "Registration rejected" };
+    case "registering": return { tone: "warn", label: "Registering" };
+    case "unregistered": return { tone: "warn", label: "Not registered" };
+    default: return { tone: "neutral", label: "Unknown" };
+  }
 }
 
 /** "Mon–Fri" for consecutive days, otherwise "Mon, Wed, Fri". */

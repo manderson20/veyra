@@ -74,7 +74,12 @@ refresh every ten seconds, NAT badge, reachability and expiry) and a
 "Registers from" column on Extensions. Addresses are not written to the
 audit log. Trunk registrations (Veyra registering to a carrier, issue #45)
 are a different object, `pjsip show registrations`, and join this page in
-the same milestone.
+the same milestone. *Built 2026-10-18:* `Capability.TRUNK_REGISTRATIONS`,
+`trunk_registrations()` (parsed from `pjsip show registrations`), the trunk
+`status` gains `registration` and the states `rejected`, `registering`,
+`unregistered` (a refused registration outranks a good qualify), the
+`trunk_down` alert reports the registration word, and
+`GET /telephony/registrations` carries `trunks` for platform administrators.
 
 ### 2.2 Packet capture
 
@@ -139,6 +144,18 @@ lines, filter, audited `diagnostics.log_read`) and **engine queries** from
 a fixed list (`pjsip show endpoint <name>`, `pjsip show contacts`, `core
 show channels verbose`, `pjsip show registrations`, `database show
 registrar`), arguments validated, every query audited. No free-form CLI.
+
+*Built 2026-10-18:* System → Diagnostics has three tabs: Packet captures
+(§2.2), **Logs** (`GET /diagnostics/logs`, `GET /diagnostics/logs/{key}
+?lines=&q=`: the tail of `messages.log`, `security.log` or `queue_log` from
+`/var/log/asterisk`, 10–2000 lines read from the end, an optional
+case-insensitive filter, audited `diagnostics.log_read`; `full` is not
+configured by Veyra's `logger.conf`) and **Engine queries** (`GET
+/diagnostics/queries`, `POST /diagnostics/query {key, argument?}`: a fixed
+list — endpoints, one endpoint, contacts, trunk registrations, transports,
+channels, the contact store, the extension states, uptime, version — the
+argument one validated token, run through the CLI socket, audited
+`diagnostics.query`). Both need `diagnostics.read`.
 
 ## 3. Extension call features (Milestone 18)
 

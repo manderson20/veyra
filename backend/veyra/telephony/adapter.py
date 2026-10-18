@@ -33,6 +33,7 @@ class Capability(StrEnum):
     RECORDING = "recording"
     REGISTRATIONS = "registrations"  # per-contact registration details (addresses)
     EXTENSION_STATE = "extension_state"  # Do Not Disturb and forwards kept in the engine
+    TRUNK_REGISTRATIONS = "trunk_registrations"  # outbound registration state per trunk
 
 
 EngineState = Literal[
@@ -66,6 +67,17 @@ class EndpointStatus:
     registered: bool
     contacts: list[str] = field(default_factory=list)
     user_agent: str | None = None
+
+
+@dataclass(frozen=True)
+class TrunkRegistration:
+    """The engine's outbound registration to a carrier (docs/CALL_FEATURES.md
+    §2.1, issue #45): ``status`` is the engine's word (Registered, Rejected,
+    Unregistered, …)."""
+
+    section: str  # the trunk's engine name, trunk-<slug>
+    server_uri: str | None
+    status: str
 
 
 @dataclass(frozen=True)
@@ -143,6 +155,10 @@ class TelephonyAdapter(ABC):
 
     def active_calls(self) -> list[ActiveCall]:
         raise NotSupported(f"{self.name}: active calls not implemented yet")
+
+    def trunk_registrations(self) -> list[TrunkRegistration]:
+        """Outbound registrations as the engine reports them (issue #45)."""
+        raise NotSupported("trunk registration state is not supported by this engine")
 
     def set_extension_state(
         self, organization: str, number: str, field: str, value: str | None

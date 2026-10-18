@@ -37,6 +37,7 @@ stub before the new code runs).
 | `max_channels` | Optional cap on simultaneous calls through the trunk (outbound; enforced with Asterisk `GROUP_COUNT`) |
 | `default_caller_id` | Number sent as caller ID on outbound calls when the route does not override it |
 | `caller_id_header` | `pai` (P-Asserted-Identity, default), `rpid` (Remote-Party-ID) or `none` |
+| `status` (read-only) | `state` `online`/`offline` from the qualify ping, or, for a registration trunk whose registration the engine reports as anything but registered, `rejected`, `registering` or `unregistered` (Milestone 18, issue #45); `reachable`; `registration`, the engine's own word. The `trunk_down` alert fires on a refused registration even when the host answers pings. Telephony → Registrations lists the trunks with the same state |
 | `dtmf_mode` | `rfc4733` (default), `inband`, `info`, `auto` |
 | `qualify_frequency` | Seconds between OPTIONS pings (default 60; 0 disables). Drives the reachability status |
 | `register_expiry` | Registration lifetime in seconds (default 3600; registration mode) |

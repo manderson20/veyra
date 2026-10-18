@@ -207,8 +207,12 @@ class TrunkPatch(BaseModel):
 
 
 class TrunkStatusOut(BaseModel):
-    state: Literal["online", "offline", "unknown"]
+    # online/offline: reachability (qualify); rejected/registering/unregistered: the
+    # registration state when the engine reports one (issue #45).
+    state: Literal["online", "offline", "unknown", "rejected", "registering", "unregistered"]
     reachable: bool | None
+    # The engine's own word for the outbound registration (Registered, Rejected, …).
+    registration: str | None = None
 
 
 class TrunkOut(BaseModel):
@@ -248,7 +252,16 @@ class TrunkPage(BaseModel):
 # ----------------------------------------------------------------- helpers
 
 
-def _statuses(request: Request | None) -> dict[str, bool] | None:
+class Live:
+    """What the engine says about trunks: reachability per endpoint and the
+    outbound registration state per section (issue #45)."""
+
+    def __init__(self, reachable: dict[str, bool], registrations: dict[str, str]) -> None:
+        self.reachable = reachable
+        self.registrations = registrations
+
+
+def _statuses(request: Request | None) -> Live | None:
     if request is None:
         return None
     adapter = request.app.state.telephony
@@ -256,25 +269,51 @@ def _statuses(request: Request | None) -> dict[str, bool] | None:
     if Capability.ENDPOINT_STATUS not in caps and Capability.TRUNK_STATUS not in caps:
         return None
     try:
-        return {s.endpoint: s.registered for s in adapter.endpoint_statuses()}
+        reachable = {s.endpoint: s.registered for s in adapter.endpoint_statuses()}
     except (EngineUnavailable, NotSupported):
         return None
+    registrations: dict[str, str] = {}
+    if Capability.TRUNK_REGISTRATIONS in caps:
+        try:
+            registrations = {r.section: r.status for r in adapter.trunk_registrations()}
+        except (EngineUnavailable, NotSupported):
+            registrations = {}
+    return Live(reachable, registrations)
 
 
-def _status(trunk: SipTrunk, live: dict[str, bool] | None) -> TrunkStatusOut | None:
+def registration_state(word: str | None) -> str | None:
+    """The engine's registration word -> our state, None for 'registered'."""
+    if not word:
+        return None
+    w = word.lower()
+    if w.startswith("registered"):
+        return None
+    if w.startswith("rejected"):
+        return "rejected"
+    if w.startswith("unregistered") or w.startswith("stopped"):
+        return "unregistered"
+    return "registering"
+
+
+def _status(trunk: SipTrunk, live: Live | None) -> TrunkStatusOut | None:
     if live is None:
         return None
     name = routing_name(trunk)
-    if name not in live or trunk.qualify_frequency == 0:
-        return TrunkStatusOut(state="unknown", reachable=None)
-    return TrunkStatusOut(state="online" if live[name] else "offline", reachable=live[name])
+    registration = live.registrations.get(name) if trunk.auth_mode == "registration" else None
+    if name not in live.reachable or trunk.qualify_frequency == 0:
+        state = registration_state(registration) or "unknown"
+        return TrunkStatusOut(state=state, reachable=None, registration=registration)
+    reachable = live.reachable[name]
+    # A rejected or pending registration matters more than a qualify answer.
+    state = registration_state(registration) or ("online" if reachable else "offline")
+    return TrunkStatusOut(state=state, reachable=reachable, registration=registration)
 
 
 def routing_name(trunk: SipTrunk) -> str:
     return f"trunk-{trunk.slug}"
 
 
-def _out(trunk: SipTrunk, live: dict[str, bool] | None) -> TrunkOut:
+def _out(trunk: SipTrunk, live: Live | None) -> TrunkOut:
     return TrunkOut(
         id=trunk.id,
         name=trunk.name,

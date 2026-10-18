@@ -4,11 +4,21 @@
 import { useEffect, useState } from "react";
 import { Badge, Button, Callout, Card, DataTable, EmptyState, PageHeader, SearchInput, SelectField, type Column } from "@/components/ui";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { Organization, Page, RegistrationRow, Registrations } from "@/lib/types";
+import type { Organization, Page, RegistrationRow, Registrations, TrunkRegistrationRow } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
 
 const REFRESH_MS = 10_000;
+
+const TRUNK_STATE: Record<string, { tone: "ok" | "warn" | "neutral" | "danger"; label: string }> = {
+  registered: { tone: "ok", label: "Registered" },
+  online: { tone: "ok", label: "Reachable" },
+  rejected: { tone: "danger", label: "Registration rejected" },
+  registering: { tone: "warn", label: "Registering" },
+  unregistered: { tone: "warn", label: "Not registered" },
+  offline: { tone: "danger", label: "Unreachable" },
+  unknown: { tone: "neutral", label: "Unknown" },
+};
 
 const STATUS_TONE: Record<string, "ok" | "warn" | "neutral" | "danger"> = {
   Avail: "ok",
@@ -79,6 +89,12 @@ export default function RegistrationsPage() {
       render: (r) => r.expires_at ? <span className="nowrap" title={formatDateTime(r.expires_at)}>{formatRelative(r.expires_at)}</span> : <span className="subtle">—</span>,
     },
   ];
+  const trunkColumns: Column<TrunkRegistrationRow>[] = [
+    { key: "name", header: "Trunk", render: (t) => <span><span className="table__primary" style={{ display: "block" }}>{t.name}</span><span className="table__secondary mono">{t.host}</span></span> },
+    { key: "state", header: "Registration", render: (t) => <Badge tone={(TRUNK_STATE[t.state] ?? TRUNK_STATE.unknown)!.tone}>{(TRUNK_STATE[t.state] ?? TRUNK_STATE.unknown)!.label}</Badge> },
+    { key: "word", header: "Engine says", render: (t) => <span className="subtle">{t.status ?? "—"}</span> },
+    { key: "reach", header: "Host", render: (t) => t.reachable === null ? <span className="subtle">—</span> : <Badge tone={t.reachable ? "ok" : "danger"}>{t.reachable ? "Answers" : "No answer"}</Badge> },
+  ];
   const d = data.data;
   return (
     <div className="stack">
@@ -88,6 +104,11 @@ export default function RegistrationsPage() {
         actions={<Button icon="refresh" onClick={reload} loading={data.loading && !!d}>Refresh</Button>}
       />
       {d && !d.available ? <Callout tone="warn" title="Registration details are not available">{d.message}</Callout> : null}
+      {d?.trunks?.length ? (
+        <Card title="Trunks" subtitle="Veyra’s own registrations to carriers, and whether the host answers.">
+          <DataTable columns={trunkColumns} rows={d.trunks} rowKey={(t) => t.trunk_id} caption="Trunk registrations" />
+        </Card>
+      ) : null}
       {d && d.available && d.unregistered > 0 ? <Callout tone="info" title={`${d.unregistered} enabled extension${d.unregistered === 1 ? " has" : "s have"} no registered phone`}>They are listed on the Extensions page as “Not registered”.</Callout> : null}
       <Card flush>
         <div className="table-toolbar">

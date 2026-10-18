@@ -16,13 +16,15 @@ import {
   PageHeader,
   SelectField,
   StatusBadge,
+  TabPanel,
+  Tabs,
   TextField,
   useToast,
   type Column,
 } from "@/components/ui";
 import { API_BASE, api, errorMessage } from "@/lib/api";
 import { formatBytes, formatDateTime, formatDuration, formatRelative } from "@/lib/format";
-import type { CaptureList, CaptureRow, CaptureTarget, CaptureTargets, SipDialog, SipMessage, SipSummary } from "@/lib/types";
+import type { CaptureList, CaptureRow, CaptureTarget, CaptureTargets, EngineQueries, EngineQueryResult, LogFiles, LogTail, SipDialog, SipMessage, SipSummary } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useBrowserStore } from "@/hooks/useBrowserStore";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -156,6 +158,70 @@ function SipView({ capture, onClose }: { capture: CaptureRow | null; onClose: ()
   );
 }
 
+function LogsPanel() {
+  const files = useApiData<LogFiles>("/diagnostics/logs");
+  const [key, setKey] = useState("messages");
+  const [lines, setLines] = useState("200");
+  const [q, setQ] = useState("");
+  const [query, setQuery] = useState<{ key: string; lines: number; q: string } | null>(null);
+  const tail = useApiData<LogTail>(query ? `/diagnostics/logs/${query.key}` : null, query ? { lines: query.lines, q: query.q || undefined } : undefined);
+  const present = files.data?.files.find((f) => f.key === key)?.present ?? true;
+  return (
+    <div className="stack">
+      <Card title="Engine logs" subtitle="The last lines of the engine's log files, newest at the bottom. Every read is recorded in the audit log.">
+        <div className="grid grid--3">
+          <SelectField label="Log" value={key} options={(files.data?.files ?? []).map((f) => ({ value: f.key, label: `${f.label}${f.present ? ` (${formatBytes(f.bytes)})` : " (not written yet)"}` }))} onChange={(e) => setKey(e.target.value)} />
+          <TextField label="Lines" type="number" min={10} max={files.data?.max_lines ?? 2000} value={lines} onChange={(e) => setLines(e.target.value)} />
+          <TextField label="Containing" value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. an extension number or Rejected" spellCheck={false} />
+        </div>
+        <div className="form-actions"><Button variant="primary" icon="search" onClick={() => setQuery({ key, lines: Number(lines) || 200, q: q.trim() })} loading={tail.loading && !!query} disabled={!present}>Show</Button></div>
+      </Card>
+      {tail.error ? <Callout tone="danger" title="Could not read the log">{errorMessage(tail.error)}</Callout> : null}
+      {tail.data ? (
+        <Card title={tail.data.file} subtitle={`${tail.data.lines.length} line${tail.data.lines.length === 1 ? "" : "s"}${query?.q ? ` containing “${query.q}”` : ""}`} flush>
+          <pre className="mono" style={{ margin: 0, padding: "var(--space-3)", maxHeight: "60vh", overflow: "auto", fontSize: "var(--text-xs)", whiteSpace: "pre-wrap" }}>{tail.data.lines.length ? tail.data.lines.join("\n") : tail.data.present ? "Nothing matched." : "This log has not been written yet."}</pre>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+function EnginePanel() {
+  const toast = useToast();
+  const queries = useApiData<EngineQueries>("/diagnostics/queries");
+  const [key, setKey] = useState("endpoints");
+  const [argument, setArgument] = useState("");
+  const [result, setResult] = useState<EngineQueryResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const chosen = queries.data?.queries.find((x) => x.key === key);
+  const run = async () => {
+    setBusy(true);
+    try {
+      setResult(await api.post<EngineQueryResult>("/diagnostics/query", { key, argument: chosen?.takes_argument ? argument.trim() : null }));
+    } catch (err) {
+      toast.error("Could not run the query", errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="stack">
+      <Card title="Engine queries" subtitle="A fixed list of read-only engine commands; the argument, where one is taken, is a single word. Every query is recorded in the audit log.">
+        <div className="grid grid--2">
+          <SelectField label="Query" value={key} options={(queries.data?.queries ?? []).map((x) => ({ value: x.key, label: `${x.label} (${x.command})` }))} onChange={(e) => { setKey(e.target.value); setArgument(""); }} />
+          {chosen?.takes_argument ? <TextField label="Argument" value={argument} onChange={(e) => setArgument(e.target.value)} placeholder="e.g. the endpoint name" spellCheck={false} /> : null}
+        </div>
+        <div className="form-actions"><Button variant="primary" icon="activity" onClick={run} loading={busy} disabled={!!chosen?.takes_argument && !argument.trim()}>Run</Button></div>
+      </Card>
+      {result ? (
+        <Card title={result.command} subtitle={result.ok ? undefined : "The engine returned an error."} flush>
+          <pre className="mono" style={{ margin: 0, padding: "var(--space-3)", maxHeight: "60vh", overflow: "auto", fontSize: "var(--text-xs)", whiteSpace: "pre-wrap" }}>{result.output || "(no output)"}</pre>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
 export default function DiagnosticsPage() {
   const { can } = useSession();
   const toast = useToast();
@@ -225,10 +291,16 @@ export default function DiagnosticsPage() {
     },
   ];
 
+  const [tab, setTab] = useState("captures");
   return (
     <div className="stack">
-      <PageHeader title="Diagnostics" description="Packet captures of SIP (and, when asked for, RTP) taken on this server, with a SIP summary that needs no other tool. Captures can contain call content and personal data; they are kept for the retention period and every download is audited."
-        actions={<Button icon="refresh" onClick={reload} loading={list.loading && !!list.data}>Refresh</Button>} />
+      <PageHeader title="Diagnostics" description="Packet captures with a SIP summary, the engine's logs and a fixed set of engine queries, all without leaving the browser. Captures and logs can contain call content and personal data; downloads, log reads and queries are recorded in the audit log."
+        actions={tab === "captures" ? <Button icon="refresh" onClick={reload} loading={list.loading && !!list.data}>Refresh</Button> : null} />
+      <Tabs idBase="diag" active={tab} onChange={setTab} tabs={[{ id: "captures", label: "Packet captures" }, { id: "logs", label: "Logs" }, { id: "engine", label: "Engine queries" }]} />
+      <TabPanel idBase="diag" id="logs" active={tab}><LogsPanel /></TabPanel>
+      <TabPanel idBase="diag" id="engine" active={tab}><EnginePanel /></TabPanel>
+      <TabPanel idBase="diag" id="captures" active={tab}>
+      <div className="stack">
       {manage ? <StartForm targets={targets.data} limits={list.data?.limits} disabled={!!list.data && list.data.running >= list.data.max_running} onStarted={reload} /> : null}
       {list.data && list.data.running >= list.data.max_running ? <Callout tone="info" title="Captures running">{list.data.max_running} captures run at a time. Stop one to start another.</Callout> : null}
       <Card title="Captures" flush>
@@ -244,6 +316,8 @@ export default function DiagnosticsPage() {
         <p>The file is removed from this server. Copies you downloaded stay with you.</p>
       </ConfirmDialog>
       {manage ? <p className="subtle"><Icon name="download" size={12} /> Downloaded files open in Wireshark (<span className="mono">.pcap</span>). From the console: <span className="mono">sudo veyra capture start --host 192.168.1.20</span>, <span className="mono">list</span>, <span className="mono">stop</span>, <span className="mono">delete</span>.</p> : null}
+      </div>
+      </TabPanel>
     </div>
   );
 }
