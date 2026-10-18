@@ -32,6 +32,7 @@ class Capability(StrEnum):
     PAGING = "paging"
     RECORDING = "recording"
     REGISTRATIONS = "registrations"  # per-contact registration details (addresses)
+    EXTENSION_STATE = "extension_state"  # Do Not Disturb and forwards kept in the engine
 
 
 EngineState = Literal[
@@ -142,6 +143,15 @@ class TelephonyAdapter(ABC):
 
     def active_calls(self) -> list[ActiveCall]:
         raise NotSupported(f"{self.name}: active calls not implemented yet")
+
+    def set_dnd(self, organization: str, number: str, on: bool) -> None:
+        """Do Not Disturb of one extension in the engine's own store, so the
+        dialplan sees it at once (docs/CALL_FEATURES.md §3.2)."""
+        raise NotSupported("extension state is not supported by this engine")
+
+    def dnd_states(self) -> dict[tuple[str, str], bool]:
+        """(organization slug, number) -> Do Not Disturb, as the engine has it."""
+        raise NotSupported("extension state is not supported by this engine")
 
     def registrations(self) -> list[Registration]:
         """Every registered contact with its addresses (Capability.REGISTRATIONS)."""

@@ -46,6 +46,19 @@ WATCHED_MODULES = (
 _CHANNEL_ENDPOINT_RE = re.compile(r"^PJSIP/([A-Za-z0-9_.-]+)-[0-9a-f]+$")
 
 
+DND_FAMILY = "veyra/dnd"
+DND_DEVICE_PREFIX = "veyra-dnd-"
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
+# "/veyra/dnd/example/1001                           : 1"
+_DND_ROW_RE = re.compile(r"^/veyra/dnd/(?P<org>[^/]+)/(?P<number>[^/\s]+)\s*:\s*(?P<value>.*)$")
+
+
+def _check_token(value: str, what: str) -> str:
+    if not _TOKEN_RE.match(value or ""):
+        raise ValueError(f"{what} {value!r} is not valid for the engine store")
+    return value
+
+
 def _endpoint_of(channel_name: str) -> str | None:
     m = _CHANNEL_ENDPOINT_RE.match(channel_name)
     return m.group(1) if m else None
@@ -104,6 +117,7 @@ class AsteriskAdapter(TelephonyAdapter):
         }
         if cli.asterisk_available():
             caps.add(Capability.REGISTRATIONS)
+            caps.add(Capability.EXTENSION_STATE)
         return caps
 
     # --- status -------------------------------------------------------------
@@ -169,6 +183,30 @@ class AsteriskAdapter(TelephonyAdapter):
                 )
             )
         return out
+
+    def set_dnd(self, organization: str, number: str, on: bool) -> None:
+        """AstDB key read by the dialplan and the custom device state behind
+        the BLF hint (docs/CALL_FEATURES.md §3.2), both through the CLI socket."""
+        org = _check_token(organization, "organization")
+        num = _check_token(number, "extension")
+        family = f"{DND_FAMILY}/{org}"
+        cmd = f"database put {family} {num} 1" if on else f"database del {family} {num}"
+        ok, out = cli.run(cmd)
+        if not ok and not (not on and "not found" in out.lower()):
+            raise EngineUnavailable(f"could not store Do Not Disturb: {out[:200]}")
+        state = "INUSE" if on else "NOT_INUSE"
+        cli.run(f"devstate change Custom:{DND_DEVICE_PREFIX}{org}-{num} {state}")
+
+    def dnd_states(self) -> dict[tuple[str, str], bool]:
+        ok, out = cli.run(f"database show {DND_FAMILY}")
+        if not ok:
+            raise EngineUnavailable(f"could not read Do Not Disturb states: {out[:200]}")
+        states: dict[tuple[str, str], bool] = {}
+        for line in out.splitlines():
+            m = _DND_ROW_RE.match(line.strip())
+            if m:
+                states[(m.group("org"), m.group("number"))] = m.group("value").strip() == "1"
+        return states
 
     def registrations(self) -> list[Registration]:
         """Registered contacts with addresses (docs/CALL_FEATURES.md §2.1), from

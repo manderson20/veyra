@@ -55,7 +55,7 @@ from veyra.core.models import (
     VoicemailBoxMember,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
-from veyra.telephony import moh
+from veyra.telephony import features, moh
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
@@ -197,6 +197,8 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
             "multi_tenancy_enabled": bool(inst.multi_tenancy_enabled) if inst else False,
         },
         "sip": load_sip_settings(db).model_dump(mode="json"),
+        # Configurable feature codes (docs/CALL_FEATURES.md §3.1).
+        "feature_codes": features.active(db),
         "smtp": {"enabled": smtp.enabled, "from_address": from_address, "from_name": from_name},
         "organizations": [
             {

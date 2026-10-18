@@ -23,6 +23,7 @@ from veyra.core.models import ConfigRevision
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.crypto import InstallationKey, try_load_installation_key
 from veyra.core.security.principal import Principal
+from veyra.telephony import features
 from veyra.telephony.adapter import Capability, EngineUnavailable, TelephonyAdapter
 from veyra.telephony.numbering import NumberingPlan, load_numbering_plan, save_numbering_plan
 from veyra.telephony.settings import CODECS, SipSettings, load_sip_settings, save_sip_settings
@@ -241,6 +242,73 @@ def put_numbering(
     )
     db.commit()
     return NumberingOut(plan=body, problems=[], description=body.describe())
+
+
+# ----------------------------------------------------------------- feature codes
+
+
+class FeatureCodeIn(BaseModel):
+    code: str = Field(min_length=2, max_length=7)
+    enabled: bool = True
+
+
+class FeatureCodesIn(BaseModel):
+    codes: dict[str, FeatureCodeIn]
+
+
+class FeatureCodesOut(BaseModel):
+    codes: list[dict[str, Any]]
+    fixed: dict[str, str]
+
+
+@router.get("/feature-codes", response_model=FeatureCodesOut, summary="Feature codes")
+def get_feature_codes(
+    principal: Principal = Depends(require("extensions.read")),
+    db: Session = Depends(get_db),
+) -> FeatureCodesOut:
+    return FeatureCodesOut(codes=features.load(db), fixed=dict(features.FIXED_CODES))
+
+
+@router.put("/feature-codes", response_model=FeatureCodesOut, summary="Change feature codes")
+def put_feature_codes(
+    body: FeatureCodesIn,
+    principal: Principal = Depends(require("routing.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> FeatureCodesOut:
+    before = {c["key"]: (c["code"], c["enabled"]) for c in features.load(db)}
+    try:
+        codes = features.save(
+            db, {k: v.model_dump() for k, v in body.codes.items()}, principal.user_id
+        )
+    except features.FeatureCodeError as e:
+        raise ProblemError(
+            422,
+            "Feature codes not saved",
+            e.message,
+            code="validation_failed",
+            errors=[{"field": e.key, "message": e.message}],
+        ) from e
+    changed = {
+        c["key"]: {"code": c["code"], "enabled": c["enabled"]}
+        for c in codes
+        if before.get(c["key"]) != (c["code"], c["enabled"])
+    }
+    if changed:
+        service.mark_changed(db, by=principal.label, what="feature codes")
+        audit.record(
+            db,
+            action="telephony.feature_codes_update",
+            actor_user_id=principal.user_id,
+            actor_label=principal.label,
+            target_type="settings",
+            target_id=features.SETTINGS_KEY,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={"changed": changed},
+        )
+    db.commit()
+    return FeatureCodesOut(codes=codes, fixed=dict(features.FIXED_CODES))
 
 
 # ----------------------------------------------------------------- revisions

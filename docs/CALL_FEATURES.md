@@ -168,6 +168,15 @@ snapshot with a collision. `GET/PUT /telephony/feature-codes`; Telephony →
 Feature Codes lists them with what each does. Codes are also exported to
 templates (`{{feature_codes.dnd_toggle}}`) and the Companion.
 
+*Built 2026-10-18:* the codes live in one settings document
+(`telephony.feature_codes`, overrides only; `veyra/telephony/features.py`)
+rather than a table, so a new default reaches every installation without a
+migration. Codes start with `*` or `#` (2 to 7 characters), may not be one
+of the fixed codes (`*43`, `*60`, `*8`, `*95`, `*97`, `*98`, `**<ext>`) and
+enabled codes are unique; a change marks a deployment (`routing.write`).
+The snapshot carries `feature_codes` (enabled key → code); the generator
+checks them again. Template and Companion export: with Milestone 21.
+
 ### 3.2 Do Not Disturb
 
 `extension_states` (one row per extension, migration `0032`): `dnd`,
@@ -182,6 +191,29 @@ seeded from the table at deployment and kept current by the same event
 handler, before dialling; DND sends the call to the extension's busy
 destination (voicemail busy greeting by default). A BLF hint
 `*76<ext>` (custom device state) lights a key when DND is on.
+
+*Built 2026-10-18* (migration `0034`, table `extension_states` with the
+forward, follow-me and ring-time columns the next sections fill):
+
+* Every endpoint carries `set_var=VEYRA_EXT=<number>` beside `VEYRA_ORG`,
+  so a feature code acts on the phone's own extension whatever its internal
+  caller ID says. The AstDB key is `veyra/dnd/<org slug>/<number>` and the
+  device state `Custom:veyra-dnd-<org slug>-<number>`.
+* `*78`/`*79`/`*76` answer, set the key and the device state, raise
+  `UserEvent(VeyraExtState,Org,Extension,Field: dnd,Value)` and play
+  `do-not-disturb` + `activated`/`de-activated`; a channel without
+  `VEYRA_EXT` hears `feature-not-avail-line`.
+* The API (`GET/PUT /extensions/{id}/state`, `extensions.read`/`.write`,
+  audited `extension.state_update`) writes the row and the engine's copy
+  through the adapter (`Capability.EXTENSION_STATE`, `set_dnd`,
+  `dnd_states`, CLI `database put/del` and `devstate change`): no
+  deployment is needed. The extension list carries `dnd`.
+* Instead of seeding at deployment, the worker reconciles the engine's keys
+  with the rows every pass (`extension_state.sync`), which also covers a
+  restored backup (AstDB is not in the backup) and an HA failover. A phone's
+  change reaches the row through the UserEvent (`updated_by: phone`).
+* The ring time (`ring_seconds`, 5–120) is stored now and read by the
+  dialplan with §3.3.
 
 ### 3.3 Call forwarding
 

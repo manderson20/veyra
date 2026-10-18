@@ -65,6 +65,7 @@ export const NAV: NavSection[] = [
     { label: "Ring Groups", href: "/ring-groups/", icon: "group", permissions: ["groups.read"], group: "Call handling" },
     { label: "Call Queues", href: "/queues/", icon: "queue", permissions: ["groups.read"], group: "Call handling" },
     { label: "Pickup Groups", href: "/pickup-groups/", icon: "phone", permissions: ["groups.read"], group: "Call handling" },
+    { label: "Feature Codes", href: "/feature-codes/", icon: "key", permissions: ["extensions.read"], group: "Call handling" },
     { label: "Paging Zones", href: "/paging-zones/", icon: "megaphone", permissions: ["paging.read"], group: "Paging and bells" },
     { label: "Pages", href: "/paging/", icon: "megaphone", permissions: ["paging.read"], group: "Paging and bells" },
     { label: "Calendars", href: "/calendars/", icon: "clock", permissions: ["bells.read"], group: "Paging and bells" },

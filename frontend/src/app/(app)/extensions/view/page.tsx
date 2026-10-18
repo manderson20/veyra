@@ -25,7 +25,7 @@ import {
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { Extension, Page, SipCredentials, User } from "@/lib/types";
+import type { Extension, ExtensionState, Page, SipCredentials, User } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useSession } from "@/hooks/useSession";
@@ -175,6 +175,7 @@ function ExtensionView() {
           </form>
         </Card>
         <div className="stack">
+          <DndCard extension={x} editable={editable} onChanged={() => ext.reload()} />
           {can("voicemail.read") ? <VoicemailCard extension={x} editable={can("voicemail.write")} onChanged={() => setChanged((n) => n + 1)} /> : null}
           {can("groups.read") ? <CallGroupsCard extension={x} /> : null}
           {can("devices.read") ? <DevicesCard extension={x} /> : null}
@@ -266,6 +267,31 @@ function SipCredentialsCard({ extension, onRotated }: { extension: Extension; on
         onConfirm={rotate} onCancel={() => { setConfirmRotate(false); setRotateError(null); }}>
         <p>The phone using extension <strong>{extension.number}</strong> stops registering until it is given the new secret and the configuration is deployed.</p>
       </ConfirmDialog>
+    </Card>
+  );
+}
+
+function DndCard({ extension, editable, onChanged }: { extension: Extension; editable: boolean; onChanged: () => void }) {
+  const toast = useToast();
+  const state = useApiData<ExtensionState>(`/extensions/${extension.id}/state`);
+  const [busy, setBusy] = useState(false);
+  const s = state.data;
+  const toggle = async (on: boolean) => {
+    setBusy(true);
+    try {
+      state.setData(await api.put<ExtensionState>(`/extensions/${extension.id}/state`, { dnd: on }));
+      toast.success(on ? "Do Not Disturb on" : "Do Not Disturb off", "Takes effect at once; no deployment needed.");
+      onChanged();
+    } catch (err) {
+      toast.error("Could not change Do Not Disturb", errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Do Not Disturb" subtitle={s?.updated_at ? `Last changed ${formatRelative(s.updated_at)} ${s.updated_by === "phone" ? "from the phone" : s.updated_by === "sync" ? "by the engine sync" : "here"}.` : undefined}>
+      <Switch label="Do Not Disturb" checked={s?.dnd ?? extension.dnd ?? false} disabled={!editable || busy || !s} onChange={(e) => toggle(e.target.checked)}
+        description="Callers hear busy, or the busy greeting when the extension has a voicemail box. The phone can switch it too with the Do Not Disturb feature codes (Telephony → Feature Codes); a lamp key programmed to the toggle code shows the state." />
     </Card>
   );
 }

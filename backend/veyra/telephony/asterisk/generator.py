@@ -113,6 +113,7 @@ OUTBOUND_DIAL_TIMEOUT = 60
 EMERGENCY_DIAL_TIMEOUT = 120
 _SITE_RE = re.compile(r"^[0-9a-f-]{36}$")
 EMERGENCY_EVENT = "VeyraEmergency"
+EXTSTATE_EVENT = "VeyraExtState"  # a phone changed its own state (CALL_FEATURES.md §3.2)
 CONTEXT_EMERGENCY_NOTIFY = "veyra-emergency-notify"
 ASTDB_CALLBACK = "veyra_ecb"
 DEFAULT_RING_SECONDS = 30
@@ -663,6 +664,7 @@ def _endpoints(
             f"aors={name}",
             f'callerid="{cid_name}" <{cid_num}>',
             f"set_var=VEYRA_ORG={org}",
+            f"set_var=VEYRA_EXT={number}",
             *emergency_cid,
             *outbound_cid,
             *moh,
@@ -1024,9 +1026,10 @@ def _dialplan(
         f"VEYRA_INSTALLATION={name}",
         "",
     ]
+    codes = _feature_codes(snapshot)
     for ns in spaces:
         with engine_names.using(Names(ns)):
-            lines += _features(mine(extensions, ns), prompts_dir)
+            lines += _features(mine(extensions, ns), prompts_dir, codes)
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _internal(
@@ -1036,6 +1039,7 @@ def _dialplan(
                 mine(queues, ns),
                 recording,
                 prompts_dir,
+                codes.get("dnd_toggle"),
             )
     lines += [
         f"[{CONTEXT_INVALID}]",
@@ -1097,11 +1101,79 @@ def _namespaces(snapshot: dict[str, Any]) -> list[str]:
     return sorted(found, key=lambda ns: (ns != engine_names.LEGACY, ns))
 
 
-def _features(extensions: list[dict[str, Any]], prompts_dir: str) -> list[str]:
+_FEATURE_CODE_RE = re.compile(r"^[*#][0-9*#]{1,6}$")
+
+
+def _feature_codes(snapshot: dict[str, Any]) -> dict[str, str]:
+    """The enabled configurable feature codes (docs/CALL_FEATURES.md §3.1)."""
+    codes: dict[str, str] = {}
+    seen: dict[str, str] = {}
+    for key, code in (snapshot.get("feature_codes") or {}).items():
+        code = str(code)
+        if not _FEATURE_CODE_RE.match(code):
+            raise GenerationError(f"feature code {key}: {code!r} is not valid")
+        if code in seen:
+            raise GenerationError(f"feature code {code} is used by {seen[code]} and {key}")
+        seen[code] = str(key)
+        codes[str(key)] = code
+    return codes
+
+
+def _dnd_codes(codes: dict[str, str]) -> list[str]:
+    """``*78``/``*79``/``*76`` (docs/CALL_FEATURES.md §3.2): the phone's own
+    extension (``VEYRA_EXT`` from its endpoint) switches the engine's copy, the
+    BLF device state, and tells the API through a UserEvent."""
+    key = "veyra/dnd/${VEYRA_ORG}/${VEYRA_EXT}"
+    device = "Custom:veyra-dnd-${VEYRA_ORG}-${VEYRA_EXT}"
+
+    def switch(on: bool) -> list[str]:
+        value = "1" if on else "0"
+        return [
+            f" same => n,Set(DB({key})={value})",
+            f" same => n,Set(DEVICE_STATE({device})={'INUSE' if on else 'NOT_INUSE'})",
+            f" same => n,UserEvent({EXTSTATE_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},"
+            f"Field: dnd,Value: {value})",
+            f" same => n,Playback(do-not-disturb&{'activated' if on else 'de-activated'})",
+            " same => n,Hangup()",
+        ]
+
+    guard = [
+        " same => n,Answer()",
+        ' same => n,GotoIf($["${VEYRA_EXT}"=""]?nophone)',
+    ]
+    tail = [
+        " same => n(nophone),Playback(feature-not-avail-line)",
+        " same => n,Hangup()",
+    ]
+    lines: list[str] = []
+    if "dnd_on" in codes:
+        lines += [f"exten => {codes['dnd_on']},1,NoOp(Veyra DND on for ${{VEYRA_EXT}})", *guard]
+        lines += switch(True) + tail
+    if "dnd_off" in codes:
+        lines += [f"exten => {codes['dnd_off']},1,NoOp(Veyra DND off for ${{VEYRA_EXT}})", *guard]
+        lines += switch(False) + tail
+    if "dnd_toggle" in codes:
+        lines += [
+            f"exten => {codes['dnd_toggle']},1,NoOp(Veyra DND toggle for ${{VEYRA_EXT}})",
+            *guard,
+            f' same => n,GotoIf($["${{DB({key})}}"="1"]?off)',
+            *switch(True),
+            " same => n(off),NoOp()",
+            *switch(False),
+            *tail,
+        ]
+    return lines
+
+
+def _features(
+    extensions: list[dict[str, Any]], prompts_dir: str, codes: dict[str, str] | None = None
+) -> list[str]:
     """Feature codes of one namespace; ``**<ext>`` reaches only its phones."""
     n = engine_names.current()
+    codes = codes or {}
     lines = [
         f"[{n.features}]",
+        *_dnd_codes(codes),
         "; *43 echo test, *60 speaking clock: always available for phone checks.",
         "exten => *43,1,NoOp(Veyra echo test)",
         " same => n,Answer()",
@@ -1170,6 +1242,7 @@ def _internal(
     queues: list[dict[str, Any]],
     recording: list[dict[str, Any]],
     prompts_dir: str,
+    dnd_toggle: str | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
@@ -1189,24 +1262,35 @@ def _internal(
         box = by_number.get(number) if not (by_number.get(number) or {}).get("shared") else None
         # The hint lets busy lamp fields follow the phone (RING_GROUPS_QUEUES.md §4.2).
         lines.append(f"exten => {number},hint,PJSIP/{endpoint}")
+        org_slug = _check_value(str(ext.get("organization") or ""), "organization")
+        # A key lit while Do Not Disturb is on (docs/CALL_FEATURES.md §3.2).
+        if dnd_toggle:
+            lines.append(f"exten => {dnd_toggle}{number},hint,Custom:veyra-dnd-{org_slug}-{number}")
+        dnd = f' same => n,GotoIf($["${{DB(veyra/dnd/{org_slug}/{number})}}"="1"]?dnd)'
         rec = _record_for_extension(recording, ext, prompts_dir)
         if box is None:
             lines += [
                 f"exten => {number},1,NoOp(Veyra extension {number})",
+                dnd,
                 *rec,
                 f" same => n,Dial(PJSIP/{endpoint},{DEFAULT_RING_SECONDS})",
+                " same => n,Hangup()",
+                f" same => n(dnd),NoOp(Veyra: {number} has Do Not Disturb on)",
+                " same => n,Busy(10)",
                 " same => n,Hangup()",
             ]
         else:
             # Unanswered and unavailable go to the unavailable greeting, busy
-            # to the busy greeting (docs/VOICEMAIL_IVR.md §3.2).
+            # (and Do Not Disturb) to the busy greeting (docs/VOICEMAIL_IVR.md §3.2).
             lines += [
                 f"exten => {number},1,NoOp(Veyra extension {number})",
+                dnd,
                 *rec,
                 f" same => n,Dial(PJSIP/{endpoint},{int(box['ring_seconds'])})",
                 ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
                 f" same => n,VoiceMail({number}@{n.voicemail},u)",
                 " same => n,Hangup()",
+                f" same => n(dnd),NoOp(Veyra: {number} has Do Not Disturb on)",
                 f" same => n(busy),VoiceMail({number}@{n.voicemail},b)",
                 " same => n,Hangup()",
             ]
