@@ -98,12 +98,27 @@ and deployment 71 carrying the codes; forwards through the API (keys and
 lamp). The owner installed every build on dev1 and confirmed the deploy
 button fix.
 
-Pending (needs an upgrade to the latest build for migrations 0035–0039
-and a deployment): follow-me, intercom, direct voicemail and operator,
-classes of service, ring-group outside members, the diagnostics logs and
-queries tabs, trunk registration state (dev1 has no registration trunk),
-and the phone-side codes dialled from a real phone (`*76`, `*72<number>`,
-`*21`, `*80<ext>`, `*<ext>`).
+Done after the owner installed cdcac7e (schema 0039): follow-me
+configured on 22214 (sequential, desk first, a member extension and an
+outside number, confirmation, no-answer destination) and switched on
+through the state (engine key `fmfm`), intercom denied on 22215, an
+operator on 22215's box, a class "Classroom" assigned to 22215, and a ring
+group with an outside number; the generated configuration carried
+`VEYRA_COS`, the follow-me branch with the `U(veyra-fm-confirm^s)`
+option and the `Local/…@veyra-fm-out` leg, the `*2122214` lamp hint, the
+`*22215` direct-voicemail entry, the intercom context with 22214 allowed
+and 22215 refused, the forward guard (`LEN(${VEYRA_CF}) > 5`) and
+`cosdenied` blocks, the ring group's outside leg, and the box's
+`operator=yes|exitcontext=veyra-vmx-22215` with its exit context. The
+diagnostics log tail (messages, security with a filter) and an engine
+query (`core show uptime`) answered; a shell-like argument was refused
+with 422. The call-limit guard renders only inside outbound route blocks
+and dev1 has no outbound routes, so it was not seen live.
+
+Pending: a deployment of this configuration and the phone-side codes
+dialled from a real phone (`*76`, `*72<number>`, `*21`, `*80<ext>`,
+`*<ext>`, 0 during a greeting); trunk registration state (dev1 has no
+registration trunk).
 
 ## 4. Not verified
 
