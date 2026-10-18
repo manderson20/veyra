@@ -10,6 +10,9 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased — 0.24.1
 
+### Fixed
+- Migration `0038` named the unique constraint of `classes_of_service` outside the models' naming convention, so `alembic check` (CI on `main` for 0.24.0) reported a drift; migration `0040` renames it, and the test suite now runs the same check so a drift is caught before a push.
+
 ### Changed
 - The Telephony section of the sidebar uses the keypad icon, so My Phone alone carries the handset (owner request 2026-10-18).
 
