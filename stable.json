@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 1,
+  "sequence": 2,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.24.2",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Extension page tabs, a per-extension limit of phones that may register, the linked-handsets Telephony icon, the official update feed, and security and fix items. See https://github.com/manderson20/veyra/releases/tag/v0.24.2",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted. Database migration 0041.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "77e23359d7",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.24.2/veyra-0.24.2.tar.gz",
+        "sha256": "bfe4e6005d7089a3de23c8bfad9855a80c491277f3ae224638b04b36b683f8c1",
+        "size": 7842910
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -20,6 +37,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-18T14:35:37+00:00",
-  "expires_at": "2027-01-16T14:35:37+00:00"
+  "generated_at": "2026-10-18T14:53:45+00:00",
+  "expires_at": "2027-01-16T14:53:45+00:00"
 }
