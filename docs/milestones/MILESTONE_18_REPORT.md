@@ -70,6 +70,12 @@ service, a feature-code page) and trunk registration state.
   outside calls; static dialplan guards on `VEYRA_COS`; a phone without a
   class may do everything; emergency routes always work; migration 0038.
 
+* **My Phone** (§3.9, owner request 2026-10-18): a sidebar tab for every
+  user with their own extensions (registration, Do Not Disturb, forwards,
+  follow-me, voicemail, dialable codes) on `me`-scoped endpoints; the first
+  slice of the Milestone 20 portal. Filed for later: #75 user-set phone
+  keys with locked keys, #76 provisioning variables, #77 fax.
+
 Deviations from the design are noted in CALL_FEATURES.md under each
 section ("Built …"): feature codes as a settings document rather than a
 table; extension state reconciled by the worker instead of seeded at
