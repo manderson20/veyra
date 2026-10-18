@@ -28,6 +28,7 @@ from veyra.core.models import (
     Device,
     Extension,
     ExtensionState,
+    FollowMe,
     InboundRoute,
     Installation,
     IvrEntry,
@@ -145,6 +146,33 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
             select(ExtensionState).where(ExtensionState.extension_id.in_(list(ext_by_id)))
         )
     }
+    # Find me / follow me (docs/CALL_FEATURES.md §3.4): extension members are
+    # resolved to endpoints here; a disabled or missing one gets no endpoint.
+    by_org_number = {(e.organization_id, e.number): e for e in extensions}
+    follow_me: dict[Any, dict[str, Any]] = {}
+    for fm in db.scalars(select(FollowMe).where(FollowMe.extension_id.in_(list(ext_by_id)))):
+        owner = ext_by_id[fm.extension_id]
+        members = []
+        for m in fm.members or []:
+            kind = str(m.get("type") or "extension")
+            number = str(m.get("target") or "")
+            member: dict[str, Any] = {
+                "type": kind,
+                "target": number,
+                "ring_seconds": int(m.get("ring_seconds") or 20),
+            }
+            if kind == "extension":
+                target = by_org_number.get((owner.organization_id, number))
+                member["endpoint"] = target.endpoint_name if target else None
+            members.append(member)
+        follow_me[fm.extension_id] = {
+            "strategy": fm.strategy,
+            "initial_ring_seconds": fm.initial_ring_seconds,
+            "confirm_calls": fm.confirm_calls,
+            "caller_id_mode": fm.caller_id_mode,
+            "members": members,
+            "no_answer_destination": fm.no_answer_destination,
+        }
     # Site defaults for the emergency caller ID (docs/TRUNKS_ROUTING.md §7) and
     # the number of phones registering each extension (docs/DEVICE_PROVISIONING.md §2).
     sites = list(db.scalars(select(Site)))
@@ -233,6 +261,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "outbound_caller_id_name": e.outbound_caller_id_name,
                 # Ring time (docs/CALL_FEATURES.md §3.3); None: the box's or the default.
                 "ring_seconds": ring_seconds.get(e.id),
+                "follow_me": follow_me.get(e.id),
                 "max_contacts": contacts.get(e.id, 1),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),

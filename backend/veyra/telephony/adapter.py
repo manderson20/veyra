@@ -148,7 +148,7 @@ class TelephonyAdapter(ABC):
         self, organization: str, number: str, field: str, value: str | None
     ) -> None:
         """One field of an extension's state (``dnd``, ``cf_always``, ``cf_busy``,
-        ``cf_no_answer``) in the engine's own store, so the dialplan sees it at
+        ``cf_no_answer``, ``fmfm``) in the engine's own store, so the dialplan sees it at
         once (docs/CALL_FEATURES.md §3.2, §3.3); None clears it."""
         raise NotSupported("extension state is not supported by this engine")
 

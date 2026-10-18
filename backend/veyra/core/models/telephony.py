@@ -77,6 +77,36 @@ class ExtensionState(Base):
     updated_by: Mapped[str] = mapped_column(String(16), default="admin", server_default="admin")
 
 
+class FollowMe(Base):
+    """Find me / follow me of one extension (docs/CALL_FEATURES.md §3.4): the
+    legs rung besides the desk phone. Whether it is on lives in
+    ``ExtensionState.fmfm_enabled`` (switched from the phone with a code)."""
+
+    __tablename__ = "follow_me"
+
+    extension_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("extensions.id", ondelete="CASCADE"), primary_key=True
+    )
+    strategy: Mapped[str] = mapped_column(String(16), default="ringall", server_default="ringall")
+    # Ring the desk phone alone first; 0 skips it.
+    initial_ring_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # An outside leg must press 1, so a mobile's voicemail cannot swallow the call.
+    confirm_calls: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # caller: outside legs see the caller's number; extension: this extension's outbound caller ID.
+    caller_id_mode: Mapped[str] = mapped_column(
+        String(16), default="caller", server_default="caller"
+    )
+    # [{"type": "extension"|"external", "target": "1002"|"5735550100", "ring_seconds": 20}, ...]
+    members: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="[]")
+    # Where the call goes when nobody answers: an extension number, else the
+    # extension's own no-answer handling (forward, voicemail).
+    no_answer_destination: Mapped[str | None] = mapped_column(String(32))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    updated_by: Mapped[str] = mapped_column(String(320), default="", server_default="")
+
+
 class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     """A physical phone registered by MAC address (docs/DEVICE_PROVISIONING.md §2)."""
 

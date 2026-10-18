@@ -47,7 +47,7 @@ _CHANNEL_ENDPOINT_RE = re.compile(r"^PJSIP/([A-Za-z0-9_.-]+)-[0-9a-f]+$")
 
 
 STATE_FAMILY = "veyra/ext"
-STATE_FIELDS = ("dnd", "cf_always", "cf_busy", "cf_no_answer")
+STATE_FIELDS = ("dnd", "cf_always", "cf_busy", "cf_no_answer", "fmfm")
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
 _VALUE_RE = re.compile(r"^[+0-9]{0,32}$")
 # "/veyra/ext/example/1001/cf_always                 : 5735550100"
@@ -207,6 +207,8 @@ class AsteriskAdapter(TelephonyAdapter):
             raise EngineUnavailable(f"could not store the extension state: {out[:200]}")
         if field == "dnd":
             device, on = f"Custom:veyra-dnd-{org}-{num}", bool(value)
+        elif field == "fmfm":
+            device, on = f"Custom:veyra-fm-{org}-{num}", bool(value)
         else:
             # The forwarding lamp is lit while any of the three forwards is set.
             current = self.extension_states().get((org, num), {})
