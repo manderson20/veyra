@@ -40,6 +40,7 @@ FILE_NOTIFY = "pjsip_notify.conf"
 FILE_PAGING = "paging.json"
 FILE_MOH = "musiconhold.conf"
 FILE_CONFBRIDGE = "confbridge.conf"
+FILE_PARKING = "res_parking.conf"
 MANAGED_FILES = [
     FILE_TRANSPORTS,
     FILE_ENDPOINTS,
@@ -52,6 +53,7 @@ MANAGED_FILES = [
     FILE_PAGING,
     FILE_MOH,
     FILE_CONFBRIDGE,
+    FILE_PARKING,
 ]
 
 # Module reload per file. Order matters: transports before endpoints is the
@@ -67,6 +69,7 @@ RELOAD_SCOPES: dict[str, str] = {
     FILE_NOTIFY: "res_pjsip_notify.so",
     FILE_MOH: "res_musiconhold.so",
     FILE_CONFBRIDGE: "app_confbridge.so",
+    FILE_PARKING: "res_parking.so",
 }
 SCOPE_ORDER = [
     "res_rtp_asterisk.so",
@@ -77,6 +80,7 @@ SCOPE_ORDER = [
     "res_pjsip_notify.so",
     "res_musiconhold.so",
     "app_confbridge.so",
+    "res_parking.so",
 ]
 
 CONTEXT_INTERNAL = "veyra-internal"
@@ -115,6 +119,8 @@ SWITCH_FAMILY = "veyra/switch"
 SWITCH_EVENT = "VeyraSwitch"
 SWITCH_PIN_TRIES = 3
 MAX_CODE_INDEX = 99
+# Parking (docs/CALL_FEATURES.md §4.7).
+PARKING_MAX_SLOTS = 50
 MAX_GROUP_DEPTH = 6
 RING_GROUP_STRATEGIES = ("ringall", "sequential")
 QUEUE_STRATEGIES = ("ringall", "rrmemory", "leastrecent", "fewestcalls", "random", "linear")
@@ -416,7 +422,8 @@ def _generate(
     ring_groups = list(snapshot.get("ring_groups") or [])
     queues = list(snapshot.get("queues") or [])
     rooms = list(snapshot.get("conference_rooms") or [])
-    _check_group_numbers(extensions, ring_groups, queues, rooms)
+    lots = list(snapshot.get("parking_lots") or [])
+    _check_group_numbers(extensions, ring_groups, queues, rooms, lots)
     moh = _check_moh(list(snapshot.get("hold_music") or []))
     org_moh = {
         str(o["slug"]): _moh_class(
@@ -452,6 +459,7 @@ def _generate(
         _paging_json(snapshot.get("paging") or {}),
         _moh_conf(moh, _path(moh_dir, "hold music directory")),
         _confbridge(rooms, moh, _path(recordings_dir, "recordings directory")),
+        _parking_conf(lots),
     ]
 
 
@@ -1030,6 +1038,7 @@ def _dialplan(
     announcements = list(snapshot.get("announcements") or [])
     rooms = list(snapshot.get("conference_rooms") or [])
     flows = list(snapshot.get("call_flows") or [])
+    lots = list(snapshot.get("parking_lots") or [])
     boxes = boxes if boxes is not None else {}
     tcs = list(snapshot.get("time_conditions") or [])
     conditions = {str(c["key"]): c for c in tcs}
@@ -1092,6 +1101,7 @@ def _dialplan(
                 _cos_for(snapshot, ns),
                 mine(rooms, ns),
                 _switch_hints(codes, mine(flows, ns), mine(tcs, ns)),
+                mine(lots, ns),
             )
     lines += _follow_me_contexts(spaces)
     if "intercom" in codes:
@@ -1137,6 +1147,7 @@ def _dialplan(
             lines += _announcement_contexts(mine(announcements, ns), prompts_dir)
             lines += _conference_contexts(mine(rooms, ns))
             lines += _call_flow_contexts(mine(flows, ns))
+            lines += _parking_contexts(mine(lots, ns))
             lines += _directory_context()
     moh = _check_moh(list(snapshot.get("hold_music") or []))
     for ns in spaces:
@@ -1761,15 +1772,22 @@ def _internal(
     cos: Cos | None = None,
     conferences: list[dict[str, Any]] | None = None,
     extra_hints: list[str] | None = None,
+    parking: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
     by_number = {number: b for (_org, number), b in boxes.items()}
+    # Parking lots: res_parking fills each lot's context with the park
+    # extension, the slots and their hints (docs/CALL_FEATURES.md §4.7).
+    lot_includes = [
+        f"include => {n.parking(_slug(lot['slug'], 'parking lot slug'))}" for lot in parking or []
+    ]
     lines = [
         f"[{n.internal}]",
-        "; Extensions first; then feature codes, outbound routes and the catch-all",
-        "; (includes are searched in order, after this context's own entries).",
+        "; Extensions first; then feature codes, parking, outbound routes and the",
+        "; catch-all (includes are searched in order, after this context's own entries).",
         f"include => {n.features}",
+        *lot_includes,
         f"include => {n.paging}",
         f"include => {n.outbound}",
         f"include => {CONTEXT_INVALID}",
@@ -2787,9 +2805,10 @@ def _check_group_numbers(
     ring_groups: list[dict[str, Any]],
     queues: list[dict[str, Any]],
     conferences: list[dict[str, Any]] | None = None,
+    parking: list[dict[str, Any]] | None = None,
 ) -> None:
-    """Ring group, queue and conference room numbers share the extension number
-    space of their engine namespace (docs/MULTI_TENANCY.md §3)."""
+    """Ring group, queue, conference room and parking numbers share the
+    extension number space of their engine namespace (docs/MULTI_TENANCY.md §3)."""
 
     def key(item: dict[str, Any], number: str) -> tuple[str, str]:
         return (engine_names.for_org(str(item.get("organization") or "")).ns, number)
@@ -2809,6 +2828,102 @@ def _check_group_numbers(
                     f"number {number} is used by a {taken[key(item, number)]} and a {what}"
                 )
             taken[key(item, number)] = what
+    for lot in parking or []:
+        slug = str(lot.get("slug") or "")
+        for number in _parking_numbers(lot):
+            if key(lot, number) in taken:
+                raise GenerationError(
+                    f"number {number} is used by a {taken[key(lot, number)]} and parking lot {slug}"
+                )
+            taken[key(lot, number)] = "parking lot"
+
+
+def _parking_numbers(lot: dict[str, Any]) -> list[str]:
+    """The park extension and every slot of a lot, validated."""
+    slug = _slug(lot.get("slug"), "parking lot slug")
+    park = str(lot.get("park_exten") or "")
+    if not re.fullmatch(r"[0-9]{1,32}", park):
+        raise GenerationError(f"parking lot {slug}: park extension {park!r} is not valid")
+    first, last = int(lot.get("slot_first") or 0), int(lot.get("slot_last") or 0)
+    if first <= 0 or last < first or last - first + 1 > PARKING_MAX_SLOTS:
+        raise GenerationError(
+            f"parking lot {slug}: slots {first}-{last} are not a range of 1 to {PARKING_MAX_SLOTS}"
+        )
+    numbers = [park] + [str(n) for n in range(first, last + 1)]
+    if len(set(numbers)) != len(numbers):
+        raise GenerationError(f"parking lot {slug}: the park extension lies inside the slots")
+    return numbers
+
+
+def _parking_conf(lots: list[dict[str, Any]]) -> GeneratedFile:
+    """``res_parking.conf`` (docs/CALL_FEATURES.md §4.7): one lot per section;
+    res_parking creates the park and slot extensions with their hints in the
+    lot's context; reloaded with ``res_parking.so``."""
+    lines = [HEADER, "[general]", "parkeddynamic=no", ""]
+    seen: set[str] = set()
+    for lot in lots:
+        slug = _slug(lot["slug"], "parking lot slug")
+        org = _slug(lot.get("organization") or "", f"organization of parking lot {slug}")
+        n = engine_names.for_org(org)
+        if n.parking(slug) in seen:
+            raise GenerationError(f"duplicate parking lot slug {slug!r}")
+        seen.add(n.parking(slug))
+        name = _check_value(str(lot.get("name") or slug), "parking lot name")
+        numbers = _parking_numbers(lot)
+        timeout = int(lot.get("timeout_seconds") or 45)
+        ring = int(lot.get("return_ring_seconds") or 20)
+        if not 10 <= timeout <= 1800:
+            raise GenerationError(f"parking lot {slug}: timeout {timeout} is out of range")
+        if not 5 <= ring <= 120:
+            raise GenerationError(f"parking lot {slug}: return ring time {ring} is out of range")
+        lines += [
+            f"[{n.parking(slug)}]",
+            f"; {name} ({org})",
+            f"context={n.parking(slug)}",
+            f"parkext={numbers[0]}",
+            "parkext_exclusive=yes",
+            f"parkpos={int(lot['slot_first'])}-{int(lot['slot_last'])}",
+            "findslot=next",
+            f"parkingtime={timeout}",
+            "comebacktoorigin=no",
+            f"comebackcontext={n.parking_timeout(slug)}",
+            f"comebackdialtime={ring}",
+            "parkedplay=caller",
+            "courtesytone=" + ("beep" if lot.get("courtesy_tone", True) else ""),
+            "parkedcalltransfers=caller",
+            "parkedcallreparking=caller",
+            "parkedcallhangup=no",
+            "parkedcallrecording=no",
+            "",
+        ]
+    return GeneratedFile(FILE_PARKING, "\n".join(lines).rstrip("\n") + "\n")
+
+
+def _parking_contexts(lots: list[dict[str, Any]]) -> list[str]:
+    """One timeout context per lot: ring the parker back for the lot's return
+    time, then the lot's destination (docs/CALL_FEATURES.md §4.7). The lot's
+    own context (park extension, slots, hints) is written by res_parking."""
+    lines: list[str] = []
+    n = engine_names.current()
+    for lot in lots:
+        slug = _slug(lot["slug"], "parking lot slug")
+        name = _check_value(str(lot.get("name") or slug), "parking lot name")
+        ring = int(lot.get("return_ring_seconds") or 20)
+        lines += [
+            f"[{n.parking(slug)}]",
+            "; Filled by res_parking at load time (park extension, slots, hints).",
+            f"exten => s,1,NoOp(Veyra parking lot {name})",
+            " same => n,Hangup()",
+            "",
+            f"[{n.parking_timeout(slug)}]",
+            f"exten => s,1,NoOp(Veyra parking lot {name}: slot ${{PARKINGSLOT}} timed out)",
+            ' same => n,GotoIf($["${PARKER_FLAT}"=""]?gone)',
+            f" same => n,Dial(${{PARKER}},{ring})",
+            f" same => n(gone),NoOp(Veyra parking lot {name}: the parker did not answer)",
+            *_goto(lot.get("timeout")),
+            "",
+        ]
+    return lines
 
 
 def _group_prologue(ctx: str, what: str, name: str, org: str) -> list[str]:

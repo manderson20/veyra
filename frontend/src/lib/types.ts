@@ -1452,6 +1452,43 @@ export interface CallFlowInput {
   is_enabled?: boolean;
 }
 
+/** A parking lot (§4.7): park extension, slot range, timeout return. */
+export interface ParkingLot {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  context: string;
+  description: string | null;
+  park_exten: string;
+  slot_first: number;
+  slot_last: number;
+  slots: string[];
+  timeout_seconds: number;
+  return_ring_seconds: number;
+  courtesy_tone: boolean;
+  timeout: Destination;
+  is_enabled: boolean;
+  problems: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ParkingLotInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  park_exten?: string;
+  slot_first?: number;
+  slot_last?: number;
+  timeout_seconds?: number;
+  return_ring_seconds?: number;
+  courtesy_tone?: boolean;
+  timeout?: DestinationInput;
+  is_enabled?: boolean;
+}
+
 export type SmtpSecurity = "starttls" | "tls" | "none";
 
 export interface SmtpSettings {

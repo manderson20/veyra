@@ -589,6 +589,40 @@ condition with a code is deployed even before a route uses it.
 *Built 2026-10-18.* Permanent overrides are cleared by hand (interface, API
 or the phone code).
 
+### 4.7 Call parking
+
+Table `parking_lots` (migration `0044`): `organization_id`, `name`, `slug`
+(contexts `veyra-park-<slug>` and `veyra-park-<slug>-timeout`),
+`park_exten`, `slot_first`, `slot_last` (at most 50 slots; the park
+extension outside them), `timeout_seconds` (10-1800),
+`return_ring_seconds` (5-120), `courtesy_tone`, the timeout destination
+(shared shape) and `is_enabled`. The lot's numbers live in the
+organization's number space (`number_owner` knows them: an extension,
+group, room or another lot cannot take them, `409 number_in_use`); they
+are short by convention (70, 71-79) and exempt from the plan's extension
+length.
+
+Generated: `res_parking.conf` (new managed file, stub installed by the
+installer, reload scope `res_parking.so`) with one lot per section
+(`parkext`, `parkext_exclusive`, `parkpos`, `findslot=next`,
+`parkingtime`, `comebacktoorigin=no`, `comebackcontext`,
+`comebackdialtime`, `parkedplay=caller`, `courtesytone=beep`,
+`parkedcalltransfers`/`parkedcallreparking=caller`). res_parking fills
+the lot's context with the park extension, the slots and their hints
+(`park:<slot>@<lot>`), and the phone context includes it, so a transfer
+to the park extension parks (the slot number is read back) and dialling
+a slot retrieves; a line key with a slot number lights while a call waits
+there. On timeout the call enters the timeout context, which rings the
+parker (`${PARKER}`) for the return time and then takes the lot's
+destination.
+
+API `GET/POST /parking-lots`, `GET/PATCH/DELETE /parking-lots/{id}`
+(`groups.read` / `groups.write`). Interface: Telephony → Parking.
+
+*Built 2026-10-18.* Not in this slice: a dedicated *park* line-key type in
+the provisioning templates (#40) and FreePBX's `*85<slot>` pickup code
+(dialling the slot does the same).
+
 ## 5. Permissions and API summary
 
 | Permission | Grants |

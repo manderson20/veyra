@@ -360,3 +360,76 @@ def test_time_condition_override_code_and_route_check():
         _files(
             _snapshot(time_conditions=[_tc("a", 2), _tc("b", 2, name="Other")], feature_codes=CODES)
         )
+
+
+def _lot(slug="main", **over):
+    lot = {
+        "slug": slug,
+        "name": slug.title(),
+        "organization": "example",
+        "park_exten": "70",
+        "slot_first": 71,
+        "slot_last": 79,
+        "timeout_seconds": 45,
+        "return_ring_seconds": 20,
+        "courtesy_tone": True,
+        "timeout": {"type": "extension", "number": "1001"},
+    }
+    lot.update(over)
+    return lot
+
+
+def test_parking_lot_conf_contexts_and_numbers():
+    files = _files(_snapshot(parking_lots=[_lot()]))
+    conf = files["res_parking.conf"]
+    lot = _context(conf, "veyra-park-main")
+    for line in (
+        "context=veyra-park-main",
+        "parkext=70",
+        "parkpos=71-79",
+        "parkingtime=45",
+        "comebacktoorigin=no",
+        "comebackcontext=veyra-park-main-timeout",
+        "comebackdialtime=20",
+        "courtesytone=beep",
+        "parkext_exclusive=yes",
+    ):
+        assert line in lot
+    dp = files["extensions.conf"]
+    assert "include => veyra-park-main" in _context(dp, "veyra-internal")
+    timeout = _context(dp, "veyra-park-main-timeout")
+    assert "Dial(${PARKER},20)" in timeout and "Goto(veyra-internal,1001,1)" in timeout
+    assert 'GotoIf($["${PARKER_FLAT}"=""]?gone)' in timeout
+    assert "res_parking.so" in generator.reload_scopes(["res_parking.conf"])
+    assert generator.validate(generator.generate(_snapshot(parking_lots=[_lot()]))) == []
+    # No courtesy tone: the key is left empty.
+    conf2 = _files(_snapshot(parking_lots=[_lot(courtesy_tone=False)]))["res_parking.conf"]
+    assert "courtesytone=\n" in conf2
+
+
+def test_parking_lot_validation():
+    with pytest.raises(generator.GenerationError, match="used by a extension and parking lot"):
+        _files(_snapshot(parking_lots=[_lot(park_exten="1001")]))
+    with pytest.raises(generator.GenerationError, match="not a range"):
+        _files(_snapshot(parking_lots=[_lot(slot_first=79, slot_last=71)]))
+    with pytest.raises(generator.GenerationError, match="not a range"):
+        _files(_snapshot(parking_lots=[_lot(slot_first=100, slot_last=200)]))
+    with pytest.raises(generator.GenerationError, match="inside the slots"):
+        _files(_snapshot(parking_lots=[_lot(park_exten="75")]))
+    with pytest.raises(generator.GenerationError, match="timeout"):
+        _files(_snapshot(parking_lots=[_lot(timeout_seconds=5)]))
+    # Two lots may not overlap, and a conference room may not sit in a lot.
+    with pytest.raises(generator.GenerationError, match="parking lot"):
+        _files(
+            _snapshot(
+                parking_lots=[_lot(), _lot("second", park_exten="80", slot_first=75, slot_last=85)]
+            )
+        )
+    with pytest.raises(
+        generator.GenerationError, match="used by a conference room and parking lot"
+    ):
+        _files(
+            _snapshot(
+                parking_lots=[_lot(park_exten="2500")], conference_rooms=[_room(number="2500")]
+            )
+        )

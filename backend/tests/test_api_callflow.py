@@ -245,3 +245,131 @@ def test_callflow_objects_deploy(admin, app, tmp_path):
     assert "Goto(veyra-directory,s,1)" in dialplan and "[veyra-directory]" in dialplan
     assert "[veyra-conf-staff-room-bridge]" in confbridge and "record_conference=yes" in confbridge
     assert "app_confbridge.so" in adapter.reloads and "pbx_config.so" in adapter.reloads
+
+
+LOTS = "/api/v1/parking-lots"
+
+
+def test_parking_lot_crud_and_number_space(admin, app, tmp_path):
+    org = _org(admin)
+    ext = _ext(admin, org["id"], "3010")
+    r = admin.post(
+        LOTS,
+        json={
+            "organization_id": org["id"],
+            "name": "Front office",
+            "park_exten": "7000",
+            "slot_first": 7001,
+            "slot_last": 7004,
+        },
+    )
+    assert r.status_code == 201, r.text
+    lot = r.json()
+    assert lot["slug"] == "front-office" and lot["slots"] == ["7001", "7002", "7003", "7004"]
+    assert lot["timeout"]["type"] == "hangup" and lot["problems"] == []
+    # Numbers of the lot are taken for everything else in the organization.
+    r = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "7002", "display_name": "Clash"},
+    )
+    assert r.status_code == 409 and "parking lot" in r.text
+    r = admin.post(
+        "/api/v1/conferences", json={"organization_id": org["id"], "name": "Room", "number": "7000"}
+    )
+    assert r.status_code == 409 and "parking lot" in r.text
+    # ... and the lot cannot take an extension's number or overlap another lot.
+    r = admin.post(
+        LOTS,
+        json={
+            "organization_id": org["id"],
+            "name": "Clash",
+            "park_exten": "3010",
+            "slot_first": 7081,
+            "slot_last": 7082,
+        },
+    )
+    assert r.status_code == 409 and r.json()["code"] == "number_in_use"
+    r = admin.post(
+        LOTS,
+        json={
+            "organization_id": org["id"],
+            "name": "Overlap",
+            "park_exten": "7080",
+            "slot_first": 7003,
+            "slot_last": 7006,
+        },
+    )
+    assert r.status_code == 409 and "parking lot" in r.text
+    # Shape rules: park extension inside the slots, reversed range, too many slots.
+    assert (
+        admin.post(
+            LOTS,
+            json={
+                "organization_id": org["id"],
+                "name": "Bad",
+                "park_exten": "7092",
+                "slot_first": 7090,
+                "slot_last": 7095,
+            },
+        ).status_code
+        == 422
+    )
+    assert (
+        admin.post(
+            LOTS,
+            json={
+                "organization_id": org["id"],
+                "name": "Bad",
+                "park_exten": "7090",
+                "slot_first": 7095,
+                "slot_last": 7091,
+            },
+        ).status_code
+        == 422
+    )
+    assert (
+        admin.post(
+            LOTS,
+            json={
+                "organization_id": org["id"],
+                "name": "Bad",
+                "park_exten": "7100",
+                "slot_first": 7101,
+                "slot_last": 7199,
+            },
+        ).status_code
+        == 422
+    )
+    # Growing the lot over its own numbers is fine; destination and timeouts update.
+    r = admin.patch(
+        f"{LOTS}/{lot['id']}",
+        json={
+            "slot_last": 7009,
+            "timeout_seconds": 60,
+            "timeout": {"type": "extension", "extension_id": ext["id"]},
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["slots"][-1] == "7009" and r.json()["timeout"]["label"].startswith("3010")
+    # Deployment writes res_parking.conf and the timeout context.
+    adapter, deployer, cfg = _fake(app, tmp_path)
+    r = admin.post("/api/v1/telephony/apply", json={})
+    assert r.status_code in (200, 202), r.text
+    with session_scope() as db:
+        deployer.run_once(db)
+    conf = (cfg / "res_parking.conf").read_text()
+    assert (
+        "[veyra-park-front-office]" in conf
+        and "parkpos=7001-7009" in conf
+        and "parkingtime=60" in conf
+    )
+    dp = (cfg / "extensions.conf").read_text()
+    assert "include => veyra-park-front-office" in dp and "[veyra-park-front-office-timeout]" in dp
+    assert "res_parking.so" in adapter.reloads
+    assert admin.delete(f"{LOTS}/{lot['id']}").status_code == 204
+    # The numbers are free again.
+    r = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "7002", "display_name": "Fine"},
+    )
+    assert r.status_code == 201, r.text

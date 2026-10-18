@@ -100,6 +100,14 @@ class Names:
         """A day/night switch's routing context (docs/CALL_FEATURES.md §4.5)."""
         return self._p(f"flow-{slug}")
 
+    def parking(self, slug: str) -> str:
+        """A parking lot's context, filled by res_parking (docs/CALL_FEATURES.md §4.7)."""
+        return self._p(f"park-{slug}")
+
+    def parking_timeout(self, slug: str) -> str:
+        """Where a parked call goes when its time is up."""
+        return self._p(f"park-{slug}-timeout")
+
     @property
     def directory(self) -> str:
         """Dial-by-name directory of the namespace (docs/CALL_FEATURES.md §4.2)."""

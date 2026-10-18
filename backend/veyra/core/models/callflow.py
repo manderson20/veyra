@@ -177,3 +177,56 @@ class ConferenceRoom(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         ForeignKey("moh_classes.id", ondelete="SET NULL")
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ParkingLot(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """A parking lot (docs/CALL_FEATURES.md §4.7): a park extension and a range
+    of slots in the organization's number space, a timeout that returns the
+    call to the parker and then to a destination. ``res_parking.conf`` and the
+    lot's dialplan contexts are generated."""
+
+    __tablename__ = "parking_lots"
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    # Transfer a call here to park it in the next free slot.
+    park_exten: Mapped[str] = mapped_column(String(32))
+    # Slots, dialled to retrieve; each has a BLF hint lit while occupied.
+    slot_first: Mapped[int] = mapped_column(Integer)
+    slot_last: Mapped[int] = mapped_column(Integer)
+    # Seconds a call may wait before it rings the parker back.
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=45)
+    # How long the parker's phone rings on the way back before the destination.
+    return_ring_seconds: Mapped[int] = mapped_column(Integer, default=20)
+    courtesy_tone: Mapped[bool] = mapped_column(Boolean, default=True)
+    timeout_type: Mapped[str] = mapped_column(String(16), default="hangup")
+    timeout_extension_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extensions.id", ondelete="SET NULL")
+    )
+    timeout_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL", use_alter=True)
+    )
+    timeout_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL", use_alter=True)
+    )
+    timeout_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL", use_alter=True)
+    )
+    timeout_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    timeout_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    timeout_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
+    timeout_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

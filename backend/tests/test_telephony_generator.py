@@ -38,8 +38,8 @@ def test_generation_is_deterministic_and_complete():
         f.content.startswith("; Managed by Veyra") for f in a if not f.path.endswith(".json")
     )
     assert by["paging.json"].content.startswith("{")
-    assert [f.path for f in a[-2:]] == ["musiconhold.conf", "confbridge.conf"]
-    assert all("[veyra-" not in f.content for f in a[-2:])
+    assert [f.path for f in a[-3:]] == ["musiconhold.conf", "confbridge.conf", "res_parking.conf"]
+    assert all("[veyra-" not in f.content for f in a[-3:])
     assert generator.validate(a) == []
 
 

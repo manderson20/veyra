@@ -56,6 +56,7 @@ def test_generate_deploy_supersede_and_rollback(client, tmp_path):
         "res_pjsip_notify.so",
         "res_musiconhold.so",
         "app_confbridge.so",
+        "res_parking.so",
     ]
     assert not list(cfg.glob(".*tmp*"))
 

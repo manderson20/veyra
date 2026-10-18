@@ -47,6 +47,7 @@ from veyra.core.models import (
     PageZone,
     PagingZone,
     PagingZoneMember,
+    ParkingLot,
     PickupGroup,
     PickupGroupMember,
     Prompt,
@@ -184,6 +185,7 @@ def _callflow(
     rooms: list[ConferenceRoom],
     moh_slug: Callable[[Any, Any], str | None],
     flows: list[CallFlow] | None = None,
+    lots: list[ParkingLot] | None = None,
 ) -> dict[str, Any]:
     """Announcements and conference rooms of active organizations
     (docs/CALL_FEATURES.md §4.1, §4.3). ``targets`` already knows their slugs."""
@@ -218,6 +220,21 @@ def _callflow(
                 "override_destination": targets.dest(f, "override"),
             }
             for f in flows or []
+        ],
+        "parking_lots": [
+            {
+                "slug": lot.slug,
+                "name": lot.name,
+                "organization": org_slug.get(lot.organization_id, ""),
+                "park_exten": lot.park_exten,
+                "slot_first": lot.slot_first,
+                "slot_last": lot.slot_last,
+                "timeout_seconds": lot.timeout_seconds,
+                "return_ring_seconds": lot.return_ring_seconds,
+                "courtesy_tone": lot.courtesy_tone,
+                "timeout": targets.dest(lot, "timeout"),
+            }
+            for lot in lots or []
         ],
         "conference_rooms": [
             {
@@ -361,7 +378,12 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     shared_by_ext: dict[Any, list[str]] = voicemail.pop("_shared_by_extension")
     hold_music, moh_slug = _hold_music(db, active, org_slug)
     groups = _groups(db, extensions, org_slug, targets, ring_groups, queues, moh_slug)
-    callflow = _callflow(db, key, org_slug, targets, announcements, rooms, moh_slug, flows)
+    lots = [
+        lot
+        for lot in db.scalars(select(ParkingLot).order_by(ParkingLot.park_exten)).all()
+        if lot.is_enabled and lot.organization_id in active
+    ]
+    callflow = _callflow(db, key, org_slug, targets, announcements, rooms, moh_slug, flows, lots)
     pickup = _pickup_groups(db, active, ext_by_id)
     smtp = load_smtp_settings(db)
     from_address, from_name = sender(smtp, inst.name if inst else "Veyra")

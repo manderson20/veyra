@@ -178,7 +178,26 @@ def used_numbers(db: Session, organization_id: Any = None) -> set[str]:
         if organization_id is not None:
             stmt = stmt.where(column.class_.organization_id == organization_id)
         used |= {n for n in db.scalars(stmt).all() if n}
+    used |= set(parking_numbers(db, organization_id))
     return used
+
+
+def parking_numbers(db: Session, organization_id: Any = None) -> dict[str, Any]:
+    """Every number a parking lot occupies (the park extension and each slot)
+    -> the lot's id (docs/CALL_FEATURES.md §4.7)."""
+    from sqlalchemy import select
+
+    from veyra.core.models import ParkingLot
+
+    stmt = select(ParkingLot)
+    if organization_id is not None:
+        stmt = stmt.where(ParkingLot.organization_id == organization_id)
+    out: dict[str, Any] = {}
+    for lot in db.scalars(stmt):
+        out[lot.park_exten] = lot.id
+        for n in range(int(lot.slot_first), int(lot.slot_last) + 1):
+            out[str(n)] = lot.id
+    return out
 
 
 def number_owner(
@@ -189,8 +208,8 @@ def number_owner(
     exclude: tuple[str, Any] | None = None,
 ) -> str | None:
     """What already uses ``number``: ``"extension"``, ``"ring group"``,
-    ``"queue"``, ``"paging zone"``, ``"page"``, ``"shared inbox"`` or
-    ``"conference room"``; None when it is free. Takes
+    ``"queue"``, ``"paging zone"``, ``"page"``, ``"shared inbox"``,
+    ``"conference room"`` or ``"parking lot"``; None when it is free. Takes
     the advisory lock that serialises concurrent creations of the same number
     across the tables.
     ``exclude`` is ``(kind, id)`` of the object being edited."""
@@ -226,4 +245,7 @@ def number_owner(
             stmt = stmt.where(model.id != exclude[1])
         if db.scalar(stmt) is not None:
             return kind
+    lot_id = parking_numbers(db, organization_id).get(number)
+    if lot_id is not None and not (exclude is not None and exclude == ("parking lot", lot_id)):
+        return "parking lot"
     return None
