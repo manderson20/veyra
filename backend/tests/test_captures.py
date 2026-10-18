@@ -514,3 +514,55 @@ def test_retention_prunes_captures_with_files(admin, tmp_path):
         assert db.query(Capture).count() == 2
         inv = {i["key"]: i for i in retention.inventory(db)}
         assert inv["captures"]["rows"] == 2 and inv["captures"]["bytes"] == 2
+
+
+# ------------------------------------------------------------------ logs and engine queries (§2.3)
+
+
+def test_log_tail_and_engine_queries(admin, tmp_path, monkeypatch):
+    from veyra.api.v1 import diagnostics
+    from veyra.telephony.asterisk import cli
+
+    monkeypatch.setattr(diagnostics, "LOG_DIR", tmp_path)
+    (tmp_path / "messages.log").write_text(
+        "".join(f"[2026-10-18 00:00:{i:02d}] NOTICE line {i} ext 1001\n" for i in range(300))
+    )
+    files = admin.get("/api/v1/diagnostics/logs").json()
+    by = {f["key"]: f for f in files["files"]}
+    assert by["messages"]["present"] is True and by["security"]["present"] is False
+    r = admin.get("/api/v1/diagnostics/logs/messages", params={"lines": 50})
+    assert r.status_code == 200 and len(r.json()["lines"]) == 50
+    assert r.json()["lines"][-1].endswith("line 299 ext 1001")
+    r = admin.get("/api/v1/diagnostics/logs/messages", params={"lines": 2000, "q": "LINE 29"})
+    assert [ln.split("line ")[1].split(" ")[0] for ln in r.json()["lines"]] == [
+        "29",
+        *[str(n) for n in range(290, 300)],
+    ]
+    r = admin.get("/api/v1/diagnostics/logs/security")
+    assert r.status_code == 200 and r.json()["lines"] == [] and r.json()["present"] is False
+    assert admin.get("/api/v1/diagnostics/logs/other").status_code == 404
+    assert admin.get("/api/v1/diagnostics/logs/messages", params={"lines": 5}).status_code == 422
+    # Queries: fixed commands, one validated argument, audited.
+    ran: list[str] = []
+    monkeypatch.setattr(
+        cli, "run", lambda command, timeout=10.0: ran.append(command) or (True, f"out of {command}")
+    )
+    keys = {q["key"]: q for q in admin.get("/api/v1/diagnostics/queries").json()["queries"]}
+    assert (
+        keys["endpoint"]["takes_argument"] is True and keys["channels"]["takes_argument"] is False
+    )
+    r = admin.post(
+        "/api/v1/diagnostics/query", json={"key": "endpoint", "argument": "example-1001"}
+    )
+    assert r.status_code == 200 and r.json()["output"] == "out of pjsip show endpoint example-1001"
+    r = admin.post("/api/v1/diagnostics/query", json={"key": "endpoint", "argument": "x; reload"})
+    assert r.status_code == 422
+    r = admin.post("/api/v1/diagnostics/query", json={"key": "channels", "argument": "x"})
+    assert r.status_code == 422
+    assert admin.post("/api/v1/diagnostics/query", json={"key": "reload"}).status_code == 404
+    assert admin.post("/api/v1/diagnostics/query", json={"key": "channels"}).status_code == 200
+    assert ran == ["pjsip show endpoint example-1001", "core show channels verbose"]
+    actions = [
+        e["action"] for e in admin.get("/api/v1/audit", params={"limit": 50}).json()["items"]
+    ]
+    assert "diagnostics.log_read" in actions and "diagnostics.query" in actions

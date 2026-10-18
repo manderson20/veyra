@@ -33,6 +33,8 @@ describe("routing helpers", () => {
     expect(trunkStatus({ is_enabled: true, status: { state: "online", reachable: true } })).toEqual({ tone: "ok", label: "Online" });
     expect(trunkStatus({ is_enabled: true, status: { state: "offline", reachable: false } }).tone).toBe("danger");
     expect(trunkStatus({ is_enabled: true, status: null }).label).toBe("Unknown");
+    expect(trunkStatus({ is_enabled: true, status: { state: "rejected", reachable: true, registration: "Rejected" } })).toEqual({ tone: "danger", label: "Registration rejected" });
+    expect(trunkStatus({ is_enabled: true, status: { state: "registering", reachable: null } }).tone).toBe("warn");
   });
 
   it("normalizes destinations for the API", () => {

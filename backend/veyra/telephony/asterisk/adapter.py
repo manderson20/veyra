@@ -26,6 +26,7 @@ from veyra.telephony.adapter import (
     GeneratedFile,
     Registration,
     TelephonyAdapter,
+    TrunkRegistration,
 )
 from veyra.telephony.asterisk import cli, contacts, generator
 from veyra.telephony.asterisk.ari import AriClient
@@ -54,6 +55,32 @@ _VALUE_RE = re.compile(r"^[+0-9]{0,32}$")
 _STATE_ROW_RE = re.compile(
     r"^/veyra/ext/(?P<org>[^/]+)/(?P<number>[^/]+)/(?P<field>[a-z_]+)\s*:\s*(?P<value>.*)$"
 )
+
+
+# "  trunk-carrier/sip:sip.carrier.example            trunk-carrier     Registered"
+_TRUNK_REG_RE = re.compile(
+    r"^\s*(?P<section>[A-Za-z0-9_.-]+)/(?P<uri>\S+)\s+(?P<auth>\S+)\s+"
+    r"(?P<status>[A-Za-z][A-Za-z ]*?)\s*(?:\(.*\))?\s*$"
+)
+
+
+def parse_trunk_registrations(output: str) -> list[TrunkRegistration]:
+    """``pjsip show registrations`` -> one entry per outbound registration."""
+    out: list[TrunkRegistration] = []
+    for line in output.splitlines():
+        if "<Registration/ServerURI" in line or line.startswith("=") or "Objects found" in line:
+            continue
+        m = _TRUNK_REG_RE.match(line)
+        if not m:
+            continue
+        out.append(
+            TrunkRegistration(
+                section=m.group("section"),
+                server_uri=m.group("uri"),
+                status=m.group("status").strip(),
+            )
+        )
+    return out
 
 
 def _check_token(value: str, what: str) -> str:
@@ -121,6 +148,7 @@ class AsteriskAdapter(TelephonyAdapter):
         if cli.asterisk_available():
             caps.add(Capability.REGISTRATIONS)
             caps.add(Capability.EXTENSION_STATE)
+            caps.add(Capability.TRUNK_REGISTRATIONS)
         return caps
 
     # --- status -------------------------------------------------------------
@@ -186,6 +214,12 @@ class AsteriskAdapter(TelephonyAdapter):
                 )
             )
         return out
+
+    def trunk_registrations(self) -> list[TrunkRegistration]:
+        ok, out = cli.run("pjsip show registrations")
+        if not ok:
+            raise EngineUnavailable(f"could not read the trunk registrations: {out[:200]}")
+        return parse_trunk_registrations(out)
 
     def set_extension_state(
         self, organization: str, number: str, field: str, value: str | None

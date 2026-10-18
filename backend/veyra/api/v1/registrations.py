@@ -12,15 +12,17 @@ contact, others the contacts of extensions in their organizations.
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from veyra.api.v1.extensions import ContactOut, _visible, contact_out
 from veyra.core.db import get_db
 from veyra.core.deps import require
-from veyra.core.models import Extension, Organization
+from veyra.core.models import Extension, Organization, SipTrunk
 from veyra.core.security.principal import Principal
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported, TelephonyAdapter
 
@@ -36,12 +38,26 @@ class RegistrationRow(ContactOut):
     organization_name: str | None = None
 
 
+class TrunkRegistrationRow(BaseModel):
+    """Veyra's own registration to a carrier (issue #45)."""
+
+    trunk_id: uuid.UUID
+    name: str
+    slug: str
+    host: str
+    status: str | None  # the engine's word, None when the engine reports nothing
+    state: str  # registered | rejected | registering | unregistered | unknown
+    reachable: bool | None
+
+
 class RegistrationsOut(BaseModel):
     registrations: list[RegistrationRow]
     available: bool
     message: str | None = None
     # Endpoints that are enabled but have no registered contact right now.
     unregistered: int = 0
+    # Registration trunks and how their registration stands (platform administrators).
+    trunks: list[TrunkRegistrationRow] = []
 
 
 @router.get(
@@ -114,4 +130,42 @@ def list_registrations(
         )
     )
     unregistered = sum(1 for name in by_endpoint if name not in seen)
-    return RegistrationsOut(registrations=out, available=True, unregistered=unregistered)
+    trunks: list[TrunkRegistrationRow] = []
+    if principal.is_platform_admin and organization_id is None:
+        from veyra.api.v1.trunks import Live, registration_state, routing_name
+
+        live = Live(
+            {s.endpoint: s.registered for s in _safe(adapter.endpoint_statuses)},
+            {r.section: r.status for r in _safe(adapter.trunk_registrations)},
+        )
+        for t in db.scalars(
+            select(SipTrunk).where(SipTrunk.is_enabled.is_(True)).order_by(SipTrunk.name)
+        ):
+            name = routing_name(t)
+            word = live.registrations.get(name) if t.auth_mode == "registration" else None
+            reachable = live.reachable.get(name)
+            if t.auth_mode != "registration":
+                state = "unknown" if reachable is None else ("online" if reachable else "offline")
+            else:
+                state = registration_state(word) or ("registered" if word else "unknown")
+            trunks.append(
+                TrunkRegistrationRow(
+                    trunk_id=t.id,
+                    name=t.name,
+                    slug=t.slug,
+                    host=t.host,
+                    status=word,
+                    state=state,
+                    reachable=reachable,
+                )
+            )
+    return RegistrationsOut(
+        registrations=out, available=True, unregistered=unregistered, trunks=trunks
+    )
+
+
+def _safe(call: Any) -> list[Any]:
+    try:
+        return list(call())
+    except (EngineUnavailable, NotSupported):
+        return []

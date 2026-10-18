@@ -283,11 +283,23 @@ export interface RegistrationRow extends RegistrationContact {
   organization_name: string | null;
 }
 
+export interface TrunkRegistrationRow {
+  trunk_id: string;
+  name: string;
+  slug: string;
+  host: string;
+  status: string | null;
+  state: "registered" | "rejected" | "registering" | "unregistered" | "online" | "offline" | "unknown" | string;
+  reachable: boolean | null;
+}
+
 export interface Registrations {
   registrations: RegistrationRow[];
   available: boolean;
   message: string | null;
   unregistered: number;
+  /** Registration trunks and how their registration stands (platform administrators). */
+  trunks?: TrunkRegistrationRow[];
 }
 
 export interface ApplyResult {
@@ -900,8 +912,11 @@ export type CallerIdHeader = "pai" | "rpid" | "none";
 export type DtmfMode = "rfc4733" | "inband" | "info" | "auto";
 
 export interface TrunkStatus {
-  state: "online" | "offline" | "unknown";
+  /** online/offline from the qualify ping; rejected/registering/unregistered from the engine's registration state (issue #45). */
+  state: "online" | "offline" | "unknown" | "rejected" | "registering" | "unregistered";
   reachable: boolean | null;
+  /** The engine's own word for the outbound registration. */
+  registration?: string | null;
 }
 
 export interface Trunk {
@@ -2675,6 +2690,31 @@ export interface FeatureCodes {
   codes: FeatureCode[];
   /** Codes that are always present and cannot be changed, with what they do. */
   fixed: Record<string, string>;
+}
+
+// ----------------------------------------------------------------- diagnostics: logs and engine queries (Milestone 18)
+
+export interface LogFiles {
+  files: { key: string; label: string; file: string; bytes: number; present: boolean }[];
+  max_lines: number;
+}
+
+export interface LogTail {
+  key: string;
+  file: string;
+  lines: string[];
+  present: boolean;
+}
+
+export interface EngineQueries {
+  queries: { key: string; command: string; takes_argument: boolean; label: string }[];
+}
+
+export interface EngineQueryResult {
+  key: string;
+  command: string;
+  ok: boolean;
+  output: string;
 }
 
 // ----------------------------------------------------------------- packet captures (Milestone 18)

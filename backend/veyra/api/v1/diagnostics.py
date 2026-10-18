@@ -5,10 +5,12 @@ Platform administrators only."""
 
 from __future__ import annotations
 
+import re
 import uuid
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -20,6 +22,7 @@ from veyra.core.errors import ProblemError, not_found
 from veyra.core.models import Capture
 from veyra.core.security.principal import Principal
 from veyra.diagnostics import captures, pcap
+from veyra.telephony.asterisk import cli
 from veyra.telephony.settings import load_sip_settings
 
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
@@ -227,6 +230,165 @@ def capture_sip(
     _audit(db, principal, ctx, "capture.view", row, messages=len(out["messages"]))
     db.commit()
     return out
+
+
+# ----------------------------------------------------------------- logs and engine queries (§2.3)
+
+LOG_DIR = Path("/var/log/asterisk")
+LOG_FILES: dict[str, tuple[str, str]] = {
+    "messages": ("messages.log", "Engine messages (notice, warning, error)"),
+    "security": ("security.log", "Security events (failed registrations, blocked requests)"),
+    "queue": ("queue_log", "Queue events"),
+}
+MAX_LOG_LINES = 2000
+_ARGUMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@-]{0,79}$")
+# Fixed engine queries; the argument, when one is taken, is a single validated token.
+QUERIES: dict[str, tuple[str, bool, str]] = {
+    "endpoints": ("pjsip show endpoints", False, "Every endpoint with its state"),
+    "endpoint": ("pjsip show endpoint {arg}", True, "One endpoint in full"),
+    "contacts": ("pjsip show contacts", False, "Registered contacts"),
+    "registrations": ("pjsip show registrations", False, "Trunk registrations"),
+    "transports": ("pjsip show transports", False, "SIP transports"),
+    "channels": ("core show channels verbose", False, "Channels and calls up now"),
+    "registrar": ("database show registrar", False, "The contact store"),
+    "states": (
+        "database show veyra/ext",
+        False,
+        "Do Not Disturb, forwards and follow-me as the engine has them",
+    ),
+    "uptime": ("core show uptime", False, "Engine uptime"),
+    "version": ("core show version", False, "Engine version"),
+}
+
+
+def _tail(path: Path, lines: int) -> list[str]:
+    """The last ``lines`` lines of a file, read from the end."""
+    out = b""
+    with path.open("rb") as f:
+        f.seek(0, 2)
+        pos = f.tell()
+        block = 64 * 1024
+        while pos > 0 and out.count(b"\n") <= lines:
+            step = min(block, pos)
+            pos -= step
+            f.seek(pos)
+            out = f.read(step) + out
+    text = out.decode("utf-8", errors="replace")
+    return text.splitlines()[-lines:]
+
+
+@router.get("/logs", summary="The engine's log files that can be read here")
+def list_logs(
+    principal: Principal = Depends(require(READ)),
+) -> dict[str, Any]:
+    files = []
+    for key, (name, label) in LOG_FILES.items():
+        path = LOG_DIR / name
+        try:
+            st = path.stat()
+            files.append(
+                {"key": key, "label": label, "file": name, "bytes": st.st_size, "present": True}
+            )
+        except OSError:
+            files.append({"key": key, "label": label, "file": name, "bytes": 0, "present": False})
+    return {"files": files, "max_lines": MAX_LOG_LINES}
+
+
+@router.get("/logs/{key}", summary="The tail of one engine log (audited)")
+def read_log(
+    key: str,
+    lines: int = Query(200, ge=10, le=MAX_LOG_LINES),
+    q: str | None = Query(None, max_length=100),
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    if key not in LOG_FILES:
+        raise not_found("Log")
+    path = LOG_DIR / LOG_FILES[key][0]
+    try:
+        tail = _tail(path, lines)
+    except FileNotFoundError:
+        tail = []
+    except PermissionError as e:
+        raise ProblemError(
+            503,
+            "Log not readable",
+            f"{path} cannot be read by the service account.",
+            code="log_unreadable",
+        ) from e
+    needle = (q or "").strip().lower()
+    if needle:
+        tail = [ln for ln in tail if needle in ln.lower()]
+    audit.record(
+        db,
+        action="diagnostics.log_read",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        target_type="log",
+        target_id=key,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"file": LOG_FILES[key][0], "lines": lines, "q": needle or None},
+    )
+    db.commit()
+    return {"key": key, "file": LOG_FILES[key][0], "lines": tail, "present": path.exists()}
+
+
+class QueryIn(BaseModel):
+    key: str = Field(max_length=40)
+    argument: str | None = Field(None, max_length=80)
+
+
+@router.get("/queries", summary="The fixed engine queries")
+def list_queries(principal: Principal = Depends(require(READ))) -> dict[str, Any]:
+    return {
+        "queries": [
+            {"key": k, "command": cmd, "takes_argument": takes, "label": label}
+            for k, (cmd, takes, label) in QUERIES.items()
+        ]
+    }
+
+
+@router.post("/query", summary="Run one fixed engine query (audited)")
+def run_query(
+    body: QueryIn,
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    if body.key not in QUERIES:
+        raise not_found("Query")
+    command, takes, _label = QUERIES[body.key]
+    argument = (body.argument or "").strip()
+    if takes:
+        if not _ARGUMENT_RE.match(argument):
+            raise ProblemError(
+                422,
+                "Validation failed",
+                "The argument is one word: letters, digits, dot, dash, underscore, @.",
+                code="validation_failed",
+                errors=[{"field": "argument", "message": "one word"}],
+            )
+        command = command.format(arg=argument)
+    elif argument:
+        raise ProblemError(
+            422, "Validation failed", "This query takes no argument.", code="validation_failed"
+        )
+    ok, output = cli.run(command, timeout=15)
+    audit.record(
+        db,
+        action="diagnostics.query",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        target_type="engine",
+        target_id=body.key,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"command": command, "ok": ok},
+    )
+    db.commit()
+    return {"key": body.key, "command": command, "ok": ok, "output": output[:200_000]}
 
 
 @router.delete("/captures/{capture_id}", summary="Delete a capture and its file")

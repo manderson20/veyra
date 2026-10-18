@@ -187,3 +187,84 @@ def test_registrations_api_scoped_and_searchable(admin, app, client):
 def test_registrations_api_without_engine(admin):
     r = admin.get("/api/v1/telephony/registrations").json()
     assert r["available"] is False and r["registrations"] == []
+
+
+# ------------------------------------------------------------------ trunk registration state (#45)
+
+REGISTRATIONS_LISTING = """
+ <Registration/ServerURI..............................>  <Auth..........>  <Status.......>
+==========================================================================================
+
+ trunk-carrier/sip:sip.carrier.example                   trunk-carrier     Registered
+ trunk-backup/sip:198.51.100.7:5060                      trunk-backup      Rejected
+ trunk-new/sip:sip.new.example                           trunk-new         Unregistered
+
+Objects found: 3
+"""
+
+
+def test_parse_trunk_registrations():
+    from veyra.telephony.asterisk.adapter import parse_trunk_registrations
+
+    rows = {r.section: r for r in parse_trunk_registrations(REGISTRATIONS_LISTING)}
+    assert rows["trunk-carrier"].status == "Registered"
+    assert rows["trunk-carrier"].server_uri == "sip:sip.carrier.example"
+    assert rows["trunk-backup"].status == "Rejected" and rows["trunk-new"].status == "Unregistered"
+    assert parse_trunk_registrations("No objects found.\n") == []
+
+
+def test_trunk_registration_state_in_status_registrations_and_alerts(admin, app):
+    from veyra.core.db import session_scope
+    from veyra.reporting import alerts
+
+    adapter = FakeAdapter()
+    app.state.telephony = adapter
+    body = {
+        "auth_mode": "registration",
+        "host": "sip.carrier.example",
+        "username": "acct1",
+        "password": "Secr3t-pass",
+    }
+    carrier = admin.post("/api/v1/trunks", json={"name": "Carrier", **body}).json()
+    backup = admin.post("/api/v1/trunks", json={"name": "Backup", **body}).json()
+    from veyra.telephony.adapter import EndpointStatus
+
+    adapter.endpoints = [
+        EndpointStatus("trunk-carrier", True),
+        EndpointStatus("trunk-backup", True),
+    ]
+    adapter.trunk_regs = {"trunk-carrier": "Registered", "trunk-backup": "Rejected"}
+    items = {t["slug"]: t for t in admin.get("/api/v1/trunks").json()["items"]}
+    assert items["carrier"]["status"] == {
+        "state": "online",
+        "reachable": True,
+        "registration": "Registered",
+    }
+    # Reachable by qualify, but the carrier refused the registration: that is what matters.
+    assert items["backup"]["status"] == {
+        "state": "rejected",
+        "reachable": True,
+        "registration": "Rejected",
+    }
+    regs = admin.get("/api/v1/telephony/registrations").json()
+    trunks = {t["slug"]: t for t in regs["trunks"]}
+    assert trunks["carrier"]["state"] == "registered" and trunks["backup"]["state"] == "rejected"
+    assert trunks["backup"]["status"] == "Rejected" and trunks["backup"]["trunk_id"] == backup["id"]
+    with session_scope() as db:
+        findings = {f.subject: f.message for f in alerts.check_trunks(db, adapter)}
+    assert "backup" in findings and "rejected" in findings["backup"] and "carrier" not in findings
+    # Without the engine's word the qualify answer decides, as before.
+    adapter.trunk_regs = {}
+    adapter.endpoints = [
+        EndpointStatus("trunk-carrier", False),
+        EndpointStatus("trunk-backup", True),
+    ]
+    items = {t["slug"]: t for t in admin.get("/api/v1/trunks").json()["items"]}
+    assert (
+        items["carrier"]["status"]["state"] == "offline"
+        and items["backup"]["status"]["state"] == "online"
+    )
+    assert items["carrier"]["status"]["registration"] is None
+    with session_scope() as db:
+        assert [f.subject for f in alerts.check_trunks(db, adapter)] == ["carrier"]
+    assert carrier["slug"] == "carrier"

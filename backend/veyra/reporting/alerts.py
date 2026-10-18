@@ -113,10 +113,22 @@ def check_engine(adapter: Any) -> list[Finding]:
 
 def check_trunks(db: Session, adapter: Any) -> list[Finding]:
     live = {s.endpoint: s.registered for s in adapter.endpoint_statuses()}
+    # The outbound registration state, when the engine reports it (issue #45):
+    # a rejected registration is a down trunk even when the host answers pings.
+    registrations: dict[str, str] = {}
+    try:
+        registrations = {r.section: r.status for r in adapter.trunk_registrations()}
+    except Exception:
+        registrations = {}
     out = []
     for t in db.scalars(select(SipTrunk).where(SipTrunk.is_enabled.is_(True))):
         name = f"trunk-{t.slug}"
-        if t.qualify_frequency and name in live and not live[name]:
+        word = registrations.get(name) if t.auth_mode == "registration" else None
+        if word and not word.lower().startswith("registered"):
+            out.append(
+                Finding("trunk_down", t.slug, f"Trunk {t.name}: registration {word.lower()}.")
+            )
+        elif t.qualify_frequency and name in live and not live[name]:
             out.append(
                 Finding("trunk_down", t.slug, f"Trunk {t.name} is not reachable or not registered.")
             )
