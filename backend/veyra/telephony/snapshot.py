@@ -139,6 +139,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     ]
     org_slug = {o.id: o.slug for o in orgs}
     org_tz = {o.id: o.timezone for o in orgs}
+    org_intercom = {o.id: o.intercom_default for o in orgs}
     ext_by_id = {e.id: e for e in extensions}
     ring_seconds = {
         s.extension_id: s.ring_seconds
@@ -262,6 +263,12 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 # Ring time (docs/CALL_FEATURES.md §3.3); None: the box's or the default.
                 "ring_seconds": ring_seconds.get(e.id),
                 "follow_me": follow_me.get(e.id),
+                # Intercom (docs/CALL_FEATURES.md §3.6); default = the organization's.
+                "intercom": (
+                    e.intercom
+                    if e.intercom in ("allow", "deny")
+                    else org_intercom.get(e.organization_id, "allow")
+                ),
                 "max_contacts": contacts.get(e.id, 1),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
@@ -562,6 +569,7 @@ def _voicemail_ivr(
                 "attach_audio": b.attach_audio,
                 "delete_after_email": b.delete_after_email,
                 "ring_seconds": b.ring_seconds,
+                "operator_extension": b.operator_extension,
             }
             for b in boxes
         ],

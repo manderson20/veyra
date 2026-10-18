@@ -153,6 +153,8 @@ export interface Organization {
   bootstrap_includes_credential?: boolean;
   /** Numbers extensions may present as outbound caller ID besides the organization's DIDs. */
   caller_id_allow_list?: string[];
+  /** Intercom default for the organization's phones: allow or deny. */
+  intercom_default?: "allow" | "deny" | string;
   /** Prefix of the organization's engine names; empty: today's names. */
   engine_namespace?: string;
   created_at: string;
@@ -327,6 +329,8 @@ export interface Extension {
   outbound_caller_id_name?: string | null;
   /** Do Not Disturb (CALL_FEATURES.md §3.2); the full state is at /extensions/{id}/state. */
   dnd?: boolean;
+  /** Intercom (CALL_FEATURES.md §3.6): may other phones make this one answer on speaker? */
+  intercom?: "default" | "allow" | "deny" | string;
   building_id?: string | null;
   location?: string | null;
   is_enabled: boolean;
@@ -1149,6 +1153,8 @@ export interface VoicemailBox {
   attach_audio: boolean;
   delete_after_email: boolean;
   ring_seconds: number;
+  /** Pressing 0 while the greeting plays reaches this extension (CALL_FEATURES.md §3.7). */
+  operator_extension?: string | null;
   is_enabled: boolean;
   /** Settings → Email delivery is enabled; without it messages stay in the box. */
   email_delivery_enabled: boolean;
@@ -1178,6 +1184,7 @@ export interface VoicemailBoxInput {
   delete_after_email?: boolean;
   ring_seconds?: number;
   is_enabled?: boolean;
+  operator_extension?: string | null;
 }
 
 export interface MyVoicemail {

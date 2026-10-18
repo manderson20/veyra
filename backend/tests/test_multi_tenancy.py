@@ -239,9 +239,12 @@ def test_second_organization_needs_the_switch(admin):
 
 
 def test_numbers_are_per_organization(admin):
-    admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
+    rm = admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
+    assert rm.status_code == 200, rm.text
     a = next(o for o in _orgs(admin) if o["slug"] == "example")["id"]
-    b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    rb = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"})
+    assert rb.status_code == 201, rb.text
+    b = rb.json()["id"]
     for org in (a, b):
         r = admin.post(
             "/api/v1/extensions",

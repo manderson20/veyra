@@ -282,7 +282,8 @@ macro-free `Gosub`. Ring groups accept external members the same way
   `Local/<number>@veyra-fm-out/n`, a per-namespace context that dials the
   number into the internal context (so the organization's outbound routes
   carry it) with `VEYRA_HOPS` reset and `VEYRA_FM_OPTS` as Dial options.
-  `confirm_calls` sets `U(veyra-fm-confirm^s)`: the answering party hears
+  `confirm_calls` sets `U(veyra-fm-confirm^s)` (per namespace, like
+  `veyra-fm-out`, so the isolation checks hold): the answering party hears
   `followme/options`, presses 1, or the leg returns `GOSUB_RESULT=CONTINUE`
   and is dropped while the others keep ringing. `caller_id_mode=caller`
   sets `__VEYRA_OUT_CID` to the caller's number, `extension` to the
@@ -321,6 +322,21 @@ speaker; per-extension `intercom` setting (`allow`, `deny`,
 matching phone option. Paging zones already use the same headers
 ([PAGING_RECORDINGS.md](PAGING_RECORDINGS.md)).
 
+*Built 2026-10-18* (migration `0036`): `extensions.intercom` is `default`,
+`allow` or `deny` and `organizations.intercom_default` is `allow` or `deny`
+(both on their pages; a change needs a deployment; `allow_from_group`
+waits for the class of service, §3.8). The snapshot resolves the setting
+per extension. With the `intercom` feature code enabled the generator
+emits `_*80.` in the features context, which jumps into a per-namespace
+`veyra-intercom` context: an allowed extension is dialled for 20 seconds
+with `b(veyra-intercom-hdr^s^1)`, a per-namespace routine that adds `Alert-Info:
+<http://www.notuse.com>;info=alert-autoanswer` and `Call-Info:
+<sip:veyra>;answer-after=0` on the called phone's channel; Do Not Disturb
+answers busy; a denied extension hears `feature-not-avail-line`, an unknown
+number `pbx-invalid`. Paging zones use multicast and keep their own path.
+The phone option that honours the header (Poly `alertInfo` class, Yealink
+and Grandstream intercom allow) belongs to the templates, Milestone 21.
+
 ### 3.7 Transfer to voicemail and the voicemail operator
 
 `*<ext>` from a phone (direct dial or as a transfer target) goes straight to
@@ -329,6 +345,18 @@ gain `operator_extension` (press 0 while the greeting plays → that
 extension, the organization's operator or a destination) and `locater`
 (press 1 → find me / follow me, press 2 → a second destination), rendered
 as `exitcontext` and the `o`/`a` options with a per-box context.
+
+*Built 2026-10-18* (migration `0037`): the `vm_direct` feature code (default
+`*`) renders one exact entry per voicemail box in the features context,
+`*<number>` → `Answer`, `VoiceMail(<number>@<ns>,s)`, so dialling it or
+using it as a transfer target reaches the greeting; exact entries are
+chosen over patterns, so `*7210` still reaches box 7210 beside the `_*72.`
+forwarding pattern. `voicemail_boxes.operator_extension` (an extension of
+the organization; the dialog field "Operator extension (press 0)") adds
+`operator=yes|exitcontext=veyra-vmx-<number>` to the box and a per-box
+context where `o` goes to the operator extension in the internal context
+and `a` (the `*` key) opens the box with `VoiceMailMain`. The locater
+(1 → follow me, 2 → a second destination) is left for the user portal.
 
 ### 3.8 Class of service
 

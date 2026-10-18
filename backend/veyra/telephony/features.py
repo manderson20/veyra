@@ -27,7 +27,7 @@ FIXED_CODES: dict[str, str] = {
     "*98": "any voicemail box",
 }
 FIXED_PREFIXES = ("**",)  # directed pickup **<ext>
-_CODE_RE = re.compile(r"^[*#][0-9*#]{1,6}$")
+_CODE_RE = re.compile(r"^[*#][0-9*#]{0,6}$")
 
 
 @dataclass(frozen=True)
@@ -77,6 +77,14 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         "*80",
         "Intercom",
         "Dialled with the extension: the phone answers on speaker.",
+        18,
+        True,
+    ),
+    FeatureCodeDef(
+        "vm_direct",
+        "*",
+        "Direct to voicemail",
+        "Followed by an extension (dialled, or as a transfer target): straight to its greeting.",
         18,
         True,
     ),
@@ -134,7 +142,7 @@ def validate(codes: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
         code = str(value.get("code") or BY_KEY[key].code).strip()
         if not _CODE_RE.match(code):
             raise FeatureCodeError(
-                key, "a code starts with * or # and has 2 to 7 characters (digits, * or #)"
+                key, "a code starts with * or # and has 1 to 7 characters (digits, * or #)"
             )
         if code in FIXED_CODES or code.startswith(FIXED_PREFIXES):
             raise FeatureCodeError(

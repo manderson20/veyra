@@ -41,6 +41,9 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     delete_after_email: Mapped[bool] = mapped_column(Boolean, default=False)
     # How long the phone rings before voicemail answers.
     ring_seconds: Mapped[int] = mapped_column(Integer, default=20)
+    # Pressing 0 while the greeting plays reaches this extension
+    # (docs/CALL_FEATURES.md §3.7); none: 0 does nothing.
+    operator_extension: Mapped[str | None] = mapped_column(String(32))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

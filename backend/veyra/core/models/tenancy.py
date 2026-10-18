@@ -70,6 +70,10 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     caller_id_allow_list: Mapped[list[str]] = mapped_column(
         JSONB, default=list, server_default="[]"
     )
+    # Intercom default for the organization's extensions (docs/CALL_FEATURES.md §3.6).
+    intercom_default: Mapped[str] = mapped_column(
+        String(8), default="allow", server_default="allow"
+    )
 
 
 class Site(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

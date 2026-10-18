@@ -1027,9 +1027,18 @@ def _dialplan(
         "",
     ]
     codes = _feature_codes(snapshot)
+
+    def my_boxes(ns: str) -> list[tuple[str, dict[str, Any]]]:
+        return [
+            (number, b)
+            for (owner, number), b in boxes.items()
+            if engine_names.for_org(owner).ns == ns
+        ]
+
     for ns in spaces:
         with engine_names.using(Names(ns)):
-            lines += _features(mine(extensions, ns), prompts_dir, codes)
+            lines += _features(mine(extensions, ns), prompts_dir, codes, my_boxes(ns))
+            lines += _voicemail_exit_contexts(my_boxes(ns))
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _internal(
@@ -1044,6 +1053,11 @@ def _dialplan(
                 codes.get("fmfm_toggle"),
             )
     lines += _follow_me_contexts(spaces)
+    if "intercom" in codes:
+        for ns in spaces:
+            with engine_names.using(Names(ns)):
+                lines += _intercom_context(mine(extensions, ns))
+                lines += _intercom_headers_context()
     lines += [
         f"[{CONTEXT_INVALID}]",
         "exten => _[0-9*#+].,1,NoOp(Veyra: no such extension ${EXTEN})",
@@ -1104,7 +1118,7 @@ def _namespaces(snapshot: dict[str, Any]) -> list[str]:
     return sorted(found, key=lambda ns: (ns != engine_names.LEGACY, ns))
 
 
-_FEATURE_CODE_RE = re.compile(r"^[*#][0-9*#]{1,6}$")
+_FEATURE_CODE_RE = re.compile(r"^[*#][0-9*#]{0,6}$")
 
 
 def _feature_codes(snapshot: dict[str, Any]) -> dict[str, str]:
@@ -1201,7 +1215,6 @@ def _dnd_codes(codes: dict[str, str]) -> list[str]:
 
 
 FM_DEVICE = "Custom:veyra-fm-${VEYRA_ORG}-${VEYRA_EXT}"
-FM_CONFIRM_CONTEXT = "veyra-fm-confirm"
 FM_STRATEGIES = ("ringall", "sequential")
 FM_CALLER_ID_MODES = ("caller", "extension")
 
@@ -1234,10 +1247,11 @@ def _follow_me_codes(codes: dict[str, str]) -> list[str]:
 
 
 def _follow_me_contexts(spaces: list[str]) -> list[str]:
-    """The outside leg of a follow-me (one per namespace, so the number leaves
-    through that organization's routes) and the shared confirmation routine:
-    the answering party presses 1, or the leg is dropped and the others keep
-    ringing (``GOSUB_RESULT=CONTINUE``)."""
+    """Per namespace: the outside leg of a follow-me (so the number leaves
+    through that organization's routes) and the confirmation routine: the
+    answering party presses 1, or the leg is dropped and the others keep
+    ringing (``GOSUB_RESULT=CONTINUE``). Both stay inside the namespace so
+    the isolation checks hold."""
     lines: list[str] = []
     for ns in spaces:
         n = Names(ns)
@@ -1250,17 +1264,15 @@ def _follow_me_contexts(spaces: list[str]) -> list[str]:
             "${VEYRA_FM_OPTS})",
             " same => n,Hangup()",
             "",
+            f"[{n.follow_me_confirm}]",
+            "exten => s,1,NoOp(Veyra follow-me confirmation)",
+            " same => n,Read(VEYRA_OK,followme/options,1,,1,6)",
+            ' same => n,GotoIf($["${VEYRA_OK}"="1"]?ok)',
+            " same => n,Set(GOSUB_RESULT=CONTINUE)",
+            " same => n,Return()",
+            " same => n(ok),Return()",
+            "",
         ]
-    lines += [
-        f"[{FM_CONFIRM_CONTEXT}]",
-        "exten => s,1,NoOp(Veyra follow-me confirmation)",
-        " same => n,Read(VEYRA_OK,followme/options,1,,1,6)",
-        ' same => n,GotoIf($["${VEYRA_OK}"="1"]?ok)',
-        " same => n,Set(GOSUB_RESULT=CONTINUE)",
-        " same => n,Return()",
-        " same => n(ok),Return()",
-        "",
-    ]
     return lines
 
 
@@ -1303,7 +1315,7 @@ def _follow_me_branch(
         if mode == "caller"
         else (f" same => n,Set(__VEYRA_OUT_CID={ocid})" if ocid else "")
     )
-    opts = f"U({FM_CONFIRM_CONTEXT}^s)" if fm.get("confirm_calls") else ""
+    opts = f"U({engine_names.current().follow_me_confirm}^s)" if fm.get("confirm_calls") else ""
     lines = [
         f" same => n(fm),NoOp(Veyra: {number} follow me, {strategy})",
         *(
@@ -1331,6 +1343,113 @@ def _follow_me_branch(
         f" same => n,Goto({internal},{dest},1)" if dest else " same => n,Goto(noanswer)",
         " same => n(fmdone),Hangup()",
     ]
+    return lines
+
+
+INTERCOM_RING_SECONDS = 20
+
+
+def _intercom_code(codes: dict[str, str]) -> list[str]:
+    """``*80<ext>`` (docs/CALL_FEATURES.md §3.6): into the namespace's intercom
+    context, which knows which phones may be made to answer on speaker."""
+    code = codes.get("intercom")
+    if not code:
+        return []
+    n = engine_names.current()
+    return [
+        f"exten => _{code}.,1,NoOp(Veyra intercom from ${{VEYRA_EXT}} to ${{EXTEN:{len(code)}}})",
+        ' same => n,GotoIf($["${VEYRA_EXT}"=""]?nophone)',
+        f" same => n,Goto({n.intercom},${{EXTEN:{len(code)}}},1)",
+        " same => n(nophone),Answer()",
+        " same => n,Playback(feature-not-avail-line)",
+        " same => n,Hangup()",
+    ]
+
+
+def _intercom_context(extensions: list[dict[str, Any]]) -> list[str]:
+    """One intercom context per namespace: allowed phones are rung with the
+    auto-answer headers (Poly reads Alert-Info, Yealink and Grandstream
+    Call-Info); denied and unknown numbers are refused. Do Not Disturb holds."""
+    n = engine_names.current()
+    lines = [f"[{n.intercom}]", "; Intercom targets; the phone answers on speaker."]
+    for ext in extensions:
+        number = str(ext["number"])
+        org_slug = _check_value(str(ext.get("organization") or ""), "organization")
+        if str(ext.get("intercom") or "allow") != "allow":
+            lines += [
+                f"exten => {number},1,NoOp(Veyra: intercom to {number} is not allowed)",
+                " same => n,Answer()",
+                " same => n,Playback(feature-not-avail-line)",
+                " same => n,Hangup()",
+            ]
+            continue
+        endpoint = _check_section(str(ext["endpoint_name"]), "endpoint name")
+        lines += [
+            f"exten => {number},1,NoOp(Veyra intercom to {number})",
+            f' same => n,GotoIf($["${{DB(veyra/ext/{org_slug}/{number}/dnd)}}"="1"]?dnd)',
+            f" same => n,Dial(PJSIP/{endpoint},{INTERCOM_RING_SECONDS},"
+            f"b({n.intercom_headers}^s^1))",
+            " same => n,Hangup()",
+            " same => n(dnd),Busy(10)",
+            " same => n,Hangup()",
+        ]
+    lines += [
+        "exten => _X.,1,Answer()",
+        " same => n,Playback(pbx-invalid)",
+        " same => n,Hangup()",
+        "",
+    ]
+    return lines
+
+
+def _intercom_headers_context() -> list[str]:
+    """Runs on the called phone's channel before it rings (Dial ``b()``)."""
+    n = engine_names.current()
+    return [
+        f"[{n.intercom_headers}]",
+        "exten => s,1,Set(PJSIP_HEADER(add,Alert-Info)=<http://www.notuse.com>"
+        ";info=alert-autoanswer)",
+        " same => n,Set(PJSIP_HEADER(add,Call-Info)=<sip:veyra>;answer-after=0)",
+        " same => n,Return()",
+        "",
+    ]
+
+
+def _voicemail_direct(codes: dict[str, str], boxes: list[tuple[str, dict[str, Any]]]) -> list[str]:
+    """``*<ext>`` (docs/CALL_FEATURES.md §3.7): straight to the box's unavailable
+    greeting, dialled or as a transfer target. One exact entry per box, so no
+    pattern can shadow another feature code."""
+    code = codes.get("vm_direct")
+    if not code:
+        return []
+    n = engine_names.current()
+    lines: list[str] = []
+    for number, _b in sorted(boxes, key=lambda kv: (len(kv[0]), kv[0])):
+        lines += [
+            f"exten => {code}{number},1,NoOp(Veyra direct to voicemail {number})",
+            " same => n,Answer()",
+            f" same => n,VoiceMail({number}@{n.voicemail},s)",
+            " same => n,Hangup()",
+        ]
+    return lines
+
+
+def _voicemail_exit_contexts(boxes: list[tuple[str, dict[str, Any]]]) -> list[str]:
+    """Per box with an operator: 0 rings the operator, * opens the box."""
+    n = engine_names.current()
+    lines: list[str] = []
+    for number, b in sorted(boxes, key=lambda kv: (len(kv[0]), kv[0])):
+        operator = b.get("operator_extension")
+        if not operator:
+            continue
+        lines += [
+            f"[{n.voicemail_exit(number)}]",
+            f"exten => o,1,NoOp(Veyra: voicemail {number} operator)",
+            f" same => n,Goto({n.internal},{operator},1)",
+            f"exten => a,1,VoiceMailMain({number}@{n.voicemail})",
+            " same => n,Hangup()",
+            "",
+        ]
     return lines
 
 
@@ -1386,7 +1505,10 @@ def _forward_codes(codes: dict[str, str]) -> list[str]:
 
 
 def _features(
-    extensions: list[dict[str, Any]], prompts_dir: str, codes: dict[str, str] | None = None
+    extensions: list[dict[str, Any]],
+    prompts_dir: str,
+    codes: dict[str, str] | None = None,
+    boxes: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> list[str]:
     """Feature codes of one namespace; ``**<ext>`` reaches only its phones."""
     n = engine_names.current()
@@ -1396,6 +1518,8 @@ def _features(
         *_dnd_codes(codes),
         *_forward_codes(codes),
         *_follow_me_codes(codes),
+        *_intercom_code(codes),
+        *_voicemail_direct(codes, boxes or []),
         "; *43 echo test, *60 speaking clock: always available for phone checks.",
         "exten => *43,1,NoOp(Veyra echo test)",
         " same => n,Answer()",
@@ -2371,9 +2495,18 @@ def _box_lines(entries: list[tuple[str, dict[str, Any]]], delivery: bool) -> lis
             delete = "yes" if b.get("delete_after_email") else "no"
         attach = "yes" if b.get("attach_audio", True) else "no"
         org = _slug(b.get("organization") or "", "organization")
+        # Pressing 0 (operator) or * during the greeting leaves to the box's
+        # exit context (docs/CALL_FEATURES.md §3.7).
+        operator = b.get("operator_extension")
+        exit_opts = ""
+        if operator:
+            if not _NUMBER_RE.match(str(operator)):
+                raise GenerationError(f"voicemail box {number}: operator {operator!r} is not valid")
+            ctx = engine_names.for_org(org).voicemail_exit(number)
+            exit_opts = f"|operator=yes|exitcontext={ctx}"
         lines.append(
             f"{number} => {pin},{name},{email},,"
-            f"attach={attach}|delete={delete}|tz={org}|saycid=yes|envelope=yes"
+            f"attach={attach}|delete={delete}|tz={org}|saycid=yes|envelope=yes{exit_opts}"
         )
     return lines
 
