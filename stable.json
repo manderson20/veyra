@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 5,
+  "sequence": 6,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.25.3",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "The installation card on System \u2192 Updates shows every stage from the approval on: approved, picked up by the background worker (with the time to its next pass), release verified and unpacked, installer running (current step), finished \u2014 with the time since the approval. The process itself is unchanged; stages that used to pass silently are now visible. Notes: https://github.com/manderson20/veyra/releases/tag/v0.25.3",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "523488bc44",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.25.3/veyra-0.25.3.tar.gz",
+        "sha256": "9b1779b4dd3d206c1b4e5066df0e3befedcaa3442b910d38ab7c2308e2afceee",
+        "size": 8007140
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -88,6 +105,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-18T23:10:36+00:00",
-  "expires_at": "2027-01-16T23:10:36+00:00"
+  "generated_at": "2026-10-18T23:29:48+00:00",
+  "expires_at": "2027-01-16T23:29:48+00:00"
 }
