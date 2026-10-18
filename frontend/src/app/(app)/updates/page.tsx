@@ -91,7 +91,18 @@ export default function UpdatesPage() {
   const [review, setReview] = useState<string | null>(null);
   const manage = can("updates.manage");
 
-  const installing = (available.data ?? []).some((u) => u.state === "installing");
+  // An approved "install now" or a running installation: watch its progress
+  // and refresh the list until it is over (the worker starts the upgrade
+  // within a minute of the approval; the list state goes approved →
+  // installing → installed / failed).
+  const pending = (available.data ?? []).find((u) => u.state === "installing" || (u.state === "approved" && u.install_when === "now"));
+  const pendingId = pending?.id;
+  const reloadAvailable = available.reload;
+  useEffect(() => {
+    if (!pendingId) return;
+    const t = window.setInterval(reloadAvailable, 5000);
+    return () => window.clearInterval(t);
+  }, [pendingId, reloadAvailable]);
   // HA-aware updates (docs/HIGH_AVAILABILITY.md §12).
   const ha = useApiData<HaStatus>(can("ha.read") ? "/ha/status" : null);
   const [standbyBusy, setStandbyBusy] = useState(false);
@@ -176,7 +187,7 @@ export default function UpdatesPage() {
         </Callout>
       ) : null}
 
-      <InstallProgress active={installing} onFinished={() => { available.reload(); history.reload(); }} />
+      <InstallProgress pending={pending} onFinished={() => { available.reload(); history.reload(); }} />
 
       <div className="grid grid--2" style={{ alignItems: "start" }}>
         <Card title="Last check">
@@ -228,17 +239,27 @@ export default function UpdatesPage() {
   );
 }
 
-/** Progress of the root upgrade runner. The API restarts during the upgrade,
- * so failed requests mean "restarting" and polling continues. */
-function InstallProgress({ active, onFinished }: { active: boolean; onFinished: () => void }) {
+/** Elapsed installer time as m:ss (installs take a minute or two). */
+function elapsedLabel(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** Progress of the root upgrade runner, live: the status file is polled every
+ * 3 seconds from the moment an installation is approved (before the runner
+ * has started, the card says so), the installer output follows the run, and
+ * the API's restart during the upgrade reads as "restarting", not as an
+ * error. */
+function InstallProgress({ pending, onFinished }: { pending: AvailableUpdate | undefined; onFinished: () => void }) {
   const toast = useToast();
   const [status, setStatus] = useState<UpgradeStatus | null>(null);
   const [unreachable, setUnreachable] = useState(false);
-  const [watching, setWatching] = useState(active);
+  const [watching, setWatching] = useState(!!pending);
+  const [now, setNow] = useState(() => Date.now());
   const finished = useRef(onFinished);
+  const logRef = useRef<HTMLPreElement>(null);
   useEffect(() => { finished.current = onFinished; }, [onFinished]);
 
-  useOnChange(active, (a) => { if (a) setWatching(true); });
+  useOnChange(!!pending, (a) => { if (a) setWatching(true); });
 
   useEffect(() => {
     let stop = false;
@@ -247,6 +268,7 @@ function InstallProgress({ active, onFinished }: { active: boolean; onFinished: 
         const s = await api.get<UpgradeStatus>("/updates/status");
         if (stop) return;
         setUnreachable(false);
+        setNow(Date.now());
         setStatus((prev) => {
           if (prev?.run?.state === "running" && s.run && s.run.state !== "running") {
             if (s.run.state === "succeeded") toast.success(`Veyra ${s.run.version} installed`, "Reload the page to use the new version.");
@@ -266,8 +288,28 @@ function InstallProgress({ active, onFinished }: { active: boolean; onFinished: 
   }, [watching, toast]);
 
   const run = status?.run;
+  // A status file from an earlier run (another version, or finished before
+  // this approval) is not this installation's progress.
+  const stale = !!run && !!pending && run.state !== "running"
+    && (run.version !== pending.version || (!!pending.approved_at && run.started_at < pending.approved_at));
+  const lines = run && !stale ? run.log_tail : [];
+  const lastLine = lines[lines.length - 1];
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lastLine, lines.length]);
+
+  if (watching && (!run || stale)) {
+    return (
+      <Callout tone="info" title={`Installing Veyra ${pending?.version ?? ""}`}>
+        <p>{unreachable ? "Veyra is restarting; this page reconnects by itself." : "Waiting for the installer to start (the background worker picks approved installations up within a minute). Calls are not affected."}</p>
+      </Callout>
+    );
+  }
   if (!run || (!watching && run.state !== "running")) return null;
   const tone = run.state === "failed" ? "danger" : run.state === "succeeded" ? "ok" : "info";
+  const started = Date.parse(run.started_at);
+  const elapsed = Number.isFinite(started) ? Math.max(0, Math.round(((run.finished_at ? Date.parse(run.finished_at) : now) - started) / 1000)) : null;
   return (
     <Callout tone={tone} title={
       run.state === "running" ? `Installing Veyra ${run.version}`
@@ -276,16 +318,19 @@ function InstallProgress({ active, onFinished }: { active: boolean; onFinished: 
     }>
       <div className="stack stack--sm">
         {run.state === "running" ? (
-          <p>{unreachable ? "Veyra is restarting; this page reconnects by itself." : <>Step: <strong>{run.step}</strong></>} Calls are not affected.</p>
+          <p>
+            {unreachable ? "Veyra is restarting; this page reconnects by itself." : <>Step: <strong>{run.step}</strong></>}
+            {elapsed !== null ? <> · {elapsedLabel(elapsed)} so far</> : null} · Calls are not affected.
+          </p>
         ) : null}
         {run.state === "succeeded" ? (
-          <p>Installed {run.finished_at ? formatRelative(run.finished_at) : ""}. <Button size="sm" onClick={() => window.location.reload()}>Reload the page</Button></p>
+          <p>Installed {run.finished_at ? formatRelative(run.finished_at) : ""}{elapsed !== null ? ` in ${elapsedLabel(elapsed)}` : ""}. <Button size="sm" onClick={() => window.location.reload()}>Reload the page</Button></p>
         ) : null}
         {run.error ? <p>{run.error}</p> : null}
         {run.log_tail.length ? (
-          <details open={run.state === "failed"}>
-            <summary>Installer output</summary>
-            <pre className="mono" style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap" }}>{run.log_tail.join("\n")}</pre>
+          <details open={run.state !== "succeeded"}>
+            <summary>Installer output{run.state === "running" ? " (live)" : ""}</summary>
+            <pre ref={logRef} className="mono" style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap" }}>{run.log_tail.join("\n")}</pre>
           </details>
         ) : null}
         {run.log_file ? <p className="subtle">Full log on the server: <code>{run.log_file}</code></p> : null}

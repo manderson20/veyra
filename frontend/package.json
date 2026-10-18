@@ -1,6 +1,6 @@
 {
   "name": "veyra-frontend",
-  "version": "0.25.1",
+  "version": "0.25.2",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "description": "Veyra administrative web interface (static Next.js export)",

@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.25.2 — 2026-10-18
+
+### Fixed
+- **Installation progress is live from the moment you click Install now.** The Updates page only started following an installation once the list showed it as "installing", and the list was not refreshed after the approval, so the progress card appeared only after a reload of the page (found on the 0.25.0 install). The page now watches as soon as an installation is approved ("Waiting for the installer to start" until the background worker picks it up, within a minute), refreshes the list until the installation is over, keeps the installer output open and scrolled to the newest line while it runs, shows the elapsed time, and still reads the API's restart during the upgrade as "Veyra is restarting". Note that the page doing the installing is the one from the version being replaced, so the first installation that shows this from the start is the one after 0.25.2.
+
 ## 0.25.1 — 2026-10-18
 
 ### Fixed
