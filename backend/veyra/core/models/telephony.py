@@ -7,11 +7,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
+from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey, utcnow
 
 
 class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
@@ -51,6 +51,30 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     location: Mapped[str | None] = mapped_column(String(200))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ExtensionState(Base):
+    """What a phone or an administrator set on an extension (docs/CALL_FEATURES.md
+    §3.2 to §3.4): Do Not Disturb, the three forwards, follow-me, ring time. The
+    engine keeps a copy in its database for the dialplan; the worker keeps the
+    two in step."""
+
+    __tablename__ = "extension_states"
+
+    extension_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("extensions.id", ondelete="CASCADE"), primary_key=True
+    )
+    dnd: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    cf_always: Mapped[str | None] = mapped_column(String(32))
+    cf_busy: Mapped[str | None] = mapped_column(String(32))
+    cf_no_answer: Mapped[str | None] = mapped_column(String(32))
+    fmfm_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    ring_seconds: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    # phone | user | admin | sync
+    updated_by: Mapped[str] = mapped_column(String(16), default="admin", server_default="admin")
 
 
 class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

@@ -186,6 +186,26 @@ def is_emergency_event(event: dict[str, Any]) -> bool:
     return event.get("type") == "ChannelUserevent" and event.get("eventname") == EMERGENCY_EVENT
 
 
+EXTSTATE_EVENT = "VeyraExtState"
+
+
+def is_extstate_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == EXTSTATE_EVENT
+
+
+def _extstate(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraExtState)`` from a feature code: the phone changed its
+    own state (docs/CALL_FEATURES.md §3.2); never raises."""
+    try:
+        from veyra.core.db import session_scope
+        from veyra.telephony import extension_state
+
+        with session_scope() as db:
+            extension_state.handle_userevent(db, event.get("userevent") or {})
+    except Exception:
+        log.exception("Could not handle the extension state event")
+
+
 def _webhook(ce: CallEvent) -> None:
     """Queue live call webhooks (docs/INTEGRATIONS.md §3.2); never raises."""
     try:
@@ -252,6 +272,8 @@ class AriEventListener:
                             continue
                         if is_emergency_event(event):
                             await asyncio.to_thread(_emergency, event)
+                        elif is_extstate_event(event):
+                            await asyncio.to_thread(_extstate, event)
                         for ce in self.translator.translate(event):
                             self.hub.publish(ce)
                             if ce.type in LIVE_WEBHOOK_EVENTS:

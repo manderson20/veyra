@@ -61,6 +61,9 @@ class FakeAdapter(TelephonyAdapter):
         self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="example-1001")]
         self.originated: list[tuple[str, str, str]] = []
         self.fail_originate: str | None = None
+        # (organization slug, number) -> Do Not Disturb, as "the engine" has it.
+        self.dnd: dict[tuple[str, str], bool] = {}
+        self.dnd_calls: list[tuple[str, str, bool]] = []
 
     def capabilities(self) -> set[Capability]:
         return {
@@ -71,6 +74,7 @@ class FakeAdapter(TelephonyAdapter):
             Capability.CONFIG_RELOAD,
             Capability.CLICK_TO_DIAL,
             Capability.REGISTRATIONS,
+            Capability.EXTENSION_STATE,
         }
 
     def health(self) -> EngineHealth:
@@ -93,6 +97,16 @@ class FakeAdapter(TelephonyAdapter):
 
     def registrations(self) -> list[Registration]:
         return list(self.contacts)
+
+    def set_dnd(self, organization: str, number: str, on: bool) -> None:
+        self.dnd_calls.append((organization, number, on))
+        if on:
+            self.dnd[(organization, number)] = True
+        else:
+            self.dnd.pop((organization, number), None)
+
+    def dnd_states(self) -> dict[tuple[str, str], bool]:
+        return dict(self.dnd)
 
     def originate(
         self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30

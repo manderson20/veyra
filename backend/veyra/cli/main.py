@@ -1122,6 +1122,13 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         from veyra.integrations import sources as webhook_sources
 
                         webhook_sources.registrations(db, get_adapter(settings))
+                        # The engine's Do Not Disturb copies follow the rows
+                        # (docs/CALL_FEATURES.md §3.2).
+                        from veyra.telephony import extension_state
+
+                        fixed = extension_state.sync(db, get_adapter(settings))
+                        if fixed:
+                            log.info("Synced %d Do Not Disturb state(s) to the engine", fixed)
                         # Samples are pruned by the retention job.
             except Exception:
                 log.exception("Worker iteration failed")

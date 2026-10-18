@@ -32,6 +32,7 @@ from veyra.core.events import Event, bus
 from veyra.core.models import (
     CallQueue,
     Extension,
+    ExtensionState,
     InboundRoute,
     Organization,
     PickupGroup,
@@ -49,7 +50,7 @@ from veyra.core.security.crypto import (
     load_installation_key,
 )
 from veyra.core.security.principal import Principal
-from veyra.telephony import routing
+from veyra.telephony import extension_state, routing
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 from veyra.telephony.numbering import (
     NumberingPlan,
@@ -295,6 +296,8 @@ class ExtensionOut(BaseModel):
     sip_secret_changed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # Do Not Disturb (docs/CALL_FEATURES.md §3.2); the full state is at /state.
+    dnd: bool = False
     # Live state from the engine; None when the engine cannot report it.
     registration: RegistrationOut | None = None
     # Groups the extension belongs to (docs/RING_GROUPS_QUEUES.md).
@@ -400,6 +403,15 @@ def _memberships(
 def _outs(db: Session, rows: list[Extension], request: Request | None = None) -> list[ExtensionOut]:
     live = _registrations(request)
     groups = _memberships(db, {r.id for r in rows})
+    ids = {r.id for r in rows}
+    states = (
+        {
+            s.extension_id: s.dnd
+            for s in db.scalars(select(ExtensionState).where(ExtensionState.extension_id.in_(ids)))
+        }
+        if ids
+        else {}
+    )
     org_ids = {r.organization_id for r in rows}
     user_ids = {r.user_id for r in rows if r.user_id}
     orgs = (
@@ -438,6 +450,7 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 sip_secret_changed_at=r.sip_secret_changed_at,
                 created_at=r.created_at,
                 updated_at=r.updated_at,
+                dnd=bool(states.get(r.id)),
                 registration=(
                     live.get(r.endpoint_name, RegistrationOut(registered=False))
                     if live is not None
@@ -547,6 +560,8 @@ def _record(
     action: str,
     ext: Extension,
     details: dict[str, object],
+    *,
+    deploy: bool = True,
 ) -> None:
     audit.record(
         db,
@@ -561,8 +576,10 @@ def _record(
         details={"number": ext.number, **details},
     )
     # Like "Apply Config" elsewhere: the Deploy changes button appears after
-    # every save that may affect the engine, until a deployment runs.
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {ext.number}")
+    # every save that may affect the engine, until a deployment runs. A change
+    # the engine takes at once (Do Not Disturb) does not need one.
+    if deploy:
+        configmgmt.mark_changed(db, by=principal.label, what=f"{action} {ext.number}")
 
 
 # ----------------------------------------------------------------- routes
@@ -754,6 +771,72 @@ def update_extension(
     db.commit()
     bus.publish(Event("extension.updated", {"extension_id": str(ext.id), "changes": details}))
     return _out(db, ext)
+
+
+class StateIn(BaseModel):
+    """Fields left out keep their value."""
+
+    dnd: bool | None = None
+    ring_seconds: int | None = Field(None, ge=extension_state.RING_MIN, le=extension_state.RING_MAX)
+
+
+@router.get("/{extension_id}/state", summary="Do Not Disturb, forwards, ring time")
+def get_state(
+    extension_id: uuid.UUID,
+    principal: Principal = Depends(require("extensions.read")),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    ext = _get_visible(db, principal, extension_id, "extensions.read")
+    return extension_state.out(extension_state.get(db, ext.id))
+
+
+@router.put("/{extension_id}/state", summary="Change Do Not Disturb or the ring time")
+def put_state(
+    extension_id: uuid.UUID,
+    body: StateIn,
+    request: Request,
+    principal: Principal = Depends(require("extensions.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """Takes effect at once: the engine keeps its own copy of the state, no
+    deployment is needed (docs/CALL_FEATURES.md §3.2)."""
+    ext = _get_visible(db, principal, extension_id, "extensions.write")
+    changes = body.model_dump(exclude_unset=True)
+    details: dict[str, Any] = {}
+    row = extension_state.ensure(db, ext)
+    if "dnd" in changes and changes["dnd"] is not None and changes["dnd"] != row.dnd:
+        extension_state.set_dnd(
+            db,
+            ext,
+            changes["dnd"],
+            by="admin",
+            adapter=getattr(request.app.state, "telephony", None),
+        )
+        details["dnd"] = changes["dnd"]
+    if (
+        "ring_seconds" in changes
+        and changes["ring_seconds"] is not None
+        and changes["ring_seconds"] != row.ring_seconds
+    ):
+        row.ring_seconds = changes["ring_seconds"]
+        row.updated_by = "admin"
+        row.updated_at = utcnow()
+        details["ring_seconds"] = changes["ring_seconds"]
+    if details:
+        # The ring time is in the dialplan, so it waits for a deployment;
+        # Do Not Disturb is already in the engine.
+        _record(
+            db,
+            ctx,
+            principal,
+            "extension.state_update",
+            ext,
+            details,
+            deploy="ring_seconds" in details,
+        )
+    db.commit()
+    return extension_state.out(row)
 
 
 @router.delete("/{extension_id}", status_code=204, summary="Delete an extension")

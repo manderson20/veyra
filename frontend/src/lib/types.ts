@@ -325,6 +325,8 @@ export interface Extension {
   /** Presented on trunk calls: one of the organization's numbers or an allowed number (CALL_FEATURES.md §3.5). */
   outbound_caller_id_number?: string | null;
   outbound_caller_id_name?: string | null;
+  /** Do Not Disturb (CALL_FEATURES.md §3.2); the full state is at /extensions/{id}/state. */
+  dnd?: boolean;
   building_id?: string | null;
   location?: string | null;
   is_enabled: boolean;
@@ -2582,6 +2584,36 @@ export interface BackupStatus {
   finished_at?: string | null;
   error?: string | null;
   backup?: string | null;
+}
+
+// ----------------------------------------------------------------- extension state and feature codes (Milestone 18)
+
+export interface ExtensionState {
+  dnd: boolean;
+  cf_always: string | null;
+  cf_busy: string | null;
+  cf_no_answer: string | null;
+  fmfm_enabled: boolean;
+  ring_seconds: number;
+  updated_at: string | null;
+  updated_by: "phone" | "user" | "admin" | "sync" | string | null;
+}
+
+export interface FeatureCode {
+  key: string;
+  label: string;
+  description: string;
+  code: string;
+  default_code: string;
+  enabled: boolean;
+  takes_number: boolean;
+  milestone: number;
+}
+
+export interface FeatureCodes {
+  codes: FeatureCode[];
+  /** Codes that are always present and cannot be changed, with what they do. */
+  fixed: Record<string, string>;
 }
 
 // ----------------------------------------------------------------- packet captures (Milestone 18)
