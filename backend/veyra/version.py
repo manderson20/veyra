@@ -9,7 +9,7 @@ the public release. frontend/package.json must carry the same version
 (tests/test_version.py checks).
 """
 
-__version__ = "0.23.1"
+__version__ = "0.24.0"
 
 # Version of the module API exposed to modules. Modules declare a compatible
 # range for this (``core_api``) in their manifest. Bumped on any breaking

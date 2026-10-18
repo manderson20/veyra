@@ -8,9 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased — Milestone 18 (becomes 0.24.0 on approval)
+## 0.24.0 — 2026-10-18 (Milestone 18)
 
-Kept current with every commit on `milestone-18`; design in [CALL_FEATURES.md](docs/CALL_FEATURES.md).
+Design in [CALL_FEATURES.md](docs/CALL_FEATURES.md); report in [MILESTONE_18_REPORT.md](docs/milestones/MILESTONE_18_REPORT.md).
 
 ### Added
 - **Registrations** (#73): Telephony → Registrations shows every registered phone with the address the registration came from and the address the phone reports (NAT when they differ), user agent, transport, reachability and expiry; `GET /telephony/registrations`; the Extensions list has a "Registers from" column; `registration.changed` webhooks carry both addresses.
