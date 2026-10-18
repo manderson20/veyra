@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 4,
+  "sequence": 5,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.25.2",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "The Updates page now follows an installation live from the moment it is approved (waiting notice until the installer starts, step, elapsed time, installer output scrolled to the newest line). Includes the 0.25.1 fix for the upgrade stopping at 'Configuring NGINX'. Notes: https://github.com/manderson20/veyra/releases/tag/v0.25.2",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "319ab5b81f",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.25.2/veyra-0.25.2.tar.gz",
+        "sha256": "0e666cbd7ab686b6881e42d4eaf9eb803a35947bf460cf3f20456dfa54a1863d",
+        "size": 8003035
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -71,6 +88,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-18T22:57:55+00:00",
-  "expires_at": "2027-01-16T22:57:55+00:00"
+  "generated_at": "2026-10-18T23:10:36+00:00",
+  "expires_at": "2027-01-16T23:10:36+00:00"
 }
