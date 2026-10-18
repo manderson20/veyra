@@ -7,8 +7,9 @@ generator turns them into dialplan contexts and ``confbridge.conf``.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -57,6 +58,89 @@ class Announcement(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     destination_conference_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class CallFlow(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """A day/night switch (docs/CALL_FEATURES.md §4.5): calls follow the
+    normal destination, or the override destination while the switch is on.
+    Toggled from a phone (``*28<index>``, BLF lit while on), the interface or
+    the API; the engine keeps a copy in its store (``veyra/switch/flow``)."""
+
+    __tablename__ = "call_flows"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name"),
+        UniqueConstraint("organization_id", "code_index"),
+    )
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    # The digits after the toggle prefix: *28<code_index>, 0-99.
+    code_index: Mapped[int] = mapped_column(Integer)
+    # Optional PIN asked before the phone toggles (installation key,
+    # purpose ``call_flow.pin:<id>``).
+    pin_ciphertext: Mapped[str | None] = mapped_column(Text)
+    normal_type: Mapped[str] = mapped_column(String(16), default="hangup")
+    override_type: Mapped[str] = mapped_column(String(16), default="hangup")
+    # The switch: on = calls take the override destination.
+    override: Mapped[bool] = mapped_column(Boolean, default=False)
+    override_by: Mapped[str | None] = mapped_column(String(200))
+    override_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    normal_extension_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extensions.id", ondelete="SET NULL")
+    )
+    normal_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL", use_alter=True)
+    )
+    normal_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL", use_alter=True)
+    )
+    normal_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL", use_alter=True)
+    )
+    normal_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    normal_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    normal_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
+    normal_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )
+    override_extension_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extensions.id", ondelete="SET NULL")
+    )
+    override_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL", use_alter=True)
+    )
+    override_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL", use_alter=True)
+    )
+    override_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL", use_alter=True)
+    )
+    override_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    override_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    override_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
+    override_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 

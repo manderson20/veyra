@@ -3,7 +3,7 @@
 
 import { SelectField } from "@/components/ui";
 import { DESTINATION_LABELS, emptyDestination, type DestinationDraft } from "@/lib/routing";
-import type { Announcement, CallQueue, ConferenceRoom, Destination, DestinationType, Extension, IvrMenu, Page, RingGroup, VoicemailBox } from "@/lib/types";
+import type { Announcement, CallFlow, CallQueue, ConferenceRoom, Destination, DestinationType, Extension, IvrMenu, Page, RingGroup, VoicemailBox } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
 /** The lists a destination picker chooses from; load once per page and share between pickers. */
@@ -15,6 +15,7 @@ export interface DestinationOptions {
   queues: CallQueue[];
   announcements: Announcement[];
   conferences: ConferenceRoom[];
+  callFlows: CallFlow[];
   loading: boolean;
 }
 
@@ -27,6 +28,7 @@ export function useDestinationOptions(organizationId: string | null | undefined)
   const queues = useApiData<Page<CallQueue>>(org ? "/queues" : null, { organization_id: org, limit: 200 });
   const announcements = useApiData<Page<Announcement>>(org ? "/announcements" : null, { organization_id: org, limit: 200 });
   const conferences = useApiData<Page<ConferenceRoom>>(org ? "/conferences" : null, { organization_id: org, limit: 200 });
+  const callFlows = useApiData<Page<CallFlow>>(org ? "/call-flows" : null, { organization_id: org, limit: 200 });
   return {
     extensions: extensions.data?.items ?? [],
     boxes: boxes.data?.items ?? [],
@@ -35,7 +37,8 @@ export function useDestinationOptions(organizationId: string | null | undefined)
     queues: queues.data?.items ?? [],
     announcements: announcements.data?.items ?? [],
     conferences: conferences.data?.items ?? [],
-    loading: extensions.loading || boxes.loading || menus.loading || ringGroups.loading || queues.loading || announcements.loading || conferences.loading,
+    callFlows: callFlows.data?.items ?? [],
+    loading: extensions.loading || boxes.loading || menus.loading || ringGroups.loading || queues.loading || announcements.loading || conferences.loading || callFlows.loading,
   };
 }
 
@@ -61,7 +64,7 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
   exclude?: string;
   idBase?: string;
 }) {
-  const kinds: DestinationType[] = ["extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", "announcement", "conference", "directory", ...(allowHangup ? ["hangup" as const] : [])];
+  const kinds: DestinationType[] = ["extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", "announcement", "conference", "call_flow", "directory", ...(allowHangup ? ["hangup" as const] : [])];
   const withCurrent = (opts: { value: string; label: string }[], value: string, fallback: string) =>
     value && !opts.some((o) => o.value === value) ? [...opts, { value, label: current?.label ?? fallback }] : opts;
   const targetId = idBase ? `${idBase}-target` : undefined;
@@ -135,6 +138,15 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
         options={withCurrent(opts, draft.conference_id, "Deleted conference room")}
         help={opts.length === 0 && !options.loading ? "Create one under Telephony → Conference Rooms." : undefined}
         onChange={(e) => onChange({ ...draft, conference_id: e.target.value })} />
+    );
+  } else if (draft.type === "call_flow") {
+    const opts = options.callFlows.filter((f) => f.id !== exclude).map((f) => ({ value: f.id, label: f.is_enabled ? f.name : `${f.name} (disabled)` }));
+    targetField = (
+      <SelectField id={targetId} label={srLabel("call flow")} required={required} disabled={disabled} value={draft.call_flow_id} error={error}
+        placeholder={options.loading ? "Loading…" : opts.length ? "Choose a call flow" : "No call flows in this organization"}
+        options={withCurrent(opts, draft.call_flow_id, "Deleted call flow")}
+        help={opts.length === 0 && !options.loading ? "Create one under Telephony → Call Flows." : undefined}
+        onChange={(e) => onChange({ ...draft, call_flow_id: e.target.value })} />
     );
   } else if (draft.type === "directory") {
     targetField = <p className="field__help" style={{ margin: 0 }}>Callers spell a name on the keypad and reach the matching extension (extensions with a voicemail box are listed).</p>;

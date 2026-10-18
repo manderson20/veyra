@@ -65,6 +65,8 @@ class FakeAdapter(TelephonyAdapter):
         # (organization slug, number) -> {field: value}, as "the engine" has it.
         self.states: dict[tuple[str, str], dict[str, str]] = {}
         self.state_calls: list[tuple[str, str, str, str | None]] = []
+        self.switch_calls: list[tuple[str, str, str, str | None]] = []
+        self.switch_states: dict[tuple[str, str, str], str] = {}
         # trunk section -> registration status word, as "the engine" reports it.
         self.trunk_regs: dict[str, str] = {}
 
@@ -122,6 +124,16 @@ class FakeAdapter(TelephonyAdapter):
 
     def extension_states(self) -> dict[tuple[str, str], dict[str, str]]:
         return {k: dict(v) for k, v in self.states.items()}
+
+    def set_switch(self, kind: str, organization: str, key: str, value: str | None) -> None:
+        self.switch_calls.append((kind, organization, key, value))
+        if value:
+            self.switch_states[(kind, organization, key)] = value
+        else:
+            self.switch_states.pop((kind, organization, key), None)
+
+    def switches(self) -> dict[tuple[str, str, str], str]:
+        return dict(self.switch_states)
 
     def originate(
         self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30

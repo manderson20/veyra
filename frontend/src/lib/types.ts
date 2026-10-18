@@ -987,7 +987,7 @@ export interface TrunkInput {
   register_expiry?: number;
 }
 
-export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "directory" | "hangup";
+export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "call_flow" | "directory" | "hangup";
 
 /** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6, RING_GROUPS_QUEUES.md §5). */
 export interface Destination {
@@ -999,6 +999,7 @@ export interface Destination {
   voicemail_box_id?: string | null;
   announcement_id?: string | null;
   conference_id?: string | null;
+  call_flow_id?: string | null;
   /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Shared inbox: Attendance (2900)", "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)", "Hang up"; null when the target is gone. */
   label: string | null;
   missing: boolean;
@@ -1013,6 +1014,7 @@ export interface DestinationInput {
   voicemail_box_id?: string | null;
   announcement_id?: string | null;
   conference_id?: string | null;
+  call_flow_id?: string | null;
 }
 
 export type RouteDestinationType = Exclude<DestinationType, "hangup">;
@@ -1035,6 +1037,7 @@ export interface InboundRoute {
   destination_voicemail_box_id: string | null;
   destination_announcement_id?: string | null;
   destination_conference_id?: string | null;
+  destination_call_flow_id?: string | null;
   destination_number: string | null;
   destination_name: string | null;
   destination: Destination;
@@ -1049,6 +1052,7 @@ export interface InboundRoute {
   after_hours_voicemail_box_id: string | null;
   after_hours_announcement_id?: string | null;
   after_hours_conference_id?: string | null;
+  after_hours_call_flow_id?: string | null;
   after_hours_number: string | null;
   after_hours_name: string | null;
   after_hours: Destination | null;
@@ -1071,6 +1075,7 @@ export interface InboundRouteInput {
   destination_voicemail_box_id?: string | null;
   destination_announcement_id?: string | null;
   destination_conference_id?: string | null;
+  destination_call_flow_id?: string | null;
   time_condition_id?: string | null;
   after_hours_type?: RouteDestinationType;
   after_hours_extension_id?: string | null;
@@ -1080,6 +1085,7 @@ export interface InboundRouteInput {
   after_hours_voicemail_box_id?: string | null;
   after_hours_announcement_id?: string | null;
   after_hours_conference_id?: string | null;
+  after_hours_call_flow_id?: string | null;
   caller_id_prefix?: string | null;
   is_enabled?: boolean;
 }
@@ -1157,7 +1163,17 @@ export interface TimeCondition {
   ranges: TimeRange[];
   /** MM-DD dates on which the condition is closed. */
   holidays: string[];
+  /** What the schedule says now; `effective_open` includes an override (docs/CALL_FEATURES.md §4.6). */
   open_now: boolean;
+  effective_open: boolean;
+  override: "open" | "closed" | null;
+  override_temporary: boolean;
+  override_by: string | null;
+  override_at: string | null;
+  /** Digits after the override code (*27<index>); null: no code. */
+  code_index: number | null;
+  code: string | null;
+  has_pin: boolean;
   in_use_by: number;
   created_at: string;
   updated_at: string;
@@ -1171,6 +1187,9 @@ export interface TimeConditionInput {
   timezone?: string | null;
   ranges?: TimeRange[];
   holidays?: string[];
+  code_index?: number | null;
+  /** Write-only; null removes the PIN. */
+  pin?: string | null;
 }
 
 // ---------------------------------------------------------------- voicemail, prompts, IVR (Milestone 7)
@@ -1395,6 +1414,41 @@ export interface ConferenceRoomInput {
   music_on_hold_alone?: boolean;
   wait_for_admin?: boolean;
   moh_class_id?: string | null;
+  is_enabled?: boolean;
+}
+
+/** A day/night switch between two destinations (§4.5). */
+export interface CallFlow {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  context: string;
+  description: string | null;
+  code_index: number;
+  code: string | null;
+  has_pin: boolean;
+  normal: Destination;
+  override_destination: Destination;
+  override: boolean;
+  override_by: string | null;
+  override_at: string | null;
+  is_enabled: boolean;
+  problems: string[];
+  in_use_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CallFlowInput {
+  organization_id?: string;
+  name?: string;
+  description?: string | null;
+  code_index?: number;
+  pin?: string | null;
+  normal?: DestinationInput;
+  override_destination?: DestinationInput;
   is_enabled?: boolean;
 }
 

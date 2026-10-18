@@ -57,6 +57,15 @@ _STATE_ROW_RE = re.compile(
 )
 
 
+SWITCH_FAMILY = "veyra/switch"
+SWITCH_KINDS = ("flow", "tc")
+_SWITCH_VALUE_RE = re.compile(r"^[a-z0-9]{1,16}$")
+# "/veyra/switch/flow/example/night                   : 1"
+_SWITCH_ROW_RE = re.compile(
+    r"^/veyra/switch/(?P<kind>[a-z]+)/(?P<org>[^/]+)/(?P<key>[^/ ]+)\s*:\s*(?P<value>.*)$"
+)
+
+
 # "  trunk-carrier/sip:sip.carrier.example            trunk-carrier     Registered"
 _TRUNK_REG_RE = re.compile(
     r"^\s*(?P<section>[A-Za-z0-9_.-]+)/(?P<uri>\S+)\s+(?P<auth>\S+)\s+"
@@ -249,6 +258,35 @@ class AsteriskAdapter(TelephonyAdapter):
             device = f"Custom:veyra-cf-{org}-{num}"
             on = any(current.get(f) for f in ("cf_always", "cf_busy", "cf_no_answer"))
         cli.run(f"devstate change {device} {'INUSE' if on else 'NOT_INUSE'}")
+
+    def set_switch(self, kind: str, organization: str, key: str, value: str | None) -> None:
+        if kind not in SWITCH_KINDS:
+            raise ValueError(f"unknown switch kind {kind!r}")
+        org = _check_token(organization, "organization")
+        k = _check_token(key, "switch key")
+        if value is not None and not _SWITCH_VALUE_RE.match(value):
+            raise ValueError(f"switch value {value!r} is not valid for the engine store")
+        family = f"{SWITCH_FAMILY}/{kind}/{org}"
+        cmd = f"database put {family} {k} {value}" if value else f"database del {family} {k}"
+        ok, out = cli.run(cmd)
+        if not ok and not (not value and "not found" in out.lower()):
+            raise EngineUnavailable(f"could not store the switch: {out[:200]}")
+        cli.run(
+            f"devstate change Custom:veyra-{kind}-{org}-{k} {'INUSE' if value else 'NOT_INUSE'}"
+        )
+
+    def switches(self) -> dict[tuple[str, str, str], str]:
+        ok, out = cli.run(f"database show {SWITCH_FAMILY}")
+        if not ok:
+            raise EngineUnavailable(f"could not read the switches: {out[:200]}")
+        found: dict[tuple[str, str, str], str] = {}
+        for line in out.splitlines():
+            m = _SWITCH_ROW_RE.match(line.strip())
+            if m and m.group("kind") in SWITCH_KINDS:
+                value = m.group("value").strip()
+                if value:
+                    found[(m.group("kind"), m.group("org"), m.group("key"))] = value
+        return found
 
     def extension_states(self) -> dict[tuple[str, str], dict[str, str]]:
         ok, out = cli.run(f"database show {STATE_FAMILY}")

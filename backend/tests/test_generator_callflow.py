@@ -255,3 +255,108 @@ def test_destinations_render_for_routes_and_groups():
     assert "Goto(veyra-conf-board,s,1)" in _context(dp, "veyra-ann-notice")
     assert "Goto(veyra-directory,s,1)" in dp
     assert "the destination no longer exists" in dp
+
+
+def _flow(slug="night", index=1, **over):
+    f = {
+        "slug": slug,
+        "name": slug.title(),
+        "organization": "example",
+        "code_index": index,
+        "pin": None,
+        "override": False,
+        "normal": {"type": "extension", "number": "1001"},
+        "override_destination": {"type": "directory"},
+    }
+    f.update(over)
+    return f
+
+
+def _tc(key="tc-1", index=2, **over):
+    c = {
+        "key": key,
+        "name": "Office hours",
+        "organization": "example",
+        "timezone": "UTC",
+        "ranges": [{"days": ["mon", "tue"], "start": "08:00", "end": "17:00"}],
+        "holidays": ["12-25"],
+        "code_index": index,
+        "pin": None,
+        "override": None,
+    }
+    c.update(over)
+    return c
+
+
+CODES = {"callflow_toggle_prefix": "*28", "tc_override_prefix": "*27"}
+
+
+def test_call_flow_context_codes_and_hints():
+    dp = _files(_snapshot(call_flows=[_flow(pin="1234")], feature_codes=CODES))["extensions.conf"]
+    flow = _context(dp, "veyra-flow-night")
+    assert 'GotoIf($["${DB(veyra/switch/flow/example/night)}"="1"]?override)' in flow
+    assert "Goto(veyra-internal,1001,1)" in flow and "Goto(veyra-directory,s,1)" in flow
+    features = _context(dp, "veyra-features")
+    code = features[features.index("exten => *281,1") :]
+    assert (
+        "Read(VEYRA_PIN,agent-pass,10,,1,10)" in code
+        and 'GotoIf($["${VEYRA_PIN}"="1234"]?ok)' in code
+    )
+    assert "Set(DB(veyra/switch/flow/example/night)=1)" in code
+    assert "Set(DEVICE_STATE(Custom:veyra-flow-example-night)=INUSE)" in code
+    assert "UserEvent(VeyraSwitch,Kind: flow,Org: example,Key: night,Value: 1)" in code
+    assert "Set(VEYRA_DEL=${DB_DELETE(veyra/switch/flow/example/night)})" in code
+    assert 'GotoIf($["${VEYRA_ORG}"!="example"]?nophone)' in code
+    assert "exten => *281,hint,Custom:veyra-flow-example-night" in _context(dp, "veyra-internal")
+    # No toggle prefix: no code, no hint, the routing context stays.
+    dp2 = _files(_snapshot(call_flows=[_flow()], feature_codes={}))["extensions.conf"]
+    assert "exten => *281" not in dp2 and "[veyra-flow-night]" in dp2
+
+
+def test_call_flow_validation():
+    with pytest.raises(generator.GenerationError, match="share the code index"):
+        _files(_snapshot(call_flows=[_flow("a", 1), _flow("b", 1)], feature_codes=CODES))
+    with pytest.raises(generator.GenerationError, match="out of range"):
+        _files(_snapshot(call_flows=[_flow(index=100)], feature_codes=CODES))
+    with pytest.raises(generator.GenerationError, match="PIN must be"):
+        _files(_snapshot(call_flows=[_flow(pin="12")], feature_codes=CODES))
+
+
+def test_time_condition_override_code_and_route_check():
+    route = {
+        "did": "5735550100",
+        "trunk": None,
+        "destination": {"type": "extension", "number": "1001"},
+        "after_hours": {"type": "directory"},
+        "time_condition": "tc-1",
+        "caller_id_prefix": None,
+        "organization": "x",
+        "organization_slug": "example",
+    }
+    dp = _files(_snapshot(time_conditions=[_tc()], inbound_routes=[route], feature_codes=CODES))[
+        "extensions.conf"
+    ]
+    features = _context(dp, "veyra-features")
+    code = features[features.index("exten => *272,1") :]
+    assert 'GotoIf($["${DB(veyra/switch/tc/example/tc-1)}"!=""]?clear)' in code
+    assert "GotoIfTime(*,*,25,dec,UTC?isclosed)" in code
+    assert "GotoIfTime(08:00-17:00,mon-tue,*,*,UTC?isopen)" in code
+    assert "Set(DB(veyra/switch/tc/example/tc-1)=open)" in code
+    assert "Set(DB(veyra/switch/tc/example/tc-1)=closed)" in code
+    assert "UserEvent(VeyraSwitch,Kind: tc,Org: example,Key: tc-1,Value: )" in code
+    assert "exten => *272,hint,Custom:veyra-tc-example-tc-1" in _context(dp, "veyra-internal")
+    # The route consults the override before the schedule.
+    body = dp.split("exten => 5735550100,1,")[1].split("\nexten =>")[0]
+    assert "Set(VEYRA_TC=${DB(veyra/switch/tc/example/tc-1)})" in body
+    assert body.index('"${VEYRA_TC}"="open"]?open') < body.index("GotoIfTime(")
+    # A condition without a code gets neither code nor hint.
+    dp2 = _files(
+        _snapshot(
+            time_conditions=[_tc(code_index=None)], inbound_routes=[route], feature_codes=CODES
+        )
+    )["extensions.conf"]
+    assert "exten => *27" not in dp2
+    with pytest.raises(generator.GenerationError, match="share the code index"):
+        _files(
+            _snapshot(time_conditions=[_tc("a", 2), _tc("b", 2, name="Other")], feature_codes=CODES)
+        )

@@ -99,6 +99,7 @@ export const DESTINATION_LABELS: Record<DestinationType, string> = {
   queue: "Call queue",
   announcement: "Announcement",
   conference: "Conference room",
+  call_flow: "Call flow",
   directory: "Dial-by-name directory",
   hangup: "Hang up",
 };
@@ -113,9 +114,10 @@ export interface DestinationDraft {
   voicemail_box_id: string;
   announcement_id: string;
   conference_id: string;
+  call_flow_id: string;
 }
 
-const NO_TARGETS = { extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "", announcement_id: "", conference_id: "" };
+const NO_TARGETS = { extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "", announcement_id: "", conference_id: "", call_flow_id: "" };
 
 export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", ...NO_TARGETS };
 export const HANGUP: DestinationDraft = { type: "hangup", ...NO_TARGETS };
@@ -136,10 +138,11 @@ export function destinationDraft(d: Destination | null | undefined, fallback: De
     voicemail_box_id: d.voicemail_box_id ?? "",
     announcement_id: d.announcement_id ?? "",
     conference_id: d.conference_id ?? "",
+    call_flow_id: d.call_flow_id ?? "",
   };
 }
 
-export type DestinationTargetField = "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | "announcement_id" | "conference_id";
+export type DestinationTargetField = "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | "announcement_id" | "conference_id" | "call_flow_id";
 
 /** The draft field that holds the target of a kind (none for hang up and the directory). */
 export function destinationTargetField(type: DestinationType): DestinationTargetField | null {
@@ -159,6 +162,8 @@ export function destinationTargetField(type: DestinationType): DestinationTarget
       return "announcement_id";
     case "conference":
       return "conference_id";
+    case "call_flow":
+      return "call_flow_id";
     default:
       return null;
   }
@@ -176,6 +181,7 @@ export function destinationBody(d: DestinationDraft): DestinationInput {
     voicemail_box_id: field === "voicemail_box_id" ? d.voicemail_box_id || null : null,
     announcement_id: field === "announcement_id" ? d.announcement_id || null : null,
     conference_id: field === "conference_id" ? d.conference_id || null : null,
+    call_flow_id: field === "call_flow_id" ? d.call_flow_id || null : null,
   };
 }
 

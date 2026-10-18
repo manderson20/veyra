@@ -109,6 +109,12 @@ QUEUE_NAME_PREFIX = "veyra-"
 CONFERENCE_PIN_TRIES = 3
 CONFERENCE_MAX_MEMBERS = 500
 DEFAULT_CONFERENCES_SUBDIR = "conferences"
+# Engine switches (docs/CALL_FEATURES.md §4.5, §4.6): the store family the
+# dialplan reads, the UserEvent that tells the API, the code indexes.
+SWITCH_FAMILY = "veyra/switch"
+SWITCH_EVENT = "VeyraSwitch"
+SWITCH_PIN_TRIES = 3
+MAX_CODE_INDEX = 99
 MAX_GROUP_DEPTH = 6
 RING_GROUP_STRATEGIES = ("ringall", "sequential")
 QUEUE_STRATEGIES = ("ringall", "rrmemory", "leastrecent", "fewestcalls", "random", "linear")
@@ -1023,8 +1029,10 @@ def _dialplan(
     queues = list(snapshot.get("queues") or [])
     announcements = list(snapshot.get("announcements") or [])
     rooms = list(snapshot.get("conference_rooms") or [])
+    flows = list(snapshot.get("call_flows") or [])
     boxes = boxes if boxes is not None else {}
-    conditions = {str(c["key"]): c for c in (snapshot.get("time_conditions") or [])}
+    tcs = list(snapshot.get("time_conditions") or [])
+    conditions = {str(c["key"]): c for c in tcs}
     trunk_slugs = [_check_section(str(t["slug"]), "trunk slug") for t in trunks]
     trunk_info = {str(t["slug"]): t for t in trunks}
     paging = snapshot.get("paging") or {}
@@ -1060,7 +1068,13 @@ def _dialplan(
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _features(
-                mine(extensions, ns), prompts_dir, codes, my_boxes(ns), _cos_for(snapshot, ns)
+                mine(extensions, ns),
+                prompts_dir,
+                codes,
+                my_boxes(ns),
+                _cos_for(snapshot, ns),
+                mine(flows, ns),
+                mine(tcs, ns),
             )
             lines += _voicemail_exit_contexts(my_boxes(ns))
     for ns in spaces:
@@ -1077,6 +1091,7 @@ def _dialplan(
                 codes.get("fmfm_toggle"),
                 _cos_for(snapshot, ns),
                 mine(rooms, ns),
+                _switch_hints(codes, mine(flows, ns), mine(tcs, ns)),
             )
     lines += _follow_me_contexts(spaces)
     if "intercom" in codes:
@@ -1121,6 +1136,7 @@ def _dialplan(
             lines += _ivr_contexts(mine(menus, ns), prompts_dir)
             lines += _announcement_contexts(mine(announcements, ns), prompts_dir)
             lines += _conference_contexts(mine(rooms, ns))
+            lines += _call_flow_contexts(mine(flows, ns))
             lines += _directory_context()
     moh = _check_moh(list(snapshot.get("hold_music") or []))
     for ns in spaces:
@@ -1656,6 +1672,8 @@ def _features(
     codes: dict[str, str] | None = None,
     boxes: list[tuple[str, dict[str, Any]]] | None = None,
     cos: Cos | None = None,
+    flows: list[dict[str, Any]] | None = None,
+    conditions: list[dict[str, Any]] | None = None,
 ) -> list[str]:
     """Feature codes of one namespace; ``**<ext>`` reaches only its phones."""
     n = engine_names.current()
@@ -1667,6 +1685,8 @@ def _features(
         *_follow_me_codes(codes, cos),
         *_intercom_code(codes, cos),
         *_voicemail_direct(codes, boxes or [], cos),
+        *_call_flow_codes(codes, flows or [], cos),
+        *_tc_override_codes(codes, conditions or [], cos),
         "; *43 echo test, *60 speaking clock: always available for phone checks.",
         "exten => *43,1,NoOp(Veyra echo test)",
         " same => n,Answer()",
@@ -1740,6 +1760,7 @@ def _internal(
     fm_code: str | None = None,
     cos: Cos | None = None,
     conferences: list[dict[str, Any]] | None = None,
+    extra_hints: list[str] | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
@@ -1752,6 +1773,7 @@ def _internal(
         f"include => {n.paging}",
         f"include => {n.outbound}",
         f"include => {CONTEXT_INVALID}",
+        *(extra_hints or []),
     ]
     for ext in extensions:
         number = str(ext["number"])
@@ -2180,6 +2202,17 @@ def _destination_lines_of(r: dict[str, Any], conditions: dict[str, dict[str, Any
             routing.check_holidays(list(cond.get("holidays") or [])),
             tz,
         )
+        # An override forced from a phone or the interface wins over the
+        # schedule (docs/CALL_FEATURES.md §4.6).
+        key = _check_value(str(cond_key), "time condition key")
+        org_slug = str(cond.get("organization") or r.get("organization_slug") or "")
+        if org_slug:
+            org = _slug(org_slug, "organization")
+            out += [
+                f" same => n,Set(VEYRA_TC=${{DB({SWITCH_FAMILY}/tc/{org}/{key})}})",
+                ' same => n,GotoIf($["${VEYRA_TC}"="open"]?open)',
+                ' same => n,GotoIf($["${VEYRA_TC}"="closed"]?closed)',
+            ]
         out += [f" same => n,GotoIfTime({args}?closed)" for args in closed]
         out += [f" same => n,GotoIfTime({args}?open)" for args in opened]
         out.append(" same => n(closed),NoOp(Veyra: outside the hours of ${VEYRA_DID})")
@@ -2224,6 +2257,10 @@ def _goto(dest: Any) -> list[str]:
     if kind == "conference":
         slug = _slug(dest.get("conference"), "conference room slug")
         ctx = engine_names.current().conference(slug)
+        return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
+    if kind == "call_flow":
+        slug = _slug(dest.get("call_flow"), "call flow slug")
+        ctx = engine_names.current().call_flow(slug)
         return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
     if kind == "directory":
         return [f" same => n,Goto({engine_names.current().directory},s,1)", " same => n,Hangup()"]
@@ -2321,6 +2358,209 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
             ]
             lines += _goto(dest if dest is not None else {"type": "hangup"})
         lines.append("")
+    return lines
+
+
+def _switch_pin_lines(pin: Any, what: str) -> list[str]:
+    """Ask for and check a switch's PIN (three attempts) before it toggles."""
+    pin = str(pin or "")
+    if not pin:
+        return []
+    if not _PIN_RE.match(pin):
+        raise GenerationError(f"{what}: the PIN must be 4 to 10 digits")
+    return [
+        " same => n,Set(VEYRA_PIN_TRIES=0)",
+        " same => n(pin),Read(VEYRA_PIN,agent-pass,10,,1,10)",
+        f' same => n,GotoIf($["${{VEYRA_PIN}}"="{pin}"]?ok)',
+        " same => n,Set(VEYRA_PIN_TRIES=$[${VEYRA_PIN_TRIES} + 1])",
+        f" same => n,GotoIf($[${{VEYRA_PIN_TRIES}} >= {SWITCH_PIN_TRIES}]?badpin)",
+        " same => n,Playback(auth-incorrect)",
+        " same => n,Goto(pin)",
+        " same => n(ok),NoOp()",
+    ]
+
+
+_SWITCH_PIN_TAIL = [
+    " same => n(badpin),Playback(auth-incorrect)",
+    " same => n,Hangup()",
+]
+
+
+def _switch_event(kind: str, org: str, key: str, value: str) -> str:
+    return f" same => n,UserEvent({SWITCH_EVENT},Kind: {kind},Org: {org},Key: {key},Value: {value})"
+
+
+def _code_index(item: dict[str, Any], what: str) -> int:
+    idx = item.get("code_index")
+    if idx is None or not 0 <= int(idx) <= MAX_CODE_INDEX:
+        raise GenerationError(
+            f"{what}: the code index {idx!r} is out of range (0-{MAX_CODE_INDEX})"
+        )
+    return int(idx)
+
+
+def _call_flow_codes(
+    codes: dict[str, str], flows: list[dict[str, Any]], cos: Cos | None = None
+) -> list[str]:
+    """``*28<index>`` toggles a call flow (docs/CALL_FEATURES.md §4.5): the
+    engine store and the lamp are switched and the API is told."""
+    prefix = codes.get("callflow_toggle_prefix")
+    if not prefix:
+        return []
+    lines: list[str] = []
+    seen: dict[int, str] = {}
+    for f in flows:
+        slug = _slug(f["slug"], "call flow slug")
+        org = _slug(f.get("organization") or "", f"organization of call flow {slug}")
+        idx = _code_index(f, f"call flow {slug}")
+        if idx in seen:
+            raise GenerationError(f"call flows {seen[idx]} and {slug} share the code index {idx}")
+        seen[idx] = slug
+        name = _check_value(str(f.get("name") or slug), "call flow name")
+        store = f"{SWITCH_FAMILY}/flow/{org}/{slug}"
+        device = f"Custom:veyra-flow-{org}-{slug}"
+        pin = _switch_pin_lines(f.get("pin"), f"call flow {slug}")
+        body = [
+            f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?nophone)',
+            *pin,
+            f' same => n,GotoIf($["${{DB({store})}}"="1"]?off)',
+            f" same => n,Set(DB({store})=1)",
+            f" same => n,Set(DEVICE_STATE({device})=INUSE)",
+            _switch_event("flow", org, slug, "1"),
+            " same => n,Playback(activated)",
+            " same => n,Hangup()",
+            f" same => n(off),NoOp(Veyra call flow {name}: back to normal)",
+            f" same => n,Set(VEYRA_DEL=${{DB_DELETE({store})}})",
+            f" same => n,Set(DEVICE_STATE({device})=NOT_INUSE)",
+            _switch_event("flow", org, slug, "0"),
+            " same => n,Playback(de-activated)",
+            " same => n,Hangup()",
+            *(_SWITCH_PIN_TAIL if pin else []),
+        ]
+        head = f"exten => {prefix}{idx},1,NoOp(Veyra call flow {name} toggle)"
+        lines += _code_block(head, body, cos, "callflow_toggle_prefix")
+    return lines
+
+
+def _tc_force(store: str, device: str, org: str, key: str, state: str) -> list[str]:
+    return [
+        f" same => n,Set(DB({store})={state})",
+        f" same => n,Set(DEVICE_STATE({device})=INUSE)",
+        _switch_event("tc", org, key, state),
+        " same => n,Playback(activated)",
+        " same => n,Hangup()",
+    ]
+
+
+def _tc_override_codes(
+    codes: dict[str, str], conditions: list[dict[str, Any]], cos: Cos | None = None
+) -> list[str]:
+    """``*27<index>`` overrides a time condition (docs/CALL_FEATURES.md §4.6):
+    when no override is set, the schedule's current state is inverted until
+    the schedule changes (the worker clears it); dialled again, it clears."""
+    prefix = codes.get("tc_override_prefix")
+    if not prefix:
+        return []
+    lines: list[str] = []
+    seen: dict[int, str] = {}
+    for c in conditions:
+        if c.get("code_index") is None:
+            continue
+        key = _check_value(str(c["key"]), "time condition key")
+        org = _slug(c.get("organization") or "", f"organization of time condition {key}")
+        idx = _code_index(c, f"time condition {c.get('name') or key}")
+        if idx in seen:
+            raise GenerationError(
+                f"time conditions {seen[idx]} and {c.get('name')} share the code index {idx}"
+            )
+        seen[idx] = str(c.get("name") or key)
+        name = _check_value(str(c.get("name") or key), "time condition name")
+        tz = routing.check_timezone(str(c.get("timezone") or "UTC"))
+        closed, opened = routing.gotoiftime_args(
+            routing.check_ranges(list(c.get("ranges") or [])),
+            routing.check_holidays(list(c.get("holidays") or [])),
+            tz,
+        )
+        store = f"{SWITCH_FAMILY}/tc/{org}/{key}"
+        device = f"Custom:veyra-tc-{org}-{key}"
+
+        pin = _switch_pin_lines(c.get("pin"), f"time condition {name}")
+        body = [
+            f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?nophone)',
+            *pin,
+            f' same => n,GotoIf($["${{DB({store})}}"!=""]?clear)',
+            *[f" same => n,GotoIfTime({args}?isclosed)" for args in closed],
+            *[f" same => n,GotoIfTime({args}?isopen)" for args in opened],
+            f" same => n(isclosed),NoOp(Veyra time condition {name}: closed now, forcing open)",
+            *_tc_force(store, device, org, key, "open"),
+            f" same => n(isopen),NoOp(Veyra time condition {name}: open now, forcing closed)",
+            *_tc_force(store, device, org, key, "closed"),
+            f" same => n(clear),NoOp(Veyra time condition {name}: back to the schedule)",
+            f" same => n,Set(VEYRA_DEL=${{DB_DELETE({store})}})",
+            f" same => n,Set(DEVICE_STATE({device})=NOT_INUSE)",
+            _switch_event("tc", org, key, ""),
+            " same => n,Playback(de-activated)",
+            " same => n,Hangup()",
+            *(_SWITCH_PIN_TAIL if pin else []),
+        ]
+        head = f"exten => {prefix}{idx},1,NoOp(Veyra time condition {name} override)"
+        lines += _code_block(head, body, cos, "tc_override_prefix")
+    return lines
+
+
+def _switch_hints(
+    codes: dict[str, str], flows: list[dict[str, Any]], conditions: list[dict[str, Any]]
+) -> list[str]:
+    """BLF hints of the switch codes in the phone context: lit while a flow is
+    switched or an override is set."""
+    hints: list[str] = []
+    prefix = codes.get("callflow_toggle_prefix")
+    if prefix:
+        for f in flows:
+            slug = _slug(f["slug"], "call flow slug")
+            org = _slug(f.get("organization") or "", "organization")
+            hints.append(
+                f"exten => {prefix}{_code_index(f, slug)},hint,Custom:veyra-flow-{org}-{slug}"
+            )
+    prefix = codes.get("tc_override_prefix")
+    if prefix:
+        for c in conditions:
+            if c.get("code_index") is None:
+                continue
+            key = _check_value(str(c["key"]), "time condition key")
+            org = _slug(c.get("organization") or "", "organization")
+            hints.append(f"exten => {prefix}{_code_index(c, key)},hint,Custom:veyra-tc-{org}-{key}")
+    return hints
+
+
+def _call_flow_contexts(flows: list[dict[str, Any]]) -> list[str]:
+    """One ``veyra-flow-<slug>`` per enabled call flow (docs/CALL_FEATURES.md
+    §4.5): the normal destination, or the override while the switch is on."""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for f in flows:
+        slug = _slug(f["slug"], "call flow slug")
+        if slug in seen:
+            raise GenerationError(f"duplicate call flow slug {slug!r}")
+        seen.add(slug)
+        name = _check_value(str(f.get("name") or slug), "call flow name")
+        org = _slug(f.get("organization") or "", f"organization of call flow {slug}")
+        store = f"{SWITCH_FAMILY}/flow/{org}/{slug}"
+        lines += [
+            f"[{engine_names.current().call_flow(slug)}]",
+            f"exten => s,1,NoOp(Veyra call flow {name} ({org}))",
+            " same => n,Set(__VEYRA_FLOW_DEPTH=$[0${VEYRA_FLOW_DEPTH} + 1])",
+            f" same => n,GotoIf($[${{VEYRA_FLOW_DEPTH}} > {routing.MAX_IVR_DEPTH}]?toodeep)",
+            f' same => n,GotoIf($["${{DB({store})}}"="1"]?override)',
+            f" same => n,NoOp(Veyra call flow {name}: normal)",
+            *_goto(f.get("normal")),
+            f" same => n(override),NoOp(Veyra call flow {name}: switched)",
+            *_goto(f.get("override_destination")),
+            " same => n(toodeep),NoOp(Veyra: call flows point at each other in a loop)",
+            " same => n,Playback(pbx-invalid)",
+            " same => n,Hangup()",
+            "",
+        ]
     return lines
 
 

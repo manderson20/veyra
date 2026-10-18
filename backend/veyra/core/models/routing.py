@@ -10,9 +10,10 @@ organization.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -53,7 +54,10 @@ class SipTrunk(UUIDPrimaryKey, Timestamps, Base):
 
 class TimeCondition(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     __tablename__ = "time_conditions"
-    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name"),
+        UniqueConstraint("organization_id", "code_index"),
+    )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
@@ -65,6 +69,19 @@ class TimeCondition(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     ranges: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     # ["MM-DD", ...], closed all day, repeating yearly.
     holidays: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    # Override (docs/CALL_FEATURES.md §4.6): None follows the schedule;
+    # "open" / "closed" forces a state, until cleared (permanent) or, when
+    # temporary, until the schedule itself changes state.
+    override: Mapped[str | None] = mapped_column(String(8))
+    override_temporary: Mapped[bool] = mapped_column(Boolean, default=False)
+    override_since_open: Mapped[bool | None] = mapped_column(Boolean)
+    override_by: Mapped[str | None] = mapped_column(String(200))
+    override_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The digits after the override prefix (*27<code_index>, 0-99); None: no code.
+    code_index: Mapped[int | None] = mapped_column(Integer)
+    # Optional PIN before the phone overrides (installation key, purpose
+    # ``time_condition.pin:<id>``).
+    pin_ciphertext: Mapped[str | None] = mapped_column(Text)
 
 
 class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
@@ -111,6 +128,9 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     destination_conference_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
     )
+    destination_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )
     time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("time_conditions.id", ondelete="RESTRICT")
     )
@@ -135,6 +155,9 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     after_hours_conference_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
+    after_hours_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
     )
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

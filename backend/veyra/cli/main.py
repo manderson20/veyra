@@ -1129,6 +1129,14 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         fixed = extension_state.sync(db, get_adapter(settings))
                         if fixed:
                             log.info("Synced %d Do Not Disturb state(s) to the engine", fixed)
+                        # Call-flow switches and time-condition overrides
+                        # (docs/CALL_FEATURES.md §4.5, §4.6): temporary overrides
+                        # expire with the schedule; the engine follows the rows.
+                        from veyra.telephony import switches
+
+                        fixed = switches.sync(db, get_adapter(settings))
+                        if fixed:
+                            log.info("Synced %d switch(es) to the engine", fixed)
                         # Samples are pruned by the retention job.
             except Exception:
                 log.exception("Worker iteration failed")

@@ -172,6 +172,16 @@ class TelephonyAdapter(ABC):
         """(organization slug, number) -> {field: value}, as the engine has it."""
         raise NotSupported("extension state is not supported by this engine")
 
+    def set_switch(self, kind: str, organization: str, key: str, value: str | None) -> None:
+        """One engine switch (docs/CALL_FEATURES.md §4.5, §4.6): the store entry
+        the dialplan reads and the custom device state behind its BLF lamp;
+        None clears it. Capability.EXTENSION_STATE."""
+        raise NotSupported("engine switches are not supported by this engine")
+
+    def switches(self) -> dict[tuple[str, str, str], str]:
+        """(kind, organization slug, key) -> value for every switch that is on."""
+        raise NotSupported("engine switches are not supported by this engine")
+
     def registrations(self) -> list[Registration]:
         """Every registered contact with its addresses (Capability.REGISTRATIONS)."""
         raise NotSupported(f"{self.name}: registration details not implemented")

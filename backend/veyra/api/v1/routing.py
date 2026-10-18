@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from veyra.api.v1 import destinations
 from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
+from veyra.api.v1.extensions import installation_key
 from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
 from veyra.core.db import get_db
@@ -39,7 +40,8 @@ from veyra.core.models import (
 )
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
-from veyra.telephony import routing
+from veyra.telephony import routing, switches
+from veyra.telephony.snapshot import time_condition_pin_purpose
 
 router = APIRouter(prefix="/routing", tags=["routing"])
 
@@ -117,6 +119,9 @@ class TimeRangeIn(BaseModel):
     end: str
 
 
+_TC_PIN_RE = re.compile(r"^[0-9]{4,10}$")
+
+
 class TimeConditionIn(BaseModel):
     organization_id: uuid.UUID
     name: str = Field(min_length=1, max_length=100)
@@ -124,6 +129,19 @@ class TimeConditionIn(BaseModel):
     timezone: str | None = Field(None, max_length=64)
     ranges: list[TimeRangeIn] = Field(min_length=1, max_length=50)
     holidays: list[str] = Field(default_factory=list, max_length=100)
+    # Override from a phone (docs/CALL_FEATURES.md §4.6): the digits after
+    # the override code (*27<code_index>); None: no code. PIN is write-only.
+    code_index: int | None = Field(None, ge=0, le=99)
+    pin: str | None = Field(None, max_length=10)
+
+    @field_validator("pin")
+    @classmethod
+    def _pin(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        if not _TC_PIN_RE.match(v.strip()):
+            raise ValueError("4 to 10 digits")
+        return v.strip()
 
     @field_validator("name")
     @classmethod
@@ -156,6 +174,15 @@ class TimeConditionPatch(BaseModel):
     timezone: str | None = Field(None, max_length=64)
     ranges: list[TimeRangeIn] | None = Field(None, min_length=1, max_length=50)
     holidays: list[str] | None = Field(None, max_length=100)
+    code_index: int | None = Field(None, ge=0, le=99)
+    pin: str | None = Field(None, max_length=10)
+
+
+class TimeConditionOverrideIn(BaseModel):
+    # "open" or "closed" forces a state; None returns to the schedule.
+    state: Literal["open", "closed"] | None = None
+    # A temporary override ends when the schedule itself changes state.
+    temporary: bool = True
 
 
 class TimeConditionOut(BaseModel):
@@ -167,13 +194,25 @@ class TimeConditionOut(BaseModel):
     timezone: str
     ranges: list[TimeRangeIn]
     holidays: list[str]
+    # What the schedule says now, and what callers get (the override wins).
     open_now: bool
+    effective_open: bool
+    override: Literal["open", "closed"] | None
+    override_temporary: bool
+    override_by: str | None
+    override_at: datetime | None
+    code_index: int | None
+    code: str | None
+    has_pin: bool
     in_use_by: int
     created_at: datetime
     updated_at: datetime
 
 
 def _tc_outs(db: Session, rows: list[TimeCondition]) -> list[TimeConditionOut]:
+    from veyra.telephony import features
+
+    prefix = features.active(db).get("tc_override_prefix")
     orgs = _org_names(db, {r.organization_id for r in rows})
     ids = [r.id for r in rows]
     counts: dict[uuid.UUID, int] = {}
@@ -195,13 +234,44 @@ def _tc_outs(db: Session, rows: list[TimeCondition]) -> list[TimeConditionOut]:
             timezone=r.timezone,
             ranges=[TimeRangeIn(**x) for x in (r.ranges or [])],
             holidays=list(r.holidays or []),
-            open_now=routing.is_open(list(r.ranges or []), list(r.holidays or []), r.timezone),
+            open_now=open_now,
+            effective_open=(r.override == "open") if r.override else open_now,
+            override=r.override,
+            override_temporary=bool(r.override_temporary),
+            override_by=r.override_by,
+            override_at=r.override_at,
+            code_index=r.code_index,
+            code=f"{prefix}{r.code_index}" if prefix and r.code_index is not None else None,
+            has_pin=bool(r.pin_ciphertext),
             in_use_by=counts.get(r.id, 0),
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
         for r in rows
+        for open_now in [routing.is_open(list(r.ranges or []), list(r.holidays or []), r.timezone)]
     ]
+
+
+def _check_tc_index(
+    db: Session, org_id: uuid.UUID, index: int | None, self_id: uuid.UUID | None
+) -> None:
+    if index is None:
+        return
+    taken = db.scalar(
+        select(TimeCondition.id).where(
+            TimeCondition.organization_id == org_id,
+            TimeCondition.code_index == index,
+            TimeCondition.id != (self_id or uuid.UUID(int=0)),
+        )
+    )
+    if taken is not None:
+        raise ProblemError(
+            409,
+            "Code index in use",
+            f"Another time condition of this organization already uses the index {index}.",
+            code="code_index_in_use",
+            errors=[{"field": "code_index", "message": "already used by another time condition"}],
+        )
 
 
 def _get_tc(db: Session, principal: Principal, tc_id: uuid.UUID, perm: str) -> TimeCondition:
@@ -241,11 +311,13 @@ def list_time_conditions(
 )
 def create_time_condition(
     body: TimeConditionIn,
+    request: Request,
     principal: Principal = Depends(require("routing.write")),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
 ) -> TimeConditionOut:
     org = _org_for_write(db, principal, body.organization_id)
+    _check_tc_index(db, org.id, body.code_index, None)
     tc = TimeCondition(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -254,7 +326,12 @@ def create_time_condition(
         timezone=body.timezone or org.timezone or "UTC",
         ranges=[r.model_dump() for r in body.ranges],
         holidays=body.holidays,
+        code_index=body.code_index,
     )
+    if body.pin:
+        tc.pin_ciphertext = installation_key(request).encrypt(
+            body.pin, time_condition_pin_purpose(tc.id)
+        )
     db.add(tc)
     try:
         db.flush()
@@ -292,6 +369,7 @@ def get_time_condition(
 def update_time_condition(
     tc_id: uuid.UUID,
     body: TimeConditionPatch,
+    request: Request,
     principal: Principal = Depends(require("routing.write")),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
@@ -299,6 +377,20 @@ def update_time_condition(
     tc = _get_tc(db, principal, tc_id, "routing.write")
     changes = body.model_dump(exclude_unset=True)
     details: dict[str, Any] = {}
+    if "code_index" in changes and changes["code_index"] != tc.code_index:
+        _check_tc_index(db, tc.organization_id, changes["code_index"], tc.id)
+        tc.code_index = changes["code_index"]
+        details["code_index"] = changes["code_index"]
+    if "pin" in changes:
+        pin = (changes["pin"] or "").strip() or None
+        if pin and not _TC_PIN_RE.match(pin):
+            raise _validation("pin", "4 to 10 digits")
+        tc.pin_ciphertext = (
+            installation_key(request).encrypt(pin, time_condition_pin_purpose(tc.id))
+            if pin
+            else None
+        )
+        details["pin"] = "set" if pin else "removed"
     if "name" in changes:
         name = (changes["name"] or "").strip()
         if not name:
@@ -363,6 +455,48 @@ def update_time_condition(
     return _tc_outs(db, [tc])[0]
 
 
+@router.post(
+    "/time-conditions/{tc_id}/override",
+    response_model=TimeConditionOut,
+    summary="Force a time condition open or closed, or back to its schedule",
+)
+def override_time_condition(
+    tc_id: uuid.UUID,
+    body: TimeConditionOverrideIn,
+    request: Request,
+    principal: Principal = Depends(require("routing.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> TimeConditionOut:
+    """Takes effect at once (the engine's switch is written live); no
+    deployment is needed. A temporary override ends when the schedule
+    itself changes state; a permanent one stays until cleared."""
+    tc = _get_tc(db, principal, tc_id, "routing.write")
+    changed = switches.set_time_condition(
+        db,
+        tc,
+        body.state,
+        temporary=body.temporary,
+        by=principal.label,
+        adapter=request.app.state.telephony,
+    )
+    if changed:
+        audit.record(
+            db,
+            action="time_condition.override",
+            actor_user_id=principal.user_id,
+            actor_label=principal.label,
+            organization_id=tc.organization_id,
+            target_type="time_condition",
+            target_id=tc.id,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={"name": tc.name, "state": body.state, "temporary": body.temporary},
+        )
+        db.commit()
+    return _tc_outs(db, [tc])[0]
+
+
 @router.delete("/time-conditions/{tc_id}", status_code=204)
 def delete_time_condition(
     tc_id: uuid.UUID,
@@ -414,6 +548,7 @@ DestinationType = Literal[
     "queue",
     "announcement",
     "conference",
+    "call_flow",
     "directory",
 ]
 
@@ -434,6 +569,7 @@ class InboundRouteIn(BaseModel):
     destination_voicemail_box_id: uuid.UUID | None = None
     destination_announcement_id: uuid.UUID | None = None
     destination_conference_id: uuid.UUID | None = None
+    destination_call_flow_id: uuid.UUID | None = None
     time_condition_id: uuid.UUID | None = None
     after_hours_type: DestinationType = "extension"
     after_hours_extension_id: uuid.UUID | None = None
@@ -443,6 +579,7 @@ class InboundRouteIn(BaseModel):
     after_hours_voicemail_box_id: uuid.UUID | None = None
     after_hours_announcement_id: uuid.UUID | None = None
     after_hours_conference_id: uuid.UUID | None = None
+    after_hours_call_flow_id: uuid.UUID | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
     is_enabled: bool = True
 
@@ -473,6 +610,7 @@ class InboundRoutePatch(BaseModel):
     destination_voicemail_box_id: uuid.UUID | None = None
     destination_announcement_id: uuid.UUID | None = None
     destination_conference_id: uuid.UUID | None = None
+    destination_call_flow_id: uuid.UUID | None = None
     time_condition_id: uuid.UUID | None = None
     after_hours_type: DestinationType | None = None
     after_hours_extension_id: uuid.UUID | None = None
@@ -482,6 +620,7 @@ class InboundRoutePatch(BaseModel):
     after_hours_voicemail_box_id: uuid.UUID | None = None
     after_hours_announcement_id: uuid.UUID | None = None
     after_hours_conference_id: uuid.UUID | None = None
+    after_hours_call_flow_id: uuid.UUID | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
     is_enabled: bool | None = None
 
@@ -504,6 +643,7 @@ class InboundRouteOut(BaseModel):
     destination_voicemail_box_id: uuid.UUID | None
     destination_announcement_id: uuid.UUID | None = None
     destination_conference_id: uuid.UUID | None = None
+    destination_call_flow_id: uuid.UUID | None = None
     # Extension number and name for extension and voicemail destinations.
     destination_number: str | None
     destination_name: str | None
@@ -519,6 +659,7 @@ class InboundRouteOut(BaseModel):
     after_hours_voicemail_box_id: uuid.UUID | None
     after_hours_announcement_id: uuid.UUID | None = None
     after_hours_conference_id: uuid.UUID | None = None
+    after_hours_call_flow_id: uuid.UUID | None = None
     after_hours_number: str | None
     after_hours_name: str | None
     after_hours: DestinationOut | None
@@ -579,6 +720,7 @@ def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
                 destination_voicemail_box_id=r.destination_voicemail_box_id,
                 destination_announcement_id=r.destination_announcement_id,
                 destination_conference_id=r.destination_conference_id,
+                destination_call_flow_id=r.destination_call_flow_id,
                 destination_number=dest.number if dest else None,
                 destination_name=dest.display_name if dest else None,
                 destination=dest_out,
@@ -594,6 +736,7 @@ def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
                 after_hours_voicemail_box_id=r.after_hours_voicemail_box_id,
                 after_hours_announcement_id=r.after_hours_announcement_id,
                 after_hours_conference_id=r.after_hours_conference_id,
+                after_hours_call_flow_id=r.after_hours_call_flow_id,
                 after_hours_number=after.number if after else None,
                 after_hours_name=after.display_name if after else None,
                 after_hours=after_out,
@@ -706,6 +849,7 @@ def create_inbound(
         destination_voicemail_box_id=body.destination_voicemail_box_id,
         destination_announcement_id=body.destination_announcement_id,
         destination_conference_id=body.destination_conference_id,
+        destination_call_flow_id=body.destination_call_flow_id,
         time_condition_id=body.time_condition_id,
         after_hours_type=body.after_hours_type,
         after_hours_extension_id=body.after_hours_extension_id,
@@ -715,6 +859,7 @@ def create_inbound(
         after_hours_voicemail_box_id=body.after_hours_voicemail_box_id,
         after_hours_announcement_id=body.after_hours_announcement_id,
         after_hours_conference_id=body.after_hours_conference_id,
+        after_hours_call_flow_id=body.after_hours_call_flow_id,
         caller_id_prefix=body.caller_id_prefix,
         is_enabled=body.is_enabled,
     )
@@ -809,6 +954,7 @@ def update_inbound(
         "destination_voicemail_box_id",
         "destination_announcement_id",
         "destination_conference_id",
+        "destination_call_flow_id",
         "time_condition_id",
         "after_hours_type",
         "after_hours_extension_id",
@@ -818,6 +964,7 @@ def update_inbound(
         "after_hours_voicemail_box_id",
         "after_hours_announcement_id",
         "after_hours_conference_id",
+        "after_hours_call_flow_id",
         "is_enabled",
     ):
         if field in changes and changes[field] != getattr(route, field):
@@ -834,6 +981,7 @@ def update_inbound(
         route.after_hours_ring_group_id = route.after_hours_queue_id = None
         route.after_hours_voicemail_box_id = None
         route.after_hours_announcement_id = route.after_hours_conference_id = None
+        route.after_hours_call_flow_id = None
     else:
         destinations.apply(
             route,

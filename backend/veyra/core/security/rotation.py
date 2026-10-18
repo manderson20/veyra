@@ -18,6 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from veyra.core.models import (
     Calendar,
+    CallFlow,
     ConferenceRoom,
     ConfigRevision,
     Device,
@@ -29,6 +30,7 @@ from veyra.core.models import (
     Organization,
     SipTrunk,
     SystemSetting,
+    TimeCondition,
     VoicemailBox,
     Webhook,
 )
@@ -85,9 +87,11 @@ def ciphers(db: Session) -> Iterator[Cipher]:
     from veyra.ha import service as ha_service
     from veyra.integrations import sso, webhooks
     from veyra.telephony.snapshot import (
+        call_flow_pin_purpose,
         conference_pin_purpose,
         pin_purpose,
         secret_purpose,
+        time_condition_pin_purpose,
         trunk_secret_purpose,
     )
     from veyra.updates import manager as updates
@@ -114,6 +118,16 @@ def ciphers(db: Session) -> Iterator[Cipher]:
         "admin_pin_ciphertext",
         lambda r: conference_pin_purpose(r.id, "admin"),
         "conference room",
+    )
+    yield from _column(
+        db, CallFlow, "pin_ciphertext", lambda r: call_flow_pin_purpose(r.id), "call flow"
+    )
+    yield from _column(
+        db,
+        TimeCondition,
+        "pin_ciphertext",
+        lambda r: time_condition_pin_purpose(r.id),
+        "time condition",
     )
     yield from _column(
         db, MfaMethod, "secret_ciphertext", lambda r: mfa.secret_purpose(r.user_id), "MFA method"

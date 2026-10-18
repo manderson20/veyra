@@ -81,6 +81,24 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         True,
     ),
     FeatureCodeDef(
+        "callflow_toggle_prefix",
+        "*28",
+        "Call flow toggle",
+        "Followed by the flow's index: switches it between its two destinations; "
+        "the BLF key is lit while switched.",
+        19,
+        True,
+    ),
+    FeatureCodeDef(
+        "tc_override_prefix",
+        "*27",
+        "Time condition override",
+        "Followed by the condition's index: forces the opposite state until the "
+        "schedule changes; dialled again, clears it.",
+        19,
+        True,
+    ),
+    FeatureCodeDef(
         "vm_direct",
         "*",
         "Direct to voicemail",

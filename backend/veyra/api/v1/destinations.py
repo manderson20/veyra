@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from veyra.core.errors import ProblemError
 from veyra.core.models import (
     Announcement,
+    CallFlow,
     CallQueue,
     ConferenceRoom,
     Extension,
@@ -36,6 +37,7 @@ DestinationType = Literal[
     "queue",
     "announcement",
     "conference",
+    "call_flow",
     "directory",
     "hangup",
 ]
@@ -49,6 +51,7 @@ TARGET_FIELDS: dict[str, str] = {
     "queue": "queue_id",
     "announcement": "announcement_id",
     "conference": "conference_id",
+    "call_flow": "call_flow_id",
 }
 # Kinds that need no target row: the dial-by-name directory of the
 # organization, and hanging up.
@@ -61,10 +64,11 @@ ID_FIELDS = (
     "voicemail_box_id",
     "announcement_id",
     "conference_id",
+    "call_flow_id",
 )
 # A reference as stored: (type, extension_id, ivr_id, ring_group_id, queue_id,
-# voicemail_box_id, announcement_id, conference_id).
-Ref = tuple[str | None, Any, Any, Any, Any, Any, Any, Any]
+# voicemail_box_id, announcement_id, conference_id, call_flow_id).
+Ref = tuple[str | None, Any, Any, Any, Any, Any, Any, Any, Any]
 
 
 def validation(field: str, message: str) -> ProblemError:
@@ -86,6 +90,7 @@ class DestinationIn(BaseModel):
     voicemail_box_id: uuid.UUID | None = None
     announcement_id: uuid.UUID | None = None
     conference_id: uuid.UUID | None = None
+    call_flow_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> DestinationIn:
@@ -105,6 +110,7 @@ class DestinationIn(BaseModel):
             self.voicemail_box_id,
             self.announcement_id,
             self.conference_id,
+            self.call_flow_id,
         )
 
 
@@ -117,6 +123,7 @@ class DestinationOut(BaseModel):
     voicemail_box_id: uuid.UUID | None = None
     announcement_id: uuid.UUID | None = None
     conference_id: uuid.UUID | None = None
+    call_flow_id: uuid.UUID | None = None
     # Human form: "2214 — Front Office", "Voicemail of 2214 (Front Office)",
     # "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)",
     # "Announcement: Closed today", "Conference: Board room (2500)",
@@ -136,6 +143,7 @@ def ref_of(obj: Any, prefix: str) -> Ref:
         getattr(obj, f"{prefix}_voicemail_box_id", None),
         getattr(obj, f"{prefix}_announcement_id", None),
         getattr(obj, f"{prefix}_conference_id", None),
+        getattr(obj, f"{prefix}_call_flow_id", None),
     )
 
 
@@ -154,7 +162,7 @@ def has_target(ref: Ref) -> bool:
 
 
 def as_input(ref: Ref) -> dict[str, Any]:
-    kind, ext, ivr, rg, q, box, ann, conf = ref
+    kind, ext, ivr, rg, q, box, ann, conf, flow = ref
     return {
         "type": kind or "extension",
         "extension_id": ext,
@@ -164,6 +172,7 @@ def as_input(ref: Ref) -> dict[str, Any]:
         "voicemail_box_id": box,
         "announcement_id": ann,
         "conference_id": conf,
+        "call_flow_id": flow,
     }
 
 
@@ -178,6 +187,7 @@ def check_destination(
     exclude_ring_group: uuid.UUID | None = None,
     exclude_queue: uuid.UUID | None = None,
     exclude_announcement: uuid.UUID | None = None,
+    exclude_call_flow: uuid.UUID | None = None,
 ) -> None:
     """422 when the target is absent, in another organization, unusable, or
     the object itself (``exclude_*``)."""
@@ -197,6 +207,17 @@ def check_destination(
             raise validation(field, "announcement not found in this organization")
         if not ann.is_enabled:
             raise validation(field, f"the announcement {ann.name} is disabled")
+        return
+    if dest.type == "call_flow":
+        if dest.call_flow_id is None:
+            raise validation(field, "choose the call flow")
+        if exclude_call_flow is not None and dest.call_flow_id == exclude_call_flow:
+            raise validation(field, "a call flow cannot point at itself")
+        flow = db.get(CallFlow, dest.call_flow_id)
+        if flow is None or flow.organization_id != organization_id:
+            raise validation(field, "call flow not found in this organization")
+        if not flow.is_enabled:
+            raise validation(field, f"the call flow {flow.name} is disabled")
         return
     if dest.type == "conference":
         if dest.conference_id is None:
@@ -275,6 +296,7 @@ class Resolver:
         self.shared: dict[uuid.UUID, VoicemailBox] = {}
         self.announcements: dict[uuid.UUID, Announcement] = {}
         self.conferences: dict[uuid.UUID, ConferenceRoom] = {}
+        self.call_flows: dict[uuid.UUID, CallFlow] = {}
         self._loaded: set[uuid.UUID] = set()
 
     def load(self, refs: list[Ref]) -> None:
@@ -286,6 +308,7 @@ class Resolver:
         box_ids = {r[5] for r in full if r[5] and r[0] == "voicemail_box"}
         ann_ids = {r[6] for r in full if r[6] and r[0] == "announcement"}
         conf_ids = {r[7] for r in full if r[7] and r[0] == "conference"}
+        flow_ids = {r[8] for r in full if r[8] and r[0] == "call_flow"}
         ext_ids -= self._loaded
         ivr_ids -= self._loaded
         rg_ids -= self._loaded
@@ -293,6 +316,10 @@ class Resolver:
         box_ids -= self._loaded
         ann_ids -= self._loaded
         conf_ids -= self._loaded
+        flow_ids -= self._loaded
+        if flow_ids:
+            for f in self.db.scalars(select(CallFlow).where(CallFlow.id.in_(flow_ids))):
+                self.call_flows[f.id] = f
         if ann_ids:
             for a in self.db.scalars(select(Announcement).where(Announcement.id.in_(ann_ids))):
                 self.announcements[a.id] = a
@@ -319,7 +346,7 @@ class Resolver:
         if q_ids:
             for q in self.db.scalars(select(CallQueue).where(CallQueue.id.in_(q_ids))):
                 self.queues[q.id] = q
-        self._loaded |= ext_ids | ivr_ids | rg_ids | q_ids | box_ids | ann_ids | conf_ids
+        self._loaded |= ext_ids | ivr_ids | rg_ids | q_ids | box_ids | ann_ids | conf_ids | flow_ids
 
     def out(
         self,
@@ -331,8 +358,24 @@ class Resolver:
         voicemail_box_id: Any = None,
         announcement_id: Any = None,
         conference_id: Any = None,
+        call_flow_id: Any = None,
     ) -> DestinationOut:
         kind = kind or "extension"
+        if kind == "call_flow":
+            flow = self.call_flows.get(call_flow_id) if call_flow_id else None
+            ok = flow is not None and flow.is_enabled
+            return DestinationOut(
+                type="call_flow",
+                extension_id=None,
+                ivr_id=None,
+                call_flow_id=call_flow_id,
+                label=(
+                    f"Call flow: {flow.name}" + ("" if flow.is_enabled else " (disabled)")
+                    if flow
+                    else None
+                ),
+                missing=not ok,
+            )
         if kind == "directory":
             return DestinationOut(
                 type="directory",
@@ -473,6 +516,7 @@ class Resolver:
 def _holders() -> list[tuple[Any, str, str]]:
     from veyra.core.models import (
         Announcement,
+        CallFlow,
         CallQueue,
         InboundRoute,
         IvrEntry,
@@ -489,6 +533,8 @@ def _holders() -> list[tuple[Any, str, str]]:
         (RingGroup, "failover", "ring group"),
         (CallQueue, "failover", "queue"),
         (Announcement, "destination", "announcement"),
+        (CallFlow, "normal", "call flow"),
+        (CallFlow, "override", "call flow"),
     ]
 
 

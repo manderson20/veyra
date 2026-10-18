@@ -4,7 +4,7 @@
 from veyra.core.models.alerts import Alert, AlertRule
 from veyra.core.models.base import Base
 from veyra.core.models.bells import BellRing, BellSchedule, Calendar, CalendarEvent
-from veyra.core.models.callflow import Announcement, ConferenceRoom
+from veyra.core.models.callflow import Announcement, CallFlow, ConferenceRoom
 from veyra.core.models.calls import CallLeg, CallRecord, QueueEvent
 from veyra.core.models.catalog import CatalogSource
 from veyra.core.models.central import (
@@ -112,6 +112,7 @@ __all__ = [
     "Building",
     "Calendar",
     "CalendarEvent",
+    "CallFlow",
     "CallLeg",
     "CallQueue",
     "CallRecord",

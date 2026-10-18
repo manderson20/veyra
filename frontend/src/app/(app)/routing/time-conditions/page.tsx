@@ -50,7 +50,7 @@ export default function TimeConditionsPage() {
     },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (t: TimeCondition) => <span>{t.organization_name}</span> }] : []),
     { key: "tz", header: "Time zone", render: (t) => <span className="mono">{t.timezone}</span> },
-    { key: "open", header: "Now", render: (t) => <Badge tone={t.open_now ? "ok" : "neutral"} icon={t.open_now ? "checkCircle" : "clock"}>{t.open_now ? "Open now" : "Closed now"}</Badge> },
+    { key: "open", header: "Now", render: (t) => <span className="row" style={{ gap: 4 }}><Badge tone={t.effective_open ? "ok" : "neutral"} icon={t.effective_open ? "checkCircle" : "clock"}>{t.effective_open ? "Open now" : "Closed now"}</Badge>{t.override ? <Badge tone="warn" icon="alert">Forced{t.override_temporary ? "" : " (permanent)"}</Badge> : null}{t.code ? <span className="mono subtle">{t.code}</span> : null}</span> },
     {
       key: "ranges",
       header: "Open hours",

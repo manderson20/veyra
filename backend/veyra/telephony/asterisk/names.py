@@ -96,6 +96,10 @@ class Names:
         profile names (docs/CALL_FEATURES.md §4.3)."""
         return self._p(f"conf-{slug}")
 
+    def call_flow(self, slug: str) -> str:
+        """A day/night switch's routing context (docs/CALL_FEATURES.md §4.5)."""
+        return self._p(f"flow-{slug}")
+
     @property
     def directory(self) -> str:
         """Dial-by-name directory of the namespace (docs/CALL_FEATURES.md §4.2)."""

@@ -520,14 +520,74 @@ generated `extensions.conf` (0640 veyra:asterisk), as voicemail PINs do in
 
 ### 4.4 Destination kinds
 
-`DestinationType` gains `announcement`, `conference` and `directory`; every
-destination holder (inbound routes, IVR menus and entries, ring groups,
-queues, announcements) carries `<prefix>_announcement_id` and
-`<prefix>_conference_id` (ON DELETE SET NULL). The snapshot renders
+`DestinationType` gains `announcement`, `conference`, `call_flow` and
+`directory`; every destination holder (inbound routes, IVR menus and
+entries, ring groups, queues, announcements, call flows) carries
+`<prefix>_announcement_id`, `<prefix>_conference_id` and
+`<prefix>_call_flow_id` (ON DELETE SET NULL). The snapshot renders
 `{type: "announcement", announcement: <slug>}`, `{type: "conference",
 conference: <slug>}` and `{type: "directory"}`; the generator emits
 `Goto(veyra-ann-<slug>,s,1)`, `Goto(veyra-conf-<slug>,s,1)` and
 `Goto(veyra-directory,s,1)` ([VOICEMAIL_IVR.md](VOICEMAIL_IVR.md) §6).
+
+### 4.5 Call flows (day/night switches)
+
+Table `call_flows` (migration `0043`): `organization_id`, `name`, `slug`
+(context `veyra-flow-<slug>`), `code_index` (0-99, unique per organization;
+dialled as `*28<index>`, feature code `callflow_toggle_prefix`),
+`pin_ciphertext` (installation key, purpose `call_flow.pin:<id>`,
+write-only), the two destinations `normal_*` and `override_*` (the shared
+destination shape), the switch itself (`override`, `override_by`,
+`override_at`) and `is_enabled`. The engine keeps the switch in its store
+(`veyra/switch/flow/<org>/<slug>` = `1`) behind
+`Custom:veyra-flow-<org>-<slug>`, so a BLF key with the code lights while
+the flow is switched.
+
+The routing context reads the store at call time and jumps to the override
+destination while it is `1`; the feature code (in the namespace's features
+context, guarded by the class of service key `callflow_toggle_prefix` and
+the phone's organization) asks for the PIN when one is set, flips the store
+entry and the device state, plays *activated* / *de-activated* and tells the
+API with `UserEvent(VeyraSwitch,Kind: flow,Org,Key,Value)`. The API
+(`POST /call-flows/{id}/state {override}`) and the interface (Telephony →
+Call Flows: a switch on each row and on the page) write the row and the
+engine live; no deployment is needed to switch. The worker's sync
+(`veyra/telephony/switches.py`) makes the engine match the rows every pass,
+so a restart or a lost store entry heals itself.
+
+API `GET/POST /call-flows`, `GET/PATCH/DELETE /call-flows/{id}`,
+`POST /call-flows/{id}/state` (`routing.read` / `routing.write`); a flow in
+use as a destination cannot be deleted (`409 call_flow_in_use`); two flows
+of one organization cannot share an index (`409 code_index_in_use`).
+Destination kind `call_flow` everywhere a destination is chosen.
+
+*Built 2026-10-18.*
+
+### 4.6 Time-condition override
+
+`time_conditions` gains `override` (`open` | `closed` | NULL),
+`override_temporary`, `override_since_open`, `override_by`, `override_at`,
+`code_index` (0-99, unique per organization; `*27<index>`, feature code
+`tc_override_prefix`) and `pin_ciphertext` (purpose
+`time_condition.pin:<id>`). An inbound route consults the engine store
+(`veyra/switch/tc/<org>/<condition id>`) before its `GotoIfTime` lines, so
+a forced state wins over the schedule; the lamp is
+`Custom:veyra-tc-<org>-<id>`.
+
+The feature code inverts the schedule's current state (the dialplan runs
+the same `GotoIfTime` checks): closed now → forced open, open now → forced
+closed; dialled while an override is set, it clears it. Overrides set from a
+phone are temporary. The interface (the time condition's page: *Force open*,
+*Force closed*, *Back to the schedule*, with a temporary/permanent choice)
+and the API (`POST /routing/time-conditions/{id}/override {state,
+temporary}`) write live. A temporary override ends when the schedule itself
+changes state: the worker compares the schedule's state now with the one
+recorded when the override was set and clears the row and the engine. The
+list and the page show what the schedule says and what callers get. A
+condition with a code is deployed even before a route uses it.
+
+*Built 2026-10-18.* Permanent overrides are cleared by hand (interface, API
+or the phone code).
 
 ## 5. Permissions and API summary
 

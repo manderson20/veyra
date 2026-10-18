@@ -206,6 +206,26 @@ def _extstate(event: dict[str, Any]) -> None:
         log.exception("Could not handle the extension state event")
 
 
+SWITCH_EVENT = "VeyraSwitch"
+
+
+def is_switch_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == SWITCH_EVENT
+
+
+def _switch(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraSwitch)`` from a feature code: a phone flipped a call
+    flow or a time-condition override (docs/CALL_FEATURES.md §4.5, §4.6)."""
+    try:
+        from veyra.core.db import session_scope
+        from veyra.telephony import switches
+
+        with session_scope() as db:
+            switches.handle_userevent(db, event.get("userevent") or {})
+    except Exception:
+        log.exception("Could not handle the switch event")
+
+
 def _webhook(ce: CallEvent) -> None:
     """Queue live call webhooks (docs/INTEGRATIONS.md §3.2); never raises."""
     try:
@@ -274,6 +294,8 @@ class AriEventListener:
                             await asyncio.to_thread(_emergency, event)
                         elif is_extstate_event(event):
                             await asyncio.to_thread(_extstate, event)
+                        elif is_switch_event(event):
+                            _switch(event)
                         for ce in self.translator.translate(event):
                             self.hub.publish(ce)
                             if ce.type in LIVE_WEBHOOK_EVENTS:

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from veyra.core.mail import load_smtp_settings, sender
 from veyra.core.models import (
     Announcement,
+    CallFlow,
     CallQueue,
     ClassOfService,
     ConferenceRoom,
@@ -76,6 +77,16 @@ def secret_purpose(extension_id: Any) -> str:
 def trunk_secret_purpose(trunk_id: Any) -> str:
     """Associated data that binds a trunk password ciphertext to its trunk."""
     return f"trunk.sip_secret:{trunk_id}"
+
+
+def call_flow_pin_purpose(flow_id: Any) -> str:
+    """Encryption purpose of a call flow's toggle PIN."""
+    return f"call_flow.pin:{flow_id}"
+
+
+def time_condition_pin_purpose(tc_id: Any) -> str:
+    """Encryption purpose of a time condition's override PIN."""
+    return f"time_condition.pin:{tc_id}"
 
 
 def conference_pin_purpose(room_id: Any, which: str) -> str:
@@ -150,6 +161,20 @@ def _conference_pin(room: ConferenceRoom, which: str, key: InstallationKey | Non
         ) from e
 
 
+def _switch_pin(row: Any, purpose: str, what: str, key: InstallationKey | None) -> str | None:
+    if not row.pin_ciphertext:
+        return None
+    if key is None:
+        raise SnapshotError(
+            f"{what} has an encrypted PIN but the installation key is not available "
+            "(see 'veyra installation-key check')"
+        )
+    try:
+        return key.decrypt(row.pin_ciphertext, purpose)
+    except DecryptionError as e:
+        raise SnapshotError(f"the PIN of {what} cannot be read: {e}") from e
+
+
 def _callflow(
     db: Session,
     key: InstallationKey | None,
@@ -158,6 +183,7 @@ def _callflow(
     announcements: list[Announcement],
     rooms: list[ConferenceRoom],
     moh_slug: Callable[[Any, Any], str | None],
+    flows: list[CallFlow] | None = None,
 ) -> dict[str, Any]:
     """Announcements and conference rooms of active organizations
     (docs/CALL_FEATURES.md §4.1, §4.3). ``targets`` already knows their slugs."""
@@ -179,6 +205,19 @@ def _callflow(
                 "destination": targets.dest(a, "destination"),
             }
             for a in announcements
+        ],
+        "call_flows": [
+            {
+                "slug": f.slug,
+                "name": f.name,
+                "organization": org_slug.get(f.organization_id, ""),
+                "code_index": f.code_index,
+                "pin": _switch_pin(f, call_flow_pin_purpose(f.id), f"call flow {f.name}", key),
+                "override": bool(f.override),
+                "normal": targets.dest(f, "normal"),
+                "override_destination": targets.dest(f, "override"),
+            }
+            for f in flows or []
         ],
         "conference_rooms": [
             {
@@ -301,6 +340,11 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         for r in db.scalars(select(ConferenceRoom).order_by(ConferenceRoom.number)).all()
         if r.is_enabled and r.organization_id in active
     ]
+    flows = [
+        f
+        for f in db.scalars(select(CallFlow).order_by(CallFlow.code_index)).all()
+        if f.is_enabled and f.organization_id in active
+    ]
     targets = Targets(
         number_of={e.id: e.number for e in extensions},
         box_numbers=set(),
@@ -309,6 +353,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         queue_slug={q.id: q.slug for q in queues},
         announcement_slug={a.id: a.slug for a in announcements},
         conference_slug={r.id: r.slug for r in rooms},
+        call_flow_slug={f.id: f.slug for f in flows},
     )
     voicemail = _voicemail_ivr(
         db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues, rooms
@@ -316,7 +361,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     shared_by_ext: dict[Any, list[str]] = voicemail.pop("_shared_by_extension")
     hold_music, moh_slug = _hold_music(db, active, org_slug)
     groups = _groups(db, extensions, org_slug, targets, ring_groups, queues, moh_slug)
-    callflow = _callflow(db, key, org_slug, targets, announcements, rooms, moh_slug)
+    callflow = _callflow(db, key, org_slug, targets, announcements, rooms, moh_slug, flows)
     pickup = _pickup_groups(db, active, ext_by_id)
     smtp = load_smtp_settings(db)
     from_address, from_name = sender(smtp, inst.name if inst else "Veyra")
@@ -589,6 +634,7 @@ class Targets:
         shared_box_number: dict[Any, str] | None = None,
         announcement_slug: dict[Any, str] | None = None,
         conference_slug: dict[Any, str] | None = None,
+        call_flow_slug: dict[Any, str] | None = None,
     ) -> None:
         self.number_of = number_of
         self.box_numbers = box_numbers
@@ -599,6 +645,7 @@ class Targets:
         self.queue_slug = queue_slug
         self.announcement_slug = announcement_slug if announcement_slug is not None else {}
         self.conference_slug = conference_slug if conference_slug is not None else {}
+        self.call_flow_slug = call_flow_slug if call_flow_slug is not None else {}
 
     def dest(self, obj: Any, prefix: str) -> dict[str, Any]:
         """The engine-neutral form of the destination stored in
@@ -618,6 +665,9 @@ class Targets:
         if kind == "conference":
             slug = self.conference_slug.get(getattr(obj, f"{prefix}_conference_id", None))
             return {"type": "conference", "conference": slug} if slug else {"type": "missing"}
+        if kind == "call_flow":
+            slug = self.call_flow_slug.get(getattr(obj, f"{prefix}_call_flow_id", None))
+            return {"type": "call_flow", "call_flow": slug} if slug else {"type": "missing"}
         if kind == "ivr":
             slug = self.ivr_slug.get(getattr(obj, f"{prefix}_ivr_id"))
             return {"type": "ivr", "ivr": slug} if slug else {"type": "missing"}
@@ -900,7 +950,6 @@ def _routing(
     trunks = db.scalars(select(SipTrunk).order_by(SipTrunk.slug)).all()
     enabled_trunks = {t.id: t for t in trunks if t.is_enabled}
     conditions = db.scalars(select(TimeCondition).order_by(TimeCondition.name)).all()
-    condition_by_id = {c.id: c for c in conditions}
     inbound = db.scalars(
         select(InboundRoute)
         .where(InboundRoute.is_enabled.is_(True))
@@ -984,15 +1033,24 @@ def _routing(
             for r in outbound
             if r.organization_id is None or r.organization_id in active_orgs
         ],
+        # Used by a route, or carrying an override code (docs/CALL_FEATURES.md
+        # §4.6): the code must work before a route points at the condition.
         "time_conditions": [
             {
                 "key": str(c.id),
                 "name": c.name,
+                "organization": org_slug.get(c.organization_id, ""),
                 "timezone": c.timezone,
                 "ranges": list(c.ranges or []),
                 "holidays": list(c.holidays or []),
+                "code_index": c.code_index,
+                "pin": _switch_pin(
+                    c, time_condition_pin_purpose(c.id), f"time condition {c.name}", key
+                ),
+                "override": c.override,
             }
             for c in conditions
-            if c.id in used_conditions and c.id in condition_by_id
+            if c.organization_id in active_orgs
+            and (c.id in used_conditions or c.code_index is not None)
         ],
     }
