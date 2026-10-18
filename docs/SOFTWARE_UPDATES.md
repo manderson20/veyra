@@ -35,18 +35,44 @@ computes size and SHA-256 and increases the metadata `sequence` and
 `expires_at` (default 30 days; a later `release refresh` re-signs to extend
 it without a release).
 
-### 1.2 Where releases live (open question §9)
+### 1.2 Where releases live (decided 2026-10-18)
 
-The `manderson20/veyra` repository is **private**, so anonymous servers
-cannot download from it. Two options, both supported:
+The `manderson20/veyra` repository is public, so releases live in it:
 
-* **A public releases repository** (proposed `manderson20/veyra-releases`)
-  holding `stable.json`, `stable.json.sig` and the tarballs as GitHub
-  release assets. Simple for every server; the release tarballs are then
-  public (the code is AGPL-licensed and meant to be published at M23).
-* **The private repository with a token**: the update source stores a
-  read-only GitHub token (fine-grained, contents read) encrypted with the
-  installation key and sends it with every request.
+* **Tarballs** are assets of the GitHub release for the tag
+  (`https://github.com/manderson20/veyra/releases/download/v<version>/veyra-<version>.tar.gz`).
+  GitHub redirects the download to a signed address; the downloader follows
+  it as long as it stays on HTTPS and then checks size and SHA-256.
+* **Metadata** is the orphan branch `updates` of the same repository:
+  `stable.json` and `stable.json.sig`, served as
+  `https://raw.githubusercontent.com/manderson20/veyra/updates/stable.json`
+  (and `.sig`). The branch holds only the feed and a README. A repository
+  ruleset blocks deletion and force-pushes; only an administrator updates it.
+* **Servers** get the address from `VEYRA_UPDATE_METADATA_URL` in
+  `veyra.env`, which the installer now writes by default (the interface's
+  System → Updates → Source still overrides it), and the public half of
+  the release key from `installer/trust/official/veyra-official.pub`, which
+  the installer copies to `/etc/veyra/trust/official/` on every install and
+  upgrade. `verify.sh` reports both (`release-key`, `update-source`).
+
+Publishing a release (after the tag and the GitHub release exist; the
+private key stays with the owner, outside the repository):
+
+```
+veyra release build --source ~/veyra-release --out ~/.veyra-release/dist
+gh release upload v<version> ~/.veyra-release/dist/veyra-<version>.tar.gz
+veyra release add ~/.veyra-release/dist/veyra-<version>.tar.gz \
+    --url https://github.com/manderson20/veyra/releases/download/v<version>/veyra-<version>.tar.gz \
+    --metadata stable.json --channel stable --category <security|bugfix|feature> \
+    --notes "…" --impact "The web interface and API restart (under a minute); calls are not interrupted." \
+    --expires-days 90
+veyra release sign stable.json --key-file ~/.veyra-release/veyra-official.key --key-id veyra-official
+# commit stable.json and stable.json.sig on the `updates` branch and push
+```
+
+The metadata expires 90 days after the last `add` or `refresh`; a quiet
+quarter needs `veyra release refresh` + `sign` + push before then, or every
+server reports the feed as rejected.
 
 ### 1.3 Trust
 
@@ -178,17 +204,16 @@ archives carry a `REVISION` file that install.sh and upgrade.sh use when
 there is no git checkout. `verify.sh`: `upgrade-unit`. uninstall.sh removes
 the unit and the polkit rule.
 
-## 9. Open questions for the owner
+## 9. Owner decisions (answered 2026-10-18)
 
-1. **Hosting**: a public `manderson20/veyra-releases` repository (simplest),
-   or the private repository with a read-only token on each server?
-2. **Release key**: the official key that signs releases (and modules)
-   stays offline with you? (Proposed; `veyra release sign` runs on your
-   machine.)
-3. **Default policy**: notify only (proposed), or download automatically
-   and wait for approval?
-4. **Maintenance window**: if you want unattended installs, which days and
-   hours (for example Saturday 02:00-04:00)?
+1. **Hosting**: the public `manderson20/veyra` repository itself: tarballs
+   as release assets, the feed on the `updates` branch (§1.2).
+2. **Release key**: `veyra-official`, an Ed25519 key generated on dev1 in
+   the owner's home directory (`~/.veyra-release/veyra-official.key`, mode
+   0600) and never committed; the owner may move it to an offline place.
+   Its public half ships with the installer.
+3. **Default policy**: notify only (unchanged).
+4. **Maintenance window**: none yet; installs are approved from the interface.
 
 ## 10. Testing
 
@@ -204,6 +229,7 @@ from the interface, history and email; a refused tampered artifact.
 
 ## 11. Decisions
 
+* 2026-10-18: the repository became public and the first feed was published (0.24.1) as decided in §9; the installer ships the official public key and the feed address so every server verifies and finds updates without manual setup (§1.2).
 * 2026-10-15: milestone started on the owner's "go ahead with M12"; built
   with the proposed defaults of §9 while the questions are open (both
   hosting options work; no keys are created for the owner: Veyra accepts

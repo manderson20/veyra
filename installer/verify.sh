@@ -286,6 +286,19 @@ if [[ -e "${catalog_keys[0]}" ]]; then
 else
     check catalog-trust warn "no catalog key in $VEYRA_ETC/trust/catalog/: module catalogs cannot be used yet"
 fi
+if [[ -s "$VEYRA_ETC/trust/official/veyra-official.pub" ]]; then
+    check release-key pass "official release key trusted (veyra-official): signed updates can be verified"
+else
+    check release-key warn "no official release key in $VEYRA_ETC/trust/official/: the update feed cannot be verified"
+fi
+update_url="$(sed -n 's/^VEYRA_UPDATE_METADATA_URL=//p' "$VEYRA_ETC/veyra.env" 2>/dev/null || true)"
+if [[ "$update_url" == https://* ]]; then
+    check update-source pass "update feed ${update_url#https://}"
+elif [[ -n "$update_url" ]]; then
+    check update-source warn "update feed is not HTTPS: $update_url"
+else
+    check update-source warn "no update feed in veyra.env (System > Updates > Source can set one)"
+fi
 grep -qs "Managed by Veyra" /etc/polkit-1/rules.d/50-veyra-services.rules \
     && check services-restart pass "Veyra's services can be restarted from the interface" \
     || check services-restart warn "polkit rule missing: restart Veyra's services on the server after module updates"

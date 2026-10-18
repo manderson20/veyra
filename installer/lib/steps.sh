@@ -266,6 +266,18 @@ PY
     else
         warn "Companion extension not built (no prebuilt dist/ and no npm); the download will be unavailable"
     fi
+    # The official release key ships with every release (installer/trust/
+    # official/) so servers can verify the signed update feed
+    # (docs/SOFTWARE_UPDATES.md §1.3). Root-owned, world-readable.
+    local pub trusted=""
+    for pub in "$RELEASE_DIR"/installer/trust/official/*.pub; do
+        [[ -f "$pub" ]] || continue
+        run install -m 0644 -o root -g root "$pub" "$VEYRA_ETC/trust/official/$(basename "$pub")"
+        trusted+=" $(basename "$pub" .pub)"
+    done
+    if [[ -n "$trusted" ]]; then
+        ok "Official release key trusted:${trusted}"
+    fi
     # Modules shipped with the release (docs/MODULE_DEVELOPMENT.md §6) are
     # signed with this server's own key, which is trusted as official, so
     # they can be installed from Modules. The example module stays unsigned

@@ -11,6 +11,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ## Unreleased — 0.24.2
 
 ### Added
+- **Official update feed**: Veyra releases are published as a signed feed (`stable.json` on the repository's `updates` branch, tarballs as GitHub release assets, Ed25519 key `veyra-official`). The installer trusts the public key and points new and upgraded servers at the feed, so System → Updates finds, verifies, downloads and installs releases without manual setup; `verify.sh` reports the key and the feed address (`release-key`, `update-source`). The 0.24.1 release is the first entry.
 - **Extension page tabs** (#81): the extension page has a tab bar across the top (General, Caller ID, Call handling, Follow me, Voicemail, Phones, Groups, Credentials) instead of one long scroll; the active tab is in the link (`?tab=`), a switch that would lose unsaved call-handling or follow-me edits asks first, and the settings form keeps its values across tabs. The same pattern (`useUrlTab`) is ready for other object pages.
 - **Phones that may register** (#82): an extension's Phones tab sets how many phones may register it at once (1–16); the engine's limit is the larger of this and the number of provisioned phones, so a softphone can register beside the desk phone without a device record. The API carries `max_registrations`, `provisioned_phones` and `registration_limit`; the Registrations page shows registered phones against the limit; migration `0041`.
 

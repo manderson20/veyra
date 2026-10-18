@@ -10,7 +10,7 @@ also states what is implemented today.
 |---|---|
 | Update policy data model and API (`/api/v1/updates/policies`) | Implemented (M0) |
 | Signed update metadata format and verification (signature, expiry, rollback protection, official key only) | Implemented (M0) |
-| Update check (UI "Check now", `veyra updates check`, worker schedule) | Implemented (M0); **no update source is published yet**, so checks report "not configured" |
+| Update check (UI "Check now", `veyra updates check`, worker schedule) | Implemented (M0); the official feed is published since 2026-10-18 ([SOFTWARE_UPDATES.md](SOFTWARE_UPDATES.md) §1.2) and the installer points every server at it |
 | Available updates and update history | Implemented (M0) |
 | Core upgrade from a source tree: backup → migrate → verify, with rollback if a migration fails (`installer/upgrade.sh`) | Implemented (M0); used for every upgrade since M1 |
 | Module update from files on disk (`POST /modules/{id}/update`) | Implemented (M0) |
@@ -81,8 +81,10 @@ Verification (`veyra/updates/metadata.py`) checks all of the following:
 * **Artifacts** are verified against `sha256` and `size` from signed metadata before use, and packages are verified again by their own signatures (modules: SHA256SUMS + SIGNATURE).
 * **No update scripts from the source are executed.** Upgrades run Veyra's own versioned procedure with verified artifacts.
 
-No official release key or update server exists yet. Publishing one is part
-of release engineering (M12/M23).
+The official release key `veyra-official` signs the feed since 2026-10-18;
+its public half ships in `installer/trust/official/` and the installer copies
+it to `/etc/veyra/trust/official/`. How releases are published:
+[SOFTWARE_UPDATES.md](SOFTWARE_UPDATES.md) §1.2.
 
 ## 4. Upgrade process
 
