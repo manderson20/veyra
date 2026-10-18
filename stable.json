@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 3,
+  "sequence": 4,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.25.1",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Fixes the 0.25.0 upgrade stopping at 'Configuring NGINX' (the Content-Security-Policy header with 81 script hashes passed NGINX's 4096-byte parameter limit; the installer now hands the hashes over in chunks). Servers that hit the failure are on 0.25.0 with NGINX still serving the previous header; installing this release completes the upgrade. Notes: https://github.com/manderson20/veyra/releases/tag/v0.25.1",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "197e64f539",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.25.1/veyra-0.25.1.tar.gz",
+        "sha256": "7c89567c7f78757821fecf1a7d7588780a2b40ea9c58537fd94b3f7296fbdcde",
+        "size": 8003795
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -54,6 +71,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-18T22:45:48+00:00",
-  "expires_at": "2027-01-16T22:45:48+00:00"
+  "generated_at": "2026-10-18T22:57:55+00:00",
+  "expires_at": "2027-01-16T22:57:55+00:00"
 }
