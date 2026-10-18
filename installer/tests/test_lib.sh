@@ -38,8 +38,10 @@ t "render_template substitutes" grep -qx 'a=1 b=x y' "$TMP/out"
 render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx.conf" \
     "LISTEN_HTTP=    listen 127.0.0.1:80;" "LISTEN_HTTPS=    listen 127.0.0.1:443 ssl;" \
     API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra HTTP_PROVISIONING=
-render_template "$HERE/../templates/nginx/security-headers.conf.in" "$TMP/headers.conf" "CSP_SCRIPT_SRC= 'sha256-abc='"
-t "security headers render script hashes into the CSP" grep -q "script-src 'self' 'sha256-abc=';" "$TMP/headers.conf"
+render_template "$HERE/../templates/nginx/security-headers.conf.in" "$TMP/headers.conf" \
+    "CSP_SCRIPT_SETS=set \$veyra_csp_scripts \" 'sha256-abc='\";"
+t "security headers render script hashes into the CSP" grep -q "^set \$veyra_csp_scripts \" 'sha256-abc='\";" "$TMP/headers.conf"
+t "security headers expand the hash variable" grep -q "script-src 'self'\${veyra_csp_scripts};" "$TMP/headers.conf"
 t "security headers set Permissions-Policy once" test "$(grep -c 'Permissions-Policy' "$TMP/headers.conf")" = 1
 t "nginx template includes the security headers in the server block" grep -q '^    include /etc/veyra/nginx-security-headers.conf;' "$TMP/nginx.conf"
 # Every location with an add_header of its own re-includes the set (nginx
@@ -133,6 +135,18 @@ t "ha-agent unit is root" grep -qx 'User=root' "$TMP/ha.service"
 . "$HERE/../lib/steps.sh" 2>/dev/null || true
 VEYRA_DATA="$TMP/data"
 t "ha_role without node.json is standalone" test "$(ha_role)" = standalone
+# The CSP hash list is handed to NGINX in chunks below its 4096-byte parameter
+# limit (0.25.0 failed its upgrade at "Configuring NGINX" with 81 hashes).
+for i in $(seq 1 95); do printf "'sha256-%044d='\n" "$i"; done >"$TMP/csp-hashes.txt"
+csp_script_sets "$TMP/csp-hashes.txt" >"$TMP/csp.sets"
+t "csp sets start empty"            grep -qx "set \$veyra_csp_scripts \"\";" "$TMP/csp.sets"
+t "csp sets split 95 hashes in 3"   test "$(grep -c "^set \$veyra_csp_scripts \"\${veyra_csp_scripts}" "$TMP/csp.sets")" = 3
+t "csp sets keep every hash"        test "$(grep -o "'sha256-" "$TMP/csp.sets" | wc -l)" = 95
+t "csp sets lines under the limit"  test "$(awk '{ if (length($0) > m) m = length($0) } END { print m }' "$TMP/csp.sets")" -lt 4096
+t "csp sets fall back to inline"    grep -q "'unsafe-inline'" <<<"$(csp_script_sets "$TMP/missing")"
+render_template "$HERE/../templates/nginx/security-headers.conf.in" "$TMP/headers.conf" \
+    "CSP_SCRIPT_SETS=$(csp_script_sets "$TMP/csp-hashes.txt")"
+t "headers carry the sets"          test "$(grep -c "^set \$veyra_csp_scripts" "$TMP/headers.conf")" = 4
 mkdir -p "$TMP/data/ha"
 echo '{"role": "secondary", "epoch": 3}' >"$TMP/data/ha/node.json"
 t "ha_role reads node.json" test "$(ha_role)" = secondary

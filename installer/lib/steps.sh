@@ -770,14 +770,30 @@ listen_directives() {
 # written by the build): the CSP allows exactly those instead of
 # 'unsafe-inline' (docs/PRODUCTION_HARDENING.md §5). Without the file the
 # interface would not load, so 'unsafe-inline' stays as the fallback.
-csp_script_src() {
-    local f="$VEYRA_PREFIX/current/frontend/out/csp-hashes.txt" h out=""
+# NGINX refuses a single configuration parameter longer than 4096 bytes
+# ("too long parameter"), and the list passed that with 0.25.0's 81 hashes,
+# so the hashes are handed over in chunks: `set` directives that append to
+# the variable $veyra_csp_scripts, which the header then expands.
+CSP_HASHES_PER_SET=${CSP_HASHES_PER_SET:-40}
+# shellcheck disable=SC2016  # the $veyra_csp_scripts below is an NGINX variable
+csp_script_sets() {
+    local f="${1:-$VEYRA_PREFIX/current/frontend/out/csp-hashes.txt}" h chunk="" n=0
+    local out='set $veyra_csp_scripts "";'
     if [[ -s "$f" ]]; then
-        while IFS= read -r h; do [[ -n "$h" ]] && out+=" $h"; done <"$f"
-        printf '%s' "$out"
+        while IFS= read -r h; do
+            [[ -n "$h" ]] || continue
+            chunk+=" $h"
+            n=$((n + 1))
+            if ((n >= CSP_HASHES_PER_SET)); then
+                out+=$'\n''set $veyra_csp_scripts "${veyra_csp_scripts}'"$chunk"'";'
+                chunk=""; n=0
+            fi
+        done <"$f"
+        [[ -n "$chunk" ]] && out+=$'\n''set $veyra_csp_scripts "${veyra_csp_scripts}'"$chunk"'";'
     else
-        printf " 'unsafe-inline'"
+        out+=$'\n''set $veyra_csp_scripts " '"'"'unsafe-inline'"'"'";'
     fi
+    printf '%s' "$out"
 }
 
 do_nginx() {
@@ -797,7 +813,7 @@ do_nginx() {
     local hdr
     hdr="$(mktemp)"
     render_template "$SCRIPT_DIR/templates/nginx/security-headers.conf.in" "$hdr" \
-        "CSP_SCRIPT_SRC=$(csp_script_src)"
+        "CSP_SCRIPT_SETS=$(csp_script_sets)"
     install_managed_file "$hdr" "$VEYRA_ETC/nginx-security-headers.conf" 0644 root:root
     rm -f "$hdr"
     render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$tmp" \

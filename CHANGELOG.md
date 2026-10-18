@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.25.1 — 2026-10-18
+
+### Fixed
+- **Upgrading to 0.25.0 stopped at "Configuring NGINX"** with `too long parameter ... nginx-security-headers.conf:12`: the Content-Security-Policy header lists a hash for every inline script of the web interface, and with 0.25.0's 81 hashes that one line passed NGINX's 4096-byte limit for a configuration parameter. The installer now hands the hashes to NGINX in chunks (`set $veyra_csp_scripts` directives the header expands), so the list can grow with the interface. A server that hit the failure is running 0.25.0 already (release switched, migrations applied, services restarted) but NGINX still serves the previous header, so pages whose scripts changed are blocked by the browser until this release is installed; `verify.sh` reports `csp-hashes` against the new form.
+
 ## 0.25.0 — 2026-10-18 (Milestone 19)
 
 ### Added

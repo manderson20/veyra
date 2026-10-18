@@ -313,7 +313,8 @@ else
 fi
 
 # --- security review items (docs/PRODUCTION_HARDENING.md §5)
-if grep -qs "script-src 'self' 'sha256-" "$VEYRA_ETC/nginx-security-headers.conf"; then
+if grep -qs "^set \$veyra_csp_scripts .*'sha256-" "$VEYRA_ETC/nginx-security-headers.conf" \
+    && ! grep -qs "'unsafe-inline'\";" "$VEYRA_ETC/nginx-security-headers.conf"; then
     check csp-hashes pass "scripts allowed by hash, no 'unsafe-inline'"
 else
     check csp-hashes warn "the CSP still allows 'unsafe-inline' scripts (rebuild the web interface; csp-hashes.txt missing)"

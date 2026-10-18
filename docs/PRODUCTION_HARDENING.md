@@ -195,7 +195,9 @@ recorded as an exception with a date. The known items that become work:
 * **CSP without `'unsafe-inline'` for scripts:** the frontend build writes
   the SHA-256 of every inline script Next.js emits into
   `frontend/out/csp-hashes.txt`; the installer renders them into the
-  NGINX header. Styles keep `'unsafe-inline'` until the UI's inline styles
+  NGINX header in chunks (`set $veyra_csp_scripts` directives in
+  `nginx-security-headers.conf`, because NGINX refuses a single parameter
+  over 4096 bytes; 0.25.1). Styles keep `'unsafe-inline'` until the UI's inline styles
   are gone (an exception).
 * **Asterisk from `universe`:** `preflight.sh` and `verify.sh` check that
   Ubuntu Pro `esm-apps` is attached and warn when it is not; INSTALLATION.md
