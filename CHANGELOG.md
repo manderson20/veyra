@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased — 0.24.2
+## 0.24.2 — 2026-10-18
 
 ### Added
 - **Official update feed**: Veyra releases are published as a signed feed (`stable.json` on the repository's `updates` branch, tarballs as GitHub release assets, Ed25519 key `veyra-official`). The installer trusts the public key and points new and upgraded servers at the feed, so System → Updates finds, verifies, downloads and installs releases without manual setup; `verify.sh` reports the key and the feed address (`release-key`, `update-source`). The 0.24.1 release is the first entry.
