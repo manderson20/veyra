@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 15,
+  "sequence": 16,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.26.7",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Updates page: the available updates sit directly under the title, no scrolling to start an installation.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "32d111f800",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.26.7/veyra-0.26.7.tar.gz",
+        "sha256": "175e0ce2a433c98134ecea710ee94f0d06d5e02f647e86a2a77ccade7754df2d",
+        "size": 8164592
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -258,6 +275,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T14:35:29+00:00",
-  "expires_at": "2027-01-17T14:35:29+00:00"
+  "generated_at": "2026-10-19T14:41:16+00:00",
+  "expires_at": "2027-01-17T14:41:16+00:00"
 }
