@@ -65,6 +65,12 @@ def _write_member(
             penalty=int(member.penalty or 0),
             name=ext.display_name,
         )
+        # The per-queue mark the phone's *45<queue> toggle reads
+        # (generator._agent_codes), so a login from the page or the API and
+        # one from the phone agree on the state.
+        adapter.store_put(
+            FAMILY, f"{org_slug}/{ext.number}/{queue.slug}", "1" if member.logged_in else None
+        )
     except (EngineUnavailable, NotSupported, ValueError) as e:
         log.warning("Agent %s in queue %s not written to the engine: %s", ext.number, queue.slug, e)
 
@@ -78,6 +84,9 @@ def _write_lamps(adapter: Any, org_slug: str, ext: Extension, members: list[Queu
     try:
         adapter.set_switch("agent", org_slug, ext.number, "1" if logged else None)
         adapter.set_switch("agentpause", org_slug, ext.number, "1" if paused else None)
+        # The marks the phone's *45 and *46 toggles read (generator._agent_codes).
+        adapter.store_put(FAMILY, f"{org_slug}/{ext.number}", "1" if logged else None)
+        adapter.store_put(FAMILY, f"{org_slug}/{ext.number}/paused", "1" if paused else None)
     except (EngineUnavailable, NotSupported, ValueError) as e:
         log.warning("Agent lamps of %s not written to the engine: %s", ext.number, e)
 

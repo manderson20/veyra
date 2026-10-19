@@ -690,6 +690,11 @@ its state when the member list is edited.
 
 *Built 2026-10-18.* Not in this slice: pause reason codes, agent state in the
 queue reports, restricting who may log in beyond the member list.
+*Live check 2026-10-19 (dev1, 0.25.4):* a dynamic agent logged in through the
+API appeared in `queue show` as a dynamic member within a second; the AstDB
+marks the phone toggles read were missing, so `_write_member` and
+`_write_lamps` now write `veyra/agent/<org>/<ext>[/<queue>|/paused]` as well
+(0.25.5).
 
 ### 4.10 Queue break-out menu
 
@@ -729,6 +734,12 @@ policy), plays a beep, and stops the recording on the next press.
 *Built 2026-10-18.* Not in this slice: class-of-service guards for the
 in-call codes (the allowed-codes list applies to dialled codes), and a
 "record this call" button in the interface.
+*Live check 2026-10-19 (dev1, 0.25.4):* `features.conf` was written on
+deployment but `features show` kept the engine defaults: Asterisk 22 has no
+`features reload` console command, and `asterisk -rx` exits 0 on "No such
+command", so the adapter took it as done. The adapter now runs `module
+reload features` and `cli.run` treats "No such command" as a failure
+(0.25.5); after the fix `features show` lists `##`, `*2` and `veyra-record *1`.
 
 ## 5. Permissions and API summary
 

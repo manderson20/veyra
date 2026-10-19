@@ -37,7 +37,8 @@ def run(command: str, timeout: float = 10.0) -> tuple[bool, str]:
     except (OSError, subprocess.TimeoutExpired) as e:
         return False, str(e)
     out = (proc.stdout or "").strip() or (proc.stderr or "").strip()
-    if proc.returncode != 0 or "Unable to connect" in out:
+    # asterisk -rx exits 0 even when the console rejects the command.
+    if proc.returncode != 0 or "Unable to connect" in out or "No such command" in out:
         return False, out or f"asterisk -rx exited with {proc.returncode}"
     return True, out
 

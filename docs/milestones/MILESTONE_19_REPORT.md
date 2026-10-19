@@ -79,13 +79,52 @@ mypy clean. CI green on pull request #87 for every increment.
 
 ### Live checks on dev1
 
-To be run by the owner on dev1 after installing 0.25.0 from System → Updates (schema 0046):
-announcements and the directory from a route, a conference room with PINs
-from two phones, a call-flow toggle and a time-condition override from a
-phone key (BLF), parking a call by transfer and retrieving it from a slot,
-blocking a caller with `*32` and a refused call, a dynamic agent logging
-in with `*45` and pausing, the break-out key during queue hold, `*1`
-recording and `##`/`*2` transfers during a call.
+The owner installed 0.25.0–0.25.4 from System → Updates and asked for the
+checks to be run from the session (2026-10-19, dev1 on 0.25.4). Through the
+API as the platform administrator, in the live organization: an announcement
+(skippable, repeat key 9) → extension; a conference room 22900 with
+participant and administrator PINs and recording; a call flow (`*281`, PIN)
+whose override goes to the announcement; a time condition with override code
+`*272`; a parking lot 22970 with slots 22971–22973 and a 30 s timeout; the
+block policy (anonymous refused) and one blocked number; a queue 22950 with a
+dynamic agent, a static agent and a break-out menu. One deployment (revision
+76, 4 files changed) took about 3 s to reach Asterisk.
+
+Verified in the engine: `dialplan show` of the announcement context
+(`Background`, repeat key, `_[0-9*#]` skip, continue to the extension), the
+call-flow context (`DB(veyra/switch/flow/…)` test, normal and override
+`Goto`), the conference context (`Read` PIN loop, `ConfBridge` with the room's
+bridge, user/admin and menu profiles; `confbridge show profile bridges` lists
+the bridge), `parking show` (extension, spaces, timeout, comeback context), the
+feature codes `*281`, `*272`, `*30`/`*31`/`*32`, `*45`, `*4522950`, `*46`,
+`*4722950` in the features context, and `queue show` with the static member.
+Live switches through the API: the call-flow override wrote
+`veyra/switch/flow/<org>/<slug>=1` and lit `Custom:veyra-flow-…` (INUSE);
+the temporary time-condition override wrote `veyra/switch/tc/<org>/<id>=closed`
+and lit its lamp; the blocked number appeared as `veyra/blacklist/<org>/<num>=1`;
+the dynamic agent logged in through the API appeared in `queue show` as a
+dynamic member within a second.
+
+Two defects found and fixed in 0.25.5:
+
+* **`features reload` is not an Asterisk 22 console command**, so
+  `features.conf` was written but never reloaded (`features show` kept `#`
+  for blind transfer, no attended transfer, no `veyra-record`), and the
+  deployment counted the rejected command as success because `asterisk -rx`
+  exits 0. The adapter now runs `module reload features` (verified by hand on
+  dev1: `##`, `*2` and `*1` appeared) and the CLI wrapper treats "No such
+  command" as a failure.
+* **Agent state set through the API did not write the AstDB marks** the
+  phone's `*45`/`*46` toggles read (`database show veyra/agent` was empty after
+  an API login), so the next press on the phone would have repeated the login.
+  The agent module now writes them with the queue member and the lamps.
+
+Not exercised (no phones in the session): audio paths, the PIN prompts, DTMF
+during a call (`*1`, `*2`, `##`), parking by transfer and the ring-back,
+`*32` after a real outside call, BLF rendering on a phone. These follow the
+same mechanisms as the Milestone 18 codes the owner tested on phones.
+The test objects were removed and the configuration redeployed; the test queue
+stays until the agent marks are confirmed after the 0.25.5 install.
 
 ## 4. Not verified
 

@@ -478,8 +478,10 @@ class AsteriskAdapter(TelephonyAdapter):
         if scope not in generator.SCOPE_ORDER:
             raise EngineUnavailable(f"unknown reload scope {scope!r}")
         if scope == "features":
-            # features.conf belongs to the core, not to a module: no ARI reload.
-            ok, out = cli.run("features reload")
+            # features.conf belongs to the core, not to a loadable module: no
+            # ARI module reload; the console's "module reload features" is the
+            # only form current Asterisk accepts ("features reload" is gone).
+            ok, out = cli.run("module reload features")
             if not ok:
                 raise EngineUnavailable(f"features reload failed: {out[:200]}")
             return

@@ -8,6 +8,12 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.25.5 — 2026-10-19
+
+### Fixed
+- **In-call codes never reached the phone system.** After a deployment the engine was asked to reload `features.conf` with the console command `features reload`, which current Asterisk no longer has; the console answered "No such command", the deployment counted it as done, and `*1` (record), `*2` (attended transfer) and `##` (blind transfer) stayed at the engine defaults (found on the 0.25.0 live check). The reload is now `module reload features`, and a console command the engine rejects is treated as a failure of the deployment step instead of a silent success. Deploy the configuration once after installing this release to activate the codes.
+- **Queue agent state set from the page or the API now agrees with the phone.** Logging an agent in from the queue page did not write the marks the phone's `*45`, `*45<queue>` and `*46` toggles read, so the first press on the phone afterwards repeated the login instead of logging out. The page, the API and the phone now share the same marks.
+
 ## 0.25.4 — 2026-10-18
 
 ### Changed

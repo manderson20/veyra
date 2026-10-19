@@ -61,16 +61,22 @@ def test_dynamic_agents_state_api_events_and_sync(admin, app):
     queue_name = f"veyra-{q['slug']}"
     assert adapter.queue_calls[-1] == (queue_name, f"PJSIP/{a['endpoint_name']}", True, False)
     assert adapter.switch_states[("agent", org["slug"], "6001")] == "1"
+    # The marks the phone's *45 / *45<queue> toggles read agree with the API.
+    marks = adapter.store["veyra/agent"]
+    assert marks[f"{org['slug']}/6001"] == "1" and marks[f"{org['slug']}/6001/{q['slug']}"] == "1"
+    assert f"{org['slug']}/6001/paused" not in marks
     # Pause, then log out (which also clears the pause).
     r = admin.post(f"{QUEUES}/{q['id']}/agents/{a['id']}/state", json={"paused": True})
     assert {x["extension_id"]: x for x in r.json()["members"]}[a["id"]]["paused"]
     assert adapter.queue_calls[-1] == (queue_name, f"PJSIP/{a['endpoint_name']}", True, True)
     assert adapter.switch_states[("agentpause", org["slug"], "6001")] == "1"
+    assert adapter.store["veyra/agent"][f"{org['slug']}/6001/paused"] == "1"
     r = admin.post(f"{QUEUES}/{q['id']}/agents/{a['id']}/state", json={"logged_in": False})
     m = {x["extension_id"]: x for x in r.json()["members"]}[a["id"]]
     assert not m["logged_in"] and not m["paused"]
     assert adapter.queue_calls[-1] == (queue_name, f"PJSIP/{a['endpoint_name']}", False, False)
     assert ("agent", org["slug"], "6001") not in adapter.switch_states
+    assert not {k for k in adapter.store["veyra/agent"] if k.startswith(f"{org['slug']}/6001")}
     # Editing the member list keeps a dynamic agent's state.
     admin.post(f"{QUEUES}/{q['id']}/agents/{a['id']}/state", json={"logged_in": True})
     r = admin.patch(
