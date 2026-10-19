@@ -31,6 +31,16 @@ ENGINE_FIELDS = ("dnd", *FORWARD_FIELDS, "fmfm")
 # Row attribute -> engine field, where they differ.
 _ROW_FIELD = {"fmfm": "fmfm_enabled"}
 _NUMBER_RE = re.compile(r"^\+?[0-9]{2,20}$")
+# Presence states a user may show (docs/USER_PORTAL.md §7).
+PRESENCE_STATES = ("available", "away", "busy", "meeting", "lunch", "out")
+PRESENCE_LABELS = {
+    "available": "Available",
+    "away": "Away",
+    "busy": "Busy",
+    "meeting": "In a meeting",
+    "lunch": "At lunch",
+    "out": "Out of the office",
+}
 
 
 class StateError(ValueError):
@@ -61,6 +71,8 @@ def out(row: ExtensionState | None) -> dict[str, Any]:
             "cf_no_answer": None,
             "fmfm_enabled": False,
             "ring_seconds": RING_DEFAULT,
+            "presence": "available",
+            "presence_message": None,
             "updated_at": None,
             "updated_by": None,
         }
@@ -71,9 +83,52 @@ def out(row: ExtensionState | None) -> dict[str, Any]:
         "cf_no_answer": row.cf_no_answer,
         "fmfm_enabled": row.fmfm_enabled,
         "ring_seconds": row.ring_seconds,
+        "presence": row.presence or "available",
+        "presence_message": row.presence_message,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         "updated_by": row.updated_by,
     }
+
+
+def set_presence(
+    db: Session,
+    extension: Extension,
+    state: str,
+    message: str | None,
+    *,
+    by: str,
+    rules: dict[str, Any] | None = None,
+    adapter: Any = None,
+) -> dict[str, Any]:
+    """Change the presence shown to colleagues and apply the user's automatic
+    actions for that state (``rules``: ``{state: {dnd: bool|None, cf_always:
+    str|None}}``) through :func:`apply`, so the engine follows at once."""
+    if state not in PRESENCE_STATES:
+        raise StateError("state", "unknown presence state")
+    text = (message or "").strip()[:60] or None
+    row = ensure(db, extension)
+    changed: dict[str, Any] = {}
+    if row.presence != state:
+        row.presence = state
+        changed["presence"] = state
+    if row.presence_message != text:
+        row.presence_message = text
+        changed["presence_message"] = text
+    if changed:
+        row.updated_by = by
+        row.updated_at = utcnow()
+        db.flush()
+    actions = (rules or {}).get(state) or {}
+    wanted: dict[str, Any] = {}
+    if actions.get("dnd") is not None:
+        wanted["dnd"] = bool(actions["dnd"])
+    if "cf_always" in actions:
+        wanted["cf_always"] = actions.get("cf_always") or None
+    if wanted:
+        changed.update(apply(db, extension, wanted, by=by, adapter=adapter))
+    elif changed:
+        _publish(extension, changed, by)
+    return changed
 
 
 def normalize_number(field: str, value: Any) -> str | None:

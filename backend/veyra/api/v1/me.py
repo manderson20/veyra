@@ -302,13 +302,47 @@ class CompanionPreferences(BaseModel):
     handle_tel_links: bool = False
 
 
+class PresenceRule(BaseModel):
+    """What happens when the user picks a presence state (docs/USER_PORTAL.md §7)."""
+
+    model_config = ConfigDict(extra="forbid")
+    dnd: bool | None = None
+    # A forward target, "" to clear the forward, None to leave it alone.
+    cf_always: str | None = None
+
+    @field_validator("cf_always")
+    @classmethod
+    def _cf(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return v
+        v = re.sub(r"[\s().-]", "", v.strip())
+        if not _NUMBER_RE.match(v):
+            raise ValueError("digits only (a leading + is allowed)")
+        return v
+
+
+class PortalPreferences(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    presence_rules: dict[str, PresenceRule] = Field(default_factory=dict)
+
+    @field_validator("presence_rules")
+    @classmethod
+    def _states(cls, v: dict[str, PresenceRule]) -> dict[str, PresenceRule]:
+        bad = [k for k in v if k not in extension_state.PRESENCE_STATES]
+        if bad:
+            raise ValueError(f"unknown presence state {bad[0]!r}")
+        return v
+
+
 class PreferencesDoc(BaseModel):
     model_config = ConfigDict(extra="forbid")
     companion: CompanionPreferences = Field(default_factory=CompanionPreferences)
+    portal: PortalPreferences = Field(default_factory=PortalPreferences)
 
 
 class PreferencesOut(BaseModel):
     companion: CompanionPreferences
+    portal: PortalPreferences
     updated_at: datetime | None
 
 
@@ -318,7 +352,9 @@ def _load(db: Session, user_id: uuid.UUID) -> UserPreference | None:
 
 def _out(row: UserPreference | None) -> PreferencesOut:
     doc = PreferencesDoc.model_validate(row.data if row and row.data else {})
-    return PreferencesOut(companion=doc.companion, updated_at=row.updated_at if row else None)
+    return PreferencesOut(
+        companion=doc.companion, portal=doc.portal, updated_at=row.updated_at if row else None
+    )
 
 
 @router.get("/preferences", response_model=PreferencesOut, summary="Your preferences")
@@ -717,3 +753,89 @@ def my_greeting_delete(
         _box_audit(db, ctx, principal, "voicemail.greeting_delete", box, {"kind": kind})
         db.commit()
     return vmsvc.greeting_list(db, request.app.state.settings, box)
+
+
+# ------------------------------------------------- presence (§7)
+
+
+class PresenceIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    state: str = Field(pattern="^(" + "|".join(extension_state.PRESENCE_STATES) + ")$")
+    message: str | None = Field(None, max_length=60)
+
+
+class PresenceOut(BaseModel):
+    state: str
+    label: str
+    message: str | None
+    states: list[dict[str, str]]
+    applied: dict[str, Any] = Field(default_factory=dict)
+
+
+def _presence_out(row: Any, applied: dict[str, Any] | None = None) -> PresenceOut:
+    state = (row.presence if row is not None else None) or "available"
+    return PresenceOut(
+        state=state,
+        label=extension_state.PRESENCE_LABELS[state],
+        message=row.presence_message if row is not None else None,
+        states=[{"key": k, "label": v} for k, v in extension_state.PRESENCE_LABELS.items()],
+        applied=applied or {},
+    )
+
+
+@router.get(
+    "/extensions/{extension_id}/presence",
+    response_model=PresenceOut,
+    summary="The presence your colleagues see",
+)
+def my_presence(
+    extension_id: uuid.UUID,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> PresenceOut:
+    ext = _own_extension(db, principal, extension_id)
+    return _presence_out(extension_state.get(db, ext.id))
+
+
+@router.put(
+    "/extensions/{extension_id}/presence",
+    response_model=PresenceOut,
+    summary="Set your presence (and its automatic actions)",
+)
+def put_my_presence(
+    extension_id: uuid.UUID,
+    body: PresenceIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> PresenceOut:
+    ext = _own_extension(db, principal, extension_id)
+    prefs = _load(db, principal.user_id)
+    doc = PreferencesDoc.model_validate(prefs.data if prefs and prefs.data else {})
+    rules = {k: v.model_dump() for k, v in doc.portal.presence_rules.items()}
+    rule = rules.get(body.state) or {}
+    if rule.get("cf_always"):
+        _check_forward_limits(db, ext, {"cf_always": rule["cf_always"]})
+    try:
+        applied = extension_state.set_presence(
+            db,
+            ext,
+            body.state,
+            body.message,
+            by="user",
+            rules=rules,
+            adapter=getattr(request.app.state, "telephony", None),
+        )
+    except extension_state.StateError as e:
+        raise ProblemError(
+            422,
+            "Validation failed",
+            e.message,
+            code="validation_failed",
+            errors=[{"field": e.field, "message": e.message}],
+        ) from e
+    if applied:
+        _own_audit(db, ctx, principal, "extension.presence_update", ext, applied)
+    db.commit()
+    return _presence_out(extension_state.get(db, ext.id), applied)

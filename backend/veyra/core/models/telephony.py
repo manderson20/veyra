@@ -111,6 +111,12 @@ class ExtensionState(Base):
     cf_no_answer: Mapped[str | None] = mapped_column(String(32))
     fmfm_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     ring_seconds: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
+    # Presence the user shows to colleagues (docs/USER_PORTAL.md §7):
+    # available | away | busy | meeting | lunch | out, with a short message.
+    presence: Mapped[str] = mapped_column(
+        String(16), default="available", server_default="available"
+    )
+    presence_message: Mapped[str | None] = mapped_column(String(60))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

@@ -16,10 +16,29 @@ from sqlalchemy.orm import Session
 from veyra.api.v1.extensions import _registrations
 from veyra.core.db import get_db
 from veyra.core.deps import require
-from veyra.core.models import CallQueue, Extension, Organization, RingGroup, User
+from veyra.core.models import (
+    CallQueue,
+    Extension,
+    ExtensionState,
+    Organization,
+    RingGroup,
+    User,
+)
 from veyra.core.security.principal import Principal
 
 router = APIRouter(prefix="/directory", tags=["directory"])
+
+
+def _on_call(request: Request) -> set[str] | None:
+    """Endpoints with a call up, or None when the engine cannot say."""
+    adapter = getattr(request.app.state, "telephony", None)
+    if adapter is None:
+        return None
+    try:
+        return {c.endpoint for c in adapter.active_calls() if getattr(c, "endpoint", None)}
+    except Exception:
+        return None
+
 
 LIMIT = 50
 
@@ -33,6 +52,10 @@ class DirectoryEntry(BaseModel):
     user_display_name: str | None
     user_email: str | None
     registered: bool | None
+    # Presence the person set (docs/USER_PORTAL.md §7) and whether a call is up.
+    presence: str | None = None
+    presence_message: str | None = None
+    on_call: bool | None = None
 
 
 class DirectoryOut(BaseModel):
@@ -68,6 +91,15 @@ def directory(
         )
     rows = db.execute(stmt.order_by(Extension.number).limit(LIMIT + 1)).all()
     live = _registrations(request)
+    busy = _on_call(request)
+    states = {
+        st.extension_id: st
+        for st in db.scalars(
+            select(ExtensionState).where(
+                ExtensionState.extension_id.in_([e.id for e, _, _ in rows[:LIMIT]])
+            )
+        )
+    }
     results = [
         DirectoryEntry(
             id=e.id,
@@ -80,6 +112,9 @@ def directory(
             and live[e.endpoint_name].registered
             if live is not None
             else None,
+            presence=(states[e.id].presence if e.id in states else None) or "available",
+            presence_message=states[e.id].presence_message if e.id in states else None,
+            on_call=(e.endpoint_name in busy) if busy is not None else None,
         )
         for e, o, u in rows[:LIMIT]
     ]

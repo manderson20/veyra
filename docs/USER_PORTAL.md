@@ -258,6 +258,19 @@ NOT_INUSE for available) lets a phone key show a colleague's presence
 (key type later, with #40's park type). Not in this slice: phone-side
 presence menus, calendar integration.
 
+*Built 2026-10-19 (slice E):* `extension_states.presence` /
+`presence_message` (migration `0049`), `extension_state.set_presence`
+(applies the state's rule through `apply`, so the engine follows at once),
+`GET/PUT /me/extensions/{id}/presence`, rules in
+`user_preferences.data.portal.presence_rules` (`PortalPreferences` on
+`/me/preferences`; a rule's `cf_always` goes through the class-of-service
+check), `GET /directory` adds `presence`, `presence_message` and `on_call`
+(from the engine's active calls). Frontend `PresenceCard` (state buttons,
+message, "Automatic actions" editor) and `ColleaguesCard` (20 s refresh,
+dot for on-call/offline, click-to-dial). Deviation: no engine lamp
+(`Custom:veyra-presence-…`) in this slice — it comes with the presence key
+type (#40's park type work); the directory is the presence source.
+
 ## 8. Phone keys set by the user, locked by the administrator (#75)
 
 Owner requirement (2026-10-18): staff set their own speed dials and

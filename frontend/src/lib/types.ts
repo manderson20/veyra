@@ -2947,8 +2947,36 @@ export interface ExtensionState {
   cf_no_answer: string | null;
   fmfm_enabled: boolean;
   ring_seconds: number;
+  /** Presence shown to colleagues (docs/USER_PORTAL.md §7). */
+  presence?: PresenceState;
+  presence_message?: string | null;
   updated_at: string | null;
   updated_by: "phone" | "user" | "admin" | "sync" | string | null;
+}
+
+export type PresenceState = "available" | "away" | "busy" | "meeting" | "lunch" | "out";
+export interface Presence {
+  state: PresenceState;
+  label: string;
+  message: string | null;
+  states: { key: PresenceState; label: string }[];
+  applied: Record<string, unknown>;
+}
+export interface PresenceRule { dnd?: boolean | null; cf_always?: string | null }
+
+/** A directory entry (docs/COMPANION.md §4) with presence and live status (USER_PORTAL.md §7). */
+export interface DirectoryEntry {
+  type: "extension" | "ring_group" | "queue" | string;
+  id: string;
+  number: string;
+  name: string;
+  organization: string;
+  user_display_name: string | null;
+  user_email: string | null;
+  registered: boolean | null;
+  presence?: PresenceState | null;
+  presence_message?: string | null;
+  on_call?: boolean | null;
 }
 
 export interface ClassOfService {
