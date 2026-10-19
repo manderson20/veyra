@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 22,
+  "sequence": 23,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.6",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Queue log-in keys for a single queue, and the central console alerts when a managed installation could not install an update. Deploy the telephony configuration after installing.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "01745d864a",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.6/veyra-0.27.6.tar.gz",
+        "sha256": "164f15d7014830d3293193da6ad405a291fa5352e2a916f8efc00aadacfe3276",
+        "size": 8283828
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -377,6 +394,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T23:06:53+00:00",
-  "expires_at": "2027-01-17T23:06:53+00:00"
+  "generated_at": "2026-10-19T23:17:35+00:00",
+  "expires_at": "2027-01-17T23:17:35+00:00"
 }
