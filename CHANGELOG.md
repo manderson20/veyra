@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Security
+- Hardening from the first CodeQL review of the public repository: the alert check that reads a peer certificate's expiry no longer accepts TLS 1.0/1.1; the backup unit's job name is validated before it reaches systemctl; prompt recording paths are resolved and checked to stay inside the organization's folder; the CSP hash script matches `<SCRIPT>` tags in any case. The remaining CodeQL alerts were reviewed and dismissed with reasons (React text rendering, server-generated cookies, administrator-only error messages, development tools).
+
 ## 0.26.4 — 2026-10-19
 
 ### Changed

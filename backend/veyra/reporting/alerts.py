@@ -204,6 +204,9 @@ def certificate_days_left(host: str = "127.0.0.1", port: int = 443) -> float | N
     from cryptography import x509
 
     ctx = ssl.create_default_context()
+    # Only the certificate is read (expiry check); verification is off on
+    # purpose, old protocol versions are not.
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     try:

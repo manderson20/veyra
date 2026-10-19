@@ -6,6 +6,7 @@ unit through polkit, and the status file for the page."""
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import uuid
 from collections.abc import Callable
@@ -215,8 +216,14 @@ def summary(db: Session) -> dict[str, Any]:
 # ------------------------------------------------------------------ the unit
 
 
+_INSTANCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
+
+
 def start(instance: str) -> None:
-    """``systemctl start --no-block veyra-backup@<instance>`` through polkit."""
+    """``systemctl start --no-block veyra-backup@<instance>`` through polkit.
+    The instance names the unit's job (``run-manual``, ``delete-<id>``)."""
+    if not _INSTANCE_RE.match(instance):
+        raise BackupError(400, "bad_instance", "The backup job name is not valid.")
     cmd = ["systemctl", "start", "--no-block", UNIT.format(instance=instance)]
     res = (
         systemctl(cmd)

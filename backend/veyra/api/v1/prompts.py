@@ -276,8 +276,11 @@ def _audit(
 def _recording_path(base: Path, org: Organization, file: str) -> Path:
     if not _RECORDING_RE.match(file):
         raise not_found("Recording")
-    path = base / org.slug / INCOMING / file
-    if not path.is_file():
+    folder = (base / org.slug / INCOMING).resolve()
+    path = (folder / file).resolve()
+    # The pattern leaves no path characters; the containment check makes it
+    # evident (and holds if the pattern ever loosens).
+    if path.parent != folder or not path.is_file():
         raise not_found("Recording")
     return path
 
