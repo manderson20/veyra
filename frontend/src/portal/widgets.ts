@@ -29,6 +29,7 @@ export const WIDGETS: WidgetManifest[] = [
   { key: "contacts", title: "Contacts", description: "Personal contacts and speed dials.", icon: "users", defaultSize: { w: 6, h: 10 }, minSize: { w: 4, h: 6 }, needs: null },
   { key: "colleagues", title: "Colleagues", description: "Who is available, on a call or away.", icon: "users", defaultSize: { w: 6, h: 10 }, minSize: { w: 4, h: 6 }, needs: null },
   { key: "keys", title: "Phone keys", description: "Your phones' keys: the locked ones and the slots you may set.", icon: "keypad", defaultSize: { w: 12, h: 8 }, minSize: { w: 6, h: 5 }, needs: null },
+  { key: "fax", title: "Fax", description: "Send a PDF as a fax and follow your faxes.", icon: "file", defaultSize: { w: 6, h: 10 }, minSize: { w: 4, h: 7 }, needs: null },
   { key: "codes", title: "Codes you can dial", description: "Feature codes available from your phone.", icon: "keypad", defaultSize: { w: 6, h: 6 }, minSize: { w: 4, h: 4 }, needs: null },
   { key: "announce", title: "Announcement", description: "A note from your administrators, shown to everyone (locked by the template).", icon: "megaphone", defaultSize: { w: 12, h: 3 }, minSize: { w: 4, h: 2 }, needs: null, lockable: true },
 ];
@@ -49,6 +50,7 @@ export const DEFAULT_LAYOUT = {
         { key: "calls", instance: "default", x: 0, y: 9, w: 6, h: 10 },
         { key: "contacts", instance: "default", x: 0, y: 19, w: 6, h: 10 },
         { key: "colleagues", instance: "default", x: 6, y: 16, w: 6, h: 10 },
+        { key: "fax", instance: "default", x: 6, y: 26, w: 6, h: 10 },
         { key: "keys", instance: "default", x: 0, y: 29, w: 12, h: 8 },
         { key: "codes", instance: "default", x: 0, y: 37, w: 6, h: 6 },
       ],

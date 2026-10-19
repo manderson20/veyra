@@ -61,6 +61,7 @@ export default function ClassesOfServicePage() {
       {!c.allow_external_forwards ? <Badge tone="warn">No outside forwards</Badge> : null}
       {!c.allow_external_follow_me ? <Badge tone="warn">No outside follow-me</Badge> : null}
       {!c.allow_intercom ? <Badge tone="warn">No intercom</Badge> : null}
+      {!c.allow_fax ? <Badge tone="warn">No fax</Badge> : null}
       {c.max_outbound_calls ? <Badge tone="neutral">{c.max_outbound_calls} outside call{c.max_outbound_calls === 1 ? "" : "s"}</Badge> : null}
     </span> },
     { key: "ext", header: "Extensions", render: (c) => c.extensions },

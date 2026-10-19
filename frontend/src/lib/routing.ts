@@ -100,6 +100,7 @@ export const DESTINATION_LABELS: Record<DestinationType, string> = {
   announcement: "Announcement",
   conference: "Conference room",
   call_flow: "Call flow",
+  fax: "Fax to email",
   directory: "Dial-by-name directory",
   hangup: "Hang up",
 };
@@ -115,9 +116,10 @@ export interface DestinationDraft {
   announcement_id: string;
   conference_id: string;
   call_flow_id: string;
+  fax_inbox_id: string;
 }
 
-const NO_TARGETS = { extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "", announcement_id: "", conference_id: "", call_flow_id: "" };
+const NO_TARGETS = { extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "", announcement_id: "", conference_id: "", call_flow_id: "", fax_inbox_id: "" };
 
 export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", ...NO_TARGETS };
 export const HANGUP: DestinationDraft = { type: "hangup", ...NO_TARGETS };
@@ -139,10 +141,11 @@ export function destinationDraft(d: Destination | null | undefined, fallback: De
     announcement_id: d.announcement_id ?? "",
     conference_id: d.conference_id ?? "",
     call_flow_id: d.call_flow_id ?? "",
+    fax_inbox_id: d.fax_inbox_id ?? "",
   };
 }
 
-export type DestinationTargetField = "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | "announcement_id" | "conference_id" | "call_flow_id";
+export type DestinationTargetField = "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | "announcement_id" | "conference_id" | "call_flow_id" | "fax_inbox_id";
 
 /** The draft field that holds the target of a kind (none for hang up and the directory). */
 export function destinationTargetField(type: DestinationType): DestinationTargetField | null {
@@ -164,6 +167,8 @@ export function destinationTargetField(type: DestinationType): DestinationTarget
       return "conference_id";
     case "call_flow":
       return "call_flow_id";
+    case "fax":
+      return "fax_inbox_id";
     default:
       return null;
   }
@@ -182,6 +187,7 @@ export function destinationBody(d: DestinationDraft): DestinationInput {
     announcement_id: field === "announcement_id" ? d.announcement_id || null : null,
     conference_id: field === "conference_id" ? d.conference_id || null : null,
     call_flow_id: field === "call_flow_id" ? d.call_flow_id || null : null,
+    fax_inbox_id: field === "fax_inbox_id" ? d.fax_inbox_id || null : null,
   };
 }
 

@@ -31,6 +31,7 @@ export interface TrunkDraft {
   default_caller_id: string;
   caller_id_header: CallerIdHeader;
   dtmf_mode: DtmfMode;
+  fax_t38: boolean;
   qualify_frequency: string;
   register_expiry: string;
 }
@@ -56,6 +57,7 @@ export const EMPTY_TRUNK: TrunkDraft = {
   default_caller_id: "",
   caller_id_header: "pai",
   dtmf_mode: "rfc4733",
+  fax_t38: false,
   qualify_frequency: "60",
   register_expiry: "3600",
 };
@@ -82,6 +84,7 @@ export function trunkDraft(t: Trunk): TrunkDraft {
     default_caller_id: t.default_caller_id ?? "",
     caller_id_header: t.caller_id_header,
     dtmf_mode: t.dtmf_mode,
+    fax_t38: t.fax_t38,
     qualify_frequency: String(t.qualify_frequency),
     register_expiry: String(t.register_expiry),
   };
@@ -115,6 +118,7 @@ export function trunkBody(d: TrunkDraft): TrunkInput {
     default_caller_id: text(d.default_caller_id),
     caller_id_header: d.caller_id_header,
     dtmf_mode: d.dtmf_mode,
+    fax_t38: d.fax_t38,
     qualify_frequency: int(d.qualify_frequency, 60),
     register_expiry: int(d.register_expiry, 3600),
   };
@@ -261,6 +265,8 @@ export function TrunkAllFields({ draft, onChange, errors, disabled, hasPassword 
           <SelectField label="DTMF" disabled={disabled} value={draft.dtmf_mode} error={errors.dtmf_mode} options={DTMF_MODES}
             onChange={(e) => onChange({ dtmf_mode: e.target.value as DtmfMode })} />
         </div>
+        <Checkbox label="Fax over T.38 (offer T.38 fax relay to this carrier; audio fax when it declines)" checked={draft.fax_t38} disabled={disabled}
+          onChange={(e) => onChange({ fax_t38: e.target.checked })} />
         <div className="form-grid">
           <TextField label="Qualify frequency (seconds)" inputMode="numeric" disabled={disabled} value={draft.qualify_frequency} error={errors.qualify_frequency}
             help="How often the carrier is checked for reachability; 0 disables status monitoring." onChange={(e) => onChange({ qualify_frequency: e.target.value.replace(/\D/g, "") })} />

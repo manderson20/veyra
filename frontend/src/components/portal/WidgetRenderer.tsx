@@ -5,6 +5,7 @@ import { CallHandlingCard } from "@/components/extensions/CallHandlingCard";
 import { FollowMeCard } from "@/components/extensions/FollowMeCard";
 import { ColleaguesCard } from "@/components/portal/ColleaguesCard";
 import { ContactsCard } from "@/components/portal/ContactsCard";
+import { FaxCard } from "@/components/portal/FaxCard";
 import { PhoneKeysCard } from "@/components/portal/PhoneKeysCard";
 import { PresenceCard } from "@/components/portal/PresenceCard";
 import { RecentCallsCard } from "@/components/portal/RecentCallsCard";
@@ -65,6 +66,8 @@ export function WidgetRenderer({ placed, extensions, boxes, announcement }: { pl
       return <PhoneKeysCard />;
     case "codes":
       return <CodesCard />;
+    case "fax":
+      return <FaxCard />;
     case "announce":
       return (
         <Callout tone="info" title={String(placed.settings?.title ?? "From your administrators")}>

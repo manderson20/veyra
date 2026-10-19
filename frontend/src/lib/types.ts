@@ -157,6 +157,8 @@ export interface Organization {
   intercom_default?: "allow" | "deny" | string;
   /** Users may play recordings of their own calls from My Phone (docs/USER_PORTAL.md §5). */
   users_play_own_recordings?: boolean;
+  fax_header?: string | null;
+  fax_station_id?: string | null;
   /** Prefix of the organization's engine names; empty: today's names. */
   engine_namespace?: string;
   created_at: string;
@@ -969,6 +971,7 @@ export interface Trunk {
   default_caller_id: string | null;
   caller_id_header: CallerIdHeader;
   dtmf_mode: DtmfMode;
+  fax_t38: boolean;
   qualify_frequency: number;
   register_expiry: number;
   status: TrunkStatus | null;
@@ -1002,11 +1005,12 @@ export interface TrunkInput {
   default_caller_id?: string | null;
   caller_id_header?: CallerIdHeader;
   dtmf_mode?: DtmfMode;
+  fax_t38?: boolean;
   qualify_frequency?: number;
   register_expiry?: number;
 }
 
-export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "call_flow" | "directory" | "hangup";
+export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "call_flow" | "fax" | "directory" | "hangup";
 
 /** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6, RING_GROUPS_QUEUES.md §5). */
 export interface Destination {
@@ -1019,6 +1023,7 @@ export interface Destination {
   announcement_id?: string | null;
   conference_id?: string | null;
   call_flow_id?: string | null;
+  fax_inbox_id?: string | null;
   /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Shared inbox: Attendance (2900)", "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)", "Hang up"; null when the target is gone. */
   label: string | null;
   missing: boolean;
@@ -1034,6 +1039,7 @@ export interface DestinationInput {
   announcement_id?: string | null;
   conference_id?: string | null;
   call_flow_id?: string | null;
+  fax_inbox_id?: string | null;
 }
 
 export type RouteDestinationType = Exclude<DestinationType, "hangup">;
@@ -1057,6 +1063,7 @@ export interface InboundRoute {
   destination_announcement_id?: string | null;
   destination_conference_id?: string | null;
   destination_call_flow_id?: string | null;
+  destination_fax_inbox_id?: string | null;
   destination_number: string | null;
   destination_name: string | null;
   destination: Destination;
@@ -1072,6 +1079,7 @@ export interface InboundRoute {
   after_hours_announcement_id?: string | null;
   after_hours_conference_id?: string | null;
   after_hours_call_flow_id?: string | null;
+  after_hours_fax_inbox_id?: string | null;
   after_hours_number: string | null;
   after_hours_name: string | null;
   after_hours: Destination | null;
@@ -1095,6 +1103,7 @@ export interface InboundRouteInput {
   destination_announcement_id?: string | null;
   destination_conference_id?: string | null;
   destination_call_flow_id?: string | null;
+  destination_fax_inbox_id?: string | null;
   time_condition_id?: string | null;
   after_hours_type?: RouteDestinationType;
   after_hours_extension_id?: string | null;
@@ -1105,6 +1114,7 @@ export interface InboundRouteInput {
   after_hours_announcement_id?: string | null;
   after_hours_conference_id?: string | null;
   after_hours_call_flow_id?: string | null;
+  after_hours_fax_inbox_id?: string | null;
   caller_id_prefix?: string | null;
   is_enabled?: boolean;
 }
@@ -3041,6 +3051,7 @@ export interface ClassOfService {
   allow_external_forwards: boolean;
   allow_external_follow_me: boolean;
   allow_intercom: boolean;
+  allow_fax: boolean;
   max_outbound_calls: number | null;
   extensions: number;
   created_at: string;
@@ -3057,6 +3068,7 @@ export interface ClassOfServiceInput {
   allow_external_forwards?: boolean;
   allow_external_follow_me?: boolean;
   allow_intercom?: boolean;
+  allow_fax?: boolean;
   max_outbound_calls?: number | null;
   no_call_limit?: boolean;
 }
@@ -3288,4 +3300,47 @@ export interface EmergencySiteDetail {
   settings: EmergencySettings;
   calls: EmergencyCallRow[];
   disclaimer: string;
+}
+
+/** Fax (docs/USER_PORTAL.md §9). */
+export interface FaxInbox {
+  id: string;
+  organization_id: string;
+  organization_name: string;
+  name: string;
+  slug: string;
+  context: string;
+  recipients: string[];
+  station_id: string | null;
+  header: string | null;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FaxState = "queued" | "dialling" | "sending" | "sent" | "failed" | "received" | "cancelled";
+
+export interface FaxJob {
+  id: string;
+  organization_id: string;
+  direction: "out" | "in";
+  number: string;
+  caller_id: string | null;
+  remote_id: string | null;
+  pages: number;
+  state: FaxState | string;
+  error: string | null;
+  attempts: number;
+  user_id: string | null;
+  user_name: string | null;
+  extension_number: string | null;
+  inbox_id: string | null;
+  inbox_name: string | null;
+  original_name: string | null;
+  has_cover: boolean;
+  has_file: boolean;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  next_attempt_at: string | null;
 }
