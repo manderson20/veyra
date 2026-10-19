@@ -702,6 +702,14 @@ do_services() {
     install_managed_file "$tmp" /etc/systemd/system/veyra-ha-agent.service 0644 root:root
     rm -f "$tmp"
     units+=(veyra-ha-agent)
+    # The voicemail store helper (docs/USER_PORTAL.md §2.2) runs as the
+    # asterisk user; the API reaches the spool only through its socket.
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-vmstore.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC"
+    install_managed_file "$tmp" /etc/systemd/system/veyra-vmstore.service 0644 root:root
+    rm -f "$tmp"
+    units+=(veyra-vmstore)
     run systemctl daemon-reload
     local role
     role="$(ha_role)"

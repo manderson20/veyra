@@ -4,7 +4,8 @@
 import { useEffect, useState } from "react";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { VoicemailBoxDialog } from "@/components/voicemail/VoicemailBoxDialog";
-import { Badge, Button, Callout, Card, DataTable, EmptyState, PageHeader, Pagination, SearchInput, SelectField, type Column } from "@/components/ui";
+import { VoicemailInbox } from "@/components/voicemail/VoicemailInbox";
+import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, PageHeader, Pagination, SearchInput, SelectField, type Column } from "@/components/ui";
 import type { Page, VoicemailBox } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
@@ -35,6 +36,8 @@ export default function VoicemailPage() {
   const list = useApiData<Page<VoicemailBox>>("/voicemail", { q: debounced, organization_id: org || undefined, limit: LIMIT, offset });
   const manyOrgs = organizations.length > 1;
   const editable = can("voicemail.write");
+  const canRead = can("voicemail.read");
+  const [messagesFor, setMessagesFor] = useState<VoicemailBox | null>(null);
   const deliveryOff = list.data?.items.length ? !list.data.items[0]!.email_delivery_enabled : false;
   const createOrg = org || (organizations.length === 1 ? organizations[0]!.id : session?.user.home_organization_id ?? "");
 
@@ -61,6 +64,7 @@ export default function VoicemailPage() {
     { key: "ring", header: "Rings for", render: (b) => <span>{b.ring_seconds} s</span> },
     { key: "use", header: "Used by", render: (b) => b.in_use_by ? <span>{b.in_use_by} route{b.in_use_by === 1 ? "" : "s"} or key{b.in_use_by === 1 ? "" : "s"}</span> : <span className="subtle">—</span> },
     { key: "enabled", header: "Enabled", render: (b) => <Badge tone={b.is_enabled ? "ok" : "neutral"}>{b.is_enabled ? "Enabled" : "Disabled"}</Badge> },
+    ...(canRead ? [{ key: "messages", header: "", render: (b: VoicemailBox) => <Button size="sm" icon="voicemail" onClick={(e) => { e.stopPropagation(); setMessagesFor(b); }}>Messages</Button> }] : []),
   ];
 
   return (
@@ -102,6 +106,14 @@ export default function VoicemailPage() {
       <VoicemailBoxDialog open={createOpen} onClose={() => setCreateOpen(false)} organizationId={createOrg} onSaved={() => { list.reload(); setChanged((n) => n + 1); }} />
       <VoicemailBoxDialog open={createShared} shared onClose={() => setCreateShared(false)} organizationId={createOrg} onSaved={() => { list.reload(); setChanged((n) => n + 1); }} />
       <VoicemailBoxDialog open={editing !== null} onClose={() => setEditing(null)} box={editing ?? undefined} onSaved={() => { list.reload(); setChanged((n) => n + 1); }} />
+      <Dialog open={messagesFor !== null} onClose={() => setMessagesFor(null)} size="lg"
+        title={messagesFor ? (messagesFor.shared ? `Messages of ${messagesFor.name}` : `Messages of ${messagesFor.extension_number} ${messagesFor.extension_name}`) : ""}
+        description="What the user hears with *97. Listening, moving, forwarding and deleting are written to the audit log.">
+        {messagesFor ? (
+          <VoicemailInbox base={`/voicemail/${messagesFor.id}`} editable={editable}
+            targets={(list.data?.items ?? []).filter((b) => b.id !== messagesFor.id && b.organization_id === messagesFor.organization_id).map((b) => ({ id: b.id, label: b.shared ? `${b.number} ${b.name}` : `${b.extension_number} ${b.extension_name}` }))} />
+        ) : null}
+      </Dialog>
     </div>
   );
 }

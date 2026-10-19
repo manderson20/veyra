@@ -1703,6 +1703,24 @@ def cmd_backup_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_vmstore_serve(args: argparse.Namespace) -> int:
+    """The voicemail store helper, run as the asterisk user by the
+    veyra-vmstore unit (docs/USER_PORTAL.md §2.2)."""
+    import logging
+    from pathlib import Path
+
+    from veyra.core.config import get_settings
+    from veyra.voicemail import store
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    settings = get_settings()
+    spool = Path(args.spool) if args.spool else settings.voicemail_spool
+    sock = Path(args.socket) if args.socket else settings.vmstore_socket
+    logging.getLogger("veyra.voicemail.store").info("%s voicemail store started", plain_header())
+    store.VoicemailStore(spool).serve(sock, group=args.group, once=args.once)
+    return 0
+
+
 def cmd_ha_agent(args: argparse.Namespace) -> int:
     """The root HA agent (docs/HIGH_AVAILABILITY.md §3)."""
     import logging
@@ -2188,6 +2206,17 @@ def build_parser() -> argparse.ArgumentParser:
     s = cp.add_parser("record", help="Internal: record a unit result")
     s.add_argument("--json", required=True)
     s.set_defaults(func=cmd_capture_record)
+    vm = sub.add_parser(
+        "vmstore", help="Voicemail store helper (docs/USER_PORTAL.md §2.2)"
+    ).add_subparsers(dest="vmstore_cmd", metavar="<action>", required=True)
+    s = vm.add_parser(
+        "serve", help="Serve the voicemail spool over the Unix socket (asterisk user)"
+    )
+    s.add_argument("--socket", help=argparse.SUPPRESS)
+    s.add_argument("--spool", help=argparse.SUPPRESS)
+    s.add_argument("--group", default="veyra", help=argparse.SUPPRESS)
+    s.add_argument("--once", action="store_true", help=argparse.SUPPRESS)
+    s.set_defaults(func=cmd_vmstore_serve)
     ha = sub.add_parser("ha", help="High availability (docs/HIGH_AVAILABILITY.md)").add_subparsers(
         dest="ha_cmd", metavar="<action>", required=True
     )

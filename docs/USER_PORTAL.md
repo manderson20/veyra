@@ -116,6 +116,17 @@ renumbering uses the `msg_id` line of the `.txt` file (Asterisk writes one
 since 11): the API accepts `{n}` and checks the `msg_id` the client sends
 as `If-Match`, answering 409 `message_moved` when the index changed.
 
+*Built 2026-10-19 (slice A):* `veyra.voicemail.store` (helper, verbs
+`ping|list|read|move|delete|copy|greetings|greeting_get|greeting_put|
+greeting_delete`), `veyra.voicemail.client`, `veyra.voicemail.service`
+(index, errors → problems), routes under `/me/voicemail/{id}/messages…` and
+`/voicemail/{id}/messages…`, unit `veyra-vmstore.service` (asterisk:veyra,
+`ProtectSystem=strict` with the spool and `/run/veyra` writable), `verify.sh`
+check `vmstore`, `pollmailboxes=yes`/`pollfreq=10`. Deviations: message
+audio is returned whole (no byte ranges; messages are small) and the `msg_id`
+guard is sent in the request body or query rather than `If-Match`. Not in
+this slice: call-me-to-play, Companion playback.
+
 ### 2.4 Companion
 
 The Companion shows the New count and the latest five with play; it

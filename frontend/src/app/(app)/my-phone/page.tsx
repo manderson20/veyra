@@ -4,8 +4,9 @@
 import { CallHandlingCard } from "@/components/extensions/CallHandlingCard";
 import { FollowMeCard } from "@/components/extensions/FollowMeCard";
 import { MyVoicemailCard } from "@/components/account/MyVoicemailCard";
+import { VoicemailInbox } from "@/components/voicemail/VoicemailInbox";
 import { Badge, Callout, Card, EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
-import type { MyExtension } from "@/lib/types";
+import type { MyExtension, MyVoicemail } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
 interface MyFeatureCodes {
@@ -17,6 +18,7 @@ interface MyFeatureCodes {
 export default function MyPhonePage() {
   const exts = useApiData<MyExtension[]>("/me/extensions");
   const codes = useApiData<MyFeatureCodes>("/me/feature-codes");
+  const boxes = useApiData<MyVoicemail[]>("/me/voicemail");
   if (exts.error) return <ErrorState title="Could not load your phone" error={exts.error} onRetry={exts.reload} />;
   if (!exts.data) return <LoadingState />;
   return (
@@ -39,6 +41,13 @@ export default function MyPhonePage() {
           </div>
         </section>
       ))}
+      {(boxes.data ?? []).map((b) => (
+        <Card key={b.id} title={b.shared ? `Voicemail: ${b.name}` : `Voicemail ${b.number}`}
+          subtitle={b.shared ? `Shared inbox ${b.number}; you are one of its members.` : "Your messages, as the phone has them. Playing, moving and deleting here changes what *97 plays."}>
+          <VoicemailInbox base={`/me/voicemail/${b.id}`}
+            targets={(boxes.data ?? []).filter((o) => o.id !== b.id).map((o) => ({ id: o.id, label: o.shared ? `${o.number} ${o.name}` : `${o.number} ${o.name}` }))} />
+        </Card>
+      ))}
       <MyVoicemailCard />
       {codes.data?.codes.length ? (
         <Card title="Codes you can dial" subtitle="Dial these from your phone; some take a number after the code.">
@@ -48,7 +57,7 @@ export default function MyPhonePage() {
           <p className="subtle">Always available: {Object.entries(codes.data.fixed).map(([code, what], i) => <span key={code}>{i ? ", " : ""}<span className="mono">{code}</span> {what}</span>)}.</p>
         </Card>
       ) : null}
-      <Callout tone="info" title="Coming later">Phone keys and speed dials from this page, personal contacts and your call history are planned for the user portal milestone.</Callout>
+      <Callout tone="info" title="Coming later">Greetings, phone keys and speed dials from this page, personal contacts and your call history follow in this milestone.</Callout>
     </div>
   );
 }

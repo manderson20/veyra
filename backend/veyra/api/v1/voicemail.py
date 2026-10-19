@@ -40,6 +40,7 @@ from veyra.core.security.crypto import InstallationKey
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
 from veyra.telephony.snapshot import pin_purpose
+from veyra.voicemail import service as vmsvc
 
 router = APIRouter(prefix="/voicemail", tags=["voicemail"])
 
@@ -601,4 +602,143 @@ def delete_box(
     db.delete(box)
     db.commit()
     bus.publish(Event("voicemail.deleted", {"id": str(box_id), "extension": number}))
+    return Response(status_code=204)
+
+
+# ------------------------------------------------- messages (docs/USER_PORTAL.md §2.3)
+
+
+def _message_audit(
+    db: Session,
+    ctx: RequestContext,
+    principal: Principal,
+    action: str,
+    box: VoicemailBox,
+    details: dict[str, Any],
+) -> None:
+    # No configuration change: the spool is read or written live.
+    audit.record(
+        db,
+        action=action,
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=box.organization_id,
+        target_type="voicemail_box",
+        target_id=box.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details=details,
+    )
+
+
+@router.get(
+    "/{box_id}/messages", response_model=vmsvc.MessagesOut, summary="Messages of a box (admin)"
+)
+def box_messages(
+    box_id: uuid.UUID,
+    request: Request,
+    folder: str = "INBOX",
+    principal: Principal = Depends(require("voicemail.read")),
+    db: Session = Depends(get_db),
+) -> vmsvc.MessagesOut:
+    box = _get(db, principal, box_id, "voicemail.read")
+    return vmsvc.list_messages(db, request.app.state.settings, box, folder)
+
+
+@router.get("/{box_id}/messages/{number}/audio", summary="Listen to a message (audited)")
+def box_message_audio(
+    box_id: uuid.UUID,
+    number: int,
+    request: Request,
+    folder: str = "INBOX",
+    download: bool = False,
+    principal: Principal = Depends(require("voicemail.read")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    box = _get(db, principal, box_id, "voicemail.read")
+    media, data = vmsvc.audio(db, request.app.state.settings, box, folder, number)
+    _message_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_download" if download else "voicemail.message_play",
+        box,
+        {"folder": folder, "number": number},
+    )
+    db.commit()
+    headers = {"Cache-Control": "private, no-store"}
+    if download:
+        headers["Content-Disposition"] = (
+            f'attachment; filename="voicemail-{folder.lower()}-{number:04d}.wav"'
+        )
+    return Response(content=data, media_type=media, headers=headers)
+
+
+@router.post("/{box_id}/messages/{number}/move", summary="Move a message to another folder")
+def box_message_move(
+    box_id: uuid.UUID,
+    number: int,
+    body: vmsvc.MoveIn,
+    request: Request,
+    principal: Principal = Depends(require("voicemail.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    box = _get(db, principal, box_id, "voicemail.write")
+    out = vmsvc.move(db, request.app.state.settings, box, number, body)
+    _message_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_move",
+        box,
+        {"folder": body.folder, "number": number, "to": body.to},
+    )
+    db.commit()
+    return out
+
+
+@router.post("/{box_id}/messages/{number}/forward", summary="Forward a message to another box")
+def box_message_forward(
+    box_id: uuid.UUID,
+    number: int,
+    body: vmsvc.ForwardIn,
+    request: Request,
+    principal: Principal = Depends(require("voicemail.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    box = _get(db, principal, box_id, "voicemail.write")
+    target = _get(db, principal, body.box_id, "voicemail.write")
+    out = vmsvc.forward(db, request.app.state.settings, box, number, body, target, principal.label)
+    _message_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_forward",
+        box,
+        {"folder": body.folder, "number": number, "to_box_id": str(target.id)},
+    )
+    db.commit()
+    return out
+
+
+@router.delete("/{box_id}/messages/{number}", status_code=204, summary="Delete a message")
+def box_message_delete(
+    box_id: uuid.UUID,
+    number: int,
+    request: Request,
+    folder: str = "INBOX",
+    msg_id: str | None = None,
+    principal: Principal = Depends(require("voicemail.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    box = _get(db, principal, box_id, "voicemail.write")
+    vmsvc.delete(db, request.app.state.settings, box, folder, number, msg_id)
+    _message_audit(
+        db, ctx, principal, "voicemail.message_delete", box, {"folder": folder, "number": number}
+    )
+    db.commit()
     return Response(status_code=204)

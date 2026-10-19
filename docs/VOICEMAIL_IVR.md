@@ -329,9 +329,12 @@ broken; deleting a box or a menu that something points at is refused.
 
 ## 8. Known limitations
 
-* Voicemail messages are not visible in the web interface (no inbox);
-  users listen by phone or email. Visual voicemail is a later milestone.
-* The greeting lives in Asterisk's spool and is managed from the phone.
+* Voicemail messages are visible in the web interface since 0.26.0
+  (My Phone and the administrator's Voicemail page, through the store
+  helper that runs as the asterisk user; [USER_PORTAL.md](USER_PORTAL.md)
+  §2). "Call me to play" and voicemail reports are not built.
+* The greetings live in Asterisk's spool; the phone menu (`*97`) records
+  them, and the web interface manages them from 0.26.0 (USER_PORTAL.md §3).
 * Prompt conversion is basic (linear interpolation); studio-quality prompts
   should be exported at 8 kHz mono from an audio tool.
 * Email delivery depends on the configured SMTP server; failures are

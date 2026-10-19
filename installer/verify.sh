@@ -37,7 +37,7 @@ if [[ -s "$VEYRA_DATA/ha/node.json" ]]; then
 fi
 
 # --- services
-services=(postgresql veyra-api veyra-worker veyra-firewall nginx veyra-ha-agent)
+services=(postgresql veyra-api veyra-worker veyra-firewall nginx veyra-ha-agent veyra-vmstore)
 engine_units=()
 [[ "$ENGINE" == "asterisk" ]] && engine_units=(asterisk veyra-deployer veyra-pager)
 if [[ "$HA_ROLE" == "secondary" ]]; then
@@ -310,6 +310,23 @@ if [[ -f /etc/systemd/system/veyra-upgrade@.service ]] \
     check upgrade-unit pass "updates can be installed from the interface"
 else
     check upgrade-unit warn "veyra-upgrade@.service, its polkit rule or /var/lib/veyra-upgrade missing: install updates with upgrade.sh"
+fi
+
+# --- voicemail store helper (docs/USER_PORTAL.md §2.2)
+if [[ -S /run/veyra/vmstore.sock ]]; then
+    if runuser -u "$VEYRA_USER" -- "$VEYRA_PREFIX/current/backend/.venv/bin/python" - <<'PY' 2>/dev/null
+import sys
+from veyra.voicemail.client import StoreClient
+r = StoreClient().ping()
+sys.exit(0 if r.get("readable") else 1)
+PY
+    then
+        check vmstore pass "voicemail web inbox: the store helper answers and can read the spool"
+    else
+        check vmstore fail "veyra-vmstore answers but cannot read the voicemail spool (journalctl -u veyra-vmstore)"
+    fi
+else
+    check vmstore fail "veyra-vmstore.service is not running: the voicemail web inbox is unavailable"
 fi
 
 # --- security review items (docs/PRODUCTION_HARDENING.md §5)

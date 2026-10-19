@@ -1266,12 +1266,37 @@ export interface VoicemailBoxInput {
 
 export interface MyVoicemail {
   id: string;
-  extension_id: string;
+  /** A shared inbox one of the user's extensions is a member of. */
+  shared: boolean;
+  extension_id: string | null;
   extension_number: string;
   extension_name: string;
+  number: string;
+  name: string;
   email: string | null;
   ring_seconds: number;
   is_enabled: boolean;
+}
+
+/** One voicemail message as the store helper reports it (docs/USER_PORTAL.md §2). */
+export interface VoicemailMessage {
+  number: number;
+  folder: string;
+  msg_id: string;
+  caller_number: string;
+  caller_name: string;
+  received_at: string | null;
+  duration_seconds: number;
+  urgent: boolean;
+  format: string | null;
+  size_bytes: number;
+}
+
+export interface VoicemailMessages {
+  folder: string;
+  messages: VoicemailMessage[];
+  counts: Record<string, number>;
+  folders: { key: string; label: string }[];
 }
 
 export type AudioKind = "prompt" | "bell" | "announcement" | "greeting" | "music";

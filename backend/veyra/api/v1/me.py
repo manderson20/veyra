@@ -30,9 +30,17 @@ from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, current_principal, request_context
 from veyra.core.errors import ProblemError, forbidden, not_found
-from veyra.core.models import Extension, FollowMe, Organization, UserPreference, VoicemailBox
+from veyra.core.models import (
+    Extension,
+    FollowMe,
+    Organization,
+    UserPreference,
+    VoicemailBox,
+    VoicemailBoxMember,
+)
 from veyra.core.security.principal import Principal
 from veyra.telephony import extension_state, features, routing
+from veyra.voicemail import service as vmsvc
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -328,9 +336,14 @@ def put_preferences(
 
 class MyVoicemailOut(BaseModel):
     id: uuid.UUID
-    extension_id: uuid.UUID
+    # A shared inbox (docs/VOICEMAIL_IVR.md §3.4) has no extension of its own;
+    # it is listed when one of the caller's extensions is a member.
+    shared: bool = False
+    extension_id: uuid.UUID | None
     extension_number: str
     extension_name: str
+    number: str
+    name: str
     email: str | None
     ring_seconds: int
     is_enabled: bool
@@ -350,24 +363,73 @@ def my_voicemail(
     principal: Principal = Depends(require_me),
     db: Session = Depends(get_db),
 ) -> list[MyVoicemailOut]:
+    return [_my_box_out(box, ext) for box, ext in _own_boxes(db, principal)]
+
+
+def _own_boxes(db: Session, principal: Principal) -> list[tuple[VoicemailBox, Extension | None]]:
+    """The caller's boxes: those of their extensions, then the shared inboxes
+    one of their extensions is a member of."""
     rows = db.execute(
         select(VoicemailBox, Extension)
         .join(Extension, Extension.id == VoicemailBox.extension_id)
         .where(Extension.user_id == principal.user_id)
         .order_by(Extension.number)
     ).all()
-    return [
-        MyVoicemailOut(
-            id=box.id,
-            extension_id=ext.id,
-            extension_number=ext.number,
-            extension_name=ext.display_name,
-            email=box.email,
-            ring_seconds=box.ring_seconds,
-            is_enabled=box.is_enabled,
-        )
-        for box, ext in rows
-    ]
+    out: list[tuple[VoicemailBox, Extension | None]] = [(b, e) for b, e in rows]
+    shared = db.scalars(
+        select(VoicemailBox)
+        .join(VoicemailBoxMember, VoicemailBoxMember.box_id == VoicemailBox.id)
+        .join(Extension, Extension.id == VoicemailBoxMember.extension_id)
+        .where(Extension.user_id == principal.user_id, VoicemailBox.extension_id.is_(None))
+        .distinct()
+        .order_by(VoicemailBox.number)
+    ).all()
+    out.extend((b, None) for b in shared)
+    return out
+
+
+def _my_box_out(box: VoicemailBox, ext: Extension | None) -> MyVoicemailOut:
+    return MyVoicemailOut(
+        id=box.id,
+        shared=ext is None,
+        extension_id=ext.id if ext else None,
+        extension_number=ext.number if ext else (box.number or ""),
+        extension_name=ext.display_name if ext else (box.name or "Shared inbox"),
+        number=ext.number if ext else (box.number or ""),
+        name=ext.display_name if ext else (box.name or "Shared inbox"),
+        email=box.email,
+        ring_seconds=box.ring_seconds,
+        is_enabled=box.is_enabled,
+    )
+
+
+def _own_box(db: Session, principal: Principal, box_id: uuid.UUID) -> VoicemailBox:
+    for box, _ in _own_boxes(db, principal):
+        if box.id == box_id:
+            return box
+    raise not_found("Voicemail box")
+
+
+def _box_audit(
+    db: Session,
+    ctx: RequestContext,
+    principal: Principal,
+    action: str,
+    box: VoicemailBox,
+    details: dict[str, Any],
+) -> None:
+    audit.record(
+        db,
+        action=action,
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=box.organization_id,
+        target_type="voicemail_box",
+        target_id=box.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"self_service": True, **details},
+    )
 
 
 @router.post("/voicemail/{box_id}/pin", status_code=204, summary="Change your voicemail PIN")
@@ -404,5 +466,142 @@ def my_voicemail_pin(
     # The PIN lives in voicemail.conf: the change reaches the phone system at
     # the next deployment.
     configmgmt.mark_changed(db, by=principal.label, what=f"voicemail.pin_change {ext.number}")
+    db.commit()
+    return Response(status_code=204)
+
+
+# ------------------------------------------------- voicemail messages (§2)
+
+
+@router.get(
+    "/voicemail/{box_id}/messages",
+    response_model=vmsvc.MessagesOut,
+    summary="Messages of one of your voicemail boxes",
+)
+def my_messages(
+    box_id: uuid.UUID,
+    request: Request,
+    folder: str = "INBOX",
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> vmsvc.MessagesOut:
+    box = _own_box(db, principal, box_id)
+    return vmsvc.list_messages(db, request.app.state.settings, box, folder)
+
+
+@router.get(
+    "/voicemail/{box_id}/messages/{number}/audio",
+    summary="Listen to one of your messages (audited)",
+)
+def my_message_audio(
+    box_id: uuid.UUID,
+    number: int,
+    request: Request,
+    folder: str = "INBOX",
+    download: bool = False,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    box = _own_box(db, principal, box_id)
+    media, data = vmsvc.audio(db, request.app.state.settings, box, folder, number)
+    _box_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_download" if download else "voicemail.message_play",
+        box,
+        {"folder": folder, "number": number},
+    )
+    db.commit()
+    headers = {"Cache-Control": "private, no-store"}
+    if download:
+        headers["Content-Disposition"] = (
+            f'attachment; filename="voicemail-{folder.lower()}-{number:04d}.wav"'
+        )
+    return Response(content=data, media_type=media, headers=headers)
+
+
+@router.post(
+    "/voicemail/{box_id}/messages/{number}/move",
+    summary="Move one of your messages to another folder",
+)
+def my_message_move(
+    box_id: uuid.UUID,
+    number: int,
+    body: vmsvc.MoveIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    box = _own_box(db, principal, box_id)
+    out = vmsvc.move(db, request.app.state.settings, box, number, body)
+    _box_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_move",
+        box,
+        {"folder": body.folder, "number": number, "to": body.to},
+    )
+    db.commit()
+    return out
+
+
+@router.post(
+    "/voicemail/{box_id}/messages/{number}/forward",
+    summary="Forward one of your messages to another box you can see",
+)
+def my_message_forward(
+    box_id: uuid.UUID,
+    number: int,
+    body: vmsvc.ForwardIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    box = _own_box(db, principal, box_id)
+    # A user forwards within what they may see: their own boxes, or any box
+    # of their organization by extension (a colleague's mailbox).
+    target = db.get(VoicemailBox, body.box_id)
+    if target is None or target.organization_id != box.organization_id:
+        raise not_found("Voicemail box")
+    out = vmsvc.forward(
+        db, request.app.state.settings, box, number, body, target, f"{principal.label}"
+    )
+    _box_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_forward",
+        box,
+        {"folder": body.folder, "number": number, "to_box_id": str(target.id)},
+    )
+    db.commit()
+    return out
+
+
+@router.delete(
+    "/voicemail/{box_id}/messages/{number}",
+    status_code=204,
+    summary="Delete one of your messages",
+)
+def my_message_delete(
+    box_id: uuid.UUID,
+    number: int,
+    request: Request,
+    folder: str = "INBOX",
+    msg_id: str | None = None,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    box = _own_box(db, principal, box_id)
+    vmsvc.delete(db, request.app.state.settings, box, folder, number, msg_id)
+    _box_audit(
+        db, ctx, principal, "voicemail.message_delete", box, {"folder": folder, "number": number}
+    )
     db.commit()
     return Response(status_code=204)

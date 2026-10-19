@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     # generated voicemail.conf); it writes them into the mail queue
     # (docs/VOICEMAIL_IVR.md §2). Shipped with the release.
     mailqueue_command: str = "/opt/veyra/current/installer/bin/veyra-mailqueue"
+    # Asterisk's voicemail spool and the socket of the store helper that reads
+    # and writes it as the asterisk user (docs/USER_PORTAL.md §2.2).
+    voicemail_spool: Path = Path("/var/spool/asterisk/voicemail")
+    vmstore_socket: Path = Path("/run/veyra/vmstore.sock")
 
     # --- Companion extension ----------------------------------------------------
     # Where the installer leaves the packaged extension (zip, signed crx and
