@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.6 — 2026-10-20
+
+No migration. Deploy the telephony configuration after installing for the per-queue log-in keys.
 
 ### Added
 - **Queue log-in key for one queue** (#130): a Toggle key with `queue:<slug>` logs the phone in and out of that queue only, and is lit while it is logged in there (beside `agent`, which toggles every queue). Takes effect at the next deployment.
