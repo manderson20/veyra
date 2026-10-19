@@ -384,7 +384,7 @@ Where the build departs from the sections above:
   retention document's `calls` row.
 * **Emergency calling:** buildings with their own address are managed
   under Sites → Buildings and extensions are placed by site, building and
-  room (0.27.1, #126); no Companion pop-up (#127); the responder's phone
+  room (0.27.1, #126); the Companion pops up for the site's recipients (0.27.5, #127: users of the recipient extensions and users with a recipient email, through the call-event stream, marked TEST for test notifications); the responder's phone
   hears the extension number read out (`veyra-emergency-notify`) rather
   than a prompt; the ELIN callback uses Asterisk's own database
   (`DB(veyra_ecb/<elin>)`), written by the emergency route itself, so it

@@ -258,8 +258,14 @@ def test_notification(
     )
     adapter = getattr(request.app.state, "telephony", None)
     results = service.notify(db, settings, adapter, call)
+    # The Companion pop-up for the responders (issue #127), marked as a test.
+    from veyra.api.v1.events import hub_of
+
+    users, alert = service.companion_alert(db, call)
+    hub_of(request.app).alert_from_thread(users, alert)
+    results = dict(call.notifications or results)
     ok = any(
-        str(v.get("state", "")).startswith(("queued", "started"))
+        str(v.get("state", "")).startswith(("queued", "started", "sent"))
         for v in results.values()
         if isinstance(v, dict)
     ) or any(

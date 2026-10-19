@@ -328,3 +328,58 @@ def test_cli_readiness_for_verify(admin, app, capsys):
     assert "1 of 1 sites with extensions are not emergency-ready: Main Campus (missing:" in out
     assert main(["emergency", "readiness", "--json"]) == 3
     assert '"not_ready": 1' in capsys.readouterr().out
+
+
+def test_companion_alert_reaches_the_responders(admin, app):
+    """The site's recipients see a Companion pop-up (#127): users of the
+    recipient extensions and users with a recipient email."""
+    import asyncio
+
+    from veyra.core.callevents import CallEventHub
+    from veyra.core.models import User
+
+    org_id, site, _ext = _site_and_ext(admin)
+    me = admin.get("/api/v1/auth/session").json()["user"]
+    nurse = admin.post(
+        "/api/v1/users",
+        json={
+            "email": "nurse@district.local",
+            "display_name": "Nurse",
+            "password": "a long enough passphrase",
+            "home_organization_id": org_id,
+        },
+    ).json()
+    admin.post(
+        "/api/v1/extensions",
+        json={
+            "organization_id": org_id,
+            "number": "1000",
+            "display_name": "Office",
+            "user_id": nurse["id"],
+        },
+    )
+    with session_scope() as db:
+        s = db.get(Site, uuid.UUID(site["id"]))
+        s.emergency_recipients = {"emails": [ADMIN_EMAIL.upper()], "extensions": ["1000"]}
+        call = service.record_call(
+            db, {"extension": "1001", "site": site["id"], "number": "911", "route": "em"}
+        )
+        users, alert = service.companion_alert(db, call)
+        assert users == {uuid.UUID(me["id"]), uuid.UUID(nurse["id"])}
+        assert alert["type"] == "emergency" and alert["extension_number"] == "1001"
+        assert alert["site"] == "Main Campus" and alert["test"] is False
+        assert "Room 101" in alert["location"]
+        assert call.notifications["companion"] == {"state": "sent", "users": 2}
+        assert db.get(User, uuid.UUID(nurse["id"])) is not None
+
+    async def deliver() -> list:
+        hub = CallEventHub()
+        mine = hub.subscribe(uuid.UUID(nurse["id"]), {})
+        other = hub.subscribe(uuid.uuid4(), {})
+        assert hub.alert(users, alert) == 1
+        hub.alert_from_thread(users, {**alert, "test": True})
+        await asyncio.sleep(0)
+        return [mine.queue.qsize(), other.queue.qsize(), mine.queue.get_nowait()]
+
+    sizes = asyncio.run(deliver())
+    assert sizes[0] == 2 and sizes[1] == 0 and sizes[2]["type"] == "emergency"

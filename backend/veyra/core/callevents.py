@@ -50,7 +50,11 @@ class CallEvent:
 class Subscriber:
     user_id: uuid.UUID
     endpoints: dict[str, tuple[uuid.UUID, str]]  # endpoint -> (extension id, number)
-    queue: asyncio.Queue[CallEvent] = field(default_factory=lambda: asyncio.Queue(QUEUE_SIZE))
+    # Call events of the user's phones, or an alert for the user itself (a dict
+    # sent as is, such as an emergency call, docs/PRODUCTION_HARDENING.md §6).
+    queue: asyncio.Queue[CallEvent | dict[str, Any]] = field(
+        default_factory=lambda: asyncio.Queue(QUEUE_SIZE)
+    )
 
 
 @dataclass
@@ -68,6 +72,8 @@ class CallEventHub:
         self.state: ListenerState = "disabled"
         self.last_error: str | None = None
         self.events_seen = 0
+        # The event loop the streams run on, for alerts sent from other threads.
+        self.loop: asyncio.AbstractEventLoop | None = None
 
     # --- tickets ------------------------------------------------------------
 
@@ -95,6 +101,8 @@ class CallEventHub:
     ) -> Subscriber:
         sub = Subscriber(user_id=user_id, endpoints=dict(endpoints))
         self.subscribers.add(sub)
+        with contextlib.suppress(RuntimeError):
+            self.loop = asyncio.get_running_loop()
         return sub
 
     def unsubscribe(self, sub: Subscriber) -> None:
@@ -114,6 +122,24 @@ class CallEventHub:
             sub.queue.put_nowait(event)
             delivered += 1
         return delivered
+
+    def alert(self, user_ids: set[uuid.UUID], payload: dict[str, Any]) -> int:
+        """Send ``payload`` to every stream of these users (issue #127)."""
+        delivered = 0
+        for sub in list(self.subscribers):
+            if sub.user_id not in user_ids:
+                continue
+            if sub.queue.full():
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    sub.queue.get_nowait()
+            sub.queue.put_nowait(payload)
+            delivered += 1
+        return delivered
+
+    def alert_from_thread(self, user_ids: set[uuid.UUID], payload: dict[str, Any]) -> None:
+        """:meth:`alert` from a request or worker thread."""
+        if self.loop is not None and user_ids:
+            self.loop.call_soon_threadsafe(self.alert, user_ids, payload)
 
     def status(self) -> dict[str, Any]:
         return {

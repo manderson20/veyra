@@ -52,7 +52,21 @@ export interface CallEndedEvent extends CallEventFields {
 }
 
 export type CallEvent = CallRingingEvent | CallDialingEvent | CallAnsweredEvent | CallEndedEvent;
-export type StreamEvent = HelloEvent | PingEvent | CallEvent;
+
+/** An emergency call at a site this user is a responder for (backend
+ * veyra/emergency/service.py `companion_alert`, issue #127). */
+export interface EmergencyEvent {
+  type: "emergency";
+  test: boolean;
+  number: string;
+  extension_number: string;
+  extension_name: string | null;
+  site: string | null;
+  location: string;
+  at: string;
+}
+
+export type StreamEvent = HelloEvent | PingEvent | CallEvent | EmergencyEvent;
 
 const CALL_TYPES = new Set(["call.ringing", "call.dialing", "call.answered", "call.ended"]);
 const LISTENER_STATES = new Set<string>(["connected", "reconnecting", "disabled"]);
@@ -108,6 +122,17 @@ export function parseStreamEvent(text: string): StreamEvent | null {
     }
     case "ping":
       return { type: "ping", listener: listener(data.listener) };
+    case "emergency":
+      return {
+        type: "emergency",
+        test: data.test === true,
+        number: str(data.number, "911"),
+        extension_number: str(data.extension_number),
+        extension_name: nullableStr(data.extension_name),
+        site: nullableStr(data.site),
+        location: str(data.location, "unknown location"),
+        at: str(data.at, new Date().toISOString()),
+      };
     case "call.ringing":
     case "call.dialing":
     case "call.answered":
@@ -130,4 +155,13 @@ export function parseStreamEvent(text: string): StreamEvent | null {
     default:
       return null;
   }
+}
+
+/** The pop-up text of an emergency alert. */
+export function emergencyNotice(e: EmergencyEvent): { title: string; message: string } {
+  const who = e.extension_name ? `${e.extension_name} (${e.extension_number})` : e.extension_number;
+  return {
+    title: `${e.test ? "TEST: " : ""}EMERGENCY call to ${e.number}`,
+    message: `From ${who}${e.site ? ` at ${e.site}` : ""}: ${e.location}.`,
+  };
 }

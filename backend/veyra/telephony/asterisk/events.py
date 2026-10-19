@@ -165,9 +165,10 @@ LIVE_WEBHOOK_EVENTS = frozenset({"call.ringing", "call.answered"})
 EMERGENCY_EVENT = "VeyraEmergency"
 
 
-def _emergency(event: dict[str, Any]) -> None:
+def _emergency(event: dict[str, Any]) -> tuple[set[Any], dict[str, Any]] | None:
     """``UserEvent(VeyraEmergency)`` from the emergency route: record the call
-    and notify the site (docs/PRODUCTION_HARDENING.md §6); never raises."""
+    and notify the site (docs/PRODUCTION_HARDENING.md §6); never raises.
+    Returns the responders' user ids and the Companion alert (issue #127)."""
     try:
         from veyra.core.config import get_settings
         from veyra.core.db import session_scope
@@ -177,9 +178,11 @@ def _emergency(event: dict[str, Any]) -> None:
         settings = get_settings()
         adapter = get_adapter(settings) if settings.telephony_engine != "none" else None
         with session_scope() as db:
-            service.handle_event(db, settings, adapter, event.get("userevent") or {})
+            call = service.handle_event(db, settings, adapter, event.get("userevent") or {})
+            return service.companion_alert(db, call)
     except Exception:
         log.exception("Could not handle the emergency event")
+    return None
 
 
 def is_emergency_event(event: dict[str, Any]) -> bool:
@@ -382,7 +385,10 @@ class AriEventListener:
                         except ValueError:
                             continue
                         if is_emergency_event(event):
-                            await asyncio.to_thread(_emergency, event)
+                            alert = await asyncio.to_thread(_emergency, event)
+                            if alert is not None and alert[0]:
+                                n = self.hub.alert(alert[0], alert[1])
+                                log.warning("emergency alert shown in %d Companion sessions", n)
                         elif is_extstate_event(event):
                             await asyncio.to_thread(_extstate, event)
                         elif is_switch_event(event):

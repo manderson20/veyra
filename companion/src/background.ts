@@ -12,7 +12,7 @@
 import { readManaged } from "./lib/managed";
 import { challengeOf, newVerifier, parseRedirect, startUrl, type SsoProvider } from "./lib/sso";
 import { ApiError, SignedOut, VeyraClient, describeError, normalizeServerUrl } from "./lib/api";
-import { isCallEvent, parseStreamEvent, type ListenerState } from "./lib/events";
+import { emergencyNotice, isCallEvent, parseStreamEvent, type ListenerState } from "./lib/events";
 import type {
   DialResult,
   DirectoryResult,
@@ -667,6 +667,19 @@ async function handleFrame(ws: WebSocket, text: string, client: VeyraClient): Pr
         })),
       });
     }
+    return;
+  }
+  if (event.type === "emergency") {
+    // Stays until dismissed, whatever the incoming-call preference (#127).
+    const notice = emergencyNotice(event);
+    notify(`veyra-emergency-${event.at}-${event.extension_number}`, {
+      type: "basic",
+      iconUrl: ICON,
+      title: notice.title,
+      message: notice.message,
+      priority: 2,
+      requireInteraction: true,
+    });
     return;
   }
   if (!isCallEvent(event)) {

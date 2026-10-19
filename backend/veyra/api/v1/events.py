@@ -127,6 +127,9 @@ async def calls_stream(websocket: WebSocket) -> None:
                 event = None
             if read_task.done():
                 break
+            if isinstance(event, dict):
+                await websocket.send_text(json.dumps(event))
+                continue
             if event is not None:
                 ext_id, number = sub.endpoints[event.endpoint]
                 await websocket.send_text(json.dumps(event.payload(ext_id, number)))

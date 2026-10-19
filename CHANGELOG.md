@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Emergency pop-up in the Companion** (#127): when someone dials 911 (or the emergency number), the people the site lists as emergency recipients — by their extension or their email address — get a Companion notification on their computer that stays until dismissed: who called, the building and room, and the site. "Send test notification" on the site's emergency page shows it too, marked TEST. Needs the new Companion build.
+
 ## 0.27.4 — 2026-10-20
 
 More audit items. Migration `0057`. Phones pick up the intercom setting at their next configuration check.

@@ -145,8 +145,8 @@ developer build steps.
 
 | Part | Role |
 |---|---|
-| Service worker (`background.ts`) | Holds the token in `chrome.storage.local`; keeps the event WebSocket open (reconnect with backoff; a `chrome.alarms` tick every minute as the safety net); shows notifications for ringing and missed calls with a "Call back" button; registers the context menu "Call … with Veyra" on selected text; answers messages from the popup, options page and content script |
-| Popup (`popup.html`) | Sign-in (server address, email, password, second-factor code); dial field with the user's extensions and a Call button; speed-dial buttons; directory search with one-click dial; recent calls from the event stream; connection status |
+| Service worker (`background.ts`) | Holds the token in `chrome.storage.local`; keeps the event WebSocket open (reconnect with backoff; a `chrome.alarms` tick every minute as the safety net); shows notifications for ringing and missed calls with a "Call back" button, and emergency-call alerts for the site's responders that stay until dismissed (#127); registers the context menu "Call … with Veyra" on selected text; answers messages from the popup, options page and content script |
+| Popup (`popup.html`) | Sign-in (server address, email, password, second-factor code); dial field with the user's extensions and a Call button; favourite contacts from My Phone (#128); directory search with one-click dial; recent calls from the event stream; connection status |
 | Options page | Dial prefix, notification toggles, "handle tel: links", speed-dial editor; all saved to the server through `/me/preferences` |
 | Content script (optional) | When enabled, intercepts clicks on `tel:` links and dials through Veyra instead of the operating system; registered at run time with the `scripting` API after the user grants the site permission |
 

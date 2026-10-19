@@ -28,6 +28,7 @@ from veyra.core.models import (
     OutboundRoute,
     OutboundRouteTrunk,
     Site,
+    User,
 )
 from veyra.core.models.base import utcnow
 
@@ -262,6 +263,52 @@ def handle_event(
     call = record_call(db, fields)
     notify(db, settings, adapter, call)
     return call
+
+
+def companion_alert(db: Session, call: EmergencyCall) -> tuple[set[uuid.UUID], dict[str, Any]]:
+    """Who sees the Companion pop-up (issue #127) and what it says: the users
+    of the site's recipient extensions and the users with a recipient email
+    address, the people the site already chose as responders."""
+    site = db.get(Site, call.site_id) if call.site_id else None
+    ext = db.get(Extension, call.extension_id) if call.extension_id else None
+    recipients = dict(site.emergency_recipients or {}) if site else {}
+    numbers = [str(n) for n in recipients.get("extensions") or [] if str(n).strip()]
+    emails = [str(e).strip().lower() for e in recipients.get("emails") or [] if str(e).strip()]
+    users: set[uuid.UUID] = set()
+    if numbers:
+        users |= {
+            u
+            for u in db.scalars(
+                select(Extension.user_id).where(
+                    Extension.organization_id == call.organization_id,
+                    Extension.number.in_(numbers),
+                    Extension.user_id.is_not(None),
+                )
+            )
+            if u
+        }
+    if emails:
+        users |= set(
+            db.scalars(
+                select(User.id).where(func.lower(User.email).in_(emails), User.is_active.is_(True))
+            )
+        )
+    payload = {
+        "type": "emergency",
+        "test": call.kind == "test",
+        "number": call.number,
+        "extension_number": call.extension_number,
+        "extension_name": ext.display_name if ext else None,
+        "site": site.name if site else None,
+        "location": call.location or "unknown location",
+        "at": call.occurred_at.isoformat(timespec="seconds"),
+    }
+    if users:
+        notes = dict(call.notifications or {})
+        notes["companion"] = {"state": "sent", "users": len(users)}
+        call.notifications = notes
+        db.flush()
+    return users, payload
 
 
 # ------------------------------------------------------------------ readiness
