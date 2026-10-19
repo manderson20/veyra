@@ -352,6 +352,10 @@ function progressTone(p: InstallProgressModel): "ok" | "danger" | "info" {
 function InstallProgressBody({ progress, reloadButton = true, fill = false }: { progress: InstallProgressModel; reloadButton?: boolean; fill?: boolean }) {
   const { status, unreachable, now, outcome } = progress;
   const logRef = useRef<HTMLPreElement>(null);
+  // The output starts open while the installation runs or failed, closed
+  // once it succeeded; the user's own choice wins after that.
+  const [logChoice, setLogChoice] = useState<boolean | null>(null);
+  const logOpen = logChoice ?? outcome !== "succeeded";
 
   // The log keeps showing its newest line.
   const run = status?.run ?? null;
@@ -360,7 +364,7 @@ function InstallProgressBody({ progress, reloadButton = true, fill = false }: { 
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [lastLine, lines.length]);
+  }, [lastLine, lines.length, logOpen]);
 
   const pending = status?.pending ?? null;
   const phase = pending?.phase ?? (run?.state === "running" ? "running" : null);
@@ -381,17 +385,19 @@ function InstallProgressBody({ progress, reloadButton = true, fill = false }: { 
   const installerSteps = lines.filter((l) => l.startsWith("==> ")).map((l) => l.slice(4));
 
   // In the dialog the output pane takes the remaining height and is the only
-  // thing that scrolls; on the page it has a fixed height.
-  const grow = fill ? { flex: "1 1 auto", minHeight: 0 } : {};
+  // thing that scrolls; everything above it keeps its height. On the page
+  // it has a fixed height. (A <details> element cannot be laid out this way:
+  // browsers do not apply flex to its content, so the pane overflowed.)
+  const keep = fill ? { flex: "0 0 auto" } : undefined;
   return (
     <div className="stack stack--sm" style={fill ? { flex: "1 1 auto", minHeight: 0 } : undefined}>
-      <p>
+      <p style={keep}>
         {unreachable ? <strong>Veyra is restarting; this page reconnects by itself.</strong> : null}
         {unreachable ? " " : ""}
         {total !== null ? <>{outcome ? "Took" : "Running for"} {elapsedLabel(total)}{approvedAt ? " since the approval" : ""}. </> : null}
         Calls are not affected.
       </p>
-      <ol className="stepper" aria-label="Installation stages">
+      <ol className="stepper" aria-label="Installation stages" style={keep}>
         <Stage index={1} state="done" title="Approved"
           note={pending?.approved_by || approvedAt ? <>{pending?.approved_by ? `by ${pending.approved_by}` : ""}{approvedAt ? ` at ${formatDateTime(approvedAt)}` : ""}</> : undefined} />
         {phase === "window" ? (
@@ -413,16 +419,20 @@ function InstallProgressBody({ progress, reloadButton = true, fill = false }: { 
             : at("finishing") === "current" ? "The new version is recording the result and sending the notification." : undefined} />
       </ol>
       {outcome === "succeeded" && reloadButton ? (
-        <p><Button size="sm" onClick={() => window.location.reload()}>Reload the page</Button> to use the new version.</p>
+        <p style={keep}><Button size="sm" onClick={() => window.location.reload()}>Reload the page</Button> to use the new version.</p>
       ) : null}
-      {run?.error ? <p>{run.error}</p> : null}
-      {pending?.error ? <p>{pending.error}</p> : null}
+      {run?.error ? <p style={keep}>{run.error}</p> : null}
+      {pending?.error ? <p style={keep}>{pending.error}</p> : null}
       {run?.log_file ? <p className="subtle" style={{ flex: "0 0 auto", margin: 0 }}>Full log on the server: <code>{run.log_file}</code></p> : null}
       {lines.length ? (
-        <details open={outcome !== "succeeded"} style={fill ? { display: "flex", flexDirection: "column", overflow: "hidden", ...grow } : undefined}>
-          <summary>Installer output{run?.state === "running" ? " (live)" : ""}</summary>
-          <pre ref={logRef} className="mono" style={{ ...(fill ? { ...grow, maxHeight: "60vh" } : { maxHeight: 240 }), overflow: "auto", whiteSpace: "pre-wrap", margin: 0 }}>{lines.join("\n")}</pre>
-        </details>
+        <div className="stack stack--xs" style={fill && logOpen ? { flex: "1 1 auto", minHeight: 0 } : keep}>
+          <button type="button" className="btn btn--sm btn--ghost" aria-expanded={logOpen} onClick={() => setLogChoice(!logOpen)} style={{ flex: "0 0 auto", alignSelf: "flex-start" }}>
+            <Icon name={logOpen ? "chevronDown" : "chevronRight"} size={14} /> Installer output{run?.state === "running" ? " (live)" : ""}
+          </button>
+          {logOpen ? (
+            <pre ref={logRef} className="mono" style={{ ...(fill ? { flex: "1 1 0", minHeight: 96 } : { maxHeight: 240 }), overflow: "auto", whiteSpace: "pre-wrap", margin: 0 }}>{lines.join("\n")}</pre>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
