@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 8,
+  "sequence": 9,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.26.0",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Milestone 20, the user portal: voicemail inbox and greetings on My Phone (new helper service veyra-vmstore), personal contacts and speed dials, recent calls with own recordings behind an organization setting, presence with automatic actions and a colleagues view, user-set phone keys in slots administrators leave open (all other keys locked), and My Phone as a canvas of widgets with administrator layout templates. Migrations 0047-0051. Fax follows as 0.26.x. Notes: https://github.com/manderson20/veyra/releases/tag/v0.26.0",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted. A new service, veyra-vmstore, is installed and started.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "5185343036",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.26.0/veyra-0.26.0.tar.gz",
+        "sha256": "fc71bec6723a8cd434b869806fe192dd06b87bf73aa11cd87c2ad3014b075179",
+        "size": 8124484
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -139,6 +156,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T00:23:22+00:00",
-  "expires_at": "2027-01-17T00:23:22+00:00"
+  "generated_at": "2026-10-19T02:08:27+00:00",
+  "expires_at": "2027-01-17T02:08:27+00:00"
 }
