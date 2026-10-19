@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Fixed
+- **Updates: one scroll bar while installing** (#91). The review window no longer scrolls as a whole during an installation: the stages and summary stay in view and only the installer output scrolls.
+
 ## 0.26.5 — 2026-10-19
 
 Migration `0053`.

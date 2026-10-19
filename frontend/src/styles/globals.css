@@ -318,6 +318,9 @@ button.sidebar__heading:hover { color: var(--sidebar-text); }
 .dialog__title { font-size: var(--text-lg); font-weight: var(--weight-semibold); }
 .dialog__description { color: var(--text-muted); margin-top: var(--space-1); }
 .dialog__body { padding: var(--space-2) var(--space-6) var(--space-5); overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); }
+/* One scroll bar: the body itself never scrolls, the filling child does (the installer output of the Updates dialog). */
+.dialog--inner-scroll .dialog__body { overflow: hidden; min-height: 0; flex: 1 1 auto; }
+.dialog--inner-scroll .dialog__body > * { min-height: 0; }
 .dialog__footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border); background: var(--surface-2); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
 .drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; border-radius: 0; width: min(520px, 100vw); }
 .drawer[open] { animation: drawer-in 180ms var(--ease); }

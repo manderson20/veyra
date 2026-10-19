@@ -349,7 +349,7 @@ function progressTone(p: InstallProgressModel): "ok" | "danger" | "info" {
 
 /** The timeline, the installer's live output and the outcome; the page shows
  * it in a callout, the review dialog in place of the release's details. */
-function InstallProgressBody({ progress, reloadButton = true }: { progress: InstallProgressModel; reloadButton?: boolean }) {
+function InstallProgressBody({ progress, reloadButton = true, fill = false }: { progress: InstallProgressModel; reloadButton?: boolean; fill?: boolean }) {
   const { status, unreachable, now, outcome } = progress;
   const logRef = useRef<HTMLPreElement>(null);
 
@@ -380,8 +380,11 @@ function InstallProgressBody({ progress, reloadButton = true }: { progress: Inst
   const waitLeft = sinceWorker === null ? null : Math.max(0, interval - sinceWorker);
   const installerSteps = lines.filter((l) => l.startsWith("==> ")).map((l) => l.slice(4));
 
+  // In the dialog the output pane takes the remaining height and is the only
+  // thing that scrolls; on the page it has a fixed height.
+  const grow = fill ? { flex: "1 1 auto", minHeight: 0 } : {};
   return (
-    <div className="stack stack--sm">
+    <div className="stack stack--sm" style={fill ? { flex: "1 1 auto", minHeight: 0 } : undefined}>
       <p>
         {unreachable ? <strong>Veyra is restarting; this page reconnects by itself.</strong> : null}
         {unreachable ? " " : ""}
@@ -415,9 +418,9 @@ function InstallProgressBody({ progress, reloadButton = true }: { progress: Inst
       {run?.error ? <p>{run.error}</p> : null}
       {pending?.error ? <p>{pending.error}</p> : null}
       {lines.length ? (
-        <details open={outcome !== "succeeded"}>
+        <details open={outcome !== "succeeded"} style={fill ? { display: "flex", flexDirection: "column", ...grow } : undefined}>
           <summary>Installer output{run?.state === "running" ? " (live)" : ""}</summary>
-          <pre ref={logRef} className="mono" style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap" }}>{lines.join("\n")}</pre>
+          <pre ref={logRef} className="mono" style={{ ...(fill ? { ...grow, maxHeight: "60vh" } : { maxHeight: 240 }), overflow: "auto", whiteSpace: "pre-wrap", margin: 0 }}>{lines.join("\n")}</pre>
         </details>
       ) : null}
       {run?.log_file ? <p className="subtle">Full log on the server: <code>{run.log_file}</code></p> : null}
@@ -536,7 +539,7 @@ function ReviewDialog({ id, editable, progress, onClose, onChanged }: {
   if (showProgress) {
     const title = progress.active ? progressTitle(progress) : `Installing Veyra ${d?.version ?? ""}`;
     return (
-      <Dialog open onClose={onClose} size="lg" title={title}
+      <Dialog open onClose={onClose} size="lg" scroll="inner" title={title}
         description="This window follows the installation live. Calls are not affected."
         footer={(
           <>
@@ -544,7 +547,7 @@ function ReviewDialog({ id, editable, progress, onClose, onChanged }: {
             {progress.outcome === "succeeded" ? <Button variant="primary" icon="refresh" onClick={() => window.location.reload()}>Reload the page</Button> : null}
           </>
         )}>
-        {progress.active ? <InstallProgressBody progress={progress} reloadButton={false} /> : <LoadingState label="Starting the installation…" />}
+        {progress.active ? <InstallProgressBody progress={progress} reloadButton={false} fill /> : <LoadingState label="Starting the installation…" />}
       </Dialog>
     );
   }

@@ -15,6 +15,8 @@ interface DialogProps {
   children?: ReactNode;
   footer?: ReactNode;
   size?: "md" | "lg";
+  /** "inner": the body never scrolls; a child marked to fill takes the remaining height and scrolls itself (one scroll bar). */
+  scroll?: "body" | "inner";
   variant?: "dialog" | "drawer";
   /** Prevent closing (e.g. while a request is in flight). */
   busy?: boolean;
@@ -24,7 +26,7 @@ interface DialogProps {
  * Modal dialog on the native <dialog> element: the browser provides the focus
  * trap, inert background and Esc handling. Focus returns to the opener on close.
  */
-export function Dialog({ open, onClose, title, description, children, footer, size = "md", variant = "dialog", busy }: DialogProps) {
+export function Dialog({ open, onClose, title, description, children, footer, size = "md", variant = "dialog", busy, scroll = "body" }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descId = useId();
@@ -53,7 +55,7 @@ export function Dialog({ open, onClose, title, description, children, footer, si
     return () => el.removeEventListener("cancel", onCancel);
   }, [busy, onClose]);
 
-  const cls = ["dialog", size === "lg" && "dialog--lg", variant === "drawer" && "drawer"].filter(Boolean).join(" ");
+  const cls = ["dialog", size === "lg" && "dialog--lg", variant === "drawer" && "drawer", scroll === "inner" && "dialog--inner-scroll"].filter(Boolean).join(" ");
   return (
     <dialog
       ref={ref}
