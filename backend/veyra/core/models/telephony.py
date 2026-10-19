@@ -178,6 +178,9 @@ class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     lines: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     # Line keys replacing the profile's when not null (§4.2).
     keys: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    # The user's own keys in the slots the key list marks "user"
+    # (docs/USER_PORTAL.md §8): {"<slot index>": {type, label, value}}.
+    user_keys: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     # Per-device variable values overriding the profile's.
     values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     firmware_image_id: Mapped[uuid.UUID | None] = mapped_column(

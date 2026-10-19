@@ -99,5 +99,9 @@ def test_contacts_crud_search_speed_dials_import_export(admin, app):
     # Delete, audited as self-service.
     garage_now = {x["name"]: x for x in pat.get(ME).json()}["Bus Garage"]
     assert pat.delete(f"{ME}/{garage_now['id']}").status_code == 204
-    events = admin.get("/api/v1/audit", params={"action": "contact.create"}).json()["items"]
+    events = [
+        e
+        for e in admin.get("/api/v1/audit", params={"q": "contact.create"}).json()["items"]
+        if e["action"] == "contact.create"
+    ]
     assert events and events[0]["details"]["self_service"] is True

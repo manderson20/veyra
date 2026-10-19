@@ -256,6 +256,9 @@ Entries: `type` ∈ `line` (a registration, `value` = line index), `blf`
 (`value` = extension or ring-group number; renders a hint subscription and
 the pickup prefix for a ringing call), `speed_dial` (`value` = number),
 `page` (`value` = paging zone slug: Poly phones page a group from a key),
+`user` (an open slot the phone's user fills from My Phone with a speed dial
+or a BLF; every other key is locked for the user — the all-call key stays;
+[USER_PORTAL.md](USER_PORTAL.md) §8; 0.26.0),
 `park`/`transfer` *(later)*. Labels default to the target's name. The
 renderer resolves numbers to the organization's extensions and groups at
 render time, so renamed targets update on the next check.

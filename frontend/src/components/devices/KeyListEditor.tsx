@@ -4,7 +4,7 @@
 import { Button, SelectField, TextField } from "@/components/ui";
 import type { LineKey, LineKeyType, PagingZone } from "@/lib/types";
 
-export const KEY_TYPE_LABELS: Record<LineKeyType, string> = { line: "Line", blf: "BLF (watch a phone or group)", speed_dial: "Speed dial", page: "Page a zone" };
+export const KEY_TYPE_LABELS: Record<LineKeyType, string> = { line: "Line", blf: "BLF (watch a phone or group)", speed_dial: "Speed dial", page: "Page a zone", user: "User's choice (set from My Phone)" };
 
 /** Ordered line keys of a profile or device (docs/DEVICE_PROVISIONING.md §4.2). */
 export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys: LineKey[]; onChange: (keys: LineKey[]) => void; zones: PagingZone[]; disabled?: boolean; error?: string }) {
@@ -24,7 +24,9 @@ export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys
           <span className="mono subtle" style={{ width: 24, paddingBottom: 10 }}>{i + 1}</span>
           <SelectField label={<span className="sr-only">Key {i + 1} type</span>} value={k.type} disabled={disabled} options={(Object.keys(KEY_TYPE_LABELS) as LineKeyType[]).map((t) => ({ value: t, label: KEY_TYPE_LABELS[t] }))}
             onChange={(e) => update(i, { type: e.target.value as LineKeyType, value: e.target.value === "line" ? "1" : "" })} />
-          {k.type === "page" ? (
+          {k.type === "user" ? (
+            <span className="subtle" style={{ alignSelf: "center" }}>Open slot: the user of the phone picks a speed dial or a BLF from My Phone. Every other key is locked for them.</span>
+          ) : k.type === "page" ? (
             <SelectField label={<span className="sr-only">Zone</span>} value={k.value} disabled={disabled} placeholder="Choose a zone" options={zones.map((z) => ({ value: z.slug, label: `${z.name} (group ${z.poly_group})` }))} onChange={(e) => update(i, { value: e.target.value })} />
           ) : (
             <TextField label={<span className="sr-only">Key {i + 1} value</span>} disabled={disabled} value={k.value} placeholder={k.type === "line" ? "Line number" : "Number"} inputMode={k.type === "line" ? "numeric" : "tel"} style={{ width: 140 }} onChange={(e) => update(i, { value: e.target.value })} />

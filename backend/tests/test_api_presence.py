@@ -89,6 +89,6 @@ def test_presence_rules_and_directory(admin, app):
     me = next(e for e in entries if e["number"] == "1001")
     assert me["presence"] == "lunch" and me["presence_message"] == "Until 1"
     assert me["registered"] is True and me["on_call"] is True
-    r = admin.get("/api/v1/audit", params={"action": "extension.presence_update"})
-    events = r.json()["items"]
+    r = admin.get("/api/v1/audit", params={"q": "extension.presence_update"})
+    events = [e for e in r.json()["items"] if e["action"] == "extension.presence_update"]
     assert events and events[0]["details"]["self_service"] is True

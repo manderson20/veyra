@@ -19,7 +19,9 @@ from veyra.provisioning.spec import TemplateError
 
 MAX_KEYS = 48
 MAX_LINES = 8
-KeyType = Literal["line", "blf", "speed_dial", "page"]
+# "user": a slot left to the phone's user (docs/USER_PORTAL.md §8); the
+# administrator's other keys are locked for the user.
+KeyType = Literal["line", "blf", "speed_dial", "page", "user"]
 _NUMBER_RE = re.compile(r"^[0-9*#+]{1,32}$")
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -40,7 +42,7 @@ class LineKey(BaseModel):
 
     type: KeyType
     label: str | None = Field(None, max_length=40)
-    value: str = Field(max_length=64)
+    value: str = Field("", max_length=64)
 
     @field_validator("label")
     @classmethod
@@ -63,6 +65,8 @@ def check_keys(db: Session, organization_id: uuid.UUID, keys: list[LineKey], fie
         raise validation(field, f"at most {MAX_KEYS} keys")
     zone_slugs: set[str] | None = None
     for i, key in enumerate(keys, 1):
+        if key.type == "user":
+            continue  # an open slot has no target of its own
         if key.type == "line":
             if not key.value.isdigit() or not 1 <= int(key.value) <= MAX_LINES:
                 raise validation(field, f"key {i}: a line key names a line number 1-{MAX_LINES}")

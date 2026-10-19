@@ -167,6 +167,8 @@ class DeviceOut(BaseModel):
     extension: ExtensionRef | None
     lines: list[ExtensionRef]
     keys: list[LineKey] | None
+    # The user's own keys in the "user" slots (docs/USER_PORTAL.md §8), read-only here.
+    user_keys: dict[str, Any] | None = None
     values: dict[str, Any]
     firmware: FirmwareRef | None
     firmware_reported: str | None
@@ -385,6 +387,7 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
                 extension=primary,
                 lines=lines,
                 keys=[LineKey.model_validate(k) for k in r.keys] if r.keys is not None else None,
+                user_keys=r.user_keys,
                 values=dict(r.values),
                 firmware=fw_ref,
                 firmware_reported=r.firmware_reported,

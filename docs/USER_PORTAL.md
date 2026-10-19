@@ -304,6 +304,19 @@ every phone no matter what the user does.
   (rows of keys with labels), locked ones greyed with the lock icon, user
   slots editable (type, label, target with a contact/extension picker).
 
+*Built 2026-10-19 (slice F):* key type `user` in `device_common.KeyType`
+(`check_keys` skips it; the Poly template renders nothing for an unfilled
+slot), `devices.user_keys` JSONB (migration `0050`), `facts.merge_user_keys`
+applied in `build_facts` before `_keys`, `api/v1/me_devices.py`
+(`GET /me/devices` with the slot map, `PUT /me/devices/{id}/keys` `{keys:
+{"<slot>": {type speed_dial|blf, label, value, contact_id?} | null}}`; 422
+`slot_locked`; BLF targets must be an extension, ring group or queue of the
+organization; audited `device.user_keys`; `check_config` NOTIFY to the
+phone), `DeviceOut.user_keys` (read-only for administrators). Frontend
+`PhoneKeysCard` on My Phone; the key editor offers "User's choice".
+Deviation: the administrator edits the user's keys by clearing the slot
+type on the profile, not through a dedicated field (follow-up).
+
 ## 9. Fax (#77)
 
 Owner requirement (2026-10-18): a user uploads a PDF on My Phone and it is

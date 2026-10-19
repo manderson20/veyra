@@ -141,7 +141,11 @@ def test_own_calls_contacts_export_and_recordings(admin, app, tmp_path):
     r = pat.get(f"/api/v1/me/calls/{internal}/recording")
     assert r.status_code == 200 and r.headers["content-type"].startswith("audio/ogg")
     assert pat.get(f"/api/v1/me/calls/{inbound}/recording").status_code == 404  # no recording
-    events = admin.get("/api/v1/audit", params={"action": "recording.play"}).json()["items"]
+    events = [
+        e
+        for e in admin.get("/api/v1/audit", params={"q": "recording.play"}).json()["items"]
+        if e["action"] == "recording.play"
+    ]
     assert events and events[0]["details"]["self_service"] is True
     # Another user's call is not reachable even with the setting on.
     _user(admin, "sam@example.org")

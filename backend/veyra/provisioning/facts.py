@@ -197,6 +197,31 @@ def _line(
     }
 
 
+def merge_user_keys(
+    raw: list[dict[str, Any]], user_keys: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Fill the ``user`` slots of a key list with the device's user keys
+    (docs/USER_PORTAL.md §8); a slot the user left empty stays empty (the
+    phone shows no key there), every other key is the administrator's."""
+    out: list[dict[str, Any]] = []
+    for i, k in enumerate(raw, 1):
+        if str(k.get("type") or "") != "user":
+            out.append(dict(k))
+            continue
+        chosen = (user_keys or {}).get(str(i))
+        if isinstance(chosen, dict) and chosen.get("type") in ("blf", "speed_dial"):
+            out.append(
+                {
+                    "type": chosen["type"],
+                    "label": chosen.get("label"),
+                    "value": str(chosen.get("value") or ""),
+                }
+            )
+        else:
+            out.append({"type": "user", "label": None, "value": ""})
+    return out
+
+
 def _keys(
     db: Session, org_id: uuid.UUID, raw: list[dict[str, Any]], zones: dict[str, PagingZone]
 ) -> list[dict[str, Any]]:
@@ -238,6 +263,8 @@ def _keys(
             entry["label"] = label or zone.name
         elif kind == "line":
             entry["label"] = label or f"Line {value}"
+        elif kind == "user":
+            continue  # an open slot the user has not filled: no key rendered
         out.append(entry)
     return out
 
@@ -363,7 +390,7 @@ def build_facts(
         for z in db.scalars(select(PagingZone).where(PagingZone.organization_id == org.id))
     }
     raw_keys = device.keys if device.keys is not None else profile.keys
-    keys = _keys(db, org.id, list(raw_keys or []), zones)
+    keys = _keys(db, org.id, merge_user_keys(list(raw_keys or []), device.user_keys), zones)
     paging = _paging(db, profile)
     sip = load_sip_settings(db)
     transport = str(values.get("sip_transport") or "UDPOnly")

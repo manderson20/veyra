@@ -183,9 +183,9 @@ def test_inbox_for_own_and_shared_boxes(admin, app, helper):
     assert r.status_code == 200 and r.json()["counts"]["INBOX"] == 2
 
     # Audit: every listening and change, flagged as self-service.
-    r = admin.get("/api/v1/audit", params={"action": "voicemail.message_play"})
+    r = admin.get("/api/v1/audit", params={"q": "voicemail.message_play"})
     assert r.status_code == 200, r.text
-    events = r.json()["items"]
+    events = [e for e in r.json()["items"] if e["action"] == "voicemail.message_play"]
     assert events and events[0]["details"]["self_service"] is True
 
     # Administrator parity on the same routes under /voicemail.
@@ -263,7 +263,11 @@ def test_greetings_upload_play_limit_and_delete(admin, app, helper):
     r = user.delete(base + "/unavail")
     assert r.status_code == 200 and not {x["kind"]: x for x in r.json()}["unavail"]["recorded"]
     assert not stored.exists()
-    events = admin.get("/api/v1/audit", params={"action": "voicemail.greeting_set"}).json()["items"]
+    events = [
+        e
+        for e in admin.get("/api/v1/audit", params={"q": "voicemail.greeting_set"}).json()["items"]
+        if e["action"] == "voicemail.greeting_set"
+    ]
     assert (
         events
         and events[0]["details"]["kind"] == "unavail"

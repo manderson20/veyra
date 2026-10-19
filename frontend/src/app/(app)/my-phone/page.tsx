@@ -9,7 +9,8 @@ import { ContactsCard } from "@/components/portal/ContactsCard";
 import { RecentCallsCard } from "@/components/portal/RecentCallsCard";
 import { PresenceCard } from "@/components/portal/PresenceCard";
 import { ColleaguesCard } from "@/components/portal/ColleaguesCard";
-import { Badge, Callout, Card, EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
+import { PhoneKeysCard } from "@/components/portal/PhoneKeysCard";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
 import type { MyExtension, MyVoicemail } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
@@ -59,6 +60,7 @@ export default function MyPhonePage() {
         <RecentCallsCard extensions={exts.data} />
       </div>
       {exts.data.length ? <ColleaguesCard extensions={exts.data} /> : null}
+      <PhoneKeysCard />
       {codes.data?.codes.length ? (
         <Card title="Codes you can dial" subtitle="Dial these from your phone; some take a number after the code.">
           <ul className="list">
@@ -67,7 +69,6 @@ export default function MyPhonePage() {
           <p className="subtle">Always available: {Object.entries(codes.data.fixed).map(([code, what], i) => <span key={code}>{i ? ", " : ""}<span className="mono">{code}</span> {what}</span>)}.</p>
         </Card>
       ) : null}
-      <Callout tone="info" title="Coming later">Phone keys from this page follow in this milestone.</Callout>
     </div>
   );
 }

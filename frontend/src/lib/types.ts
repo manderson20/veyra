@@ -1304,6 +1304,28 @@ export interface ContactInput {
   notes: string | null;
 }
 
+/** One of the user's phones with its key slots (docs/USER_PORTAL.md §8). */
+export interface MyDeviceSlot {
+  index: number;
+  kind: "locked" | "user";
+  type: string | null;
+  label: string | null;
+  value: string | null;
+}
+export interface MyDevice {
+  id: string;
+  label: string | null;
+  manufacturer: string;
+  model: string;
+  mac_display: string;
+  extension_id: string;
+  extension_number: string;
+  profile_name: string | null;
+  slots: MyDeviceSlot[];
+  user_slots: number;
+}
+export interface UserKeyInput { type: "speed_dial" | "blf"; label: string | null; value: string; contact_id?: string | null }
+
 /** One voicemail message as the store helper reports it (docs/USER_PORTAL.md §2). */
 export interface VoicemailMessage {
   number: number;
@@ -1940,7 +1962,8 @@ export interface PageLogEntry {
   detail: Record<string, unknown>;
 }
 
-export type LineKeyType = "line" | "blf" | "speed_dial" | "page";
+/** "user": an open slot the phone's user fills from My Phone (docs/USER_PORTAL.md §8). */
+export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user";
 
 export interface LineKey {
   type: LineKeyType;
