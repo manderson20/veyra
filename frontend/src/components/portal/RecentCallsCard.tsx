@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { clock, DIRECTION, OUTCOME, party } from "@/components/calls/format";
-import { Badge, Button, Callout, Card, Icon, SelectField, useToast } from "@/components/ui";
+import { Badge, Button, Callout, Card, Dialog, Icon, SelectField, TextField, useToast } from "@/components/ui";
 import { buttonClass } from "@/components/ui/Button";
 import { API_BASE, api, errorMessage } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
@@ -23,6 +23,7 @@ export function RecentCallsCard({ extensions }: { extensions: MyExtension[] }) {
   const [playing, setPlaying] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<string | null>(null);
   const [dialing, setDialing] = useState<string | null>(null);
+  const [adding, setAdding] = useState<{ number: string; name: string } | null>(null);
   const mine = new Set(extensions.map((x) => x.number));
   const phone = extensions.find((x) => x.is_enabled) ?? extensions[0];
 
@@ -80,12 +81,44 @@ export function RecentCallsCard({ extensions }: { extensions: MyExtension[] }) {
               <span className="row" style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {c.recorded ? <Button size="sm" icon={playing === c.id ? "stop" : "play"} onClick={() => play(c)}>{playing === c.id ? "Close" : "Recording"}</Button> : null}
                 {callable ? <Button size="sm" icon="phone" loading={dialing === o.number} onClick={() => dial(o.number!)}>Call back</Button> : null}
+                {callable && !o.ext && !c.contact_name ? <Button size="sm" icon="plus" onClick={() => setAdding({ number: o.number!, name: o.name ?? "" })}>Add to contacts</Button> : null}
               </span>
             </li>
           );
         })}
       </ul>
       <MoreRows {...rows} />
+      {adding ? <AddContactDialog number={adding.number} name={adding.name} onClose={() => setAdding(null)} onAdded={() => { setAdding(null); calls.reload(); }} /> : null}
     </Card>
+  );
+}
+
+/** Save the other party of a call as a contact (#136). */
+function AddContactDialog({ number, name: initial, onClose, onAdded }: { number: string; name: string; onClose: () => void; onAdded: () => void }) {
+  const toast = useToast();
+  const [name, setName] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post("/me/contacts", { name: name.trim(), numbers: [{ label: "work", number }] });
+      toast.success(`${name.trim()} added to your contacts`);
+      onAdded();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onClose={onClose} busy={busy} title="Add to contacts" description={`Save ${number} so its name shows on your calls and voicemail.`}
+      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" loading={busy} disabled={!name.trim()} onClick={save}>Add contact</Button></>}>
+      <div className="stack stack--sm">
+        <TextField label="Name" required autoFocus value={name} maxLength={200} placeholder="e.g. Pat Parent" onChange={(e) => setName(e.target.value)} />
+        {error ? <Callout tone="danger">{error}</Callout> : null}
+      </div>
+    </Dialog>
   );
 }

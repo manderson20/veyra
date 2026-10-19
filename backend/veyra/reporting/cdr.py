@@ -440,6 +440,15 @@ def process(db: Session, reader: CdrReader | None = None) -> int:
     if finished and webhooks.subscribed(db, "call.ended"):
         for call in finished:
             sources.call_ended(db, call)
+    # Missed-call email for the users who want it (issue #136).
+    if finished:
+        from veyra.core.config import get_settings
+        from veyra.reporting import missed
+
+        try:
+            missed.notify(db, finished, get_settings().mailqueue_dir)
+        except Exception:
+            log.exception("missed-call email failed")
     if n:
         log.info("Call history: %d CDRs read", n)
     return n

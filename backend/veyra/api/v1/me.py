@@ -328,6 +328,8 @@ class PortalPreferences(BaseModel):
     # The user's own canvas (docs/USER_PORTAL.md §10), validated as a layout
     # document when set; None: the template (or the default) applies.
     layout: dict[str, Any] | None = None
+    # An email for each call to the user's extension nobody answered (#136).
+    missed_call_email: bool = False
 
     @field_validator("layout")
     @classmethod
@@ -373,7 +375,23 @@ def get_preferences(
     return _out(_load(db, principal.user_id))
 
 
-@router.put("/preferences", response_model=PreferencesOut, summary="Replace your preferences")
+def _merged(stored: dict[str, Any] | None, body: PreferencesDoc) -> dict[str, Any]:
+    """The stored document with the sections and fields the request names:
+    the Companion saves only ``companion``, a My Phone card only its own
+    portal fields, and neither erases the other's."""
+    try:
+        base = PreferencesDoc.model_validate(stored or {}).model_dump(mode="json")
+    except ValueError:
+        base = PreferencesDoc().model_dump(mode="json")
+    sent = body.model_dump(mode="json")
+    for section in body.model_fields_set:
+        part = getattr(body, section)
+        for field in part.model_fields_set:
+            base[section][field] = sent[section][field]
+    return base
+
+
+@router.put("/preferences", response_model=PreferencesOut, summary="Update your preferences")
 def put_preferences(
     body: PreferencesDoc,
     principal: Principal = Depends(require_me),
@@ -384,8 +402,8 @@ def put_preferences(
         ext = db.get(Extension, body.companion.default_extension_id)
         if ext is None or ext.user_id != principal.user_id:
             body.companion.default_extension_id = None
-    data: dict[str, Any] = body.model_dump(mode="json")
     row = _load(db, principal.user_id)
+    data = _merged(row.data if row else None, body)
     if row is None:
         row = UserPreference(user_id=principal.user_id, data=data)
         db.add(row)

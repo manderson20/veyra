@@ -208,8 +208,10 @@ audited `recording.play`/`recording.download` with `self_service`),
 `/me/calls` from `veyra.portal.contacts` (number → name, national numbers
 also by their last ten digits), the same names on the voicemail list.
 Frontend `components/portal/RecentCallsCard.tsx` (filter, call back,
-recording player, export). Not built: "add to contacts" from a call row,
-missed-call email.
+recording player, export). Since 0.27.5 (#136): "Add to contacts" on a
+call row with an outside number, and the missed-call email
+(`portal.missed_call_email`; `reporting/missed.py` after each call-history
+pass, one email per finished `missed` call to the user's extension).
 
 ## 6. Personal contacts and speed dials (#60)
 
@@ -514,6 +516,5 @@ model, service and API, interface)
 ## 14. Known limitations (planned)
 
 No WebRTC browser phone (P2), no call-me-to-play, no phone-side presence
-menu, no user-group object (roles and departments instead), no missed-call
-email yet (the `voicemail.message` webhook and the call-history widget
-cover the need in part), Companion widgets only for the inbox counts.
+menu, no user-group object (roles and departments instead), Companion
+widgets only for the inbox counts.

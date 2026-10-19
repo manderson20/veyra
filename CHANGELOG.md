@@ -11,8 +11,13 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ## Unreleased
 
 ### Added
+- **Missed-call emails** (#136): Account → Missed calls → "Email me about missed calls" sends one short email per call to your phone that nobody answered, with who called and when.
+- **Add to contacts from a call** (#136): My Phone → Recent calls has "Add to contacts" for an outside caller, so their name shows on later calls and voicemail.
 - **Edit rows on module pages** (#115): module pages built from tables can now offer an edit form — click a row to change it. AND Clocks 0.2.0 uses it for clocks (name, address, group, model); update the module under System → Modules. Module API 1.2.
 - **Emergency pop-up in the Companion** (#127): when someone dials 911 (or the emergency number), the people the site lists as emergency recipients — by their extension or their email address — get a Companion notification on their computer that stays until dismissed: who called, the building and room, and the site. "Send test notification" on the site's emergency page shows it too, marked TEST. Needs the new Companion build.
+
+### Fixed
+- **Saving one setting no longer resets others**: saving presence rules on My Phone, or settings in the Companion, replaced the whole preferences document and could reset the user's own My Phone layout or the other client's settings; only the changed settings are saved now.
 
 ## 0.27.4 — 2026-10-20
 
