@@ -25,6 +25,7 @@ from veyra.core.models import (
     CallQueue,
     CallRecord,
     CallRecording,
+    ConferenceRoom,
     Extension,
     InboundRoute,
     Organization,
@@ -339,6 +340,9 @@ class RecordingOut(BaseModel):
     from_number: str | None
     from_name: str | None
     to_number: str | None
+    # A conference room's recording (#133): the room instead of a call.
+    conference_room_id: uuid.UUID | None = None
+    conference_name: str | None = None
     duration_seconds: int
     size_bytes: int
     created_at: datetime
@@ -389,20 +393,36 @@ def _rec_outs(db: Session, rows: list[CallRecording]) -> list[RecordingOut]:
             )
         )
     }
+    rooms = {
+        room.id: room.name
+        for room in db.scalars(
+            select(ConferenceRoom).where(
+                ConferenceRoom.id.in_({r.conference_room_id for r in rows if r.conference_room_id})
+            )
+        )
+    }
     out = []
     for r in rows:
         c = calls.get(r.call_id) if r.call_id else None
+        conference = r.ref.startswith("conf-")
+        started = c.started_at if c else (files.conference_started(r.ref) if conference else None)
         out.append(
             RecordingOut(
                 id=r.id,
                 organization_id=r.organization_id,
                 call_id=r.call_id,
                 policy_name=policies.get(r.policy_id) if r.policy_id else None,
-                started_at=c.started_at if c else None,
+                started_at=started,
                 direction=c.direction if c else None,
                 from_number=c.from_number if c else None,
                 from_name=c.from_name if c else None,
                 to_number=c.to_number if c else None,
+                conference_room_id=r.conference_room_id,
+                conference_name=(
+                    rooms.get(r.conference_room_id, "Deleted room")
+                    if r.conference_room_id
+                    else ("Deleted room" if conference else None)
+                ),
                 duration_seconds=r.duration_seconds,
                 size_bytes=r.size_bytes,
                 created_at=r.created_at,

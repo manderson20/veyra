@@ -15,19 +15,33 @@ import shutil
 import subprocess
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from veyra.core.models import CallRecord, CallRecording, Organization, RecordingPolicy
+from veyra.core.models import (
+    CallRecord,
+    CallRecording,
+    ConferenceRoom,
+    Organization,
+    RecordingPolicy,
+)
 from veyra.core.models.base import utcnow
 from veyra.telephony.audio import wav_duration
 
 log = logging.getLogger("veyra.reporting")
 
 INCOMING = "incoming"
+# ConfBridge writes <conferences>/<org>--<room slug>-<epoch>.wav while the
+# room is recorded (generator.DEFAULT_CONFERENCES_SUBDIR).
+CONFERENCES = "conferences"
+_CONF_RE = re.compile(
+    r"^(?P<org>[0-9a-z-]{1,63})--(?P<slug>[0-9a-z-]{1,40})-(?P<ts>[0-9]{9,11})\.wav$"
+)
+# The file grows for as long as the room is up; untouched this long, it is done.
+CONFERENCE_DONE_AFTER = timedelta(minutes=2)
 _NAME_RE = re.compile(r"^(?P<ref>[0-9A-Za-z._-]{1,64})--(?P<policy>[0-9a-f-]{36})\.wav$")
 # A WAV with no matching call is converted anyway after this long (the CDR
 # was lost, or the call never reached a bridge).
@@ -157,6 +171,76 @@ def process(
     if stored:
         log.info("Stored %d call recordings", stored)
     return stored
+
+
+def process_conferences(
+    db: Session,
+    recordings_dir: Path,
+    now: datetime | None = None,
+    clock: float | None = None,
+) -> int:
+    """Store finished conference recordings with the call recordings (#133)."""
+    now = now or utcnow()
+    clock = clock if clock is not None else time.time()
+    try:
+        files = sorted((recordings_dir / CONFERENCES).glob("*.wav"))
+    except OSError:
+        return 0
+    stored = 0
+    for wav in files:
+        m = _CONF_RE.match(wav.name)
+        if not m:
+            continue
+        try:
+            st = wav.stat()
+        except OSError:
+            continue
+        if clock - st.st_mtime < CONFERENCE_DONE_AFTER.total_seconds():
+            continue
+        ref = f"conf-{m.group('ts')}-{m.group('slug')}"[:64]
+        if db.scalar(select(CallRecording.id).where(CallRecording.ref == ref)):
+            wav.unlink(missing_ok=True)
+            continue
+        if st.st_size <= EMPTY_WAV_BYTES:
+            wav.unlink(missing_ok=True)
+            continue
+        room = db.scalar(select(ConferenceRoom).where(ConferenceRoom.slug == m.group("slug")))
+        org_id = room.organization_id if room else None
+        started = datetime.fromtimestamp(int(m.group("ts")), tz=now.tzinfo)
+        rel = Path(_org_slug(db, org_id)) / f"{started:%Y}" / f"{started:%m}" / f"{ref}.ogg"
+        dst = recordings_dir / rel
+        duration = round(wav_duration(wav))
+        try:
+            convert(wav, dst)
+        except ConversionError as e:
+            log.warning("Conference recording %s not converted: %s", ref, e)
+            continue
+        db.add(
+            CallRecording(
+                id=uuid.uuid4(),
+                ref=ref,
+                organization_id=org_id,
+                conference_room_id=room.id if room else None,
+                path=str(rel),
+                format="ogg",
+                size_bytes=dst.stat().st_size,
+                duration_seconds=duration,
+                created_at=now,
+                delete_after=now + timedelta(days=DEFAULT_RETENTION_DAYS),
+            )
+        )
+        db.flush()
+        wav.unlink(missing_ok=True)
+        stored += 1
+    if stored:
+        log.info("Stored %d conference recordings", stored)
+    return stored
+
+
+def conference_started(ref: str) -> datetime | None:
+    """The start time a conference recording's ref carries."""
+    m = re.match(r"^conf-([0-9]{9,11})-", ref)
+    return datetime.fromtimestamp(int(m.group(1)), tz=UTC) if m else None
 
 
 def prune(db: Session, recordings_dir: Path, now: datetime | None = None) -> int:

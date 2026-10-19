@@ -1189,6 +1189,8 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     recordings.process(db, settings.recordings_dir)
+                with session_scope() as db:
+                    recordings.process_conferences(db, settings.recordings_dir)
                 # Queue events for the queue reports (docs/REPORTING.md §5.1).
                 from veyra.reporting import queues as queue_log
 

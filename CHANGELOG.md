@@ -11,6 +11,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ## Unreleased
 
 ### Added
+- **Conference recordings on the Call Recording page** (#133): recordings of conference rooms with recording on are stored like call recordings (kept 90 days, can be held) and listed with the room's name. Migration `0055`.
 - **Reports** (#121): the dashboard's "Calls today" compares with the same weekday last week up to the same time of day; the Reports trunk table shows the most calls up at once on each trunk in the period, to compare with the carrier's channel limit.
 
 ### Changed

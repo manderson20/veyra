@@ -58,6 +58,10 @@ class CallRecording(UUIDPrimaryKey, TenantScoped, Base):
     policy_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("recording_policies.id", ondelete="SET NULL")
     )
+    # A conference room's recording (issue #133) instead of a call's.
+    conference_room_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL"), index=True
+    )
     # Relative to <data>/recordings.
     path: Mapped[str] = mapped_column(String(300))
     format: Mapped[str] = mapped_column(String(16), default="ogg")

@@ -225,8 +225,8 @@ function Recordings() {
   const columns: Column<CallRecordingItem>[] = [
     { key: "when", header: "Call", render: (r) => <span className="nowrap">{formatDateTime(r.started_at ?? r.created_at)}</span> },
     { key: "dir", header: <span className="sr-only">Direction</span>, render: (r) => (r.direction ? DIRECTION[r.direction].label : "—") },
-    { key: "from", header: "From", render: (r) => party(r.from_number, r.from_name) },
-    { key: "to", header: "To", render: (r) => party(r.to_number, null) },
+    { key: "from", header: "From", render: (r) => r.conference_name ? <span><Badge tone="neutral" icon="users">Conference</Badge> {r.conference_name}</span> : party(r.from_number, r.from_name) },
+    { key: "to", header: "To", render: (r) => r.conference_name ? <span className="subtle">Whole room</span> : party(r.to_number, null) },
     { key: "len", header: "Length", render: (r) => <span className="mono">{clock(r.duration_seconds)}</span> },
     { key: "keep", header: "Deleted on", render: (r) => (r.held ? <Badge tone="info">Held</Badge> : r.delete_after ? <span className="nowrap">{formatDateTime(r.delete_after)}</span> : "—") },
     {

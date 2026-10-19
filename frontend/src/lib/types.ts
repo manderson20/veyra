@@ -2582,6 +2582,9 @@ export interface CallRecordingItem {
   from_number: string | null;
   from_name: string | null;
   to_number: string | null;
+  /** A conference room's recording (#133) instead of a call's. */
+  conference_room_id?: string | null;
+  conference_name?: string | null;
   duration_seconds: number;
   size_bytes: number;
   created_at: string;
