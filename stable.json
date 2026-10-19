@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 19,
+  "sequence": 20,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.3",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Built-in bells and chimes in the audio library, voicemail greeting keys 1 and 2, presence keys on phones, and direct-to-voicemail now plays the greeting. Deploy the telephony configuration after installing.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "2bf2652143",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.3/veyra-0.27.3.tar.gz",
+        "sha256": "799cd527e0bc3a7783c677c9905f69e4f2f27dce22714a3aba93da012bd589f7",
+        "size": 8273686
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -326,6 +343,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T21:42:42+00:00",
-  "expires_at": "2027-01-17T21:42:42+00:00"
+  "generated_at": "2026-10-19T22:19:20+00:00",
+  "expires_at": "2027-01-17T22:19:20+00:00"
 }
