@@ -22,6 +22,7 @@ from veyra.telephony.adapter import (
     TelephonyAdapter,
     TrunkRegistration,
 )
+from veyra.telephony.asterisk import adapter as asterisk_adapter
 from veyra.telephony.asterisk import generator
 
 
@@ -163,6 +164,12 @@ class FakeAdapter(TelephonyAdapter):
         return dict(self.store.get(family, {}))
 
     def store_put(self, family: str, key: str, value: str | None) -> None:
+        # The same checks as the engine adapter, so a key it would refuse
+        # (and only log) fails the test instead.
+        asterisk_adapter._check_family(family)
+        asterisk_adapter._check_store_key(key)
+        if value is not None and not asterisk_adapter._STORE_VALUE_RE.match(value):
+            raise ValueError(f"store value {value!r} is not valid")
         self.store_calls.append((family, key, value))
         fam = self.store.setdefault(family, {})
         if value:

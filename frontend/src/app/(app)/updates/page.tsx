@@ -67,6 +67,7 @@ const STATE: Record<string, { tone: "ok" | "neutral" | "danger" | "warn" | "info
   installing: { tone: "warn", label: "Installing" },
   installed: { tone: "ok", label: "Installed" },
   failed: { tone: "danger", label: "Failed" },
+  superseded: { tone: "neutral", label: "Superseded" },
 };
 
 const DAYS = [

@@ -74,6 +74,14 @@ The metadata expires 90 days after the last `add` or `refresh`; a quiet
 quarter needs `veyra release refresh` + `sign` + push before then, or every
 server reports the feed as rejected.
 
+A release that can only be installed from a given version onwards (because
+an intermediate release performed a one-off step outside the migration
+chain) is added with `--min-from <version>`: the server shows the
+requirement, refuses approval below it and the runner refuses again (§3.3).
+Ordinary releases need no `--min-from`: migrations chain, and `upgrade.sh`
+takes a server from any earlier version in one step, so skipping releases
+is safe and the skipped ones are then marked superseded (§2).
+
 ### 1.3 Trust
 
 Update metadata is accepted only when signed by a key in
@@ -93,6 +101,12 @@ match the signed size and SHA-256 before they are kept.
   approved → installing → installed / failed*.
 * Only one core version is kept downloaded at a time (the newest
   compatible); older downloads are removed.
+* The list shows Veyra's releases newest first. A release that is not newer
+  than the installed version (one skipped by installing a later release, or
+  a failed attempt at an older one) becomes *superseded* after the next check
+  or a successful installation and leaves the list; its download is removed.
+  Releases that must be installed from a given version onwards say so with
+  `min_from_version` (§3.3), which blocks approval and the runner alike.
 
 ## 3. Approve and apply
 

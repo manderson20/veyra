@@ -118,6 +118,9 @@ Two defects found and fixed in 0.25.5:
   phone's `*45`/`*46` toggles read (`database show veyra/agent` was empty after
   an API login), so the next press on the phone would have repeated the login.
   The agent module now writes them with the queue member and the lamps.
+  *Correction after the 0.26.0 install:* the engine adapter refused those
+  keys (a path in a store key) and only logged it; fixed in 0.26.1, when
+  `database show veyra/agent` showed the marks after an API login.
 
 Not exercised (no phones in the session): audio paths, the PIN prompts, DTMF
 during a call (`*1`, `*2`, `##`), parking by transfer and the ring-back,

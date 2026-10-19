@@ -3,6 +3,7 @@
 §4.10): the queue API, the live state endpoint, phone events, the worker's
 sync and the generated configuration."""
 
+import pytest
 from fake_adapter import FakeAdapter
 from test_api_ivr import _ext, _org
 from test_generator_callflow import _context, _files, _snapshot
@@ -243,3 +244,28 @@ def test_generated_queue_agents_and_breakout():
         and "exten => *45,1" not in dp2
         and "exten => *472400,1" in dp2
     )
+
+
+def test_engine_adapter_writes_agent_marks(monkeypatch, tmp_path):
+    """The real adapter accepts the agent marks' path keys and issues the
+    AstDB commands the dialplan reads (a refused key was only logged before)."""
+    from veyra.telephony.asterisk import adapter as asterisk_adapter
+    from veyra.telephony.asterisk import cli
+
+    commands: list[str] = []
+    monkeypatch.setattr(cli, "run", lambda cmd: (commands.append(cmd), (True, ""))[1])
+    pw = tmp_path / "ari"
+    pw.write_text("x")
+    a = asterisk_adapter.AsteriskAdapter("http://localhost:8088/ari", "veyra", pw)
+    a.store_put("veyra/agent", "example/1001/sales", "1")
+    a.store_put("veyra/agent", "example/1001", "1")
+    a.store_put("veyra/agent", "example/1001/paused", None)
+    assert commands == [
+        "database put veyra/agent example/1001/sales 1",
+        "database put veyra/agent example/1001 1",
+        "database del veyra/agent example/1001/paused",
+    ]
+    with pytest.raises(ValueError):
+        a.store_put("veyra/agent", "example/../1001", "1")
+    with pytest.raises(ValueError):
+        a.store_put("veyra/agent", "example/1001; reload", "1")

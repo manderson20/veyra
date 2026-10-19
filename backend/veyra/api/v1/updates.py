@@ -184,11 +184,9 @@ def available(
     db: Session = Depends(get_db),
 ) -> list[AvailableOut]:
     rows = db.scalars(
-        select(AvailableUpdate)
-        .where(AvailableUpdate.state != "dismissed")
-        .order_by(AvailableUpdate.created_at.desc())
-    )
-    return [AvailableOut.model_validate(r) for r in rows]
+        select(AvailableUpdate).where(AvailableUpdate.state.notin_(("dismissed", "superseded")))
+    ).all()
+    return [AvailableOut.model_validate(r) for r in manager.version_order(list(rows))]
 
 
 @router.get("/history", response_model=Page[HistoryOut], summary="Update history")

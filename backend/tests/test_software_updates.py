@@ -13,6 +13,7 @@ import threading
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from veyra.cli.main import main as cli
 from veyra.core.db import session_scope
@@ -451,3 +452,38 @@ def test_unused_policy_row_is_harmless(settings, db_ready):
     with session_scope() as db:
         assert db.get(UpdatePolicy, "veyra_core") is not None
         assert manager.due_for_start(db, datetime.now(UTC), lambda: 0) is None
+
+
+def test_superseded_and_newest_first(admin, settings):
+    """Releases the installed version has overtaken leave the offer; the
+    list is by version, newest first, whatever the order of discovery."""
+    rows = []
+    for version in ("98.0.0", "0.0.1", "99.0.0"):
+        rows.append(
+            AvailableUpdate(
+                component="veyra_core",
+                target="veyra",
+                version=version,
+                current_version="0.0.0",
+                channel="stable",
+                category="bugfix",
+                state="available",
+                metadata_={},
+            )
+        )
+    with session_scope() as db:
+        db.add_all(rows)
+        db.flush()
+        assert manager.supersede_older(db, settings) == 1
+        states = {r.version: r.state for r in rows}
+    assert states == {"98.0.0": "available", "0.0.1": "superseded", "99.0.0": "available"}
+    listed = [u["version"] for u in admin.get("/api/v1/updates/available").json()]
+    assert "0.0.1" not in listed
+    assert listed.index("99.0.0") < listed.index("98.0.0")
+    with session_scope() as db:
+        for r in db.scalars(
+            select(AvailableUpdate).where(
+                AvailableUpdate.version.in_(("98.0.0", "0.0.1", "99.0.0"))
+            )
+        ):
+            db.delete(r)

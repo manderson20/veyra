@@ -58,6 +58,9 @@ _STATE_ROW_RE = re.compile(
 
 
 _FAMILY_RE = re.compile(r"^veyra(/[A-Za-z0-9_.+-]{1,64}){1,3}$")
+# A store key may carry a path of its own (``<org>/<ext>/<queue>`` under
+# ``veyra/agent``); the dialplan reads the joined path with DB().
+_STORE_KEY_RE = re.compile(r"^[A-Za-z0-9+][A-Za-z0-9_.+-]{0,63}(/[A-Za-z0-9_.+-]{1,64}){0,3}$")
 _STORE_VALUE_RE = re.compile(r"^[A-Za-z0-9 ._+-]{1,200}$")
 
 
@@ -65,6 +68,12 @@ def _check_family(family: str) -> str:
     if not _FAMILY_RE.match(family):
         raise ValueError(f"store family {family!r} is not one of Veyra's")
     return family
+
+
+def _check_store_key(key: str) -> str:
+    if not _STORE_KEY_RE.match(key or "") or any(seg.strip(".") == "" for seg in key.split("/")):
+        raise ValueError(f"store key {key!r} is not valid for the engine store")
+    return key
 
 
 _SECTION_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
@@ -328,7 +337,7 @@ class AsteriskAdapter(TelephonyAdapter):
 
     def store_put(self, family: str, key: str, value: str | None) -> None:
         fam = _check_family(family)
-        k = _check_token(key, "store key")
+        k = _check_store_key(key)
         if value is not None and not _STORE_VALUE_RE.match(value):
             raise ValueError(f"store value {value!r} is not valid")
         cmd = f"database put {fam} {k} {value}" if value else f"database del {fam} {k}"

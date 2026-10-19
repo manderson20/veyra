@@ -63,6 +63,7 @@ def check_for_updates(db: Session, settings: Settings, keyring: Keyring) -> Upda
 
     before = {r.id for r in db.scalars(select(AvailableUpdate))}
     found = record_available(db, meta)
+    manager.supersede_older(db, settings)
     notify = manager.mail_notifier(db, settings)
     for row in db.scalars(select(AvailableUpdate).where(AvailableUpdate.component == "veyra_core")):
         if row.id not in before:

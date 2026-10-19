@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.26.1 — 2026-10-19
+
+### Fixed
+- **Agent log-in marks reached the engine only from the phone.** Logging an agent in or out, or pausing them, from the queue page or the API wrote the queue member and the lamps but not the `veyra/agent` marks the phone's `*45`/`*46` toggles read: the engine adapter refused store keys with a path and the 0.25.5 change was only logged as a warning. The adapter accepts path keys now, and the test double applies the engine's checks so a refused key fails the suite.
+
+### Changed
+- **Updates**: releases older than the one installed are no longer offered. After a check or a successful installation they become *superseded* and leave the list (their download is removed); Veyra's releases are listed newest first.
+
 ## 0.26.0 — 2026-10-19 (Milestone 20)
 
 Design: [docs/USER_PORTAL.md](docs/USER_PORTAL.md); report [docs/milestones/MILESTONE_20_REPORT.md](docs/milestones/MILESTONE_20_REPORT.md). Migrations `0047`–`0051`; new unit `veyra-vmstore`; new permission `portal.templates`. Fax (#77) follows as 0.26.x.

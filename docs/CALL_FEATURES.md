@@ -694,7 +694,10 @@ queue reports, restricting who may log in beyond the member list.
 API appeared in `queue show` as a dynamic member within a second; the AstDB
 marks the phone toggles read were missing, so `_write_member` and
 `_write_lamps` now write `veyra/agent/<org>/<ext>[/<queue>|/paused]` as well
-(0.25.5).
+(0.25.5). *Live check 2026-10-19 (dev1, 0.26.0):* still missing — the
+adapter's store key check refused keys with a path, so the writes were
+logged as warnings; the check now allows a path and the test double applies
+the engine's checks (0.26.1).
 
 ### 4.10 Queue break-out menu
 

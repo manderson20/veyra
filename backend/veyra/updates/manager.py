@@ -568,6 +568,7 @@ def reconcile(
         if status["state"] == "succeeded" and __version__ == row.version:
             row.state, row.error = "installed", None
             shutil.rmtree(version_dir(settings, row.version), ignore_errors=True)
+            supersede_older(db, settings)
             notify("installed", row)
         elif status["state"] == "failed":
             row.state = "failed"
@@ -580,6 +581,49 @@ def reconcile(
         row.state, row.install_finished_at = "failed", utcnow()
         row.error = "The upgrade did not start (no progress from veyra-upgrade@.service)."
         notify("failed", row)
+
+
+def supersede_older(db: Session, settings: Settings) -> int:
+    """Releases the installed version has overtaken leave the offer: a row
+    that is still available, downloaded or failed, whose version is not newer
+    than what runs now, becomes ``superseded`` (its download is removed).
+    Called after every check and after a successful installation."""
+    from veyra.updates.checker import installed_versions
+
+    current = installed_versions(db)
+    changed = 0
+    for row in db.scalars(
+        select(AvailableUpdate).where(
+            AvailableUpdate.state.in_(("available", "downloaded", "failed"))
+        )
+    ):
+        installed = current.get((row.component, row.target))
+        if installed is None:
+            continue
+        try:
+            older = Version.parse(row.version) <= Version.parse(installed)
+        except ValueError:
+            continue
+        if not older:
+            continue
+        if row.component == "veyra_core":
+            shutil.rmtree(version_dir(settings, row.version), ignore_errors=True)
+        row.state, row.install_when, row.approved_at = "superseded", None, None
+        changed += 1
+    return changed
+
+
+def version_order(rows: list[AvailableUpdate]) -> list[AvailableUpdate]:
+    """Veyra's own releases before the modules, newest version first."""
+
+    def version(r: AvailableUpdate) -> Version:
+        try:
+            return Version.parse(r.version)
+        except ValueError:
+            return Version.parse("0.0.0")
+
+    newest_first = sorted(rows, key=version, reverse=True)
+    return sorted(newest_first, key=lambda r: (r.component != "veyra_core", r.target))
 
 
 # ------------------------------------------------------------ notifications
