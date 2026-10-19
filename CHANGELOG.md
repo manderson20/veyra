@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Changed
+- **My Phone widgets fit their size** (#92): a widget smaller than its content is no longer cropped. Its title stays put and the content scrolls inside the widget; lists (recent calls, contacts, colleagues, voicemail, faxes) show as many rows as fit with "Show all"; the fax form folds behind a "Send a fax" button in a short widget; contacts show one number in a narrow widget.
+
 ## 0.26.3 — 2026-10-19
 
 Migration `0052`; new permissions `fax.read` and `fax.manage`; the installer adds the packages `ghostscript` and `libtiff-tools` and the shared directory `<data>/fax`; `verify.sh` gains `fax-tools`, `fax-engine` and `fax-dir`.

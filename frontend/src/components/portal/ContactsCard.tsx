@@ -7,6 +7,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { API_BASE, api, errorMessage } from "@/lib/api";
 import type { Contact, ContactInput, ContactNumber, MyExtension, OriginateResult } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { MoreRows, useRowLimit, useWidgetSize } from "@/components/portal/WidgetSize";
 import { useFormErrors } from "@/hooks/useFormErrors";
 
 const LABELS: { value: ContactNumber["label"]; label: string }[] = [
@@ -32,6 +33,8 @@ export function ContactsCard({ extensions }: { extensions: MyExtension[] }) {
     return rows.filter((c) => c.name.toLowerCase().includes(needle) || (c.company ?? "").toLowerCase().includes(needle)
       || (c.email ?? "").toLowerCase().includes(needle) || (digits && c.numbers.some((n) => n.number.includes(digits))));
   }, [list.data, q]);
+  const size = useWidgetSize();
+  const rows = useRowLimit(shown.length, (list.data?.length ?? 0) > 5 ? 60 : 0);
 
   const dial = async (number: string) => {
     if (!phone) return;
@@ -65,7 +68,7 @@ export function ContactsCard({ extensions }: { extensions: MyExtension[] }) {
         ) : null}
         {shown.length ? (
           <ul className="list-plain">
-            {shown.map((c) => (
+            {shown.slice(0, rows.limit).map((c) => (
               <li key={c.id} className="list-row" style={{ paddingLeft: 0, paddingRight: 0, alignItems: "flex-start" }}>
                 <span style={{ minWidth: 0 }}>
                   <span className="table__primary">
@@ -76,7 +79,7 @@ export function ContactsCard({ extensions }: { extensions: MyExtension[] }) {
                     {c.speed_dial ? <> <Badge tone="outline">Speed dial {c.speed_dial}</Badge></> : null}
                   </span>
                   <span className="table__secondary" style={{ display: "block" }}>
-                    {c.numbers.map((n) => <span key={`${n.label}-${n.number}`} style={{ marginRight: 12 }}>{LABELS.find((l) => l.value === n.label)?.label}: <span className="mono">{n.number}</span></span>)}
+                    {(size.narrow ? c.numbers.slice(0, 1) : c.numbers).map((n) => <span key={`${n.label}-${n.number}`} style={{ marginRight: 12 }}>{LABELS.find((l) => l.value === n.label)?.label}: <span className="mono">{n.number}</span></span>)}
                     {c.email ? <span>{c.email}</span> : null}
                   </span>
                 </span>
@@ -88,6 +91,7 @@ export function ContactsCard({ extensions }: { extensions: MyExtension[] }) {
             ))}
           </ul>
         ) : null}
+        <MoreRows {...rows} />
         {list.data && list.data.length > 0 && shown.length === 0 ? <p className="subtle">No contact matches.</p> : null}
       </div>
       <ContactDialog contact={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.reload(); }} />

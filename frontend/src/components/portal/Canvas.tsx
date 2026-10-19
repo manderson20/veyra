@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Button, Icon } from "@/components/ui";
 import { COLS, ROW_PX, columnsFor, heightOf, idOf, moveWidget, reflow, resizeWidget, type Placed, type Size } from "@/portal/layout";
 import { widgetByKey } from "@/portal/widgets";
+import { WidgetSizeProvider } from "@/components/portal/WidgetSize";
 
 /**
  * The portal canvas (docs/USER_PORTAL.md §10): a 12-column grid of widgets.
@@ -113,8 +114,8 @@ export function Canvas({ widgets, render, arranging, locked, onChange, onRemove 
                 </span>
               </div>
             ) : null}
-            <div className="canvas__body" style={{ height: canArrange ? "calc(100% - 34px)" : "100%", overflow: "auto", pointerEvents: canArrange ? "none" : undefined, opacity: canArrange ? 0.85 : 1 }}>
-              {render(p)}
+            <div className="canvas__body" style={{ height: canArrange ? "calc(100% - 34px)" : "100%", overflow: "hidden", pointerEvents: canArrange ? "none" : undefined, opacity: canArrange ? 0.85 : 1 }}>
+              <WidgetSizeProvider w={pos.w} h={pos.h} cols={cols}>{render(p)}</WidgetSizeProvider>
             </div>
             {canArrange ? <div className="canvas__resize" aria-hidden="true" style={{ position: "absolute", right: 2, bottom: 2, width: 16, height: 16, cursor: "nwse-resize", touchAction: "none", borderRight: "3px solid var(--border-strong)", borderBottom: "3px solid var(--border-strong)" }} onPointerDown={(e) => onPointerDown(e, p, "resize")} /> : null}
           </div>

@@ -9,6 +9,7 @@ import { API_BASE, api, errorMessage } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
 import type { CallHistoryItem, CallOutcome, MyExtension, OriginateResult, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { MoreRows, useRowLimit } from "@/components/portal/WidgetSize";
 
 const FILTERS: { value: string; label: string }[] = [
   { value: "", label: "All calls" }, { value: "missed", label: "Missed" }, { value: "answered", label: "Answered" }, { value: "voicemail", label: "To voicemail" },
@@ -48,6 +49,8 @@ export function RecentCallsCard({ extensions }: { extensions: MyExtension[] }) {
     setPlaying(playing === c.id ? null : c.id);
   };
 
+  const items = calls.data?.items ?? [];
+  const rows = useRowLimit(items.length);
   return (
     <Card title="Recent calls" subtitle="Calls to and from your phones in the last 30 days."
       actions={<div className="row"><SelectField label={<span className="sr-only">Show</span>} value={outcome} options={FILTERS} onChange={(e) => setOutcome(e.target.value)} /><a className={buttonClass("secondary", "md")} href={`${API_BASE}/me/calls/export.csv${outcome ? `?outcome=${outcome}` : ""}`} download><Icon name="download" size={14} /> Export</a></div>}>
@@ -55,7 +58,7 @@ export function RecentCallsCard({ extensions }: { extensions: MyExtension[] }) {
       {blocked ? <Callout tone="warn">{blocked}</Callout> : null}
       {calls.data && calls.data.items.length === 0 ? <p className="subtle">No calls yet.</p> : null}
       <ul className="list-plain">
-        {(calls.data?.items ?? []).map((c) => {
+        {items.slice(0, rows.limit).map((c) => {
           const o = other(c);
           const dir = DIRECTION[c.direction];
           const callable = o.number && !mine.has(o.number) && phone;
@@ -82,6 +85,7 @@ export function RecentCallsCard({ extensions }: { extensions: MyExtension[] }) {
           );
         })}
       </ul>
+      <MoreRows {...rows} />
     </Card>
   );
 }

@@ -8,6 +8,7 @@ import { API_BASE, api, errorMessage } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
 import type { FaxJob } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { MoreRows, useRowLimit, useWidgetSize } from "@/components/portal/WidgetSize";
 
 export const FAX_STATE: Record<string, { tone: "ok" | "neutral" | "danger" | "warn" | "info"; label: string }> = {
   queued: { tone: "neutral", label: "Waiting" },
@@ -38,6 +39,10 @@ export function FaxCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const size = useWidgetSize();
+  const [composing, setComposing] = useState(false);
+  const showForm = !size.compact || composing;
+  const rows = useRowLimit(jobs.data?.length ?? 0, showForm ? 260 : 40);
 
   // While one of the faxes is on its way, the list follows it.
   const active = (jobs.data ?? []).some((j) => ACTIVE_FAX_STATES.includes(j.state));
@@ -72,6 +77,7 @@ export function FaxCard() {
       setTo("");
       setSubject("");
       setNote("");
+      setComposing(false);
       jobs.reload();
     } catch (err) {
       setError(errorMessage(err));
@@ -92,7 +98,8 @@ export function FaxCard() {
   return (
     <Card title="Fax">
       <div className="stack stack--sm">
-        <form className="stack stack--sm" onSubmit={send}>
+        {!showForm ? <div><Button variant="primary" onClick={() => setComposing(true)}>Send a fax</Button></div> : null}
+        {showForm ? <form className="stack stack--sm" onSubmit={send}>
           <TextField label="Fax number" required inputMode="tel" value={number} placeholder="(573) 555-0100" disabled={busy}
             onChange={(e) => setNumber(e.target.value)} />
           <div className="field">
@@ -114,8 +121,9 @@ export function FaxCard() {
           {error ? <Callout tone="danger">{error}</Callout> : null}
           <div>
             <Button variant="primary" type="submit" loading={busy} disabled={!file || !number.trim()}>Send fax</Button>
+            {size.compact ? <Button onClick={() => setComposing(false)} disabled={busy}>Close</Button> : null}
           </div>
-        </form>
+        </form> : null}
         <h3 className="card__title">Your faxes</h3>
         {jobs.error ? (
           <Callout tone="danger">{errorMessage(jobs.error)}</Callout>
@@ -125,7 +133,7 @@ export function FaxCard() {
           <EmptyState compact icon="history" title="No faxes yet">Faxes you send appear here with their state; you are emailed when one is delivered or fails.</EmptyState>
         ) : (
           <ul className="stack stack--sm" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {jobs.data.map((j) => (
+            {jobs.data.slice(0, rows.limit).map((j) => (
               <li key={j.id} className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
                 <span style={{ minWidth: 0 }}>
                   <span className="table__primary" style={{ display: "block" }}>
@@ -148,6 +156,7 @@ export function FaxCard() {
             ))}
           </ul>
         )}
+        <MoreRows {...rows} />
       </div>
     </Card>
   );

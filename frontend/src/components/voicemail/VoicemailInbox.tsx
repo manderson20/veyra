@@ -8,6 +8,7 @@ import { API_BASE, api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatDuration, formatRelative } from "@/lib/format";
 import type { VoicemailMessage, VoicemailMessages } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { MoreRows, useRowLimit } from "@/components/portal/WidgetSize";
 
 export interface ForwardTarget { id: string; label: string }
 
@@ -60,6 +61,7 @@ export function VoicemailInbox({ base, targets, editable = true, refreshSeconds 
     }
   };
 
+  const rows = useRowLimit(list.data?.messages.length ?? 0, 60);
   if (list.error) {
     const code = (list.error as { code?: string } | null)?.code;
     return (
@@ -83,7 +85,7 @@ export function VoicemailInbox({ base, targets, editable = true, refreshSeconds 
         </EmptyState>
       ) : (
         <ul className="list-plain">
-          {data.messages.map((m) => (
+          {data.messages.slice(0, rows.limit).map((m) => (
             <li key={`${m.folder}-${m.msg_id}`} className="list-row" style={{ paddingLeft: 0, paddingRight: 0, alignItems: "flex-start" }}>
               <span style={{ minWidth: 0 }}>
                 <span className="table__primary">
@@ -117,6 +119,7 @@ export function VoicemailInbox({ base, targets, editable = true, refreshSeconds 
           ))}
         </ul>
       )}
+      <MoreRows {...rows} />
       <MoveDialog message={moving} folders={data?.folders ?? []} busy={busy} error={error} onClose={() => setMoving(null)} onMove={(to) => moving && act("move", moving, to)} />
       <ForwardDialog message={forwarding} targets={targets} busy={busy} error={error} onClose={() => setForwarding(null)} onForward={(id) => forwarding && act("forward", forwarding, id)} />
       <Dialog open={deleting !== null} onClose={() => setDeleting(null)} busy={busy} title="Delete this message?"

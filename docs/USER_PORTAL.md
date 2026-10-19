@@ -444,6 +444,18 @@ object); modules cannot register widgets yet; buildings and departments
 have no pages (and no list API) of their own yet, so the template editor
 takes their id in a field and the pickers come with those pages (M21/M22).
 
+*Built 2026-10-19 (0.26.4, #92):* widgets fit their size instead of being
+cropped. Inside a canvas item the card is a flex column: the title stays
+pinned and only the card body scrolls (one scroll bar). The canvas passes
+the placed size to every widget through `WidgetSizeProvider`
+(`components/portal/WidgetSize.tsx`): `useWidgetSize()` gives `w`, `h`,
+`compact` (under 8 rows) and `narrow` (under half the canvas), and
+`useRowLimit(total, reserve)` tells a list how many ~56 px rows fit, with
+`MoreRows` ("Show all (n more)" / "Show fewer"). Recent calls, contacts,
+colleagues, voicemail messages and faxes limit their rows; the fax form
+folds behind "Send a fax" in a short widget; contacts show one number when
+narrow. Outside the canvas (administrator pages) the limit is off.
+
 ## 11. Permissions and API summary
 
 New permissions: `portal.templates` (org admins by default),

@@ -7,6 +7,7 @@ import { Badge, Button, Callout, Card, SearchInput, useToast } from "@/component
 import { api, errorMessage } from "@/lib/api";
 import type { DirectoryEntry, MyExtension, OriginateResult, PresenceState } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { MoreRows, useRowLimit } from "@/components/portal/WidgetSize";
 
 const LABEL: Record<PresenceState, string> = { available: "Available", away: "Away", busy: "Busy", meeting: "In a meeting", lunch: "At lunch", out: "Out" };
 
@@ -33,6 +34,7 @@ export function ColleaguesCard({ extensions }: { extensions: MyExtension[] }) {
     }
   };
   const people = (dir.data?.results ?? []).filter((e) => e.type === "extension" && !mine.has(e.number));
+  const rows = useRowLimit(people.length, 60);
   return (
     <Card title="Colleagues" subtitle="Who is available right now.">
       <div className="stack stack--sm">
@@ -40,7 +42,7 @@ export function ColleaguesCard({ extensions }: { extensions: MyExtension[] }) {
         {dir.error ? <Callout tone="danger">{errorMessage(dir.error)}</Callout> : null}
         {dir.data && people.length === 0 ? <p className="subtle">Nobody matches.</p> : null}
         <ul className="list-plain">
-          {people.map((e) => {
+          {people.slice(0, rows.limit).map((e) => {
             const presence = (e.presence ?? "available") as PresenceState;
             return (
               <li key={e.id} className="list-row" style={{ paddingLeft: 0, paddingRight: 0 }}>
@@ -59,6 +61,7 @@ export function ColleaguesCard({ extensions }: { extensions: MyExtension[] }) {
             );
           })}
         </ul>
+        <MoreRows {...rows} />
       </div>
     </Card>
   );
