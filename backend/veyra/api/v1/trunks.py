@@ -94,6 +94,10 @@ class TrunkBase(BaseModel):
     fax_t38: bool = False
     qualify_frequency: int = Field(60, ge=0, le=3600)
     register_expiry: int = Field(3600, ge=60, le=86400)
+    register_retry_interval: int = Field(60, ge=10, le=3600)
+    register_forbidden_retry: int = Field(600, ge=30, le=86400)
+    # None: keep trying for as long as the carrier refuses (the default).
+    register_max_retries: int | None = Field(None, ge=1, le=100000)
 
     @field_validator("name")
     @classmethod
@@ -206,6 +210,9 @@ class TrunkPatch(BaseModel):
     fax_t38: bool | None = None
     qualify_frequency: int | None = Field(None, ge=0, le=3600)
     register_expiry: int | None = Field(None, ge=60, le=86400)
+    register_retry_interval: int | None = Field(None, ge=10, le=3600)
+    register_forbidden_retry: int | None = Field(None, ge=30, le=86400)
+    register_max_retries: int | None = Field(None, ge=1, le=100000)
 
 
 class TrunkStatusOut(BaseModel):
@@ -242,6 +249,9 @@ class TrunkOut(BaseModel):
     fax_t38: bool
     qualify_frequency: int
     register_expiry: int
+    register_retry_interval: int = 60
+    register_forbidden_retry: int = 600
+    register_max_retries: int | None = None
     status: TrunkStatusOut | None
     created_at: datetime
     updated_at: datetime
@@ -342,6 +352,9 @@ def _out(trunk: SipTrunk, live: Live | None) -> TrunkOut:
         fax_t38=trunk.fax_t38,
         qualify_frequency=trunk.qualify_frequency,
         register_expiry=trunk.register_expiry,
+        register_retry_interval=trunk.register_retry_interval,
+        register_forbidden_retry=trunk.register_forbidden_retry,
+        register_max_retries=trunk.register_max_retries,
         status=_status(trunk, live),
         created_at=trunk.created_at,
         updated_at=trunk.updated_at,

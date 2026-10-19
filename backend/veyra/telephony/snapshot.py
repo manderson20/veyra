@@ -1086,6 +1086,9 @@ def _routing(
                 "fax_t38": t.fax_t38,
                 "qualify_frequency": t.qualify_frequency,
                 "register_expiry": t.register_expiry,
+                "register_retry_interval": t.register_retry_interval,
+                "register_forbidden_retry": t.register_forbidden_retry,
+                "register_max_retries": t.register_max_retries,
             }
             for t in trunks
             if t.is_enabled

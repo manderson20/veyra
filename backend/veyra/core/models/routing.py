@@ -52,6 +52,14 @@ class SipTrunk(UUIDPrimaryKey, Timestamps, Base):
     fax_t38: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     qualify_frequency: Mapped[int] = mapped_column(Integer, default=60)
     register_expiry: Mapped[int] = mapped_column(Integer, default=3600)
+    # Registration retries (issue #142): seconds between attempts after a
+    # failure, after a 403 Forbidden, and how many attempts before giving up
+    # (None: never give up; Asterisk's own default stops after 10).
+    register_retry_interval: Mapped[int] = mapped_column(Integer, default=60, server_default="60")
+    register_forbidden_retry: Mapped[int] = mapped_column(
+        Integer, default=600, server_default="600"
+    )
+    register_max_retries: Mapped[int | None] = mapped_column(Integer)
 
 
 class TimeCondition(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

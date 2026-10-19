@@ -119,6 +119,9 @@ QUEUE_NAME_PREFIX = "veyra-"
 CONFERENCE_PIN_TRIES = 3
 CONFERENCE_MAX_MEMBERS = 500
 DEFAULT_CONFERENCES_SUBDIR = "conferences"
+# max_retries of a trunk registration that never gives up (Asterisk's limit is
+# an unsigned int; a million attempts a minute apart is years).
+REGISTER_FOREVER = 1_000_000
 # Engine switches (docs/CALL_FEATURES.md §4.5, §4.6): the store family the
 # dialplan reads, the UserEvent that tells the API, the code indexes.
 SWITCH_FAMILY = "veyra/switch"
@@ -867,6 +870,14 @@ def _trunks(sip: SipSettings, trunks: list[dict[str, Any]]) -> GeneratedFile:
                 )
             sensitive = True
             expiry = int(t.get("register_expiry") or 3600)
+            retry = int(t.get("register_retry_interval") or 60)
+            forbidden = int(t.get("register_forbidden_retry") or 600)
+            # Asterisk stops after 10 failed attempts and for good after one
+            # rejected challenge unless told otherwise (issue #142): a carrier
+            # outage must not leave the trunk unregistered until a reload.
+            max_retries = int(t.get("register_max_retries") or REGISTER_FOREVER)
+            if not (10 <= retry <= 3600 and 30 <= forbidden <= 86400 and max_retries >= 1):
+                raise GenerationError(f"trunk {slug}: registration retry settings are out of range")
             lines += [
                 f"[{name}]",
                 "type=auth",
@@ -881,8 +892,11 @@ def _trunks(sip: SipSettings, trunks: list[dict[str, Any]]) -> GeneratedFile:
                 f"server_uri=sip:{host}:{port}",
                 f"client_uri=sip:{username}@{host}",
                 f"contact_user={username}",
-                "retry_interval=60",
-                "forbidden_retry_interval=600",
+                f"retry_interval={retry}",
+                f"forbidden_retry_interval={forbidden}",
+                f"fatal_retry_interval={forbidden}",
+                f"max_retries={max_retries}",
+                "auth_rejection_permanent=no",
                 f"expiration={expiry}",
                 "line=yes",
                 f"endpoint={name}",

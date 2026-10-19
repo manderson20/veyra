@@ -34,6 +34,10 @@ export interface TrunkDraft {
   fax_t38: boolean;
   qualify_frequency: string;
   register_expiry: string;
+  register_retry_interval: string;
+  register_forbidden_retry: string;
+  /** Empty: keep trying. */
+  register_max_retries: string;
 }
 
 export const EMPTY_TRUNK: TrunkDraft = {
@@ -60,6 +64,9 @@ export const EMPTY_TRUNK: TrunkDraft = {
   fax_t38: false,
   qualify_frequency: "60",
   register_expiry: "3600",
+  register_retry_interval: "60",
+  register_forbidden_retry: "600",
+  register_max_retries: "",
 };
 
 export function trunkDraft(t: Trunk): TrunkDraft {
@@ -87,6 +94,9 @@ export function trunkDraft(t: Trunk): TrunkDraft {
     fax_t38: t.fax_t38,
     qualify_frequency: String(t.qualify_frequency),
     register_expiry: String(t.register_expiry),
+    register_retry_interval: String(t.register_retry_interval ?? 60),
+    register_forbidden_retry: String(t.register_forbidden_retry ?? 600),
+    register_max_retries: t.register_max_retries ? String(t.register_max_retries) : "",
   };
 }
 
@@ -121,6 +131,9 @@ export function trunkBody(d: TrunkDraft): TrunkInput {
     fax_t38: d.fax_t38,
     qualify_frequency: int(d.qualify_frequency, 60),
     register_expiry: int(d.register_expiry, 3600),
+    register_retry_interval: int(d.register_retry_interval, 60),
+    register_forbidden_retry: int(d.register_forbidden_retry, 600),
+    register_max_retries: d.register_max_retries.trim() ? int(d.register_max_retries, 0) : null,
   };
   if (d.password) body.password = d.password;
   else if (d.clear_password) body.password = null;
@@ -273,6 +286,16 @@ export function TrunkAllFields({ draft, onChange, errors, disabled, hasPassword 
           <TextField label="Registration expiry (seconds)" inputMode="numeric" disabled={disabled || !registration} value={draft.register_expiry} error={errors.register_expiry}
             help="How long each registration lasts (60–86400)." onChange={(e) => onChange({ register_expiry: e.target.value.replace(/\D/g, "") })} />
         </div>
+        {registration ? (
+          <div className="form-grid form-grid--3">
+            <TextField label="Retry after a failure (seconds)" inputMode="numeric" disabled={disabled} value={draft.register_retry_interval} error={errors.register_retry_interval}
+              help="10–3600; 60 by default." onChange={(e) => onChange({ register_retry_interval: e.target.value.replace(/\D/g, "") })} />
+            <TextField label="Retry after Forbidden (seconds)" inputMode="numeric" disabled={disabled} value={draft.register_forbidden_retry} error={errors.register_forbidden_retry}
+              help="When the carrier answers 403 or another refusal; 30–86400." onChange={(e) => onChange({ register_forbidden_retry: e.target.value.replace(/\D/g, "") })} />
+            <TextField label="Give up after (attempts)" inputMode="numeric" disabled={disabled} value={draft.register_max_retries} error={errors.register_max_retries} placeholder="Never"
+              help="Empty: keep trying until the carrier accepts." onChange={(e) => onChange({ register_max_retries: e.target.value.replace(/\D/g, "") })} />
+          </div>
+        ) : null}
       </FormSection>
       <hr className="divider" />
       <FormSection title="Advanced" description="Usually left empty; some carriers require specific From values or a proxy.">

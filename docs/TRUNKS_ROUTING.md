@@ -42,6 +42,7 @@ stub before the new code runs).
 | `fax_t38` | `false` (default); `true` offers T.38 fax relay to the carrier (`t38_udptl=yes`, redundancy error correction, NAT), audio fax when it declines ([USER_PORTAL.md](USER_PORTAL.md) §9) |
 | `qualify_frequency` | Seconds between OPTIONS pings (default 60; 0 disables). Drives the reachability status |
 | `register_expiry` | Registration lifetime in seconds (default 3600; registration mode) |
+| `register_retry_interval`, `register_forbidden_retry`, `register_max_retries` | Seconds between attempts after a failure (60) and after a 403 or other fatal answer (600), and attempts before giving up (empty: never). Rendered as `retry_interval`, `forbidden_retry_interval` and `fatal_retry_interval`, `max_retries` (1 000 000 when empty) and always `auth_rejection_permanent=no`: Asterisk's defaults (10 attempts, a rejected challenge is final) would leave a trunk unregistered after a short carrier outage (0.27.8, #142, migration `0058`) |
 | `is_enabled` | Disabled trunks stay in the database but are left out of the generated configuration and the routes skip them |
 
 **Status.** `GET /trunks` and `GET /trunks/{id}` carry `status: {state,
@@ -203,7 +204,7 @@ under `trunks.write` because they choose the installation's trunks.
 
 ```
 GET    /trunks?q=                         status included
-POST   /trunks                            {name, auth_mode, host, port?, transport?, username?, auth_username?, password?, from_user?, from_domain?, outbound_proxy?, match_addresses?, codecs?, max_channels?, default_caller_id?, caller_id_header?, dtmf_mode?, fax_t38?, qualify_frequency?, register_expiry?, description?, is_enabled?}
+POST   /trunks                            {name, auth_mode, host, port?, transport?, username?, auth_username?, password?, from_user?, from_domain?, outbound_proxy?, match_addresses?, codecs?, max_channels?, default_caller_id?, caller_id_header?, dtmf_mode?, fax_t38?, qualify_frequency?, register_expiry?, register_retry_interval?, register_forbidden_retry?, register_max_retries?, description?, is_enabled?}
 GET    /trunks/{id}
 PATCH  /trunks/{id}                       password: set a new one; null clears it
 DELETE /trunks/{id}                       409 trunk_in_use

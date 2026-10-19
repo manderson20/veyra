@@ -983,6 +983,9 @@ export interface Trunk {
   fax_t38: boolean;
   qualify_frequency: number;
   register_expiry: number;
+  register_retry_interval?: number;
+  register_forbidden_retry?: number;
+  register_max_retries?: number | null;
   status: TrunkStatus | null;
   created_at: string;
   updated_at: string;
@@ -1017,6 +1020,9 @@ export interface TrunkInput {
   fax_t38?: boolean;
   qualify_frequency?: number;
   register_expiry?: number;
+  register_retry_interval?: number;
+  register_forbidden_retry?: number;
+  register_max_retries?: number | null;
 }
 
 export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "call_flow" | "fax" | "directory" | "hangup";

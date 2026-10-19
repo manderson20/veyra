@@ -152,7 +152,7 @@ below are the reasons a FreePBX site would hesitate.
 | Maximum channels | yes | ✔ | |
 | Continue if busy | no | ✘ | P3 |
 | Dial manipulation rules per trunk (prepend/prefix/match) | per outbound route only | ◐ | P2 |
-| Registration tuning (retry interval, forbidden retry, max retries, expiration) | expiration only | ◐ | P2 |
+| Registration tuning (retry interval, forbidden retry, max retries, expiration) | all four (0.27.8, #142) | ✔ | — |
 | **Registration state shown** (registered / rejected / retrying) | reachability from qualify only | ✘ | **P1** |
 | Outbound proxy, contact user, codecs, qualify, DTMF mode, PAI/RPID | yes | ✔ | |
 | Inbound channel counting per trunk | no | ✘ | P3 |

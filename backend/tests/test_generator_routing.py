@@ -538,3 +538,25 @@ def test_holiday_sql_matches_python(app):
             for h in hs:
                 got = db.scalar(select(_holiday(h, local, weekday)))
                 assert bool(got) == routing.holiday_matches(h, d), (h, d)
+
+
+def test_trunk_registration_keeps_retrying():
+    """Asterisk gives up after 10 attempts and after one rejected challenge by
+    default; Veyra's trunks keep retrying unless told otherwise (#142)."""
+    from veyra.telephony.asterisk import generator as gen
+
+    snap = _snapshot()
+    snap["trunks"] = [_trunk()]
+    conf = {f.path: f.content for f in gen.generate(snap)}[gen.FILE_TRUNKS]
+    assert "retry_interval=60" in conf and "forbidden_retry_interval=600" in conf
+    assert "fatal_retry_interval=600" in conf and "auth_rejection_permanent=no" in conf
+    assert f"max_retries={gen.REGISTER_FOREVER}" in conf
+    snap["trunks"] = [
+        _trunk(register_retry_interval=30, register_forbidden_retry=1800, register_max_retries=20)
+    ]
+    conf = {f.path: f.content for f in gen.generate(snap)}[gen.FILE_TRUNKS]
+    assert "retry_interval=30" in conf and "forbidden_retry_interval=1800" in conf
+    assert "max_retries=20" in conf
+    snap["trunks"] = [_trunk(register_retry_interval=5)]
+    with pytest.raises(gen.GenerationError, match="retry"):
+        gen.generate(snap)
