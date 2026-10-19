@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.4 — 2026-10-20
+
+More audit items. Migration `0057`. Phones pick up the intercom setting at their next configuration check.
 
 ### Added
 - **Call recordings are encrypted on disk** (#122): every new call and conference recording is stored encrypted with its own key, which is protected by the installation key; recordings made before are encrypted in the background. Listening and downloading work as before. Migration `0057`. Backups keep the recordings encrypted; restoring needs the installation key, as for every other secret.
