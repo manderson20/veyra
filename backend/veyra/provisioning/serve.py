@@ -46,6 +46,7 @@ router = APIRouter(prefix="/provisioning", include_in_schema=False, tags=["provi
 
 _MAC_IN_NAME = re.compile(r"(?<![0-9a-f])([0-9a-f]{12})(?![0-9a-f])")
 _FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_DIRECTORY_RE = re.compile(r"^[0-9a-fA-F]{12}-directory\.xml$")
 EMPTY_MASTER = (
     '<?xml version="1.0" standalone="yes"?>\n'
     '<APPLICATION APP_FILE_PATH="" CONFIG_FILES="" MISC_FILES="" LOG_FILE_DIRECTORY="" />\n'
@@ -315,6 +316,10 @@ def get_file(filename: str, request: Request, db: Session = Depends(get_db)) -> 
     if cred is None:
         _log(db, request, filename=filename, mac=mac, result="unauthorized", status=401)
         return _unauthorized()
+    if _DIRECTORY_RE.match(filename):
+        # Poly phones fetch <MAC>-directory.xml by themselves: the
+        # organization's directory (docs/PROVISIONING_BREADTH.md §5).
+        return get_directory("poly.xml", request, db)
     if filename == "000000000000.cfg":
         _log(
             db,

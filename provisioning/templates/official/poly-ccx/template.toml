@@ -1,0 +1,19 @@
+spec_version = 2
+features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "ntp", "dst_rules", "vlan", "firmware", "device_credential"]
+
+[template]
+key = "poly.ccx"
+name = "Poly CCX business media phones"
+version = "0.2.0"
+manufacturer = "Poly"
+models = ["CCX 350", "CCX 400", "CCX 500", "CCX 505", "CCX 600", "CCX 700"]
+parent = "poly.vvx.base"
+parent_version = "0.2.0"
+firmware = "UC Software 7.x / 8.x (Open SIP)"
+status = "experimental"
+description = "Poly CCX business media phones in Open SIP mode on the UC Software configuration shared with the VVX family; no group paging (the CCX lacks Push-to-Talk). Not yet verified on hardware."
+
+[[files]]
+name = "veyra-{mac}.cfg"
+source = "phone.cfg.j2"
+format = "xml"

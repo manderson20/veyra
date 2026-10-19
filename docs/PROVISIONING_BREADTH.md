@@ -273,6 +273,17 @@ and NOTIFY re-provision; the new key types of §3 that the model supports.
 The owner runs it on the VVX 411 and 450; the result moves the Poly family
 to `stable`.
 
+*Built 2026-10-20 (slice F, part 1):* `poly.edge.e` (Edge E100–E550) and
+`poly.ccx` (CCX 350–700, Open SIP; the paging block is empty because the CCX
+has no Push-to-Talk) on the shared Poly base; the provisioning server answers
+Poly's own `<MAC>-directory.xml` request with the organization's directory;
+`GET /devices/export.csv?manufacturer=` (MACs plain and with colons, model,
+label, provisioning URL) and a *Redirect services* card on the Provisioning
+page with per-vendor instructions and exports; the checklist in
+[PROVISIONING_HARDWARE_CHECKS.md](PROVISIONING_HARDWARE_CHECKS.md). Still
+open: Edge V (format not published), the owner's hardware runs, Grandstream
+and CyberData on request.
+
 ## 8. Slices and order
 
 A. Variables: model, migration, resolution, API, re-provision on change,

@@ -174,3 +174,89 @@ def test_yealink_lineup_and_conference_phone(admin, app):
     assert out["error"] is None and out["template_key"] == "yealink.cp", out
     cfg = out["files"][0]["content"]
     assert "account.1.enable = 1" in cfg and "linekey." not in cfg
+
+
+def test_poly_edge_ccx_and_poly_directory(admin, app):
+    makers = admin.get("/api/v1/provisioning/models").json()["manufacturers"]
+    poly = {m for e in makers if e["name"] == "Poly" for m in e["models"]}
+    for m in ("Edge E100", "Edge E550", "CCX 350", "CCX 700", "VVX 411"):
+        assert m in poly, m
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    o = org["id"]
+    ext = _post(admin, EXT, {"organization_id": o, "number": "1010", "display_name": "Counselor"})
+    zone = _post(
+        admin,
+        ZONES,
+        {
+            "organization_id": o,
+            "name": "Office",
+            "multicast_address": "239.1.2.30",
+            "multicast_port": 5004,
+            "poly_group": 6,
+        },
+    )
+    profile = _post(
+        admin,
+        PROFILES,
+        {
+            "organization_id": o,
+            "name": "Poly media phones",
+            "template_key": "poly.vvx.base",
+            "paging": [{"zone_id": zone["id"], "subscribed": True, "transmit": True}],
+        },
+    )
+    out = {}
+    for mac, model in (("0004f2c00001", "CCX 505"), ("0004f2e00001", "Edge E450")):
+        d = _post(
+            admin,
+            DEVICES,
+            {
+                "organization_id": o,
+                "mac_address": mac,
+                "manufacturer": "Poly",
+                "model": model,
+                "profile_id": profile["id"],
+                "primary_extension_id": ext["id"],
+            },
+        )
+        p = admin.get(f"{DEVICES}/{d['id']}/preview").json()
+        assert p["error"] is None, p
+        out[model] = (p["template_key"], "\n".join(f["content"] for f in p["files"]))
+    assert out["CCX 505"][0] == "poly.ccx" and "ptt." not in out["CCX 505"][1]
+    assert out["Edge E450"][0] == "poly.edge.e" and "ptt." in out["Edge E450"][1]
+    cred = admin.post(f"/api/v1/organizations/{o}/provisioning-credential/rotate").json()
+    phone = TestClient(app, base_url="https://veyra.test")
+    r = phone.get(
+        "/provisioning/0004f2c00001-directory.xml",
+        headers=_basic(cred["username"], cred["password"]),
+    )
+    assert r.status_code == 200 and "<fn>Counselor</fn><ct>1010</ct>" in r.text
+
+
+def test_device_export_for_redirect_portals(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    profile = _post(
+        admin,
+        PROFILES,
+        {"organization_id": org["id"], "name": "Export", "template_key": "yealink.base"},
+    )
+    _post(
+        admin,
+        DEVICES,
+        {
+            "organization_id": org["id"],
+            "mac_address": "805ec0bb0002",
+            "manufacturer": "Yealink",
+            "model": "T54W",
+            "label": "Room 9",
+            "profile_id": profile["id"],
+        },
+    )
+    r = admin.get(f"{DEVICES}/export.csv", params={"manufacturer": "yealink"})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    lines = r.text.splitlines()
+    assert lines[0] == "mac,mac_colon,manufacturer,model,label,provisioning_url"
+    assert any(
+        row.startswith("805EC0BB0002,80:5E:C0:BB:00:02,Yealink,T54W,Room 9,http") for row in lines
+    )
+    assert "Poly" not in r.text

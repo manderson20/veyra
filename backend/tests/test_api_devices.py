@@ -175,11 +175,14 @@ def test_device_profile_resolves_family_values_keys_and_paging(admin):
     )
     # An abstract family resolves to the model templates underneath it.
     assert profile["template_abstract"] is True and profile["manufacturer"] == "Poly"
-    assert profile["models"] == {
+    models = profile["models"]
+    assert {k: models[k] for k in ("VVX 410", "VVX 411", "VVX 450")} == {
         "VVX 410": "poly.vvx.411",
         "VVX 411": "poly.vvx.411",
         "VVX 450": "poly.vvx.450",
     }
+    # Edge E and CCX share the family (M21).
+    assert models["Edge E450"] == "poly.edge.e" and models["CCX 505"] == "poly.ccx"
     assert profile["values"] == {"sip_transport": "TCPOnly", "registration_expires": 600}
     assert profile["keys"][1]["label"] == "Front" and profile["paging"][0]["poly_group"] == 1
     r = admin.patch(f"{PROFILES}/{profile['id']}", json={"template_key": "poly.vvx.411"})
@@ -399,12 +402,16 @@ def test_template_editor_customize_save_and_delete(admin):
     assert admin.delete(f"{base}/local.poly.411").status_code == 204
     # A profile on the family resolves to the official models.
     profile = _profile(admin, org["id"], template="local.poly.vvx")
-    assert set(profile["models"]) == {"VVX 410", "VVX 411", "VVX 450"}
+    assert {"VVX 410", "VVX 411", "VVX 450", "Edge E450", "CCX 505"} <= set(profile["models"])
     r = admin.delete(f"{base}/local.poly.vvx")
     assert r.status_code == 409 and r.json()["code"] == "template_in_use"
     admin.delete(f"{PROFILES}/{profile['id']}")
     assert admin.delete(f"{base}/local.poly.vvx").status_code == 409  # children depend on it
-    assert admin.delete(f"{base}/local.poly.vvx.411").status_code == 204
-    assert admin.delete(f"{base}/local.poly.vvx.450").status_code == 204
+    children = [
+        x["key"] for x in admin.get(base).json()["items"] if x["key"].startswith("local.poly.vvx.")
+    ]
+    assert {"local.poly.vvx.411", "local.poly.vvx.450"} <= set(children)
+    for child in children:
+        assert admin.delete(f"{base}/{child}").status_code == 204, child
     assert admin.delete(f"{base}/local.poly.vvx").status_code == 204
     assert admin.get(f"{base}/local.poly.vvx").status_code == 404

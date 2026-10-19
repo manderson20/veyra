@@ -569,6 +569,56 @@ def list_devices(
     )
 
 
+@router.get(
+    "/export.csv",
+    summary="Devices as CSV for vendor redirect portals (Yealink RPS, Poly ZTP, Grandstream GDMS)",
+)
+def export_devices(
+    request: Request,
+    organization_id: uuid.UUID | None = None,
+    manufacturer: str | None = Query(None, max_length=64),
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> Response:
+    """MAC addresses with the provisioning URL to register in a vendor's
+    redirect service (docs/PROVISIONING_BREADTH.md §6)."""
+    import csv
+    import io
+
+    from veyra.provisioning.facts import provisioning_url
+
+    stmt = _visible(principal, READ).order_by(Device.manufacturer, Device.model, Device.mac_address)
+    if organization_id:
+        stmt = stmt.where(Device.organization_id == organization_id)
+    if manufacturer:
+        stmt = stmt.where(Device.manufacturer.ilike(manufacturer.strip()))
+    url = provisioning_url(request.app.state.settings, request.headers.get("host"))
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["mac", "mac_colon", "manufacturer", "model", "label", "provisioning_url"])
+    for d in db.scalars(stmt):
+        mac = d.mac_address.upper()
+        w.writerow(
+            [
+                mac,
+                ":".join(mac[i : i + 2] for i in range(0, 12, 2)),
+                d.manufacturer,
+                d.model,
+                d.label or "",
+                url,
+            ]
+        )
+    name = f"veyra-devices{'-' + manufacturer.strip().lower() if manufacturer else ''}.csv"
+    return Response(
+        buf.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.post("", response_model=DeviceOut, status_code=201, summary="Register a device")
 def create_device(
     body: DeviceIn,

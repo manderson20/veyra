@@ -281,7 +281,9 @@ def test_provisioning_server_authenticates_logs_and_serves(admin, app):
     assert anon.get(f"{PROV}/veyra-0004f2aabbcc.cfg", headers=org_auth).status_code == 403
     assert admin.get(f"{DEVICES}/{device['id']}").json()["status"] == "error"
     admin.patch(f"{DEVICES}/{device['id']}", json={"is_enabled": True})
-    assert anon.get(f"{PROV}/0004f2aabbcc-directory.xml", headers=org_auth).status_code == 404
+    # The phone's own directory file is the organization's directory (M21 §5).
+    r = anon.get(f"{PROV}/0004f2aabbcc-directory.xml", headers=org_auth)
+    assert r.status_code == 200 and "<directory>" in r.text
     assert anon.get(f"{PROV}/..%2Fetc%2Fpasswd", headers=org_auth).status_code == 404
     # Rotating the enrollment credential does not affect the provisioned phone.
     admin.post(f"/api/v1/organizations/{org['id']}/provisioning-credential/rotate")
