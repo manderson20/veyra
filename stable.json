@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 14,
+  "sequence": 15,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.26.6",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Updates: one scroll bar while installing; only the installer output scrolls. CodeQL sanitizer rewrites.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "df949505ea",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.26.6/veyra-0.26.6.tar.gz",
+        "sha256": "b56e3dcef2bd4d1e2905438d35cf784ece64a1510ae71dfb6745d56a2ca71d6b",
+        "size": 8164255
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -241,6 +258,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T14:22:34+00:00",
-  "expires_at": "2027-01-17T14:22:34+00:00"
+  "generated_at": "2026-10-19T14:35:29+00:00",
+  "expires_at": "2027-01-17T14:35:29+00:00"
 }
