@@ -8,9 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased — 0.26.0 (Milestone 20)
+## 0.26.0 — 2026-10-19 (Milestone 20)
 
-Design: [docs/USER_PORTAL.md](docs/USER_PORTAL.md). Entries are added as each slice lands.
+Design: [docs/USER_PORTAL.md](docs/USER_PORTAL.md); report [docs/milestones/MILESTONE_20_REPORT.md](docs/milestones/MILESTONE_20_REPORT.md). Migrations `0047`–`0051`; new unit `veyra-vmstore`; new permission `portal.templates`. Fax (#77) follows as 0.26.x.
 
 ### Added
 - **Voicemail web inbox** (#31): My Phone shows the messages of your voicemail boxes and of the shared inboxes you are a member of, by folder (New, Old, Work, Family, Friends, Urgent) with caller, time and length; play them in the browser, download, move to a folder (moving to Old marks a message as heard on the phone too), forward to a colleague's box or delete. Administrators have the same on the Voicemail page ("Messages" on a box). Every listening and change is audited. Messages are reached through a new small service, `veyra-vmstore`, that runs as the asterisk user and reads and writes the voicemail spool on the API's behalf over a local socket — the API itself gains no file access; the installer installs it and `verify.sh` checks it (`vmstore`). The generated `voicemail.conf` polls mailboxes (`pollmailboxes=yes`) so the phones' message lamps follow changes made from the web.

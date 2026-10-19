@@ -1,7 +1,7 @@
 # Milestone 20 Report — User portal
 
 Branch `milestone-20` (from `main` at 0.25.5). Design:
-[USER_PORTAL.md](../USER_PORTAL.md). Status: **built 2026-10-19 (slices A–G);
+[USER_PORTAL.md](../USER_PORTAL.md). Status: **released as 0.26.0 on 2026-10-19 (slices A–G);
 fax (slice H, #77) follows as 0.26.x as the design allowed**. Issues #31,
 #32, #33, #60, #75, #78 under "M20 — User portal"; #77 stays open for the
 fax patch. Pull request #90.
