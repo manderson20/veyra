@@ -102,6 +102,7 @@ export const NAV: NavSection[] = [
     { label: "Updates", href: "/updates/", icon: "update", permissions: ["updates.read"], group: "Software" },
     { label: "Backups", href: "/system/backups/", icon: "database", permissions: ["backups.read"], group: "Software" },
     { label: "Module Manager", href: "/modules/", icon: "modules", permissions: ["modules.read"], group: "Software" },
+    { label: "Portal Layouts", href: "/system/portal-layouts/", icon: "dashboard", permissions: ["portal.templates"], group: "Platform" },
     { label: "Audit Log", href: "/audit/", icon: "audit", permissions: ["audit.read"], group: "Status" },
     { label: "Alerts", href: "/system/alerts/", icon: "alert", permissions: ["alerts.read"], group: "Status" },
     { label: "Firewall", href: "/system/firewall/", icon: "shield", permissions: ["firewall.read"], group: "Security" },

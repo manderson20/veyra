@@ -147,6 +147,11 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin"),
     ),
     PermissionDef(
+        "portal.templates",
+        "Build and assign default layouts of the user portal (My Phone)",
+        default_roles=("org_admin",),
+    ),
+    PermissionDef(
         "ivr.read",
         "View IVR menus, announcements and prompts",
         default_roles=("org_admin", "site_admin", "technician", "read_only"),

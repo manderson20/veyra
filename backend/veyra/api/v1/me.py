@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -41,6 +41,7 @@ from veyra.core.models import (
 )
 from veyra.core.security.principal import Principal
 from veyra.portal import contacts as portal_contacts
+from veyra.portal import layouts as portal_layouts
 from veyra.telephony import extension_state, features, routing
 from veyra.telephony.numbering import load_numbering_plan
 from veyra.voicemail import service as vmsvc
@@ -324,6 +325,14 @@ class PresenceRule(BaseModel):
 class PortalPreferences(BaseModel):
     model_config = ConfigDict(extra="forbid")
     presence_rules: dict[str, PresenceRule] = Field(default_factory=dict)
+    # The user's own canvas (docs/USER_PORTAL.md §10), validated as a layout
+    # document when set; None: the template (or the default) applies.
+    layout: dict[str, Any] | None = None
+
+    @field_validator("layout")
+    @classmethod
+    def _layout(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        return portal_layouts.validate_layout(v) if v is not None else None
 
     @field_validator("presence_rules")
     @classmethod
@@ -839,3 +848,137 @@ def put_my_presence(
         _own_audit(db, ctx, principal, "extension.presence_update", ext, applied)
     db.commit()
     return _presence_out(extension_state.get(db, ext.id), applied)
+
+
+# ------------------------------------------------- portal layout (§10)
+
+
+class LayoutOut(BaseModel):
+    # The user's own layout when saved, else the template's, else none (the
+    # interface then uses its built-in default).
+    layout: dict[str, Any] | None
+    source: Literal["user", "template", "default"]
+    template_id: uuid.UUID | None
+    template_name: str | None
+    locked_widgets: list[str]
+
+
+class LayoutIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    layout: dict[str, Any]
+
+    @field_validator("layout")
+    @classmethod
+    def _layout(cls, v: dict[str, Any]) -> dict[str, Any]:
+        return portal_layouts.validate_layout(v)
+
+
+def _layout_out(db: Session, principal: Principal) -> LayoutOut:
+    prefs = _load(db, principal.user_id)
+    doc = PreferencesDoc.model_validate(prefs.data if prefs and prefs.data else {})
+    template = portal_layouts.resolve_template(db, principal.user_id, None)
+    locked = list(template.locked_widgets or []) if template else []
+    if doc.portal.layout:
+        return LayoutOut(
+            layout=doc.portal.layout,
+            source="user",
+            template_id=template.id if template else None,
+            template_name=template.name if template else None,
+            locked_widgets=locked,
+        )
+    if template is not None:
+        return LayoutOut(
+            layout=dict(template.layout or {}),
+            source="template",
+            template_id=template.id,
+            template_name=template.name,
+            locked_widgets=locked,
+        )
+    return LayoutOut(
+        layout=None, source="default", template_id=None, template_name=None, locked_widgets=[]
+    )
+
+
+@router.get("/portal/layout", response_model=LayoutOut, summary="Your portal layout")
+def my_layout(
+    principal: Principal = Depends(require_me), db: Session = Depends(get_db)
+) -> LayoutOut:
+    return _layout_out(db, principal)
+
+
+@router.put("/portal/layout", response_model=LayoutOut, summary="Save your portal layout")
+def put_my_layout(
+    body: LayoutIn,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> LayoutOut:
+    template = portal_layouts.resolve_template(db, principal.user_id, None)
+    locked = set(template.locked_widgets or []) if template else set()
+    present = {w["key"] for t in body.layout["tabs"] for w in t["widgets"]}
+    missing = sorted(locked - present)
+    if missing:
+        raise ProblemError(
+            422,
+            "Locked widget",
+            f"The widget {missing[0]!r} is required by your administrators and cannot be removed.",
+            code="widget_locked",
+            errors=[{"field": "layout", "message": f"{missing[0]} is locked"}],
+        )
+    row = _load(db, principal.user_id)
+    data: dict[str, Any] = dict(row.data or {}) if row else {}
+    portal = dict(data.get("portal") or {})
+    portal["layout"] = body.layout
+    data["portal"] = portal
+    if row is None:
+        row = UserPreference(user_id=principal.user_id, data=data)
+        db.add(row)
+    else:
+        row.data = data
+    audit.record(
+        db,
+        action="portal.layout_update",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=None,
+        target_type="user",
+        target_id=principal.user_id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={
+            "self_service": True,
+            "tabs": len(body.layout["tabs"]),
+            "widgets": sum(len(t["widgets"]) for t in body.layout["tabs"]),
+        },
+    )
+    db.commit()
+    return _layout_out(db, principal)
+
+
+@router.post("/portal/layout/reset", response_model=LayoutOut, summary="Back to the default layout")
+def reset_my_layout(
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> LayoutOut:
+    row = _load(db, principal.user_id)
+    if row is not None and (row.data or {}).get("portal", {}).get("layout"):
+        data = dict(row.data or {})
+        portal = dict(data.get("portal") or {})
+        portal.pop("layout", None)
+        data["portal"] = portal
+        row.data = data
+        audit.record(
+            db,
+            action="portal.layout_reset",
+            actor_user_id=principal.user_id,
+            actor_label=principal.label,
+            organization_id=None,
+            target_type="user",
+            target_id=principal.user_id,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={"self_service": True},
+        )
+        db.commit()
+    return _layout_out(db, principal)

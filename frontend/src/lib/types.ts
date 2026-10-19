@@ -1304,6 +1304,32 @@ export interface ContactInput {
   notes: string | null;
 }
 
+/** Portal canvas layout documents and templates (docs/USER_PORTAL.md §10). */
+export interface PortalLayoutOut {
+  layout: { version: 1; tabs: { id: string; name: string; widgets: { key: string; instance: string; x: number; y: number; w: number; h: number; settings?: Record<string, unknown> }[] }[] } | null;
+  source: "user" | "template" | "default";
+  template_id: string | null;
+  template_name: string | null;
+  locked_widgets: string[];
+}
+export type PortalScope = "system" | "organization" | "building" | "department" | "role";
+export interface PortalTemplate {
+  id: string;
+  organization_id: string | null;
+  organization_name: string | null;
+  name: string;
+  description: string | null;
+  scope: PortalScope;
+  scope_ref: string | null;
+  scope_label: string | null;
+  layout: NonNullable<PortalLayoutOut["layout"]>;
+  locked_widgets: string[];
+  priority: number;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 /** One of the user's phones with its key slots (docs/USER_PORTAL.md §8). */
 export interface MyDeviceSlot {
   index: number;

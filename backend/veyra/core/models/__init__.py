@@ -71,7 +71,7 @@ from veyra.core.models.platform import (
     UpdateHistory,
     UpdatePolicy,
 )
-from veyra.core.models.portal import UserContact
+from veyra.core.models.portal import PortalTemplate, UserContact
 from veyra.core.models.provisioning import (
     DeviceProfile,
     DeviceProfilePaging,
@@ -180,6 +180,7 @@ __all__ = [
     "Permission",
     "PickupGroup",
     "PickupGroupMember",
+    "PortalTemplate",
     "Prompt",
     "ProvisioningRequest",
     "ProvisioningTemplate",

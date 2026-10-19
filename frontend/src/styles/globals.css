@@ -461,3 +461,9 @@ a.rail__button:hover { color: #fff; }
 .range-picker { display: inline-flex; gap: 2px; }
 .range-picker button { font-size: var(--text-xs); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; }
 .range-picker button[aria-pressed="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ---------------- Portal canvas (docs/USER_PORTAL.md §10) ---------------- */
+.canvas__item { display: flex; flex-direction: column; }
+.canvas--arranging .canvas__item { outline: 1px dashed var(--border-strong); border-radius: var(--radius-md); background: var(--surface); }
+.canvas__handle { padding: 4px 8px; border-bottom: 1px solid var(--border); font-size: var(--text-sm); font-weight: var(--weight-semibold); user-select: none; }
+.canvas__body > * { height: 100%; }

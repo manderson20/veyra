@@ -33,3 +33,30 @@ class UserContact(UUIDPrimaryKey, Timestamps, Base):
     favourite: Mapped[bool] = mapped_column(Boolean, default=False)
     speed_dial: Mapped[int | None] = mapped_column(Integer)
     notes: Mapped[str | None] = mapped_column(Text)
+
+
+class PortalTemplate(UUIDPrimaryKey, Timestamps, Base):
+    """A default portal layout an administrator assigns by scope
+    (docs/USER_PORTAL.md §10): system-wide (``organization_id`` NULL,
+    ``scope`` = system), an organization, a building, a department or a
+    role. For a user the nearest scope wins (role, department, building,
+    organization, system; then the highest ``priority``); the user's own
+    layout layers on top and ``locked_widgets`` cannot be removed."""
+
+    __tablename__ = "portal_templates"
+
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(Text)
+    # system | organization | building | department | role
+    scope: Mapped[str] = mapped_column(String(16))
+    # The building or department id, or the role key; NULL for system/organization.
+    scope_ref: Mapped[str | None] = mapped_column(String(64))
+    # {"version": 1, "tabs": [{"id", "name", "widgets": [{key, instance, x, y, w, h, settings}]}]}
+    layout: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    # Widget keys the user cannot remove (an all-call or emergency widget).
+    locked_widgets: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    priority: Mapped[int] = mapped_column(Integer, default=0)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

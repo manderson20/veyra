@@ -403,6 +403,26 @@ remove.
   template (phone, voicemail, calls, codes), so existing users see what
   they have today until they rearrange it.
 
+*Built 2026-10-19 (slice G):* `veyra/portal/layouts.py` (`LayoutDoc`
+validation: 12 columns, ≤ 8 tabs, ≤ 40 widgets per tab;
+`resolve_template`), `portal_templates` (migration `0051`),
+`api/v1/portal_templates.py` (`/portal-templates` CRUD + `/{id}/push`;
+`portal.templates`; system scope for platform administrators), `GET/PUT
+/me/portal/layout` and `POST /me/portal/layout/reset` (422 `widget_locked`
+when a locked widget is missing), the user's document in
+`user_preferences.data.portal.layout`. Frontend: `src/portal/layout.ts`
+(pure grid engine with unit tests: compaction, collision push-down, reflow
+to 6 and 1 columns, template layering), `src/portal/widgets.ts` (registry
+and the default layout = the former My Phone page), `components/portal/
+Canvas.tsx` (pointer-event drag and resize, keyboard arrows, ResizeObserver
+breakpoints), `WidgetRenderer.tsx`, `PortalCanvasPage.tsx` (tabs, add
+drawer, undo, save, reset); My Phone renders the canvas; System → Portal
+layouts edits templates with the same canvas. Deviations: the announcement
+widget's text comes from the template's widget `settings` (no separate
+object); modules cannot register widgets yet; buildings and departments
+have no pages (and no list API) of their own yet, so the template editor
+takes their id in a field and the pickers come with those pages (M21/M22).
+
 ## 11. Permissions and API summary
 
 New permissions: `portal.templates` (org admins by default),
@@ -446,6 +466,11 @@ widget and own recordings (§5), self-service limits (§4) — E. Presence (§7)
 My Phone as canvas — H. Fax (§9). Each slice lands as its own commit with
 tests, docs "Built" notes and issue comments; 0.26.0 at the end (H may
 follow as 0.26.x).
+
+*Outcome 2026-10-19:* A–G built on `milestone-20`; H (fax) ships as
+0.26.x as planned here, with the destination kind, tables, dialplan, worker,
+installer packages and pages in one patch series
+([MILESTONE_20_REPORT.md](milestones/MILESTONE_20_REPORT.md)).
 
 ## 14. Known limitations (planned)
 
