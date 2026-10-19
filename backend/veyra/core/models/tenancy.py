@@ -74,6 +74,11 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     intercom_default: Mapped[str] = mapped_column(
         String(8), default="allow", server_default="allow"
     )
+    # Users may play recordings of calls they took part in from My Phone
+    # (docs/USER_PORTAL.md §5); off by default, recordings are sensitive.
+    users_play_own_recordings: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
 
 
 class Site(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

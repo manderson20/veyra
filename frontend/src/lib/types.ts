@@ -155,6 +155,8 @@ export interface Organization {
   caller_id_allow_list?: string[];
   /** Intercom default for the organization's phones: allow or deny. */
   intercom_default?: "allow" | "deny" | string;
+  /** Users may play recordings of their own calls from My Phone (docs/USER_PORTAL.md §5). */
+  users_play_own_recordings?: boolean;
   /** Prefix of the organization's engine names; empty: today's names. */
   engine_namespace?: string;
   created_at: string;
@@ -2392,6 +2394,8 @@ export interface CallHistoryItem {
   talk_seconds: number;
   leg_count: number;
   recorded: boolean;
+  /** On the user's own history: the other party's name from their contacts. */
+  contact_name?: string | null;
   in_progress: boolean;
 }
 

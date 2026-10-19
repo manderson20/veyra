@@ -180,6 +180,12 @@ legs), the Companion exposes DND and the forwards, and call waiting is
 documented as a phone-side setting (Poly `call.callWaiting.enable`) that the
 provisioning template controls — not a Veyra toggle in this milestone.
 
+*Built 2026-10-19 (slice D):* `me._check_forward_limits` refuses, with 422
+`cos_denied`, a forward target longer than the numbering plan's extension
+length when the extension's class of service has `allow_external_forwards`
+off (follow-me legs already go through the shared `save_follow_me`
+validation). Call waiting is not a Veyra toggle (phone-side).
+
 ## 5. Call history and recordings (#60)
 
 `GET /me/calls` exists (last 30 days, outcome filter). This milestone adds
@@ -193,6 +199,17 @@ schools treat recordings as sensitive) and the user's extension was a
 party. Playback is audited (`recording.play`, `self_service: true`) exactly
 like the administrator's. Export to CSV of own calls: `GET /me/calls/
 export.csv`.
+
+*Built 2026-10-19 (slice D):* `organizations.users_play_own_recordings`
+(migration `0048`, organization page switch), `GET /me/calls/{id}/recording`
+(403 `recordings_not_allowed` when off; the user's extension must be a party;
+audited `recording.play`/`recording.download` with `self_service`),
+`GET /me/calls/export.csv` (own calls, audited), `CallOut.contact_name` on
+`/me/calls` from `veyra.portal.contacts` (number → name, national numbers
+also by their last ten digits), the same names on the voicemail list.
+Frontend `components/portal/RecentCallsCard.tsx` (filter, call back,
+recording player, export). Not built: "add to contacts" from a call row,
+missed-call email.
 
 ## 6. Personal contacts and speed dials (#60)
 

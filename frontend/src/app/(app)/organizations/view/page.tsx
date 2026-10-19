@@ -41,6 +41,7 @@ function OrganizationView() {
   const [moh, setMoh] = useState("");
   const [allowList, setAllowList] = useState("");
   const [intercom, setIntercom] = useState("allow");
+  const [ownRecordings, setOwnRecordings] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useOnChange(org.data, (o) => {
@@ -51,6 +52,7 @@ function OrganizationView() {
       setMoh(o.moh_class_id ?? "");
       setAllowList((o.caller_id_allow_list ?? []).join("\n"));
       setIntercom(o.intercom_default ?? "allow");
+      setOwnRecordings(!!o.users_play_own_recordings);
     }
   });
 
@@ -62,14 +64,14 @@ function OrganizationView() {
   const routingEditable = editable && can("routing.write");
   const allowListNow = allowList.split("\n").map((n) => n.trim()).filter(Boolean);
   const allowListChanged = allowListNow.join("\n") !== (o.caller_id_allow_list ?? []).join("\n");
-  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow");
+  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || ownRecordings !== !!o.users_play_own_recordings;
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}) });
+      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}) });
       org.setData(updated);
       toast.success("Organization saved", moh !== (o.moh_class_id ?? "") ? "Deploy changes to apply the hold music." : undefined);
     } catch (err) {
@@ -97,6 +99,7 @@ function OrganizationView() {
               help="Numbers an extension may send as outbound caller ID besides the organization's own numbers (inbound routes), one per line. Changing it needs the routing permission." onChange={(e) => setAllowList(e.target.value)} />
             <HoldMusicSelect organizationId={o.id} label="Hold music" value={moh} disabled={!editable} error={errors.fields.moh_class_id}
               help="What callers hear when a phone of this organization puts them on hold. Sets are managed under Telephony → Hold Music." onChange={setMoh} />
+            <Switch label="Users may play recordings of their own calls" description="On My Phone, a user can listen to recordings of calls their extension took part in. Off by default; every listening is audited." checked={ownRecordings} disabled={!editable} onChange={(e) => setOwnRecordings(e.target.checked)} />
             <Switch label="Active" description="Inactive organizations are kept but cannot be used for new configuration." checked={active} disabled={!editable} onChange={(e) => setActive(e.target.checked)} />
             {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
             {editable ? (

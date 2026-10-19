@@ -31,6 +31,7 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, current_principal, request_context
 from veyra.core.errors import ProblemError, forbidden, not_found
 from veyra.core.models import (
+    ClassOfService,
     Extension,
     FollowMe,
     Organization,
@@ -39,7 +40,9 @@ from veyra.core.models import (
     VoicemailBoxMember,
 )
 from veyra.core.security.principal import Principal
+from veyra.portal import contacts as portal_contacts
 from veyra.telephony import extension_state, features, routing
+from veyra.telephony.numbering import load_numbering_plan
 from veyra.voicemail import service as vmsvc
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -169,11 +172,13 @@ def put_my_state(
     ctx: RequestContext = Depends(request_context),
 ) -> dict[str, Any]:
     ext = _own_extension(db, principal, extension_id)
+    changes = body.model_dump(exclude_unset=True)
+    _check_forward_limits(db, ext, changes)
     try:
         details = extension_state.apply(
             db,
             ext,
-            body.model_dump(exclude_unset=True),
+            changes,
             by="user",
             adapter=getattr(request.app.state, "telephony", None),
         )
@@ -189,6 +194,32 @@ def put_my_state(
         _own_audit(db, ctx, principal, "extension.state_update", ext, details)
     db.commit()
     return extension_state.out(extension_state.get(db, ext.id))
+
+
+def _check_forward_limits(db: Session, ext: Extension, changes: dict[str, Any]) -> None:
+    """The administrator's limits apply to self-service too (docs/USER_PORTAL.md
+    §4): a class of service without outside forwards refuses a forward target
+    longer than an extension number."""
+    targets = {
+        k: str(v or "") for k, v in changes.items() if k in ("cf_always", "cf_busy", "cf_no_answer")
+    }
+    if not any(targets.values()) or ext.class_of_service_id is None:
+        return
+    cos = db.get(ClassOfService, ext.class_of_service_id)
+    if cos is None or cos.allow_external_forwards:
+        return
+    ext_len = load_numbering_plan(db).extension_length
+    for field, value in targets.items():
+        digits = re.sub(r"[\s().-]", "", value)
+        if digits and len(digits.lstrip("+")) > ext_len:
+            raise ProblemError(
+                422,
+                "Outside forwards not allowed",
+                "Your phone's class of service does not allow forwarding to outside numbers; "
+                "ask an administrator.",
+                code="cos_denied",
+                errors=[{"field": field, "message": "outside numbers are not allowed"}],
+            )
 
 
 @router.get("/extensions/{extension_id}/follow-me", summary="Your phone's find me / follow me")
@@ -486,7 +517,8 @@ def my_messages(
     db: Session = Depends(get_db),
 ) -> vmsvc.MessagesOut:
     box = _own_box(db, principal, box_id)
-    return vmsvc.list_messages(db, request.app.state.settings, box, folder)
+    names = portal_contacts.names_by_number(db, principal.user_id)
+    return vmsvc.list_messages(db, request.app.state.settings, box, folder, names)
 
 
 @router.get(

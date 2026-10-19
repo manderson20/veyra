@@ -6,6 +6,7 @@ import { FollowMeCard } from "@/components/extensions/FollowMeCard";
 import { MyVoicemailCard } from "@/components/account/MyVoicemailCard";
 import { VoicemailBoxPanel } from "@/components/voicemail/VoicemailBoxPanel";
 import { ContactsCard } from "@/components/portal/ContactsCard";
+import { RecentCallsCard } from "@/components/portal/RecentCallsCard";
 import { Badge, Callout, Card, EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
 import type { MyExtension, MyVoicemail } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -50,7 +51,10 @@ export default function MyPhonePage() {
         </Card>
       ))}
       <MyVoicemailCard />
-      <ContactsCard extensions={exts.data} />
+      <div className="grid grid--2" style={{ alignItems: "start" }}>
+        <ContactsCard extensions={exts.data} />
+        <RecentCallsCard extensions={exts.data} />
+      </div>
       {codes.data?.codes.length ? (
         <Card title="Codes you can dial" subtitle="Dial these from your phone; some take a number after the code.">
           <ul className="list">
@@ -59,7 +63,7 @@ export default function MyPhonePage() {
           <p className="subtle">Always available: {Object.entries(codes.data.fixed).map(([code, what], i) => <span key={code}>{i ? ", " : ""}<span className="mono">{code}</span> {what}</span>)}.</p>
         </Card>
       ) : null}
-      <Callout tone="info" title="Coming later">Phone keys from this page, your call history and presence follow in this milestone.</Callout>
+      <Callout tone="info" title="Coming later">Phone keys from this page and presence follow in this milestone.</Callout>
     </div>
   );
 }

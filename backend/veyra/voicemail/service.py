@@ -160,7 +160,15 @@ def _message_out(folder: str, m: dict[str, Any]) -> MessageOut:
     )
 
 
-def list_messages(db: Session, settings: Settings, box: VoicemailBox, folder: str) -> MessagesOut:
+def list_messages(
+    db: Session,
+    settings: Settings,
+    box: VoicemailBox,
+    folder: str,
+    names: dict[str, str] | None = None,
+) -> MessagesOut:
+    """The folder's messages, newest first; ``names`` (number → name, from
+    the user's contacts) fills in a caller name the carrier did not send."""
     check_folder(folder)
     context, mailbox = location(db, box)
     try:
@@ -168,6 +176,12 @@ def list_messages(db: Session, settings: Settings, box: VoicemailBox, folder: st
     except StoreClientError as e:
         raise problem(e) from e
     messages = [_message_out(folder, m) for m in out.get("messages", [])]
+    if names:
+        from veyra.portal.contacts import resolve
+
+        for m in messages:
+            if not m.caller_name:
+                m.caller_name = resolve(names, m.caller_number) or ""
     messages.sort(key=lambda m: m.received_at or datetime.min.replace(tzinfo=UTC), reverse=True)
     return MessagesOut(
         folder=folder,

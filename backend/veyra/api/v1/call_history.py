@@ -12,8 +12,8 @@ from collections.abc import Iterator
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session
@@ -34,6 +34,8 @@ from veyra.core.models import (
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
+from veyra.portal import contacts as portal_contacts
+from veyra.reporting import recordings as recording_files
 
 router = APIRouter(tags=["call history"])
 
@@ -72,6 +74,8 @@ class CallOut(BaseModel):
     leg_count: int
     recorded: bool
     in_progress: bool
+    # On the user's own history: the other party's name from their contacts.
+    contact_name: str | None = None
 
 
 class LegOut(BaseModel):
@@ -314,37 +318,9 @@ def export_history(
     )
     db.commit()
 
-    def lines() -> Iterator[str]:
-        buf = io.StringIO()
-        w = csv.writer(buf)
-        w.writerow(CSV_COLUMNS)
-        for c in outs:
-            answered = c.answered_by
-            w.writerow(
-                [
-                    c.started_at.isoformat(),
-                    c.direction,
-                    c.outcome,
-                    c.from_number or "",
-                    c.from_name or "",
-                    c.to_number or "",
-                    c.did or "",
-                    f"{answered.number} {answered.display_name}" if answered else "",
-                    c.trunk_name or "",
-                    c.ring_seconds,
-                    c.talk_seconds,
-                    c.organization_name or "",
-                    c.leg_count,
-                    "yes" if c.recorded else "no",
-                ]
-            )
-            yield buf.getvalue()
-            buf.seek(0)
-            buf.truncate()
-
     stamp = utcnow().strftime("%Y%m%d-%H%M")
     return StreamingResponse(
-        lines(),
+        _csv_lines(outs),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="calls-{stamp}.csv"'},
     )
@@ -391,6 +367,35 @@ def get_call(
     )
 
 
+def _csv_lines(outs: list[CallOut]) -> Iterator[str]:
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(CSV_COLUMNS)
+    for c in outs:
+        answered = c.answered_by
+        w.writerow(
+            [
+                c.started_at.isoformat(),
+                c.direction,
+                c.outcome,
+                c.from_number or "",
+                c.from_name or "",
+                c.to_number or "",
+                c.did or "",
+                f"{answered.number} {answered.display_name}" if answered else "",
+                c.trunk_name or "",
+                c.ring_seconds,
+                c.talk_seconds,
+                c.organization_name or "",
+                c.leg_count,
+                "yes" if c.recorded else "no",
+            ]
+        )
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate()
+
+
 @router.get("/me/calls", response_model=Page[CallOut], summary="Your own calls")
 def my_calls(
     since: datetime | None = Query(None, alias="from"),
@@ -412,4 +417,121 @@ def my_calls(
         since = utcnow() - timedelta(days=30)
     stmt = _filtered(stmt, since, until, None, None, outcome, None, None, None, None)
     rows, total = paginate(db, stmt, page)
-    return Page(items=_outs(db, rows), total=total, limit=page.limit, offset=page.offset)
+    outs = _with_contacts(db, principal, _outs(db, rows))
+    return Page(items=outs, total=total, limit=page.limit, offset=page.offset)
+
+
+def _own_calls(principal: Principal) -> Select[Any]:
+    mine = select(Extension.id).where(Extension.user_id == principal.user_id)
+    return select(CallRecord).where(
+        or_(
+            CallRecord.from_extension_id.in_(mine),
+            CallRecord.to_extension_id.in_(mine),
+            CallRecord.answered_extension_id.in_(mine),
+        )
+    )
+
+
+def _with_contacts(db: Session, principal: Principal, outs: list[CallOut]) -> list[CallOut]:
+    """The other party's name from the user's contacts (docs/USER_PORTAL.md §5)."""
+    names = portal_contacts.names_by_number(db, principal.user_id)
+    if not names:
+        return outs
+    for c in outs:
+        for number in (c.from_number, c.to_number):
+            name = portal_contacts.resolve(names, number)
+            if name:
+                c.contact_name = name
+                break
+    return outs
+
+
+@router.get("/me/calls/export.csv", summary="Your own calls as CSV")
+def my_calls_export(
+    since: datetime | None = Query(None, alias="from"),
+    until: datetime | None = Query(None, alias="to"),
+    outcome: Outcome | None = None,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> StreamingResponse:
+    if since is None and until is None:
+        since = utcnow() - timedelta(days=30)
+    stmt = _filtered(
+        _own_calls(principal), since, until, None, None, outcome, None, None, None, None
+    )
+    outs = _with_contacts(db, principal, _outs(db, list(db.scalars(stmt.limit(EXPORT_LIMIT)))))
+    audit.record(
+        db,
+        action="calls.history_export",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=None,
+        target_type="calls",
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"rows": len(outs), "self_service": True},
+    )
+    db.commit()
+    stamp = utcnow().strftime("%Y%m%d-%H%M")
+    return StreamingResponse(
+        _csv_lines(outs),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="my-calls-{stamp}.csv"'},
+    )
+
+
+@router.get("/me/calls/{call_id}/recording", summary="Listen to a recording of your own call")
+def my_call_recording(
+    call_id: uuid.UUID,
+    request: Request,
+    download: bool = False,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> FileResponse:
+    """Only when the organization allows it (``users_play_own_recordings``,
+    docs/USER_PORTAL.md §5) and the user's extension took part; audited like
+    the administrator's listening."""
+    call = db.scalar(_own_calls(principal).where(CallRecord.id == call_id))
+    if call is None:
+        raise ProblemError(404, "Not found", "No such call of yours.", code="not_found")
+    org = db.get(Organization, call.organization_id) if call.organization_id else None
+    if org is None or not org.users_play_own_recordings:
+        raise ProblemError(
+            403,
+            "Not allowed",
+            "Your organization does not let users play recordings of their calls.",
+            code="recordings_not_allowed",
+        )
+    rec = db.scalar(
+        select(CallRecording).where(
+            CallRecording.call_id == call.id, CallRecording.deleted_at.is_(None)
+        )
+    )
+    if rec is None:
+        raise ProblemError(404, "Not found", "This call has no recording.", code="not_found")
+    path = recording_files.file_of(request.app.state.settings.recordings_dir, rec)
+    if path is None:
+        raise ProblemError(404, "Missing", "The recording file is missing.", code="file_missing")
+    rng = request.headers.get("range", "")
+    if not rng.startswith("bytes=") or rng.startswith("bytes=0-"):
+        audit.record(
+            db,
+            action="recording.download" if download else "recording.play",
+            actor_user_id=principal.user_id,
+            actor_label=principal.label,
+            organization_id=rec.organization_id,
+            target_type="recording",
+            target_id=rec.id,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={"call_id": str(call.id), "self_service": True},
+        )
+        db.commit()
+    return FileResponse(
+        path,
+        media_type="audio/ogg",
+        filename=f"recording-{rec.ref}.ogg" if download else None,
+        headers={"Cache-Control": "private, no-store"},
+    )

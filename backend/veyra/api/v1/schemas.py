@@ -72,6 +72,8 @@ class OrganizationPatch(BaseModel):
     caller_id_allow_list: list[str] | None = Field(None, max_length=100)
     # Intercom default for the organization's phones (docs/CALL_FEATURES.md §3.6).
     intercom_default: str | None = Field(None, pattern=r"^(allow|deny)$")
+    # Users may play recordings of their own calls from My Phone (docs/USER_PORTAL.md §5).
+    users_play_own_recordings: bool | None = None
 
     @field_validator("timezone")
     @classmethod
@@ -105,6 +107,7 @@ class OrganizationOut(ORM):
     bootstrap_includes_credential: bool = False
     caller_id_allow_list: list[str] = []
     intercom_default: str = "allow"
+    users_play_own_recordings: bool = False
     # Prefix of the organization's engine names; empty: today's names
     # (docs/MULTI_TENANCY.md §2).
     engine_namespace: str = ""
