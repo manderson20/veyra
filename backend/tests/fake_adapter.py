@@ -62,6 +62,7 @@ class FakeAdapter(TelephonyAdapter):
         ]
         self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="example-1001")]
         self.originated: list[tuple[str, str, str]] = []
+        self.originated_channels: list[tuple[str, str, str, dict[str, str]]] = []
         self.fail_originate: str | None = None
         # (organization slug, number) -> {field: value}, as "the engine" has it.
         self.states: dict[tuple[str, str], dict[str, str]] = {}
@@ -184,6 +185,21 @@ class FakeAdapter(TelephonyAdapter):
             raise EngineUnavailable(self.fail_originate)
         self.originated.append((endpoint, number, context))
         return f"orig-{len(self.originated)}"
+
+    def originate_channel(
+        self,
+        endpoint: str,
+        extension: str,
+        *,
+        context: str,
+        caller_id: str,
+        timeout: int = 60,
+        variables: dict[str, str] | None = None,
+    ) -> str:
+        if self.fail_originate:
+            raise EngineUnavailable(self.fail_originate)
+        self.originated_channels.append((endpoint, extension, context, dict(variables or {})))
+        return f"chan-{len(self.originated_channels)}"
 
     def managed_files(self) -> list[str]:
         return list(generator.MANAGED_FILES)

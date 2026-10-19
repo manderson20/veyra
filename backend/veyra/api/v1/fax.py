@@ -153,7 +153,8 @@ def _audit(
     target_type: str,
     row: Any,
     details: dict[str, Any],
-    *, changed: bool = False,
+    *,
+    changed: bool = False,
 ) -> None:
     audit.record(
         db,
@@ -213,7 +214,9 @@ def create_inbox(
     )
     db.add(row)
     db.flush()
-    _audit(db, ctx, principal, "fax.inbox_create", "fax_inbox", row, {"name": row.name}, changed=True)
+    _audit(
+        db, ctx, principal, "fax.inbox_create", "fax_inbox", row, {"name": row.name}, changed=True
+    )
     db.commit()
     bus.publish(Event("fax.inbox_created", {"id": str(row.id), "name": row.name}))
     return _inbox_outs(db, [row])[0]
@@ -244,7 +247,16 @@ def update_inbox(
             if k == "name" and v is None:
                 continue
         setattr(row, k, v)
-    _audit(db, ctx, principal, "fax.inbox_update", "fax_inbox", row, {"name": row.name, "fields": sorted(changes)}, changed=True)
+    _audit(
+        db,
+        ctx,
+        principal,
+        "fax.inbox_update",
+        "fax_inbox",
+        row,
+        {"name": row.name, "fields": sorted(changes)},
+        changed=True,
+    )
     db.commit()
     return _inbox_outs(db, [row])[0]
 
@@ -260,7 +272,9 @@ def delete_inbox(
     what = destinations.describe_uses(db, "fax", row.id)
     if what:
         raise destinations.in_use_error("Fax inbox in use", "fax_inbox_in_use", what)
-    _audit(db, ctx, principal, "fax.inbox_delete", "fax_inbox", row, {"name": row.name}, changed=True)
+    _audit(
+        db, ctx, principal, "fax.inbox_delete", "fax_inbox", row, {"name": row.name}, changed=True
+    )
     db.delete(row)
     db.commit()
     bus.publish(Event("fax.inbox_deleted", {"id": str(inbox_id)}))
@@ -270,7 +284,9 @@ def delete_inbox(
 # ----------------------------------------------------------------- jobs
 
 
-@router.get("/jobs", response_model=Page[JobOut], summary="Fax jobs of the organizations you manage")
+@router.get(
+    "/jobs", response_model=Page[JobOut], summary="Fax jobs of the organizations you manage"
+)
 def list_jobs(
     organization_id: uuid.UUID | None = None,
     state: str | None = Query(None, max_length=16),
@@ -293,7 +309,9 @@ def list_jobs(
         like = f"%{q.strip()}%"
         stmt = stmt.where(or_(FaxJob.number.ilike(like), FaxJob.original_name.ilike(like)))
     rows, total = paginate(db, stmt, params)
-    return Page(items=fax_service.outs(db, rows), total=total, limit=params.limit, offset=params.offset)
+    return Page(
+        items=fax_service.outs(db, rows), total=total, limit=params.limit, offset=params.offset
+    )
 
 
 def _job(db: Session, principal: Principal, job_id: uuid.UUID, perm: str) -> FaxJob:

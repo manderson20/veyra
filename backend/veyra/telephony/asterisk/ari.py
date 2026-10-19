@@ -39,7 +39,13 @@ class AriClient:
         except OSError:
             return None
 
-    def _request(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> Any:
         if not self.is_loopback:
             raise EngineUnavailable("ARI must be reached over loopback.")
         password = self.password()
@@ -49,13 +55,16 @@ class AriClient:
         if params:
             query = {k: str(v) for k, v in params.items() if v is not None}
             url = f"{url}?{urllib.parse.urlencode(query)}"
-        req = urllib.request.Request(url, method=method)  # noqa: S310
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(url, data=data, method=method)  # noqa: S310
         auth = base64.b64encode(f"{self.username}:{password}".encode()).decode()
         req.add_header("Authorization", f"Basic {auth}")
+        if data is not None:
+            req.add_header("Content-Type", "application/json")
         try:
             # Loopback HTTP only (checked above).
             with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:  # noqa: S310
-                body = resp.read()
+                raw = resp.read()
         except urllib.error.HTTPError as e:
             detail = ""
             with contextlib.suppress(ValueError, OSError):
@@ -64,10 +73,10 @@ class AriClient:
             raise EngineUnavailable(msg) from e
         except (urllib.error.URLError, OSError) as e:
             raise EngineUnavailable(f"ARI is not reachable: {e}") from e
-        if not body:
+        if not raw:
             return None
         try:
-            return json.loads(body)
+            return json.loads(raw)
         except ValueError as e:
             raise EngineUnavailable("ARI returned a response that is not JSON.") from e
 
@@ -101,9 +110,11 @@ class AriClient:
         context: str,
         caller_id: str,
         timeout: int,
+        variables: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """``POST /channels``: ring ``endpoint``; once it answers the channel
-        runs the dialplan at ``extension@context`` (which places the call)."""
+        runs the dialplan at ``extension@context`` (which places the call).
+        ``variables`` are set on the new channel (ARI takes them in the body)."""
         return (
             self._request(
                 "POST",
@@ -116,6 +127,7 @@ class AriClient:
                     "callerId": caller_id,
                     "timeout": timeout,
                 },
+                {"variables": variables} if variables else None,
             )
             or {}
         )

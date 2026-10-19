@@ -25,6 +25,7 @@ from veyra.core.models import (
     Capture,
     CentralSample,
     ClusterEvent,
+    FaxJob,
     FirewallBan,
     FirewallEvent,
     PageLog,
@@ -118,6 +119,15 @@ RULES: list[Rule] = [
         ProvisioningRequest.at,
     ),
     Rule("page_log", "Page log", 90, 7, "Pages sent.", PageLog, PageLog.at),
+    Rule(
+        "fax",
+        "Faxes",
+        90,
+        7,
+        "Sent and received faxes with their pages (PDF and TIFF); faxes in progress stay.",
+        FaxJob,
+        FaxJob.created_at,
+    ),
     Rule(
         "captures",
         "Packet captures",
@@ -213,7 +223,7 @@ def _count(result: Any) -> int:
     return int(getattr(result, "rowcount", 0) or 0)
 
 
-def _prune(db: Session, rule: Rule, cutoff: datetime) -> int:
+def _prune(db: Session, rule: Rule, cutoff: datetime, app_settings: Any = None) -> int:
     if rule.key == "audit_log":
         db.execute(text("SET LOCAL veyra.audit_retention = 'on'"))
         return _count(db.execute(delete(AuditEvent).where(AuditEvent.occurred_at < cutoff)))
@@ -237,6 +247,22 @@ def _prune(db: Session, rule: Rule, cutoff: datetime) -> int:
             )
         )
         return n
+    if rule.key == "fax":
+        from veyra.core.config import get_settings
+        from veyra.core.models.fax import ACTIVE_STATES
+        from veyra.fax import service as fax_service
+
+        cfg = app_settings or get_settings()
+        n = 0
+        for job in db.scalars(
+            select(FaxJob).where(
+                FaxJob.created_at < cutoff, FaxJob.state.not_in(list(ACTIVE_STATES))
+            )
+        ).all():
+            fax_service.remove_files(cfg, job)
+            db.delete(job)
+            n += 1
+        return n
     if rule.key == "captures":
         from veyra.diagnostics import captures
 
@@ -253,7 +279,9 @@ def _prune(db: Session, rule: Rule, cutoff: datetime) -> int:
     return _count(db.execute(delete(rule.model).where(rule.time_column < cutoff)))
 
 
-def run(db: Session, now: datetime | None = None, *, actor: str = "worker") -> dict[str, int]:
+def run(
+    db: Session, now: datetime | None = None, *, actor: str = "worker", app_settings: Any = None
+) -> dict[str, int]:
     """Apply every rule; one audit entry per class that lost rows, and one
     summary. The caller commits."""
     now = now or utcnow()
@@ -261,7 +289,7 @@ def run(db: Session, now: datetime | None = None, *, actor: str = "worker") -> d
     removed: dict[str, int] = {}
     for rule in RULES:
         cutoff = now - timedelta(days=current[rule.key])
-        n = _prune(db, rule, cutoff)
+        n = _prune(db, rule, cutoff, app_settings)
         removed[rule.key] = n
         if n:
             audit.record(

@@ -220,6 +220,22 @@ class TelephonyAdapter(ABC):
         in ``context`` (click-to-dial). Returns the engine's channel id."""
         raise NotSupported(f"{self.name}: click-to-dial not implemented")
 
+    def originate_channel(
+        self,
+        endpoint: str,
+        extension: str,
+        *,
+        context: str,
+        caller_id: str,
+        timeout: int = 60,
+        variables: dict[str, str] | None = None,
+    ) -> str:
+        """Start a channel on ``endpoint`` (a full ``tech/resource``, for example
+        ``Local/5551234@veyra-outbound/n``) with channel ``variables``; when it
+        answers it runs the dialplan at ``extension@context`` (fax sending,
+        docs/USER_PORTAL.md §9). Returns the engine's channel id."""
+        raise NotSupported(f"{self.name}: originating channels not implemented")
+
     # --- configuration -------------------------------------------------------
 
     def managed_files(self) -> list[str]:

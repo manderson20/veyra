@@ -8,6 +8,7 @@ recipients. Files live under ``<data>/fax/<org slug>/<job>.tiff|.pdf``."""
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
@@ -191,14 +192,12 @@ def _store(src: Path, dest: Path) -> None:
 
 
 def with_suppress_chown(path: Path, gid: int) -> None:
-    try:
+    with contextlib.suppress(OSError):
         os.chown(path, -1, gid)
-    except OSError:
-        pass
 
 
 def render(pdf: bytes, cover: dict[str, Any] | None, dest: Path) -> int:
-    """PDF (plus an optional cover sheet) → fax TIFF (G4, 204×196 dpi, letter)
+    """PDF (plus an optional cover sheet) → fax TIFF (G4, 204x196 dpi, letter)
     at ``dest``; returns the number of pages. Raises FaxError."""
     with tempfile.TemporaryDirectory(prefix="veyra-fax-") as tmp:
         src = Path(tmp) / "in.pdf"
@@ -280,9 +279,7 @@ def outs(db: Session, rows: list[FaxJob]) -> list[JobOut]:
     ext_ids = {r.extension_id for r in rows if r.extension_id}
     inbox_ids = {r.inbox_id for r in rows if r.inbox_id}
     users = (
-        {u.id: u for u in db.scalars(select(User).where(User.id.in_(user_ids)))}
-        if user_ids
-        else {}
+        {u.id: u for u in db.scalars(select(User).where(User.id.in_(user_ids)))} if user_ids else {}
     )
     exts = (
         {e.id: e for e in db.scalars(select(Extension).where(Extension.id.in_(ext_ids)))}
@@ -370,16 +367,24 @@ def create_outbound(
         raise ProblemError(415, "Empty file", "The file is empty.", code="unsupported_file")
     if len(pdf) > MAX_PDF_BYTES:
         raise ProblemError(
-            413, "File too large", f"The PDF may be up to {MAX_PDF_BYTES >> 20} MB.", code="too_large"
+            413,
+            "File too large",
+            f"The PDF may be up to {MAX_PDF_BYTES >> 20} MB.",
+            code="too_large",
         )
     if not pdf.lstrip()[:5].startswith(b"%PDF-"):
         raise ProblemError(
-            415, "Not a PDF", "Upload a PDF file; other formats are not faxed.", code="unsupported_file"
+            415,
+            "Not a PDF",
+            "Upload a PDF file; other formats are not faxed.",
+            code="unsupported_file",
         )
     check_may_fax(db, extension)
     org = db.get(Organization, extension.organization_id)
     if org is None:
-        raise ProblemError(409, "No organization", "The extension has no organization.", code="conflict")
+        raise ProblemError(
+            409, "No organization", "The extension has no organization.", code="conflict"
+        )
     job = FaxJob(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -466,7 +471,9 @@ def start_due(db: Session, settings: Settings, adapter: Any, now: datetime | Non
                 variables=variables,
             )
         except (EngineUnavailable, NotSupported) as e:
-            _retry_or_fail(db, settings, job, f"The engine refused the call: {e}", now, MAX_ATTEMPTS)
+            _retry_or_fail(
+                db, settings, job, f"The engine refused the call: {e}", now, MAX_ATTEMPTS
+            )
             continue
         job.state = "dialling"
         job.channel_id = (channel or "")[:80] or None
@@ -502,7 +509,9 @@ def expire(db: Session, settings: Settings, now: datetime | None = None) -> int:
             FaxJob.started_at < now - DIAL_TIMEOUT,
         )
     ).all():
-        _retry_or_fail(db, settings, job, "No report from the engine within 10 minutes.", now, MAX_ATTEMPTS)
+        _retry_or_fail(
+            db, settings, job, "No report from the engine within 10 minutes.", now, MAX_ATTEMPTS
+        )
         n += 1
     return n
 
@@ -514,7 +523,9 @@ def tick(db: Session, settings: Settings, adapter: Any) -> None:
 
 def cancel(db: Session, settings: Settings, job: FaxJob, now: datetime | None = None) -> None:
     if job.state not in ACTIVE_STATES:
-        raise ProblemError(409, "Not active", "This fax is not waiting or in progress.", code="wrong_state")
+        raise ProblemError(
+            409, "Not active", "This fax is not waiting or in progress.", code="wrong_state"
+        )
     job.state = "cancelled"
     job.finished_at = now or utcnow()
     job.next_attempt_at = None
@@ -522,9 +533,16 @@ def cancel(db: Session, settings: Settings, job: FaxJob, now: datetime | None = 
 
 def retry(db: Session, settings: Settings, job: FaxJob, now: datetime | None = None) -> None:
     if job.direction != "out" or job.state not in ("failed", "cancelled"):
-        raise ProblemError(409, "Cannot retry", "Only failed or cancelled sends can be retried.", code="wrong_state")
+        raise ProblemError(
+            409,
+            "Cannot retry",
+            "Only failed or cancelled sends can be retried.",
+            code="wrong_state",
+        )
     if file_path(settings, job.file) is None:
-        raise ProblemError(409, "File gone", "The fax file was removed by retention.", code="file_gone")
+        raise ProblemError(
+            409, "File gone", "The fax file was removed by retention.", code="file_gone"
+        )
     job.state, job.attempts, job.error = "queued", 0, None
     job.finished_at, job.channel_id = None, None
     job.next_attempt_at = now or utcnow()
@@ -533,7 +551,19 @@ def retry(db: Session, settings: Settings, job: FaxJob, now: datetime | None = N
 # ------------------------------------------------------------------- reports
 
 
-_FIELDS = ("Direction", "Job", "Inbox", "Org", "File", "Status", "Error", "Pages", "Remote", "Cause", "Caller")
+_FIELDS = (
+    "Direction",
+    "Job",
+    "Inbox",
+    "Org",
+    "File",
+    "Status",
+    "Error",
+    "Pages",
+    "Remote",
+    "Cause",
+    "Caller",
+)
 
 
 def parse_userevent(userevent: dict[str, Any]) -> dict[str, str]:
@@ -706,7 +736,11 @@ def _notify_user(db: Session, settings: Settings, job: FaxJob) -> None:
         )
     try:
         msg = mail.compose(
-            from_address=from_address, from_name=from_name, to=user.email, subject=subject, text=text
+            from_address=from_address,
+            from_name=from_name,
+            to=user.email,
+            subject=subject,
+            text=text,
         )
         _enqueue(settings, msg)
     except OSError:
@@ -754,7 +788,5 @@ def remove_files(settings: Settings, job: FaxJob) -> None:
     for rel in (job.file, job.pdf_file):
         path = file_path(settings, rel)
         if path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 path.unlink()
-            except OSError:
-                pass

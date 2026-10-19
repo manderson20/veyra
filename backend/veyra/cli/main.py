@@ -1171,6 +1171,13 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     queue_log.process(db)
+                # Fax jobs (docs/USER_PORTAL.md §9): start the queued sends,
+                # give up on attempts the engine never reported on.
+                from veyra.fax import service as fax_service
+                from veyra.telephony import get_adapter
+
+                with session_scope() as db:
+                    fax_service.tick(db, settings, get_adapter(settings))
             # Outgoing webhooks (docs/INTEGRATIONS.md §3.5): voicemail
             # notifications in, due deliveries out.
             deliver_webhooks(settings, log)

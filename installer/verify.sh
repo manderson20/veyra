@@ -329,6 +329,25 @@ else
     check vmstore fail "veyra-vmstore.service is not running: the voicemail web inbox is unavailable"
 fi
 
+# --- fax (docs/USER_PORTAL.md §9)
+if [[ "$ENGINE" == "asterisk" ]]; then
+    if command -v gs >/dev/null 2>&1 && command -v tiff2pdf >/dev/null 2>&1; then
+        check fax-tools pass "Ghostscript and tiff2pdf present: faxes are converted to and from PDF"
+    else
+        check fax-tools warn "ghostscript or libtiff-tools missing: faxes cannot be converted (apt-get install ghostscript libtiff-tools)"
+    fi
+    if asterisk -rx 'module show like res_fax_spandsp' 2>/dev/null | grep -q 'res_fax_spandsp.so'; then
+        check fax-engine pass "res_fax_spandsp loaded: faxes can be sent and received"
+    else
+        check fax-engine warn "res_fax_spandsp is not loaded: faxes cannot be sent or received"
+    fi
+    if [[ -d "$VEYRA_DATA/fax/incoming" ]]; then
+        check fax-dir pass "$(stat -c '%a %U:%G' "$VEYRA_DATA/fax") (fax files shared with the engine)"
+    else
+        check fax-dir fail "$VEYRA_DATA/fax/incoming is missing: received faxes cannot be stored"
+    fi
+fi
+
 # --- security review items (docs/PRODUCTION_HARDENING.md §5)
 if grep -qs "^set \$veyra_csp_scripts .*'sha256-" "$VEYRA_ETC/nginx-security-headers.conf" \
     && ! grep -qs "'unsafe-inline'\";" "$VEYRA_ETC/nginx-security-headers.conf"; then

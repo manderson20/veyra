@@ -273,6 +273,50 @@ def _agent(event: dict[str, Any]) -> None:
         log.exception("Could not handle the agent event")
 
 
+FAX_EVENT = "VeyraFax"
+
+
+def is_fax_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == FAX_EVENT
+
+
+def _fax(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraFax)``: a fax was sent, failed or received
+    (docs/USER_PORTAL.md §9)."""
+    try:
+        from veyra.core.config import get_settings
+        from veyra.core.db import session_scope
+        from veyra.fax import service as fax_service
+
+        with session_scope() as db:
+            fax_service.handle_userevent(db, get_settings(), event.get("userevent") or {})
+    except Exception:
+        log.exception("Could not handle the fax event")
+
+
+def _fax_channel(event: dict[str, Any]) -> None:
+    """A Local channel ended: when it was a fax job's outbound leg that never
+    reached the fax context, the call did not connect."""
+    channel = event.get("channel") or {}
+    if not str(channel.get("name") or "").startswith("Local/") or not channel.get("id"):
+        return
+    try:
+        from veyra.core.config import get_settings
+        from veyra.core.db import session_scope
+        from veyra.fax import service as fax_service
+
+        with session_scope() as db:
+            fax_service.channel_gone(
+                db,
+                get_settings(),
+                str(channel["id"]),
+                cause=event.get("cause"),
+                cause_txt=event.get("cause_txt"),
+            )
+    except Exception:
+        log.exception("Could not handle the ended fax channel")
+
+
 def _webhook(ce: CallEvent) -> None:
     """Queue live call webhooks (docs/INTEGRATIONS.md §3.2); never raises."""
     try:
@@ -347,6 +391,10 @@ class AriEventListener:
                             _blacklist(event)
                         elif is_agent_event(event):
                             _agent(event)
+                        elif is_fax_event(event):
+                            _fax(event)
+                        elif event.get("type") == "ChannelDestroyed":
+                            _fax_channel(event)
                         for ce in self.translator.translate(event):
                             self.hub.publish(ce)
                             if ce.type in LIVE_WEBHOOK_EVENTS:

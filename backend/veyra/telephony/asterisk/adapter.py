@@ -465,6 +465,21 @@ class AsteriskAdapter(TelephonyAdapter):
         ch = self.ari.originate(f"PJSIP/{endpoint}", number, context, caller_id, timeout)
         return str(ch.get("id") or "")
 
+    def originate_channel(
+        self,
+        endpoint: str,
+        extension: str,
+        *,
+        context: str,
+        caller_id: str,
+        timeout: int = 60,
+        variables: dict[str, str] | None = None,
+    ) -> str:
+        ch = self.ari.originate(
+            endpoint, extension, context, caller_id, timeout, variables=variables
+        )
+        return str(ch.get("id") or "")
+
     # --- configuration ------------------------------------------------------
 
     def managed_files(self) -> list[str]:

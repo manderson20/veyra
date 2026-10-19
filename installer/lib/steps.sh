@@ -58,6 +58,9 @@ do_packages() {
     # ffmpeg decodes MP3 and other compressed uploads for the audio library
     # (docs/PAGING_RECORDINGS.md §3); without it only WAV uploads are accepted.
     pkgs+=(ffmpeg)
+    # ghostscript renders PDFs to fax TIFFs, libtiff-tools (tiff2pdf) turns
+    # received faxes into PDFs (docs/USER_PORTAL.md §9).
+    [[ $SKIP_TELEPHONY == 1 ]] || pkgs+=(ghostscript libtiff-tools)
     # nftables: the Veyra firewall's table (docs/FIREWALL_TRUST.md §3).
     pkgs+=(nftables)
     local missing=()
@@ -580,9 +583,11 @@ do_telephony() {
     # the worker converts and files them by organization and month.
     run install -d -m 2770 -o "$VEYRA_USER" -g asterisk "$VEYRA_DATA/prompts" \
         "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" "$VEYRA_DATA/moh" \
-        "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming" "$VEYRA_DATA/recordings/conferences"
+        "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming" "$VEYRA_DATA/recordings/conferences" \
+        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming"
     run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" \
-        "$VEYRA_DATA/moh" "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming" "$VEYRA_DATA/recordings/conferences"
+        "$VEYRA_DATA/moh" "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming" "$VEYRA_DATA/recordings/conferences" \
+        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming"
     # Firmware images uploaded through the API, served by NGINX (www-data reads).
     run install -d -m 0755 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firmware"
     local role

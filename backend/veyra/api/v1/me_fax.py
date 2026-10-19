@@ -26,16 +26,19 @@ router = APIRouter(prefix="/me/fax", tags=["me"])
 
 
 def _own_job(db: Session, principal: Principal, job_id: uuid.UUID) -> FaxJob:
-    row = db.scalar(
-        select(FaxJob).where(FaxJob.id == job_id, FaxJob.user_id == principal.user_id)
-    )
+    row = db.scalar(select(FaxJob).where(FaxJob.id == job_id, FaxJob.user_id == principal.user_id))
     if row is None:
         raise not_found("Fax")
     return row
 
 
 def _audit(
-    db: Session, ctx: RequestContext, principal: Principal, action: str, row: FaxJob, details: dict[str, Any]
+    db: Session,
+    ctx: RequestContext,
+    principal: Principal,
+    action: str,
+    row: FaxJob,
+    details: dict[str, Any],
 ) -> None:
     audit.record(
         db,
@@ -135,7 +138,9 @@ def cancel_fax(
     return fax_service.outs(db, [row])[0]
 
 
-@router.post("/{job_id}/retry", response_model=JobOut, summary="Send one of your failed faxes again")
+@router.post(
+    "/{job_id}/retry", response_model=JobOut, summary="Send one of your failed faxes again"
+)
 def retry_fax(
     job_id: uuid.UUID,
     request: Request,
