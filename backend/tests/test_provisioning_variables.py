@@ -265,6 +265,7 @@ def test_feature_keys_render_as_blf_and_speed_dials(admin, app):
         {"type": "park", "value": "nowhere"},
         {"type": "park", "value": "front-desk:2999"},
         {"type": "toggle", "value": "flow:nope"},
+        {"type": "toggle", "value": "queue:nope"},
         {"type": "toggle", "value": "lunch"},
     ):
         r = admin.patch(f"{DEVICES}/{d1['id']}", json={"keys": [bad]})

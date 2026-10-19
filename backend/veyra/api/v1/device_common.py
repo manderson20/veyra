@@ -13,7 +13,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from veyra.core.errors import ProblemError
-from veyra.core.models import CallFlow, FirmwareImage, PagingZone, ParkingLot, Site, TimeCondition
+from veyra.core.models import (
+    CallFlow,
+    CallQueue,
+    FirmwareImage,
+    PagingZone,
+    ParkingLot,
+    Site,
+    TimeCondition,
+)
 from veyra.provisioning.renderer import ResolvedTemplate, TemplateCatalog, coerce_one
 from veyra.provisioning.spec import TemplateError
 
@@ -38,7 +46,9 @@ KeyType = Literal[
     "toggle",
     "presence",
 ]
-_TOGGLE_RE = re.compile(r"^(flow:[a-z0-9]+(?:-[a-z0-9]+)*|tc:[0-9a-f-]{36}|agent)$")
+_TOGGLE_RE = re.compile(
+    r"^(flow:[a-z0-9]+(?:-[a-z0-9]+)*|queue:[a-z0-9]+(?:-[a-z0-9]+)*|tc:[0-9a-f-]{36}|agent)$"
+)
 _PARK_RE = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)(?::([0-9]{1,6}))?$")
 _NUMBER_RE = re.compile(r"^[0-9*#+]{1,32}$")
 # A key value naming a provisioning variable (docs/PROVISIONING_BREADTH.md §2.3).
@@ -143,6 +153,14 @@ def check_toggle_target(
         )
         if flow is None:
             raise validation(field, f"key {i}: call flow {value[5:]!r} not found")
+    elif value.startswith("queue:"):
+        queue = db.scalar(
+            select(CallQueue).where(
+                CallQueue.organization_id == organization_id, CallQueue.slug == value[6:]
+            )
+        )
+        if queue is None:
+            raise validation(field, f"key {i}: queue {value[6:]!r} not found")
     elif value.startswith("tc:"):
         try:
             tc = db.get(TimeCondition, uuid.UUID(value[3:]))

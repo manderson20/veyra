@@ -71,6 +71,10 @@ def _write_member(
         adapter.store_put(
             FAMILY, f"{org_slug}/{ext.number}/{queue.slug}", "1" if member.logged_in else None
         )
+        # The lamp of a per-queue log-in key (issue #130).
+        adapter.set_switch(
+            "agentq", org_slug, f"{ext.number}-{queue.slug}", "1" if member.logged_in else None
+        )
     except (EngineUnavailable, NotSupported, ValueError) as e:
         log.warning("Agent %s in queue %s not written to the engine: %s", ext.number, queue.slug, e)
 

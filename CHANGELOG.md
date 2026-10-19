@@ -11,6 +11,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ## Unreleased
 
 ### Added
+- **Queue log-in key for one queue** (#130): a Toggle key with `queue:<slug>` logs the phone in and out of that queue only, and is lit while it is logged in there (beside `agent`, which toggles every queue). Takes effect at the next deployment.
 - **Central console: "Instance update failed" alert** (#120): a managed installation that could not install an update raises an alert on the console with the version and the reason.
 
 ## 0.27.5 — 2026-10-20

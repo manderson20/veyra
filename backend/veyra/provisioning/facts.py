@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from veyra.core.config import Settings
 from veyra.core.models import (
     CallFlow,
+    CallQueue,
     Device,
     DeviceProfile,
     DeviceProfilePaging,
@@ -437,6 +438,16 @@ def _toggle_key(
     if value == "agent":
         login = codes.get("queue_login")
         return (f"{login}*{own_number}", FEATURE_LABELS["agent"]) if login and own_number else None
+    if value.startswith("queue:"):
+        login = codes.get("queue_login")
+        queue = db.scalar(
+            select(CallQueue).where(
+                CallQueue.organization_id == org_id, CallQueue.slug == value[6:]
+            )
+        )
+        if not login or queue is None or not own_number:
+            return None
+        return f"{login}{queue.number}*{own_number}", f"Log in {queue.name}"
     if value.startswith("flow:"):
         prefix = codes.get("callflow_toggle_prefix")
         flow = db.scalar(

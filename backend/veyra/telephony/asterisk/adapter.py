@@ -101,7 +101,7 @@ def _check_interface(value: str) -> str:
 
 
 SWITCH_FAMILY = "veyra/switch"
-SWITCH_KINDS = ("flow", "tc", "agent", "agentpause")
+SWITCH_KINDS = ("flow", "tc", "agent", "agentpause", "agentq")
 _SWITCH_VALUE_RE = re.compile(r"^[a-z0-9]{1,16}$")
 # "/veyra/switch/flow/example/night                   : 1"
 _SWITCH_ROW_RE = re.compile(

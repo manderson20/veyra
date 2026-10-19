@@ -16,7 +16,7 @@ const VALUE_HINT: Partial<Record<LineKeyType, { placeholder: string; help: strin
   intercom: { placeholder: "Extension", help: "Calls the extension on its speaker." },
   presence: { placeholder: "Extension", help: "Lit while the colleague is busy or in a meeting, blinking while away, off when available; pressing it calls them." },
   park: { placeholder: "front-desk or front-desk:2972", help: "A parking lot parks a call; lot:slot watches that slot and picks the call up." },
-  toggle: { placeholder: "flow:snow-day, tc:<id> or agent", help: "Lit while the call flow is switched, the override is set, or the phone is logged in to its queues." },
+  toggle: { placeholder: "flow:snow-day, tc:<id>, agent or queue:<slug>", help: "Lit while the call flow is switched, the override is set, the phone is logged in to its queues (agent), or logged in to one queue (queue:<slug>)." },
 };
 
 /** Ordered line keys of a profile or device (docs/DEVICE_PROVISIONING.md §4.2). */

@@ -2700,6 +2700,7 @@ def _agent_lines(
     key = f"{AGENT_FAMILY}/{org}/{number}"
     device = f"Custom:veyra-agent-{org}-{number}"
     adds, removes, marks, clears = [], [], [], []
+    lamps_on, lamps_off = [], []
     for q, m in memberships:
         slug = _slug(q["slug"], "queue slug")
         qname = n.queue(slug)
@@ -2712,6 +2713,10 @@ def _agent_lines(
         removes.append(f" same => n,RemoveQueueMember({qname},PJSIP/{endpoint})")
         marks.append(f" same => n,Set(DB({key}/{slug})=1)")
         clears.append(f" same => n,Set(VEYRA_DEL=${{DB_DELETE({key}/{slug})}})")
+        # The lamp of a per-queue log-in key (issue #130).
+        qdevice = f"Custom:veyra-agentq-{org}-{number}-{slug}"
+        lamps_on.append(f" same => n,Set(DEVICE_STATE({qdevice})=INUSE)")
+        lamps_off.append(f" same => n,Set(DEVICE_STATE({qdevice})=NOT_INUSE)")
     test = f"{key}/{_slug(memberships[0][0]['slug'], 'queue slug')}" if scope else key
     event_scope = f",Queue: {scope}" if scope else ""
     # After a logout, the extension-wide flag follows the queues still logged in.
@@ -2722,6 +2727,7 @@ def _agent_lines(
         f' same => n,GotoIf($["${{DB({test})}}"="1"]?logout)',
         *adds,
         *marks,
+        *lamps_on,
         f" same => n,Set(DB({key})=1)",
         f" same => n,Set(DEVICE_STATE({device})=INUSE)",
         f" same => n,UserEvent({AGENT_EVENT},Org: {org},Extension: {number},"
@@ -2731,6 +2737,7 @@ def _agent_lines(
         f" same => n(logout),NoOp(Veyra agent {number} logs out)",
         *removes,
         *clears,
+        *lamps_off,
         *any_left,
         ' same => n,GotoIf($["${VEYRA_ANY}"="1"]?told)',
         f" same => n,Set(VEYRA_DEL=${{DB_DELETE({key})}})",
@@ -2865,6 +2872,20 @@ def _agent_hints(codes: dict[str, str], queues: list[dict[str, Any]]) -> list[st
             ]
         if pause:
             hints.append(f"exten => {pause}*{number},hint,Custom:veyra-agentpause-{org}-{number}")
+        if login:
+            # One queue's log-in key (issue #130): lit while logged into it,
+            # pressing it from the agent's phone toggles that queue.
+            for q, _m in memberships:
+                slug = _slug(q["slug"], "queue slug")
+                qnum = str(q["number"])
+                hints += [
+                    f"exten => {login}{qnum}*{number},hint,"
+                    f"Custom:veyra-agentq-{org}-{number}-{slug}",
+                    f'exten => {login}{qnum}*{number},1,GotoIf($["${{VEYRA_EXT}}"="{number}"]'
+                    f"?{login}{qnum},1)",
+                    " same => n,Playback(beeperr)",
+                    " same => n,Hangup()",
+                ]
     return hints
 
 

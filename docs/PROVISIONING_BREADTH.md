@@ -159,8 +159,10 @@ toggle `flow:<slug>` / `tc:<id>` → BLF on the override code; toggle `agent`
 number, so the generator now makes the DND and agent hint numbers dialable
 from the owner's own phone (any other phone hears an error tone). Transfer
 has no key in the Poly family yet and is reported as a preview warning;
-per-queue log-in toggles (`queue:<slug>`) are not in this slice. Lamp states
-are not verified on hardware (§7).
+per-queue log-in toggles (`queue:<slug>`) followed in 0.27.6 (#130): a BLF
+on `*45<queue>*<ext>` (hint `Custom:veyra-agentq-<org>-<ext>-<queue>`, set by
+the phone's log-in dialplan and by the API's agent state). Lamp states are
+not verified on hardware (§7).
 
 ## 4. Official templates (#35–#39)
 

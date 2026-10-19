@@ -62,6 +62,8 @@ def test_dynamic_agents_state_api_events_and_sync(admin, app):
     queue_name = f"veyra-{q['slug']}"
     assert adapter.queue_calls[-1] == (queue_name, f"PJSIP/{a['endpoint_name']}", True, False)
     assert adapter.switch_states[("agent", org["slug"], "6001")] == "1"
+    # The per-queue log-in key's lamp (#130).
+    assert adapter.switch_states[("agentq", org["slug"], f"6001-{q['slug']}")] == "1"
     # The marks the phone's *45 / *45<queue> toggles read agree with the API.
     marks = adapter.store["veyra/agent"]
     assert marks[f"{org['slug']}/6001"] == "1" and marks[f"{org['slug']}/6001/{q['slug']}"] == "1"
@@ -77,6 +79,7 @@ def test_dynamic_agents_state_api_events_and_sync(admin, app):
     assert not m["logged_in"] and not m["paused"]
     assert adapter.queue_calls[-1] == (queue_name, f"PJSIP/{a['endpoint_name']}", False, False)
     assert ("agent", org["slug"], "6001") not in adapter.switch_states
+    assert ("agentq", org["slug"], f"6001-{q['slug']}") not in adapter.switch_states
     assert not {k for k in adapter.store["veyra/agent"] if k.startswith(f"{org['slug']}/6001")}
     # Editing the member list keeps a dynamic agent's state.
     admin.post(f"{QUEUES}/{q['id']}/agents/{a['id']}/state", json={"logged_in": True})
@@ -225,6 +228,8 @@ def test_generated_queue_agents_and_breakout():
     per_queue = _context(dp, "veyra-agent-login-support")
     assert 'GotoIf($["${DB(veyra/agent/example/1001/support)}"="1"]?logout)' in per_queue
     assert "Action: logout,Queue: support" in per_queue
+    assert "Set(DEVICE_STATE(Custom:veyra-agentq-example-1001-support)=INUSE)" in per_queue
+    assert "Set(DEVICE_STATE(Custom:veyra-agentq-example-1001-support)=NOT_INUSE)" in login
     features = _context(dp, "veyra-features")
     assert "Goto(veyra-agent-login,${VEYRA_EXT},1)" in features
     assert (
@@ -236,6 +241,9 @@ def test_generated_queue_agents_and_breakout():
     internal = _context(dp, "veyra-internal")
     assert "exten => *45*1001,hint,Custom:veyra-agent-example-1001" in internal
     assert "exten => *46*1001,hint,Custom:veyra-agentpause-example-1001" in internal
+    # One queue's log-in key (#130): lamp and toggle.
+    assert "exten => *452400*1001,hint,Custom:veyra-agentq-example-1001-support" in internal
+    assert 'exten => *452400*1001,1,GotoIf($["${VEYRA_EXT}"="1001"]?*452400,1)' in internal
     # No dynamic agents: no login contexts or codes, only the count code.
     snap["queues"] = [_snap_queue(members=[_snap_queue()["members"][1]])]
     dp2 = _files(snap)["extensions.conf"]
