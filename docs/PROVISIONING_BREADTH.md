@@ -1,6 +1,6 @@
 # Provisioning breadth (Milestone 21)
 
-Status: **design, 2026-10-19**. Roadmap row 21 (0.27.0). Tracking issue #61;
+Status: **released as 0.27.0 on 2026-10-20** (slices A, B, C, E, F; D on request; templates experimental until the hardware checks). Roadmap row 21 (0.27.0). Tracking issue #61;
 items #76 (variables), #40 (key types), #35 (Yealink), #36 (Grandstream),
 #37 (ATA), #38 (Algo and CyberData), #39 (Poly Edge and CCX), #34 (VVX on
 hardware). Builds on [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md)
