@@ -440,9 +440,9 @@ breakpoints), `WidgetRenderer.tsx`, `PortalCanvasPage.tsx` (tabs, add
 drawer, undo, save, reset); My Phone renders the canvas; System → Portal
 layouts edits templates with the same canvas. Deviations: the announcement
 widget's text comes from the template's widget `settings` (no separate
-object); modules cannot register widgets yet; buildings and departments
-have no pages (and no list API) of their own yet, so the template editor
-takes their id in a field and the pickers come with those pages (M21/M22).
+object); modules cannot register widgets yet (#134). Buildings (Sites →
+Buildings) and departments (Organizations → Departments) have their own
+pages since 0.27.1 (#126), and the template editor picks them from a list.
 
 *Built 2026-10-19 (0.26.4, #92):* widgets fit their size instead of being
 cropped. Inside a canvas item the card is a flex column: the title stays

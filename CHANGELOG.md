@@ -10,9 +10,14 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased
 
+### Fixed
+- **Extensions can be placed at a site.** The site of an extension decides its emergency route, emergency caller ID and the site's emergency readiness, but it could not be set from the interface or the API, so no extension counted toward any site. Extensions now take a site (or a building, which implies its site).
+
 ### Added
 - **Forgot your password?** (#108): when email delivery is set up, the sign-in page offers "Forgot your password?"; the user enters their address and receives a one-time link to choose a new password. The page answers the same whether or not the address has an account, sends at most one link per account every five minutes, and skips accounts that sign in through Google or Microsoft. Administrators can still issue links as before.
 - **Hang up a call** (#109): Active Calls has a Hang up button (with a confirmation) for administrators and technicians (new permission "Hang up calls in progress"); each hang-up is in the audit log.
+- **Buildings and departments** (#126): Sites → Buildings lists each site's buildings, with their own street address when it differs from the site's (emergency notifications give that address). Organizations → Departments groups extensions. An extension's new Location card (and the New extension dialog) places it at a site, in a building and room, and in a department; My Phone layout templates can now be assigned to a building or a department by picking it from a list.
+- **Emergency readiness in the installer check** (#124): `verify.sh` warns when a site with extensions is not ready for emergency calls and names what is missing (`veyra emergency readiness`).
 - **Closed days and moving holidays** (#113): time conditions take holidays as dates every year, date ranges every year (winter break, even across New Year), one-off dates and ranges (a snow day, this year's spring break), and rules such as the fourth Thursday of November or the last Monday of May. The holiday list is now an editor with one row per holiday and says each one in words; the report builder's business-hours filter follows the same holidays.
 
 ## 0.27.0 — 2026-10-20 (Milestone 21: provisioning breadth)

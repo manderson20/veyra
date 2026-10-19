@@ -382,9 +382,9 @@ Where the build departs from the sections above:
   the spool, 0750 `asterisk`); the inventory shows the spool's size. The
   Milestone 10 `calls.retention_days` setting is kept in step with the
   retention document's `calls` row.
-* **Emergency calling:** no Buildings API yet (the address and location
-  columns exist; addresses are entered on the site, locations on the
-  extension and the phone); no Companion pop-up; the responder's phone
+* **Emergency calling:** buildings with their own address are managed
+  under Sites → Buildings and extensions are placed by site, building and
+  room (0.27.1, #126); no Companion pop-up (#127); the responder's phone
   hears the extension number read out (`veyra-emergency-notify`) rather
   than a prompt; the ELIN callback uses Asterisk's own database
   (`DB(veyra_ecb/<elin>)`), written by the emergency route itself, so it

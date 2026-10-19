@@ -157,6 +157,7 @@ class SiteOut(BaseModel):
     emergency_caller_id_number: str | None
     extensions: int
     devices: int
+    buildings: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -200,6 +201,13 @@ def _outs(db: Session, rows: list[Site]) -> list[SiteOut]:
             .group_by(Device.site_id)
         ).all()
     )
+    building_counts = dict(
+        db.execute(
+            select(Building.site_id, func.count(Building.id))
+            .where(Building.site_id.in_(ids))
+            .group_by(Building.site_id)
+        ).all()
+    )
     return [
         SiteOut(
             id=r.id,
@@ -216,6 +224,7 @@ def _outs(db: Session, rows: list[Site]) -> list[SiteOut]:
             emergency_caller_id_number=r.emergency_caller_id_number,
             extensions=int(ext_counts.get(r.id, 0)),
             devices=int(dev_counts.get(r.id, 0)),
+            buildings=int(building_counts.get(r.id, 0)),
             created_at=r.created_at,
             updated_at=r.updated_at,
         )

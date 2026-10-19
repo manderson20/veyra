@@ -30,8 +30,10 @@ from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
 from veyra.core.models import (
+    Building,
     CallQueue,
     ClassOfService,
+    Department,
     Extension,
     ExtensionState,
     FollowMe,
@@ -42,6 +44,7 @@ from veyra.core.models import (
     QueueMember,
     RingGroup,
     RingGroupMember,
+    Site,
     User,
 )
 from veyra.core.models.base import utcnow
@@ -133,9 +136,14 @@ class ExtensionIn(BaseModel):
     # Phones that may register at once (docs/EXTENSIONS.md §1); None: as many
     # as are provisioned with the extension, at least one.
     max_registrations: int | None = Field(None, ge=1, le=16)
-    # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
+    # The site the phone is at (its emergency route and caller ID) and the
+    # dispatchable location (docs/PRODUCTION_HARDENING.md §6). A building
+    # implies its site.
+    site_id: uuid.UUID | None = None
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
+    # Groups extensions for My Phone layout templates (docs/USER_PORTAL.md §8).
+    department_id: uuid.UUID | None = None
     is_enabled: bool = True
 
     @field_validator("number")
@@ -176,9 +184,14 @@ class ExtensionPatch(BaseModel):
     # Phones that may register at once (docs/EXTENSIONS.md §1); None: as many
     # as are provisioned with the extension, at least one.
     max_registrations: int | None = Field(None, ge=1, le=16)
-    # Dispatchable location (docs/PRODUCTION_HARDENING.md §6).
+    # The site the phone is at (its emergency route and caller ID) and the
+    # dispatchable location (docs/PRODUCTION_HARDENING.md §6). A building
+    # implies its site.
+    site_id: uuid.UUID | None = None
     building_id: uuid.UUID | None = None
     location: str | None = Field(None, max_length=200)
+    # Groups extensions for My Phone layout templates (docs/USER_PORTAL.md §8).
+    department_id: uuid.UUID | None = None
     is_enabled: bool | None = None
 
     @field_validator("number")
@@ -205,6 +218,38 @@ class ExtensionPatch(BaseModel):
     @classmethod
     def _cid_number(cls, v: str | None) -> str | None:
         return _caller_id_number(v)
+
+
+def _check_place(
+    db: Session,
+    organization_id: uuid.UUID,
+    site_id: uuid.UUID | None,
+    building_id: uuid.UUID | None,
+) -> uuid.UUID | None:
+    """The effective site: the given one, or the building's when only a
+    building is given. Both must be in the organization and agree."""
+    if building_id is not None:
+        building = db.get(Building, building_id)
+        if building is None or building.organization_id != organization_id:
+            raise _validation("building_id", "the building is not in this organization")
+        if site_id is not None and site_id != building.site_id:
+            raise _validation("building_id", "the building is at another site")
+        return building.site_id
+    if site_id is not None:
+        site = db.get(Site, site_id)
+        if site is None or site.organization_id != organization_id:
+            raise _validation("site_id", "the site is not in this organization")
+    return site_id
+
+
+def _check_department(
+    db: Session, organization_id: uuid.UUID, department_id: uuid.UUID | None
+) -> None:
+    if department_id is None:
+        return
+    row = db.get(Department, department_id)
+    if row is None or row.organization_id != organization_id:
+        raise _validation("department_id", "the department is not in this organization")
 
 
 def _check_class(db: Session, organization_id: uuid.UUID, class_id: uuid.UUID | None) -> None:
@@ -321,8 +366,13 @@ class ExtensionOut(BaseModel):
     max_registrations: int | None = None
     provisioned_phones: int = 0
     registration_limit: int = 1
+    site_id: uuid.UUID | None = None
+    site_name: str | None = None
     building_id: uuid.UUID | None = None
+    building_name: str | None = None
     location: str | None = None
+    department_id: uuid.UUID | None = None
+    department_name: str | None = None
     is_enabled: bool
     sip_secret_set: bool
     sip_secret_changed_at: datetime | None
@@ -445,6 +495,32 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
         if class_ids
         else {}
     )
+    site_ids = {r.site_id for r in rows if r.site_id}
+    building_ids = {r.building_id for r in rows if r.building_id}
+    site_names = (
+        dict(db.execute(select(Site.id, Site.name).where(Site.id.in_(site_ids))).all())
+        if site_ids
+        else {}
+    )
+    building_names = (
+        dict(
+            db.execute(
+                select(Building.id, Building.name).where(Building.id.in_(building_ids))
+            ).all()
+        )
+        if building_ids
+        else {}
+    )
+    department_ids = {r.department_id for r in rows if r.department_id}
+    department_names = (
+        dict(
+            db.execute(
+                select(Department.id, Department.name).where(Department.id.in_(department_ids))
+            ).all()
+        )
+        if department_ids
+        else {}
+    )
     states = (
         {
             s.extension_id: s.dnd
@@ -493,8 +569,13 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 max_registrations=r.max_registrations,
                 provisioned_phones=phones.get(r.id, 0),
                 registration_limit=registration_limit(r.max_registrations, phones.get(r.id, 0)),
+                site_id=r.site_id,
+                site_name=site_names.get(r.site_id) if r.site_id else None,
                 building_id=r.building_id,
+                building_name=building_names.get(r.building_id) if r.building_id else None,
                 location=r.location,
+                department_id=r.department_id,
+                department_name=department_names.get(r.department_id) if r.department_id else None,
                 is_enabled=r.is_enabled,
                 sip_secret_set=bool(r.sip_secret_ciphertext),
                 sip_secret_changed_at=r.sip_secret_changed_at,
@@ -711,6 +792,8 @@ def create_extension(
     _check_user(db, body.user_id, body.organization_id)
     check_outbound_caller_id(db, principal, org.id, body.outbound_caller_id_number)
     _check_class(db, org.id, body.class_of_service_id)
+    site_id = _check_place(db, org.id, body.site_id, body.building_id)
+    _check_department(db, org.id, body.department_id)
     ext = Extension(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -726,8 +809,10 @@ def create_extension(
         intercom=body.intercom,
         class_of_service_id=body.class_of_service_id,
         max_registrations=body.max_registrations,
+        site_id=site_id,
         building_id=body.building_id,
         location=body.location,
+        department_id=body.department_id,
         is_enabled=body.is_enabled,
     )
     _set_secret(ext, key)
@@ -797,6 +882,20 @@ def update_extension(
         details["user_id"] = str(ext.user_id) if ext.user_id else None
     if "class_of_service_id" in changes:
         _check_class(db, ext.organization_id, changes["class_of_service_id"])
+    if "department_id" in changes:
+        _check_department(db, ext.organization_id, changes["department_id"])
+    if "site_id" in changes or "building_id" in changes:
+        site_id = changes.get("site_id", ext.site_id)
+        building_id = changes.get("building_id", ext.building_id)
+        if changes.get("building_id") is not None and "site_id" not in changes:
+            site_id = None  # the new building decides the site
+        if "site_id" in changes and "building_id" not in changes and building_id is not None:
+            # Moving to another site drops a building that is not there.
+            b = db.get(Building, building_id)
+            if b is None or b.site_id != site_id:
+                building_id = None
+        changes["building_id"] = building_id
+        changes["site_id"] = _check_place(db, ext.organization_id, site_id, building_id)
     if (
         "outbound_caller_id_number" in changes
         and changes["outbound_caller_id_number"] != ext.outbound_caller_id_number
@@ -814,8 +913,10 @@ def update_extension(
         "intercom",
         "class_of_service_id",
         "max_registrations",
+        "site_id",
         "building_id",
         "location",
+        "department_id",
         "is_enabled",
     ):
         if field in changes and changes[field] != getattr(ext, field):

@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Canvas } from "@/components/portal/Canvas";
 import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, PageHeader, SelectField, Switch, Tabs, TextArea, TextField, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import type { PortalScope, PortalTemplate, Role } from "@/lib/types";
+import type { Building, Department, PortalScope, PortalTemplate, Role } from "@/lib/types";
 import { addWidget, newTabId, removeWidget, type Layout, type Placed } from "@/portal/layout";
 import { DEFAULT_LAYOUT, WIDGETS, widgetByKey } from "@/portal/widgets";
 import { useApiData } from "@/hooks/useApiData";
@@ -13,8 +13,6 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
 
-// Building and department scopes exist in the API and in the resolution;
-// their pickers arrive with the buildings and departments pages (M21/M22).
 const SCOPES: { value: PortalScope; label: string }[] = [
   { value: "organization", label: "Whole organization" },
   { value: "role", label: "A role" },
@@ -22,7 +20,7 @@ const SCOPES: { value: PortalScope; label: string }[] = [
   { value: "building", label: "A building" },
   { value: "department", label: "A department" },
 ];
-const PICKABLE: PortalScope[] = ["organization", "role", "system"];
+const PICKABLE: PortalScope[] = ["organization", "building", "department", "role", "system"];
 
 /** Default portal layouts by scope (docs/USER_PORTAL.md §10). */
 export default function PortalLayoutsPage() {
@@ -69,6 +67,8 @@ function TemplateDialog({ template, isPlatform, onClose, onSaved }: { template: 
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const roles = useApiData<Role[]>(scope === "role" ? "/roles" : null);
+  const buildings = useApiData<Building[]>(scope === "building" && org ? "/buildings" : null, { organization_id: org });
+  const departments = useApiData<Department[]>(scope === "department" && org ? "/departments" : null, { organization_id: org });
   const current = layout.tabs.find((x) => x.id === tab) ?? layout.tabs[0]!;
   const update = (widgets: Placed[]) => setLayout({ ...layout, tabs: layout.tabs.map((x) => (x.id === current.id ? { ...x, widgets } : x)) });
 
@@ -136,7 +136,8 @@ function TemplateDialog({ template, isPlatform, onClose, onSaved }: { template: 
           <SelectField label="Applies to" value={scope} disabled={!!t} options={SCOPES.filter((s) => (s.value !== "system" || isPlatform) && (PICKABLE.includes(s.value) || s.value === t?.scope))} onChange={(e) => { setScope(e.target.value as PortalScope); setRef(""); }} />
           {scope !== "system" ? <SelectField label="Organization" value={org} disabled={!!t} options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => setOrg(e.target.value)} /> : null}
         </div>
-        {scope === "building" || scope === "department" ? <TextField label={scope === "building" ? "Building id" : "Department id"} value={ref} onChange={(e) => setRef(e.target.value)} error={errors.fields.scope_ref} help="A picker comes with the buildings and departments pages; until then the id from the API." /> : null}
+        {scope === "building" ? <SelectField label="Building" value={ref} disabled={!!t} placeholder={org ? "Choose a building" : "Choose the organization first"} options={(buildings.data ?? []).map((b) => ({ value: b.id, label: `${b.name} (${b.site_name})` }))} onChange={(e) => setRef(e.target.value)} error={errors.fields.scope_ref} help="Users whose extension is in this building (Directory → Sites → Buildings)." /> : null}
+        {scope === "department" ? <SelectField label="Department" value={ref} disabled={!!t} placeholder={org ? "Choose a department" : "Choose the organization first"} options={(departments.data ?? []).map((d) => ({ value: d.id, label: d.name }))} onChange={(e) => setRef(e.target.value)} error={errors.fields.scope_ref} help="Users whose extension is in this department (Organizations → Departments)." /> : null}
         {scope === "role" ? <SelectField label="Role" value={ref} placeholder="Choose a role" options={(roles.data ?? []).map((r) => ({ value: r.key, label: r.name }))} onChange={(e) => setRef(e.target.value)} error={errors.fields.scope_ref} /> : null}
         <Switch label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         <div className="stack stack--sm">

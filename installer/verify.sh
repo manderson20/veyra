@@ -85,6 +85,14 @@ else
     check schema fail "Database schema is not current: $out"
 fi
 
+# --- emergency calling readiness (docs/PRODUCTION_HARDENING.md §6)
+out="$(/usr/local/bin/veyra emergency readiness 2>&1)"; rc=$?
+case "$rc" in
+    0) check emergency pass "$out" ;;
+    3) check emergency warn "$out (System → Emergency calling)" ;;
+    *) check emergency warn "could not check emergency readiness: $out" ;;
+esac
+
 # --- phone provisioning (Milestone 9, docs/DEVICE_PROVISIONING.md §3)
 if grep -qs "location /provisioning/" /etc/nginx/sites-available/veyra.conf; then
     check prov-location pass "NGINX serves /provisioning/"
