@@ -1999,7 +1999,7 @@ export interface PageLogEntry {
 }
 
 /** "user": an open slot the phone's user fills from My Phone (docs/USER_PORTAL.md §8). */
-export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user";
+export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user" | "park" | "voicemail" | "transfer" | "intercom" | "dnd" | "toggle";
 
 export interface LineKey {
   type: LineKeyType;

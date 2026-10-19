@@ -4,7 +4,19 @@
 import { Button, SelectField, TextField } from "@/components/ui";
 import type { LineKey, LineKeyType, PagingZone } from "@/lib/types";
 
-export const KEY_TYPE_LABELS: Record<LineKeyType, string> = { line: "Line", blf: "BLF (watch a phone or group)", speed_dial: "Speed dial", page: "Page a zone", user: "User's choice (set from My Phone)" };
+export const KEY_TYPE_LABELS: Record<LineKeyType, string> = {
+  line: "Line", blf: "BLF (watch a phone or group)", speed_dial: "Speed dial", page: "Page a zone", user: "User's choice (set from My Phone)",
+  voicemail: "Voicemail", intercom: "Intercom to an extension", dnd: "Do Not Disturb (lit while on)", park: "Park (a lot, or watch a slot)",
+  toggle: "Toggle (call flow, time condition, queue log-in)", transfer: "Transfer",
+};
+
+/** What the value field of a key type asks for (docs/PROVISIONING_BREADTH.md §3). */
+const VALUE_HINT: Partial<Record<LineKeyType, { placeholder: string; help: string }>> = {
+  voicemail: { placeholder: "Line (optional)", help: "Dials voicemail; the lamp follows the line's messages." },
+  intercom: { placeholder: "Extension", help: "Calls the extension on its speaker." },
+  park: { placeholder: "front-desk or front-desk:2972", help: "A parking lot parks a call; lot:slot watches that slot and picks the call up." },
+  toggle: { placeholder: "flow:snow-day, tc:<id> or agent", help: "Lit while the call flow is switched, the override is set, or the phone is logged in to its queues." },
+};
 
 /** Ordered line keys of a profile or device (docs/DEVICE_PROVISIONING.md §4.2). */
 export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys: LineKey[]; onChange: (keys: LineKey[]) => void; zones: PagingZone[]; disabled?: boolean; error?: string }) {
@@ -26,6 +38,10 @@ export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys
             onChange={(e) => update(i, { type: e.target.value as LineKeyType, value: e.target.value === "line" ? "1" : "" })} />
           {k.type === "user" ? (
             <span className="subtle" style={{ alignSelf: "center" }}>Open slot: the user of the phone picks a speed dial or a BLF from My Phone. Every other key is locked for them.</span>
+          ) : k.type === "dnd" || k.type === "transfer" ? (
+            <span className="subtle" style={{ alignSelf: "center" }}>{k.type === "dnd" ? "Toggles Do Not Disturb on this phone; lit while it is on." : "Not every phone has a transfer key; where it has none the preview says so and the phone's softkey does it."}</span>
+          ) : VALUE_HINT[k.type] ? (
+            <TextField label={<span className="sr-only">Key {i + 1} value</span>} disabled={disabled} value={k.value} placeholder={VALUE_HINT[k.type]!.placeholder} title={VALUE_HINT[k.type]!.help} style={{ width: 200 }} onChange={(e) => update(i, { value: e.target.value.trim() })} />
           ) : k.type === "page" ? (
             <span className="row" style={{ gap: 6 }}>
               <SelectField label={<span className="sr-only">Zone</span>} value={k.value.startsWith("$") ? "$" : k.value} disabled={disabled} placeholder="Choose a zone"

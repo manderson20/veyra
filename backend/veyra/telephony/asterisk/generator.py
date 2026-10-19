@@ -1914,6 +1914,15 @@ def _internal(
         # Keys lit while Do Not Disturb or a forward is on (docs/CALL_FEATURES.md §3.2, §3.3).
         if dnd_toggle:
             lines.append(f"exten => {dnd_toggle}{number},hint,Custom:veyra-dnd-{org_slug}-{number}")
+            # A DND key on the phone (docs/PROVISIONING_BREADTH.md §3) is a BLF
+            # on this hint; pressing it dials the hint: the owner's phone
+            # toggles, any other phone is refused.
+            lines += [
+                f'exten => {dnd_toggle}{number},1,GotoIf($["${{VEYRA_EXT}}"="{number}"]'
+                f"?{dnd_toggle},1)",
+                " same => n,Playback(beeperr)",
+                " same => n,Hangup()",
+            ]
         if cf_code:
             lines.append(f"exten => {cf_code}{number},hint,Custom:veyra-cf-{org_slug}-{number}")
         fm_branch = _follow_me_branch(
@@ -2789,6 +2798,12 @@ def _agent_hints(codes: dict[str, str], queues: list[dict[str, Any]]) -> list[st
         org = _slug(memberships[0][0].get("organization") or "", "organization")
         if login:
             hints.append(f"exten => {login}*{number},hint,Custom:veyra-agent-{org}-{number}")
+            # The queue log-in key's lamp is dialable from the agent's own phone.
+            hints += [
+                f'exten => {login}*{number},1,GotoIf($["${{VEYRA_EXT}}"="{number}"]?{login},1)',
+                " same => n,Playback(beeperr)",
+                " same => n,Hangup()",
+            ]
         if pause:
             hints.append(f"exten => {pause}*{number},hint,Custom:veyra-agentpause-{org}-{number}")
     return hints
@@ -3363,6 +3378,9 @@ def _parking_conf(lots: list[dict[str, Any]]) -> GeneratedFile:
             "parkext_exclusive=yes",
             f"parkpos={int(lot['slot_first'])}-{int(lot['slot_last'])}",
             "findslot=next",
+            # Slot hints: a park key watching a slot lights while a call waits
+            # there (docs/PROVISIONING_BREADTH.md §3).
+            "parkinghints=yes",
             f"parkingtime={timeout}",
             "comebacktoorigin=no",
             f"comebackcontext={n.parking_timeout(slug)}",

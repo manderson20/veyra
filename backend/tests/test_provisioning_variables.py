@@ -4,7 +4,9 @@ precedence, ``$name`` key references resolved per phone, variables filling
 template variables, the preview's warnings, re-provisioning on change and the
 in-use refusal."""
 
+from veyra.core.db import session_scope
 from veyra.provisioning.variables import VarsView, check_name, reference
+from veyra.telephony import features
 
 VARS = "/api/v1/provisioning/variables"
 DEVICES = "/api/v1/devices"
@@ -197,3 +199,71 @@ def test_scopes_precedence_keys_reprovision_and_in_use(admin, app):
         "provisioning.variable_update",
         "provisioning.variable_delete",
     } <= actions
+
+
+def test_feature_keys_render_as_blf_and_speed_dials(admin, app):
+    """Key types of docs/PROVISIONING_BREADTH.md §3 on a Poly profile."""
+    org, _site_a, _site_b, _profile, (d1, _d2) = _setup(admin)
+    o = org["id"]
+    ext = admin.get(EXT, params={"organization_id": o, "q": "1001"}).json()["items"][0]
+    flow = _post(
+        admin,
+        "/api/v1/call-flows",
+        {
+            "organization_id": o,
+            "name": "Snow day",
+            "code_index": 7,
+            "normal": {"type": "extension", "extension_id": ext["id"]},
+            "override_destination": {"type": "hangup"},
+        },
+    )
+    _post(
+        admin,
+        "/api/v1/parking-lots",
+        {
+            "organization_id": o,
+            "name": "Front desk",
+            "park_exten": "2970",
+            "slot_first": 2971,
+            "slot_last": 2973,
+            "timeout": {"type": "extension", "extension_id": ext["id"]},
+        },
+    )
+    keys = [
+        {"type": "line", "value": "1"},
+        {"type": "voicemail", "value": ""},
+        {"type": "intercom", "value": "1002"},
+        {"type": "dnd", "value": ""},
+        {"type": "park", "value": "front-desk"},
+        {"type": "park", "value": "front-desk:2972"},
+        {"type": "toggle", "value": f"flow:{flow['slug']}"},
+        {"type": "toggle", "value": "agent"},
+        {"type": "transfer", "value": ""},
+    ]
+    r = admin.patch(f"{DEVICES}/{d1['id']}", json={"keys": keys})
+    assert r.status_code == 200, r.text
+    content, warnings = _preview(admin, d1)
+    with session_scope() as db:
+        codes = features.active(db)
+    # Speed dials: voicemail, intercom + number, the lot's park extension.
+    assert '.action.string="*97$Tinvite$"' in content
+    assert f'.action.string="{codes["intercom"]}1002$Tinvite$"' in content
+    assert '.action.string="2970$Tinvite$"' in content
+    # BLF lamps: DND of the phone's own number, a parking slot, the flow, queue log-in.
+    for watched in (
+        f"{codes['dnd_toggle']}1001",
+        "2972",
+        f"{codes['callflow_toggle_prefix']}7",
+        f"{codes['queue_login']}*1001",
+    ):
+        assert f'.address="{watched}"' in content, watched
+    assert any("transfer" in w for w in warnings)
+    # Validation: unknown lot, slot out of range, bad toggle.
+    for bad in (
+        {"type": "park", "value": "nowhere"},
+        {"type": "park", "value": "front-desk:2999"},
+        {"type": "toggle", "value": "flow:nope"},
+        {"type": "toggle", "value": "lunch"},
+    ):
+        r = admin.patch(f"{DEVICES}/{d1['id']}", json={"keys": [bad]})
+        assert r.status_code == 422, bad

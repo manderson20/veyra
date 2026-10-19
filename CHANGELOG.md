@@ -14,6 +14,7 @@ Design: [docs/PROVISIONING_BREADTH.md](docs/PROVISIONING_BREADTH.md). Migration 
 
 ### Added
 - **Provisioning variables** (#76): Provisioning → Variables defines values phones share once — an all-call zone per building, the time server, an admin password — for the installation, an organization, a site or a device profile; each phone takes the nearest one. Line keys use them as `$name` (a page key `$all_call` on one profile pages each building's own zone), templates as `{{ vars.name }}`, and a variable named like a template setting fills that setting for every profile that leaves it empty. Saving a value asks the phones it reaches to re-read their configuration. The device page shows the values a phone resolves and where each comes from, and the configuration preview warns about variables nobody defined.
+- **More line key types** (#40): Voicemail, Intercom to an extension, Do Not Disturb (lit while on), Park (a lot, or watch a slot and pick the parked call up — every parking lot now publishes its slots' lamps), and Toggle for a call flow, a time condition override or queue log-in (lit while switched or logged in). They work with the existing Poly templates; a Transfer key is accepted but the Poly phones keep their transfer softkey, and the configuration preview says so.
 
 ## 0.26.7 — 2026-10-19
 

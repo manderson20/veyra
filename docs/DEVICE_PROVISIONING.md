@@ -259,7 +259,8 @@ the pickup prefix for a ringing call), `speed_dial` (`value` = number),
 `user` (an open slot the phone's user fills from My Phone with a speed dial
 or a BLF; every other key is locked for the user — the all-call key stays;
 [USER_PORTAL.md](USER_PORTAL.md) §8; 0.26.0),
-`park`/`transfer` *(later)*. Any key value may be `$name`, a provisioning
+`park`, `voicemail`, `transfer`, `intercom`, `dnd` and `toggle`
+(0.27.0; semantics in [PROVISIONING_BREADTH.md](PROVISIONING_BREADTH.md) §3). Any key value may be `$name`, a provisioning
 variable resolved per phone ([PROVISIONING_BREADTH.md](PROVISIONING_BREADTH.md)
 §2; 0.27.0). Labels default to the target's name. The
 renderer resolves numbers to the organization's extensions and groups at

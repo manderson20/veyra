@@ -147,6 +147,21 @@ plus EFK macros for transfer, DND and intercom; Yealink: `linekey.X.type`
 codes; Grandstream: P-values per key with modes). A type a family cannot
 express renders nothing and is listed as a warning in the preview.
 
+*Built 2026-10-20 (slice B, #40):* the new types are translated in
+`facts._feature_keys` into the BLF and speed-dial keys every template
+already renders (the original type is kept as `feature`), so no template
+changed: voicemail → speed dial `*97`; intercom → speed dial intercom code +
+number; park without a slot → speed dial to the lot's park extension (the
+user transfers the call to it), with a slot → BLF on the slot
+(`parkinghints=yes` on every lot); DND → BLF on `<dnd_toggle><own number>`;
+toggle `flow:<slug>` / `tc:<id>` → BLF on the override code; toggle `agent`
+→ BLF on `<queue_login>*<own number>`. Pressing a BLF dials the watched
+number, so the generator now makes the DND and agent hint numbers dialable
+from the owner's own phone (any other phone hears an error tone). Transfer
+has no key in the Poly family yet and is reported as a preview warning;
+per-queue log-in toggles (`queue:<slug>`) are not in this slice. Lamp states
+are not verified on hardware (§7).
+
 ## 4. Official templates (#35–#39)
 
 Each family is an abstract base plus model templates (the Poly pattern):
