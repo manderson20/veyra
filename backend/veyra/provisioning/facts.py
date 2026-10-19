@@ -39,6 +39,8 @@ from veyra.provisioning.renderer import (
     render,
 )
 from veyra.provisioning.spec import TemplateError
+from veyra.provisioning.variables import VarsView, resolve_reference, scopes_of
+from veyra.provisioning.variables import resolve as resolve_variables
 from veyra.telephony.settings import load_sip_settings
 from veyra.telephony.snapshot import secret_purpose
 
@@ -223,8 +225,15 @@ def merge_user_keys(
 
 
 def _keys(
-    db: Session, org_id: uuid.UUID, raw: list[dict[str, Any]], zones: dict[str, PagingZone]
+    db: Session,
+    org_id: uuid.UUID,
+    raw: list[dict[str, Any]],
+    zones: dict[str, PagingZone],
+    variables: VarsView | None = None,
 ) -> list[dict[str, Any]]:
+    # A key value may be "$name": the variable's value for this phone
+    # (docs/PROVISIONING_BREADTH.md §2.3).
+    raw = [{**k, "value": resolve_reference(k.get("value"), variables)} for k in raw]
     numbers = {k.get("value") for k in raw if k.get("type") in ("blf", "speed_dial")}
     names: dict[str, str] = {}
     if numbers:
@@ -352,9 +361,11 @@ def build_facts(
     mask_secrets: bool = False,
     scheme: str = "https",
     values: dict[str, Any] | None = None,
+    variables: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     device, profile, org = ctx.device, ctx.profile, ctx.organization
     values = values or {}
+    vars_view = VarsView(variables or {})
     ext_ids = [device.primary_extension_id] if device.primary_extension_id else []
     for line in device.lines:
         try:
@@ -390,7 +401,9 @@ def build_facts(
         for z in db.scalars(select(PagingZone).where(PagingZone.organization_id == org.id))
     }
     raw_keys = device.keys if device.keys is not None else profile.keys
-    keys = _keys(db, org.id, merge_user_keys(list(raw_keys or []), device.user_keys), zones)
+    keys = _keys(
+        db, org.id, merge_user_keys(list(raw_keys or []), device.user_keys), zones, vars_view
+    )
     paging = _paging(db, profile)
     sip = load_sip_settings(db)
     transport = str(values.get("sip_transport") or "UDPOnly")
@@ -450,6 +463,7 @@ def build_facts(
             "blf": any(k["type"] == "blf" for k in keys),
             "paging": paging["enabled"],
         },
+        "vars": vars_view,
     }
 
 
@@ -463,13 +477,23 @@ def render_device(
     host: str | None = None,
     mask_secrets: bool = False,
     scheme: str = "https",
+    warnings: list[str] | None = None,
 ) -> list[RenderedFile]:
-    """Every file the device's template produces, with the profile's values,
-    the device's overrides and the facts (§4.1). Raises ``ProvisioningError``
-    or ``TemplateError``."""
+    """Every file the device's template produces, with the provisioning
+    variables (docs/PROVISIONING_BREADTH.md §2: a defined variable with a
+    template variable's name fills it unless the profile or device set it),
+    the profile's values, the device's overrides and the facts (§4.1). A
+    ``warnings`` list, when given, receives the variables templates and keys
+    referenced but nobody defined. Raises ``ProvisioningError`` or
+    ``TemplateError``."""
     ctx = resolve_device(catalog, db, device)
     resolved = catalog.resolve(ctx.template_key)
-    values: dict[str, Any] = {**dict(ctx.profile.values), **dict(device.values)}
+    variables = resolve_variables(db, **scopes_of(device, ctx.profile))
+    values: dict[str, Any] = {
+        **{k: v for k, v in variables.items() if k in resolved.variables},
+        **dict(ctx.profile.values),
+        **dict(device.values),
+    }
     facts = build_facts(
         db,
         settings,
@@ -479,6 +503,7 @@ def render_device(
         mask_secrets=mask_secrets,
         scheme=scheme,
         values=values,
+        variables=variables,
     )
     line1 = facts["lines"][0] if facts["lines"] else None
     core = {
@@ -497,7 +522,7 @@ def render_device(
         if values.get(name) in (None, ""):
             values[name] = value
     try:
-        return render(
+        files = render(
             resolved,
             values,
             mac=device.mac_address,
@@ -507,6 +532,9 @@ def render_device(
         )
     except TemplateError as e:
         raise ProvisioningError("render_error", "; ".join(e.errors)) from e
+    if warnings is not None:
+        warnings.extend(f"variable {n} is not defined" for n in sorted(facts["vars"].missing))
+    return files
 
 
 def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]:
@@ -571,6 +599,7 @@ def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]
             "firmware_version": None,
         },
         "features": {"voicemail": True, "blf": False, "paging": False},
+        "vars": {},
     }
 
 

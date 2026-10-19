@@ -688,6 +688,9 @@ class PreviewOut(BaseModel):
     files: list[dict[str, str]]
     error: str | None = None
     error_code: str | None = None
+    # Variables the template or the keys reference but nobody defined
+    # (docs/PROVISIONING_BREADTH.md §2.2).
+    warnings: list[str] = []
 
 
 @router.get(
@@ -702,6 +705,7 @@ def preview_device(
     device = _get(db, principal, device_id, READ)
     settings = request.app.state.settings
     catalog = catalog_for(request, db)
+    warnings: list[str] = []
     try:
         ctx = facts.resolve_device(catalog, db, device)
         files = facts.render_device(
@@ -712,13 +716,61 @@ def preview_device(
             key=try_load_installation_key(settings),
             host=request.headers.get("host"),
             mask_secrets=True,
+            warnings=warnings,
         )
     except facts.ProvisioningError as e:
         return PreviewOut(template_key=None, files=[], error=str(e), error_code=e.code)
     return PreviewOut(
         template_key=ctx.template_key,
         files=[{"filename": f.filename, "format": f.format, "content": f.content} for f in files],
+        warnings=warnings,
     )
+
+
+class ResolvedVariableOut(BaseModel):
+    name: str
+    value: str
+    scope: str
+    scope_id: uuid.UUID | None
+    sensitive: bool
+    description: str | None
+
+
+@router.get(
+    "/{device_id}/variables",
+    response_model=list[ResolvedVariableOut],
+    summary="The provisioning variables this phone resolves, with their scopes",
+)
+def device_variables(
+    device_id: uuid.UUID,
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> list[ResolvedVariableOut]:
+    from veyra.provisioning import variables as varsvc
+
+    device = _get(db, principal, device_id, READ)
+    profile = db.get(DeviceProfile, device.profile_id) if device.profile_id else None
+    scopes = (
+        varsvc.scopes_of(device, profile)
+        if profile is not None
+        else {
+            "organization_id": device.organization_id,
+            "site_id": device.site_id,
+            "profile_id": None,
+        }
+    )
+    reveal = principal.has(WRITE, device.organization_id)
+    return [
+        ResolvedVariableOut(
+            name=str(v["name"]),
+            value=varsvc.MASK if v["sensitive"] and not reveal else str(v["value"]),
+            scope=str(v["scope"]),
+            scope_id=v["scope_id"],
+            sensitive=bool(v["sensitive"]),
+            description=v["description"],
+        )
+        for v in varsvc.resolve_detailed(db, **scopes)
+    ]
 
 
 @router.get("/{device_id}", response_model=DeviceOut)

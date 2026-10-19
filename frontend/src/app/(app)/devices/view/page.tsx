@@ -6,10 +6,10 @@ import { Suspense, useState, type FormEvent } from "react";
 import { CopyButton } from "@/components/common/CopyButton";
 import { KeyListEditor } from "@/components/devices/KeyListEditor";
 import { DEVICE_STATUS } from "@/app/(app)/devices/page";
-import { Badge, Button, Callout, Card, Checkbox, ConfirmDialog, ErrorState, LoadingState, PageHeader, SelectField, Switch, TabPanel, Tabs, TextField, useToast } from "@/components/ui";
+import { Badge, Button, Callout, Card, Checkbox, ConfirmDialog, DataTable, EmptyState, ErrorState, LoadingState, PageHeader, SelectField, Switch, TabPanel, Tabs, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { Device, DeviceInput, DevicePreview, DeviceProfile, Extension, LineKey, Page, ReprovisionResult } from "@/lib/types";
+import type { Device, DeviceInput, DevicePreview, DeviceProfile, Extension, LineKey, Page, ReprovisionResult, ResolvedVariable } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -215,6 +215,7 @@ function DeviceView() {
       <TabPanel idBase="dev" id="preview" active={tab}>
         <Card title="Configuration files" subtitle="What the phone downloads, rendered now with secrets masked." actions={<Button icon="eye" loading={previewBusy} onClick={loadPreview}>{preview ? "Refresh" : "Render"}</Button>}>
           {preview?.error ? <Callout tone="danger">{preview.error}</Callout> : null}
+          {preview?.warnings?.length ? <Callout tone="warn" title="Missing variables">{preview.warnings.join("; ")}. Define them under Provisioning → Variables; until then those settings and keys are left out.</Callout> : null}
           {preview?.template_key ? <p className="muted">Template <span className="mono">{preview.template_key}</span></p> : null}
           {preview?.files.map((f) => (
             <div key={f.filename} className="stack stack--sm" style={{ marginTop: 12 }}>
@@ -224,6 +225,7 @@ function DeviceView() {
           ))}
           {!preview && !previewBusy ? <p className="muted">Render to see the files.</p> : null}
         </Card>
+        <DeviceVariables deviceId={d.id} />
       </TabPanel>
       <TabPanel idBase="dev" id="status" active={tab}>
         <div className="grid grid--2" style={{ alignItems: "start" }}>
@@ -265,4 +267,20 @@ function DeviceView() {
 
 export default function Page() {
   return <Suspense fallback={<LoadingState />}><DeviceView /></Suspense>;
+}
+
+/** The provisioning variables this phone resolves, and where each comes from. */
+function DeviceVariables({ deviceId }: { deviceId: string }) {
+  const vars = useApiData<ResolvedVariable[]>(`/devices/${deviceId}/variables`);
+  const SCOPE: Record<string, string> = { installation: "Installation", organization: "Organization", site: "Site", profile: "Profile" };
+  return (
+    <Card title="Variables" subtitle="Values this phone takes from Provisioning → Variables; the nearest scope wins." flush>
+      <DataTable columns={[
+        { key: "name", header: "Variable", render: (v: ResolvedVariable) => <span className="mono">{v.name}</span> },
+        { key: "value", header: "Value", render: (v: ResolvedVariable) => <span className="mono">{v.value}</span> },
+        { key: "scope", header: "From", render: (v: ResolvedVariable) => <Badge tone="neutral">{SCOPE[v.scope] ?? v.scope}</Badge> },
+      ]} rows={vars.data} rowKey={(v) => v.name} loading={vars.loading} error={vars.error} onRetry={vars.reload}
+        caption="Resolved variables" empty={<EmptyState compact icon="settings" title="No variables reach this phone" />} />
+    </Card>
+  );
 }

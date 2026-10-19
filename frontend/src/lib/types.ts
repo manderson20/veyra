@@ -2152,6 +2152,37 @@ export interface DevicePreview {
   files: RenderedFile[];
   error: string | null;
   error_code: string | null;
+  /** Variables a template or key referenced but nobody defined. */
+  warnings?: string[];
+}
+
+/** Provisioning variables (docs/PROVISIONING_BREADTH.md §2). */
+export type VariableScope = "installation" | "organization" | "site" | "profile";
+
+export interface ProvisioningVariable {
+  id: string | null;
+  source: "core" | "defined";
+  scope: VariableScope | null;
+  scope_id: string | null;
+  scope_name: string | null;
+  organization_id: string | null;
+  name: string;
+  value: string | null;
+  sensitive: boolean;
+  description: string | null;
+  type?: string | null;
+  default?: string | number | boolean | null;
+  affected_devices?: number | null;
+  updated_at?: string | null;
+}
+
+export interface ResolvedVariable {
+  name: string;
+  value: string;
+  scope: VariableScope;
+  scope_id: string | null;
+  sensitive: boolean;
+  description: string | null;
 }
 
 export interface ReprovisionResult {

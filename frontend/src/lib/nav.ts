@@ -91,6 +91,7 @@ export const NAV: NavSection[] = [
     { label: "Devices", href: "/devices/", icon: "device", permissions: ["devices.read"], group: "Phones" },
     { label: "Device Profiles", href: "/device-profiles/", icon: "settings", permissions: ["devices.read"], group: "Phones" },
     { label: "Templates", href: "/provisioning/", icon: "template", permissions: ["provisioning.read"], group: "Configuration" },
+    { label: "Variables", href: "/provisioning/variables/", icon: "settings", permissions: ["provisioning.read"], group: "Configuration" },
     { label: "Firmware", href: "/firmware/", icon: "update", permissions: ["provisioning.read"], group: "Configuration" },
   ] },
   { id: "modules", label: "Modules", icon: "modules", description: "Pages added by installed modules.", items: [] },

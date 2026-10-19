@@ -23,6 +23,8 @@ MAX_LINES = 8
 # administrator's other keys are locked for the user.
 KeyType = Literal["line", "blf", "speed_dial", "page", "user"]
 _NUMBER_RE = re.compile(r"^[0-9*#+]{1,32}$")
+# A key value naming a provisioning variable (docs/PROVISIONING_BREADTH.md §2.3).
+REF_RE = re.compile(r"^\$[a-z][a-z0-9_]{0,39}$")
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
@@ -67,6 +69,8 @@ def check_keys(db: Session, organization_id: uuid.UUID, keys: list[LineKey], fie
     for i, key in enumerate(keys, 1):
         if key.type == "user":
             continue  # an open slot has no target of its own
+        if REF_RE.match(key.value.strip()):
+            continue  # "$name": a provisioning variable, resolved per phone
         if key.type == "line":
             if not key.value.isdigit() or not 1 <= int(key.value) <= MAX_LINES:
                 raise validation(field, f"key {i}: a line key names a line number 1-{MAX_LINES}")

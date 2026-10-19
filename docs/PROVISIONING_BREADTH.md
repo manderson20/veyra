@@ -108,6 +108,23 @@ where it is used (keys, zones, templates), and an inline editor; a
 device pages gain a *Variables* tab showing what they inherit and what they
 override. The key editor offers *Use a variable* beside the value field.
 
+*Built 2026-10-19 (slice A, #76):* table `provisioning_variables`
+(migration `0054`; `organization_id` stored for the permission filter),
+`veyra/provisioning/variables.py` (names, `$name` references, `VarsView`
+that renders a missing name as empty and records it, resolution, reach,
+re-provision through SIP NOTIFY `check_config`, in-use check),
+`/provisioning/variables` CRUD (the old core-only list is merged into it
+with `source: core`), `GET /devices/{id}/variables`, preview `warnings`.
+Templates get the `vars` fact; a defined variable with a template
+variable's name fills it below the profile and device values. Key lists
+accept `$name` on any key type (validated as a reference, resolved in
+`facts._keys`). Paging-zone `$name` addresses and the Companion export are
+not in slice A (§2.3, later). Interface: Provisioning → Variables (scopes,
+create/edit/remove, built-in values), a *Variables* card on the device's
+Configuration tab, preview warnings, and "From a variable…" on page keys.
+Deleting a variable is refused only when a phone that references it would
+be left without any value (another scope may still provide it).
+
 ## 3. Key types (#40)
 
 | Type | `value` | Phone behaviour | Lamp |

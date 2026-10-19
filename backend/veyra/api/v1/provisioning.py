@@ -32,7 +32,7 @@ from veyra.provisioning.renderer import (
     render,
     validate,
 )
-from veyra.provisioning.spec import CORE_VARIABLES, TemplateError, parse_template_manifest
+from veyra.provisioning.spec import TemplateError, parse_template_manifest
 
 router = APIRouter(prefix="/provisioning", tags=["provisioning"])
 
@@ -97,11 +97,6 @@ def _summary(rec: TemplateRecord) -> dict[str, Any]:
         "source": rec.source,
         "features": rec.manifest.features,
     }
-
-
-@router.get("/variables", summary="Approved template variables")
-def variables(principal: Principal = Depends(require("provisioning.read"))) -> list[dict[str, Any]]:
-    return [v.model_dump() for v in CORE_VARIABLES]
 
 
 @router.get("/models", summary="Manufacturers and models known to the template catalog")

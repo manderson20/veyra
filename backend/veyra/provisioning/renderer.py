@@ -48,6 +48,7 @@ EMPTY_FACTS: dict[str, Any] = {
     "paging": {"enabled": False, "groups": []},
     "server": {},
     "features": {},
+    "vars": {},
 }
 MAX_SOURCE_BYTES = 256 * 1024
 MAX_OUTPUT_BYTES = 1024 * 1024

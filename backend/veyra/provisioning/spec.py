@@ -84,7 +84,7 @@ CORE_VARIABLES: tuple[VariableDef, ...] = (
 DEVICE_VARIABLES = ("mac", "mac_upper", "model", "model_slug")
 # Structured facts (spec version 2, docs/DEVICE_PROVISIONING.md §4.1): read-only
 # objects Veyra builds from the device, its profile, extensions and zones.
-FACT_NAMES = ("device", "organization", "lines", "keys", "paging", "server", "features")
+FACT_NAMES = ("device", "organization", "lines", "keys", "paging", "server", "features", "vars")
 CORE_NAMES = {v.name for v in CORE_VARIABLES}
 
 

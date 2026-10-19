@@ -27,7 +27,15 @@ export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys
           {k.type === "user" ? (
             <span className="subtle" style={{ alignSelf: "center" }}>Open slot: the user of the phone picks a speed dial or a BLF from My Phone. Every other key is locked for them.</span>
           ) : k.type === "page" ? (
-            <SelectField label={<span className="sr-only">Zone</span>} value={k.value} disabled={disabled} placeholder="Choose a zone" options={zones.map((z) => ({ value: z.slug, label: `${z.name} (group ${z.poly_group})` }))} onChange={(e) => update(i, { value: e.target.value })} />
+            <span className="row" style={{ gap: 6 }}>
+              <SelectField label={<span className="sr-only">Zone</span>} value={k.value.startsWith("$") ? "$" : k.value} disabled={disabled} placeholder="Choose a zone"
+                options={[...zones.map((z) => ({ value: z.slug, label: `${z.name} (group ${z.poly_group})` })), { value: "$", label: "From a variable (per building)…" }]}
+                onChange={(e) => update(i, { value: e.target.value === "$" ? (k.value.startsWith("$") ? k.value : "$") : e.target.value })} />
+              {k.value.startsWith("$") ? (
+                <TextField label={<span className="sr-only">Variable name</span>} disabled={disabled} value={k.value} placeholder="$all_call" style={{ width: 140 }}
+                  help="A provisioning variable; each site or profile gives its zone." onChange={(e) => update(i, { value: "$" + e.target.value.replace(/^\$+/, "").toLowerCase() })} />
+              ) : null}
+            </span>
           ) : (
             <TextField label={<span className="sr-only">Key {i + 1} value</span>} disabled={disabled} value={k.value} placeholder={k.type === "line" ? "Line number" : "Number"} inputMode={k.type === "line" ? "numeric" : "tel"} style={{ width: 140 }} onChange={(e) => update(i, { value: e.target.value })} />
           )}

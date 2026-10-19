@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.0 (Milestone 21: provisioning breadth)
+
+Design: [docs/PROVISIONING_BREADTH.md](docs/PROVISIONING_BREADTH.md). Migration `0054`.
+
+### Added
+- **Provisioning variables** (#76): Provisioning → Variables defines values phones share once — an all-call zone per building, the time server, an admin password — for the installation, an organization, a site or a device profile; each phone takes the nearest one. Line keys use them as `$name` (a page key `$all_call` on one profile pages each building's own zone), templates as `{{ vars.name }}`, and a variable named like a template setting fills that setting for every profile that leaves it empty. Saving a value asks the phones it reaches to re-read their configuration. The device page shows the values a phone resolves and where each comes from, and the configuration preview warns about variables nobody defined.
+
 ## 0.26.7 — 2026-10-19
 
 ### Changed
