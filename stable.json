@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 11,
+  "sequence": 12,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.26.3",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Fax: send a PDF from My Phone (cover sheet, state, retry, cancel, PDF); fax inboxes 'Fax to email' as a destination; T.38 per trunk; who may fax per class of service; Fax page for administrators. The upgrade installs ghostscript and libtiff-tools.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted. Two packages are installed.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "d0f55c619c",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.26.3/veyra-0.26.3.tar.gz",
+        "sha256": "909decf7fa03aabecb01c58dc5ee27dc4aed5494ef2bd20256948cc55ca4d909",
+        "size": 8155659
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -190,6 +207,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T03:39:36+00:00",
-  "expires_at": "2027-01-17T03:39:36+00:00"
+  "generated_at": "2026-10-19T05:49:03+00:00",
+  "expires_at": "2027-01-17T05:49:03+00:00"
 }
