@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 13,
+  "sequence": 14,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.26.5",
+      "channel": "stable",
+      "category": "security",
+      "release_notes": "Phones online graph on the overview (registered against known phones). Security hardening from the CodeQL review: TLS 1.2 minimum on the certificate probe, backup job name validation, recording path containment, CSP hash regex. Test fixes.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "754551797d",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.26.5/veyra-0.26.5.tar.gz",
+        "sha256": "d7e19e455c33fc753b1caa0b132ae7c795b6e9fe9c4977a81de99c354dc2b579",
+        "size": 8165288
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -224,6 +241,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T13:43:53+00:00",
-  "expires_at": "2027-01-17T13:43:53+00:00"
+  "generated_at": "2026-10-19T14:22:34+00:00",
+  "expires_at": "2027-01-17T14:22:34+00:00"
 }
