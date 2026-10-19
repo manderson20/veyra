@@ -149,7 +149,8 @@ instance refuses unknown command names. There is deliberately no
 * **Alerts**:
   * an instance not seen for 10 minutes (configurable);
   * an instance whose health is failed;
-  * an instance whose update failed.
+  * an instance whose update failed (rule `instance_update_failed`, from the
+    `updates.available` states the instance reports; 0.27.6, #120).
   They go to the console's monitoring alerts, so its e-mail recipients get
   them.
 * **Actions on several instances**: "Check for updates", "Approve update

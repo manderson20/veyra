@@ -297,6 +297,18 @@ def test_console_offline_keeps_settings_and_alerts(routed, app, monkeypatch):
         assert [f.rule for f in findings] == ["instance_offline"]
     rows = admin.get("/api/v1/central/instances").json()
     assert rows[0]["status"] == "offline"
+    # An update the instance could not install raises its own alert (#120).
+    with session_scope() as db:
+        inst = db.query(CentralInstance).one()
+        report = dict(inst.last_report or {})
+        report["updates"] = {
+            "available": [{"version": "9.9.9", "state": "failed", "error": "disk full"}]
+        }
+        inst.last_report = report
+    with session_scope() as db:
+        rules = [(f.rule, f.message) for f in alerts.check_central(db, utcnow())]
+        assert ("instance_update_failed", rules[-1][1]) == rules[-1]
+        assert "could not install Veyra 9.9.9: disk full" in rules[-1][1]
 
 
 def test_permissions_and_bulk(routed, app):

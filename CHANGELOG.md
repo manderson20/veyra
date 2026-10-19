@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Central console: "Instance update failed" alert** (#120): a managed installation that could not install an update raises an alert on the console with the version and the reason.
+
 ## 0.27.5 — 2026-10-20
 
 More audit items. No migration. The Companion changes need the new Companion build; AND Clocks 0.2.0 is updated from System → Modules.

@@ -62,6 +62,7 @@ RULES: dict[str, RuleDef] = {
         # Central console only (docs/CENTRAL_MANAGEMENT.md §6).
         RuleDef("instance_offline", "Instance not checking in", 0),
         RuleDef("instance_failed", "Instance unhealthy", 5),
+        RuleDef("instance_update_failed", "Instance update failed", 0),
         # Backups (docs/PRODUCTION_HARDENING.md §2.6).
         RuleDef("backup_failed", "Backup failed", 0),
         RuleDef("backup_stale", "No recent good backup", 0),
@@ -264,6 +265,21 @@ def check_central(db: Session, now: datetime) -> list[Finding]:
                     {"instance_id": str(inst.instance_id)},
                 )
             )
+        # An update the instance could not install (CENTRAL_MANAGEMENT.md §6; #120).
+        report = inst.last_report or {}
+        updates = report.get("updates") if isinstance(report, dict) else None
+        for u in (updates or {}).get("available") or [] if isinstance(updates, dict) else []:
+            if isinstance(u, dict) and u.get("state") == "failed":
+                error = str(u.get("error") or "").strip()
+                out.append(
+                    Finding(
+                        "instance_update_failed",
+                        f"{label} {u.get('version')}",
+                        f"{label} could not install Veyra {u.get('version')}"
+                        + (f": {error[:200]}" if error else "."),
+                        {"instance_id": str(inst.instance_id), "version": u.get("version")},
+                    )
+                )
     return out
 
 
