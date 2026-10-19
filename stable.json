@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 23,
+  "sequence": 24,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.7",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "The update window no longer cuts off the installer output or its steps.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "ddfca312df",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.7/veyra-0.27.7.tar.gz",
+        "sha256": "c0c8a613c0abc2943aa3b6dc0f6413a0e36d3c0c4f4bed9d20f4456213855d05",
+        "size": 8282554
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -394,6 +411,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T23:17:35+00:00",
-  "expires_at": "2027-01-17T23:17:35+00:00"
+  "generated_at": "2026-10-19T23:23:27+00:00",
+  "expires_at": "2027-01-17T23:23:27+00:00"
 }
