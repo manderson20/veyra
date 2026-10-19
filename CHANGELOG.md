@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Changed
+- **Updates: the installation runs in the same window.** "Install now" no longer closes the review window: it turns into the live progress (stages, installer output, elapsed time) and ends with a **Reload the page** button; closing it leaves the progress callout on the page, and opening the release again while it installs shows the progress too.
+
 ## 0.26.1 — 2026-10-19
 
 ### Fixed

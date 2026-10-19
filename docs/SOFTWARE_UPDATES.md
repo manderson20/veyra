@@ -182,10 +182,13 @@ picked up by the worker, release verified and unpacked, installer running
 installer output scrolled to the newest line; while the API restarts the requests fail and the page says
 "Veyra is restarting" and keeps polling. A status file left by an earlier
 run (another version, or finished before this approval) is not shown as
-this installation's progress. The page doing the watching belongs to the
-version being replaced, so a change to this view is seen one release later
-(0.25.2). The new worker finishes the update's state from the status file
-and sends the email.
+this installation's progress. Since 0.26.2 "Install now" keeps the review
+dialog open on this same progress and ends it with a *Reload the page*
+button; closing the dialog leaves the callout on the page, and opening the
+release again while it installs shows the progress. The page doing the
+watching belongs to the version being replaced, so a change to this view is
+seen one release later (0.25.2). The new worker finishes the update's state
+from the status file and sends the email.
 History records the outcome and the log; failures keep the previous
 release running (or print the recovery steps when the database was
 already migrated, as today).
