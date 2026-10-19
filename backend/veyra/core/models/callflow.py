@@ -62,6 +62,9 @@ class Announcement(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     destination_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
     )
+    destination_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
+    )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -118,6 +121,9 @@ class CallFlow(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     normal_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
     )
+    normal_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
+    )
     override_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
     )
@@ -141,6 +147,9 @@ class CallFlow(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     override_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )
+    override_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -229,6 +238,9 @@ class ParkingLot(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     timeout_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
     )
+    timeout_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
+    )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -287,4 +299,7 @@ class CallerBlockPolicy(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     destination_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )
+    destination_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )

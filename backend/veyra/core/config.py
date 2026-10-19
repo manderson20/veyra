@@ -206,6 +206,13 @@ class Settings(BaseSettings):
         return self.data_dir / "recordings"
 
     @property
+    def fax_dir(self) -> Path:
+        """Fax pages (docs/USER_PORTAL.md §9): ``<org slug>/<job>.tiff|.pdf`` of
+        sent and received faxes; Asterisk writes received pages to
+        ``incoming/`` first. Shared with the asterisk group like recordings."""
+        return self.data_dir / "fax"
+
+    @property
     def mailqueue_dir(self) -> Path:
         """Outgoing messages waiting for the worker (voicemail notifications
         from Asterisk and, later, other notifications)."""

@@ -19,5 +19,6 @@ def get_adapter(settings: Settings) -> TelephonyAdapter:
             mailqueue_command=settings.mailqueue_command,
             moh_dir=settings.moh_dir,
             recordings_dir=settings.recordings_dir,
+            fax_dir=settings.fax_dir,
         )
     return NullAdapter()

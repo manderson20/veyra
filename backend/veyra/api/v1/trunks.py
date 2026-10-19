@@ -91,6 +91,7 @@ class TrunkBase(BaseModel):
     default_caller_id: str | None = Field(None, max_length=32)
     caller_id_header: CallerIdHeader = "pai"
     dtmf_mode: DtmfMode = "rfc4733"
+    fax_t38: bool = False
     qualify_frequency: int = Field(60, ge=0, le=3600)
     register_expiry: int = Field(3600, ge=60, le=86400)
 
@@ -202,6 +203,7 @@ class TrunkPatch(BaseModel):
     default_caller_id: str | None = Field(None, max_length=32)
     caller_id_header: CallerIdHeader | None = None
     dtmf_mode: DtmfMode | None = None
+    fax_t38: bool | None = None
     qualify_frequency: int | None = Field(None, ge=0, le=3600)
     register_expiry: int | None = Field(None, ge=60, le=86400)
 
@@ -237,6 +239,7 @@ class TrunkOut(BaseModel):
     default_caller_id: str | None
     caller_id_header: str
     dtmf_mode: str
+    fax_t38: bool
     qualify_frequency: int
     register_expiry: int
     status: TrunkStatusOut | None
@@ -336,6 +339,7 @@ def _out(trunk: SipTrunk, live: Live | None) -> TrunkOut:
         default_caller_id=trunk.default_caller_id,
         caller_id_header=trunk.caller_id_header,
         dtmf_mode=trunk.dtmf_mode,
+        fax_t38=trunk.fax_t38,
         qualify_frequency=trunk.qualify_frequency,
         register_expiry=trunk.register_expiry,
         status=_status(trunk, live),

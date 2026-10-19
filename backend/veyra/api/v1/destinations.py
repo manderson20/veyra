@@ -3,7 +3,7 @@
 queues and announcements (docs/VOICEMAIL_IVR.md §6, docs/RING_GROUPS_QUEUES.md
 §5, docs/CALL_FEATURES.md §4): an extension, an extension's voicemail box, an
 IVR menu, a ring group, a call queue, an announcement, a conference room, the
-dial-by-name directory, or (where allowed) a hang-up. Validation checks that
+dial-by-name directory, a fax inbox, or (where allowed) a hang-up. Validation checks that
 the target exists in the organization and is usable; output carries a label
 and a ``missing`` flag so the interface can show a broken target."""
 
@@ -23,6 +23,7 @@ from veyra.core.models import (
     CallQueue,
     ConferenceRoom,
     Extension,
+    FaxInbox,
     IvrMenu,
     RingGroup,
     VoicemailBox,
@@ -38,6 +39,7 @@ DestinationType = Literal[
     "announcement",
     "conference",
     "call_flow",
+    "fax",
     "directory",
     "hangup",
 ]
@@ -52,6 +54,7 @@ TARGET_FIELDS: dict[str, str] = {
     "announcement": "announcement_id",
     "conference": "conference_id",
     "call_flow": "call_flow_id",
+    "fax": "fax_inbox_id",
 }
 # Kinds that need no target row: the dial-by-name directory of the
 # organization, and hanging up.
@@ -65,10 +68,11 @@ ID_FIELDS = (
     "announcement_id",
     "conference_id",
     "call_flow_id",
+    "fax_inbox_id",
 )
 # A reference as stored: (type, extension_id, ivr_id, ring_group_id, queue_id,
-# voicemail_box_id, announcement_id, conference_id, call_flow_id).
-Ref = tuple[str | None, Any, Any, Any, Any, Any, Any, Any, Any]
+# voicemail_box_id, announcement_id, conference_id, call_flow_id, fax_inbox_id).
+Ref = tuple[str | None, Any, Any, Any, Any, Any, Any, Any, Any, Any]
 
 
 def validation(field: str, message: str) -> ProblemError:
@@ -91,6 +95,7 @@ class DestinationIn(BaseModel):
     announcement_id: uuid.UUID | None = None
     conference_id: uuid.UUID | None = None
     call_flow_id: uuid.UUID | None = None
+    fax_inbox_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> DestinationIn:
@@ -111,6 +116,7 @@ class DestinationIn(BaseModel):
             self.announcement_id,
             self.conference_id,
             self.call_flow_id,
+            self.fax_inbox_id,
         )
 
 
@@ -124,10 +130,12 @@ class DestinationOut(BaseModel):
     announcement_id: uuid.UUID | None = None
     conference_id: uuid.UUID | None = None
     call_flow_id: uuid.UUID | None = None
+    fax_inbox_id: uuid.UUID | None = None
     # Human form: "2214 — Front Office", "Voicemail of 2214 (Front Office)",
     # "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)",
     # "Announcement: Closed today", "Conference: Board room (2500)",
-    # "Dial-by-name directory", "Hang up"; None when the target is gone.
+    # "Fax to email: Front office", "Dial-by-name directory", "Hang up";
+    # None when the target is gone.
     label: str | None
     missing: bool
 
@@ -144,6 +152,7 @@ def ref_of(obj: Any, prefix: str) -> Ref:
         getattr(obj, f"{prefix}_announcement_id", None),
         getattr(obj, f"{prefix}_conference_id", None),
         getattr(obj, f"{prefix}_call_flow_id", None),
+        getattr(obj, f"{prefix}_fax_inbox_id", None),
     )
 
 
@@ -162,7 +171,7 @@ def has_target(ref: Ref) -> bool:
 
 
 def as_input(ref: Ref) -> dict[str, Any]:
-    kind, ext, ivr, rg, q, box, ann, conf, flow = ref
+    kind, ext, ivr, rg, q, box, ann, conf, flow, fax = ref
     return {
         "type": kind or "extension",
         "extension_id": ext,
@@ -173,6 +182,7 @@ def as_input(ref: Ref) -> dict[str, Any]:
         "announcement_id": ann,
         "conference_id": conf,
         "call_flow_id": flow,
+        "fax_inbox_id": fax,
     }
 
 
@@ -207,6 +217,15 @@ def check_destination(
             raise validation(field, "announcement not found in this organization")
         if not ann.is_enabled:
             raise validation(field, f"the announcement {ann.name} is disabled")
+        return
+    if dest.type == "fax":
+        if dest.fax_inbox_id is None:
+            raise validation(field, "choose the fax inbox")
+        inbox = db.get(FaxInbox, dest.fax_inbox_id)
+        if inbox is None or inbox.organization_id != organization_id:
+            raise validation(field, "fax inbox not found in this organization")
+        if not inbox.is_enabled:
+            raise validation(field, f"the fax inbox {inbox.name} is disabled")
         return
     if dest.type == "call_flow":
         if dest.call_flow_id is None:
@@ -297,6 +316,7 @@ class Resolver:
         self.announcements: dict[uuid.UUID, Announcement] = {}
         self.conferences: dict[uuid.UUID, ConferenceRoom] = {}
         self.call_flows: dict[uuid.UUID, CallFlow] = {}
+        self.fax_inboxes: dict[uuid.UUID, FaxInbox] = {}
         self._loaded: set[uuid.UUID] = set()
 
     def load(self, refs: list[Ref]) -> None:
@@ -309,6 +329,7 @@ class Resolver:
         ann_ids = {r[6] for r in full if r[6] and r[0] == "announcement"}
         conf_ids = {r[7] for r in full if r[7] and r[0] == "conference"}
         flow_ids = {r[8] for r in full if r[8] and r[0] == "call_flow"}
+        fax_ids = {r[9] for r in full if len(r) > 9 and r[9] and r[0] == "fax"}
         ext_ids -= self._loaded
         ivr_ids -= self._loaded
         rg_ids -= self._loaded
@@ -317,6 +338,10 @@ class Resolver:
         ann_ids -= self._loaded
         conf_ids -= self._loaded
         flow_ids -= self._loaded
+        fax_ids -= self._loaded
+        if fax_ids:
+            for i in self.db.scalars(select(FaxInbox).where(FaxInbox.id.in_(fax_ids))):
+                self.fax_inboxes[i.id] = i
         if flow_ids:
             for f in self.db.scalars(select(CallFlow).where(CallFlow.id.in_(flow_ids))):
                 self.call_flows[f.id] = f
@@ -346,7 +371,9 @@ class Resolver:
         if q_ids:
             for q in self.db.scalars(select(CallQueue).where(CallQueue.id.in_(q_ids))):
                 self.queues[q.id] = q
-        self._loaded |= ext_ids | ivr_ids | rg_ids | q_ids | box_ids | ann_ids | conf_ids | flow_ids
+        self._loaded |= (
+            ext_ids | ivr_ids | rg_ids | q_ids | box_ids | ann_ids | conf_ids | flow_ids | fax_ids
+        )
 
     def out(
         self,
@@ -359,8 +386,24 @@ class Resolver:
         announcement_id: Any = None,
         conference_id: Any = None,
         call_flow_id: Any = None,
+        fax_inbox_id: Any = None,
     ) -> DestinationOut:
         kind = kind or "extension"
+        if kind == "fax":
+            inbox = self.fax_inboxes.get(fax_inbox_id) if fax_inbox_id else None
+            ok = inbox is not None and inbox.is_enabled
+            return DestinationOut(
+                type="fax",
+                extension_id=None,
+                ivr_id=None,
+                fax_inbox_id=fax_inbox_id,
+                label=(
+                    f"Fax to email: {inbox.name}" + ("" if inbox.is_enabled else " (disabled)")
+                    if inbox
+                    else None
+                ),
+                missing=not ok,
+            )
         if kind == "call_flow":
             flow = self.call_flows.get(call_flow_id) if call_flow_id else None
             ok = flow is not None and flow.is_enabled

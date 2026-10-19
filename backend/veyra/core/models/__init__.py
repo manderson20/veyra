@@ -23,6 +23,7 @@ from veyra.core.models.central import (
     CentralSample,
 )
 from veyra.core.models.emergency import EmergencyCall
+from veyra.core.models.fax import FaxInbox, FaxJob
 from veyra.core.models.firewall import FirewallBan, FirewallEvent, FirewallFeed, FirewallRule
 from veyra.core.models.groups import (
     CallQueue,
@@ -148,6 +149,8 @@ __all__ = [
     "EmergencyCall",
     "Extension",
     "ExtensionState",
+    "FaxInbox",
+    "FaxJob",
     "FirewallBan",
     "FirewallEvent",
     "FirewallFeed",

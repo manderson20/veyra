@@ -33,6 +33,7 @@ from veyra.core.models import (
     Device,
     Extension,
     ExtensionState,
+    FaxInbox,
     FollowMe,
     InboundRoute,
     Installation,
@@ -374,6 +375,12 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         for f in db.scalars(select(CallFlow).order_by(CallFlow.code_index)).all()
         if f.is_enabled and f.organization_id in active
     ]
+    # Fax inboxes (docs/USER_PORTAL.md §9): enabled ones of active organizations.
+    inboxes = [
+        i
+        for i in db.scalars(select(FaxInbox).order_by(FaxInbox.slug)).all()
+        if i.is_enabled and i.organization_id in active
+    ]
     targets = Targets(
         number_of={e.id: e.number for e in extensions},
         box_numbers=set(),
@@ -383,6 +390,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         announcement_slug={a.id: a.slug for a in announcements},
         conference_slug={r.id: r.slug for r in rooms},
         call_flow_slug={f.id: f.slug for f in flows},
+        fax_inbox_slug={i.id: i.slug for i in inboxes},
     )
     voicemail = _voicemail_ivr(
         db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues, rooms
@@ -439,8 +447,20 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "is_active": o.is_active,
                 "namespace": o.engine_namespace,
                 "hold_music": moh_slug(o.moh_class_id, o.id),
+                "fax_header": o.fax_header,
+                "fax_station_id": o.fax_station_id,
             }
             for o in orgs
+        ],
+        "fax_inboxes": [
+            {
+                "slug": i.slug,
+                "name": i.name,
+                "organization": org_slug.get(i.organization_id, ""),
+                "header": i.header,
+                "station_id": i.station_id,
+            }
+            for i in inboxes
         ],
         "hold_music": hold_music,
         "extensions": [
@@ -669,6 +689,7 @@ class Targets:
         announcement_slug: dict[Any, str] | None = None,
         conference_slug: dict[Any, str] | None = None,
         call_flow_slug: dict[Any, str] | None = None,
+        fax_inbox_slug: dict[Any, str] | None = None,
     ) -> None:
         self.number_of = number_of
         self.box_numbers = box_numbers
@@ -680,6 +701,7 @@ class Targets:
         self.announcement_slug = announcement_slug if announcement_slug is not None else {}
         self.conference_slug = conference_slug if conference_slug is not None else {}
         self.call_flow_slug = call_flow_slug if call_flow_slug is not None else {}
+        self.fax_inbox_slug = fax_inbox_slug if fax_inbox_slug is not None else {}
 
     def dest(self, obj: Any, prefix: str) -> dict[str, Any]:
         """The engine-neutral form of the destination stored in
@@ -702,6 +724,9 @@ class Targets:
         if kind == "call_flow":
             slug = self.call_flow_slug.get(getattr(obj, f"{prefix}_call_flow_id", None))
             return {"type": "call_flow", "call_flow": slug} if slug else {"type": "missing"}
+        if kind == "fax":
+            slug = self.fax_inbox_slug.get(getattr(obj, f"{prefix}_fax_inbox_id", None))
+            return {"type": "fax", "fax_inbox": slug} if slug else {"type": "missing"}
         if kind == "ivr":
             slug = self.ivr_slug.get(getattr(obj, f"{prefix}_ivr_id"))
             return {"type": "ivr", "ivr": slug} if slug else {"type": "missing"}
@@ -1053,6 +1078,7 @@ def _routing(
                 "default_caller_id": t.default_caller_id,
                 "caller_id_header": t.caller_id_header,
                 "dtmf_mode": t.dtmf_mode,
+                "fax_t38": t.fax_t38,
                 "qualify_frequency": t.qualify_frequency,
                 "register_expiry": t.register_expiry,
             }

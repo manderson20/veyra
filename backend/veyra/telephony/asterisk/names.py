@@ -100,6 +100,15 @@ class Names:
         """A day/night switch's routing context (docs/CALL_FEATURES.md §4.5)."""
         return self._p(f"flow-{slug}")
 
+    def fax_in(self, slug: str) -> str:
+        """A fax inbox: answers with ReceiveFAX and reports (docs/USER_PORTAL.md §9)."""
+        return self._p(f"fax-in-{slug}")
+
+    @property
+    def fax_out(self) -> str:
+        """SendFAX of a queued job once its outbound leg answers (§9)."""
+        return self._p("fax-out")
+
     def parking(self, slug: str) -> str:
         """A parking lot's context, filled by res_parking (docs/CALL_FEATURES.md §4.7)."""
         return self._p(f"park-{slug}")

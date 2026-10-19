@@ -147,6 +147,16 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin"),
     ),
     PermissionDef(
+        "fax.read",
+        "See fax inboxes and the organization's fax jobs",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
+        "fax.manage",
+        "Create fax inboxes; retry, cancel and download the organization's faxes",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
         "portal.templates",
         "Build and assign default layouts of the user portal (My Phone)",
         default_roles=("org_admin",),

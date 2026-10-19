@@ -135,6 +135,8 @@ ANONYMOUS_VALUES = ("", "anonymous", "restricted", "unavailable", "unknown", "pr
 # Queue dynamic agents (docs/CALL_FEATURES.md §4.9).
 AGENT_FAMILY = "veyra/agent"
 AGENT_EVENT = "VeyraAgent"
+FAX_EVENT = "VeyraFax"
+_FAX_STATION_RE = re.compile(r"^[0-9+ ]{1,32}$")
 # In-call codes (docs/CALL_FEATURES.md §4.11): the applicationmap feature and
 # the pseudo policy id of on-demand recordings (no policy row).
 CONTEXT_ONDEMAND = "veyra-ondemand"
@@ -162,6 +164,7 @@ DEFAULT_RING_SECONDS = 30
 DEFAULT_PROMPTS_DIR = "/var/lib/veyra/prompts"
 DEFAULT_MOH_DIR = "/var/lib/veyra/moh"
 DEFAULT_RECORDINGS_DIR = "/var/lib/veyra/recordings"
+DEFAULT_FAX_DIR = "/var/lib/veyra/fax"
 CONTEXT_RECORD = "veyra-record"
 # Engine class of a hold music set (docs/PAGING_RECORDINGS.md §3.2).
 MOH_CLASS_PREFIX = "veyra-"
@@ -396,6 +399,7 @@ def generate(
     mailqueue_command: str = DEFAULT_MAILQUEUE_COMMAND,
     moh_dir: str = DEFAULT_MOH_DIR,
     recordings_dir: str = DEFAULT_RECORDINGS_DIR,
+    fax_dir: str = DEFAULT_FAX_DIR,
 ) -> list[GeneratedFile]:
     sip = SipSettings.model_validate(snapshot.get("sip") or {})
     problems = sip.problems()
@@ -413,6 +417,7 @@ def generate(
             mailqueue_command=mailqueue_command,
             moh_dir=moh_dir,
             recordings_dir=recordings_dir,
+            fax_dir=fax_dir,
         )
     # Prove the organizations cannot reach each other (docs/MULTI_TENANCY.md §5).
     strict = bool((snapshot.get("installation") or {}).get("multi_tenancy_enabled"))
@@ -433,6 +438,7 @@ def _generate(
     mailqueue_command: str,
     moh_dir: str,
     recordings_dir: str,
+    fax_dir: str = DEFAULT_FAX_DIR,
 ) -> list[GeneratedFile]:
     extensions = list(snapshot.get("extensions") or [])
     trunks = list(snapshot.get("trunks") or [])
@@ -470,6 +476,7 @@ def _generate(
             prompts,
             recording,
             _path(recordings_dir, "recordings directory"),
+            _path(fax_dir, "fax directory"),
         ),
         _rtp(sip),
         _voicemail(snapshot, boxes, _path(mailqueue_command, "mail queue command")),
@@ -814,6 +821,10 @@ def _trunks(sip: SipSettings, trunks: list[dict[str, Any]]) -> GeneratedFile:
             f"dtmf_mode={dtmf}",
             f"set_var=VEYRA_TRUNK={slug}",
         ]
+        if t.get("fax_t38"):
+            # T.38 fax relay (docs/USER_PORTAL.md §9): offered to the carrier,
+            # audio (G.711) fax when it declines.
+            lines += ["t38_udptl=yes", "t38_udptl_ec=redundancy", "t38_udptl_nat=yes"]
         if t.get("from_user"):
             lines.append(f"from_user={_check_value(str(t['from_user']), 'from user')}")
         if t.get("from_domain"):
@@ -1095,6 +1106,7 @@ def _dialplan(
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
     recording: list[dict[str, Any]] | None = None,
     recordings_dir: str = DEFAULT_RECORDINGS_DIR,
+    fax_dir: str = DEFAULT_FAX_DIR,
 ) -> GeneratedFile:
     """``extensions.conf``. Each engine namespace gets its own contexts
     (docs/MULTI_TENANCY.md §2); the sections keep their order, so an
@@ -1110,6 +1122,7 @@ def _dialplan(
     rooms = list(snapshot.get("conference_rooms") or [])
     flows = list(snapshot.get("call_flows") or [])
     lots = list(snapshot.get("parking_lots") or [])
+    fax_inboxes = list(snapshot.get("fax_inboxes") or [])
     boxes = boxes if boxes is not None else {}
     tcs = list(snapshot.get("time_conditions") or [])
     conditions = {str(c["key"]): c for c in tcs}
@@ -1237,6 +1250,7 @@ def _dialplan(
             lines += _announcement_contexts(mine(announcements, ns), prompts_dir)
             lines += _conference_contexts(mine(rooms, ns))
             lines += _call_flow_contexts(mine(flows, ns))
+            lines += _fax_contexts(mine(fax_inboxes, ns), fax_dir)
             lines += _agent_contexts(codes, mine(queues, ns))
             lines += _parking_contexts(mine(lots, ns))
             lines += _directory_context()
@@ -2387,6 +2401,10 @@ def _goto(dest: Any) -> list[str]:
         slug = _slug(dest.get("call_flow"), "call flow slug")
         ctx = engine_names.current().call_flow(slug)
         return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
+    if kind == "fax":
+        slug = _slug(dest.get("fax_inbox"), "fax inbox slug")
+        ctx = engine_names.current().fax_in(slug)
+        return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
     if kind == "directory":
         return [f" same => n,Goto({engine_names.current().directory},s,1)", " same => n,Hangup()"]
     if kind in ("extension", "voicemail"):
@@ -3066,6 +3084,68 @@ def _conference_profiles(slug: str) -> tuple[str, str, str, str, str]:
     """Room name, bridge, user, admin and menu profile names of a room."""
     stem = engine_names.current().conference(slug)
     return stem, f"{stem}-bridge", f"{stem}-user", f"{stem}-admin", f"{stem}-menu"
+
+
+def _fax_contexts(inboxes: list[dict[str, Any]], fax_dir: str) -> list[str]:
+    """``veyra-fax-out`` of the namespace (the worker originates a Local
+    channel over the outbound routes; once it answers, ``send`` runs SendFAX
+    of the job named in the channel variables) and one ``veyra-fax-in-<slug>``
+    per enabled inbox (ReceiveFAX into the shared fax directory); both report
+    the result with ``UserEvent(VeyraFax)``, which the API turns into the job's
+    state and the PDF by email (docs/USER_PORTAL.md §9)."""
+    names = engine_names.current()
+    lines = [
+        f"[{names.fax_out}]",
+        "; Sends the queued fax named in VEYRA_FAX_JOB once the outbound leg answers.",
+        "exten => send,1,NoOp(Veyra fax job ${VEYRA_FAX_JOB} to ${VEYRA_FAX_NUMBER})",
+        ' same => n,ExecIf($["${VEYRA_FAX_HEADER}"!=""]'
+        "?Set(FAXOPT(headerinfo)=${VEYRA_FAX_HEADER}))",
+        ' same => n,ExecIf($["${VEYRA_FAX_STATION}"!=""]'
+        "?Set(FAXOPT(localstationid)=${VEYRA_FAX_STATION}))",
+        " same => n,Set(FAXOPT(ecm)=yes)",
+        " same => n,SendFAX(${VEYRA_FAX_FILE},d)",
+        " same => n,Hangup()",
+        f"exten => h,1,UserEvent({FAX_EVENT},Direction: out,Job: ${{VEYRA_FAX_JOB}},"
+        "Status: ${FAXSTATUS},Error: ${FAXERROR},Pages: ${FAXPAGES},"
+        "Remote: ${REMOTESTATIONID},Cause: ${HANGUPCAUSE})",
+        "",
+    ]
+    seen: set[str] = set()
+    for i in inboxes:
+        slug = _slug(i["slug"], "fax inbox slug")
+        if slug in seen:
+            raise GenerationError(f"duplicate fax inbox slug {slug!r}")
+        seen.add(slug)
+        name = _check_value(str(i.get("name") or slug), "fax inbox name")
+        org = _slug(i.get("organization") or "", f"organization of fax inbox {slug}")
+        header = str(i.get("header") or "")
+        station = str(i.get("station_id") or "")
+        if station and not _FAX_STATION_RE.match(station):
+            raise GenerationError(f"fax inbox {slug}: station id {station!r} is not valid")
+        ctx = names.fax_in(slug)
+        lines += [
+            f"[{ctx}]",
+            f"; {name} ({org})",
+            f"exten => s,1,NoOp(Veyra fax inbox {name})",
+            f" same => n,Set(__VEYRA_FAX_INBOX={slug})",
+            f" same => n,Set(__VEYRA_FAX_FILE={fax_dir}/incoming/{slug}-${{UNIQUEID}}.tiff)",
+        ]
+        if header:
+            lines.append(f" same => n,Set(FAXOPT(headerinfo)={_check_value(header, 'fax header')})")
+        if station:
+            lines.append(f" same => n,Set(FAXOPT(localstationid)={station})")
+        lines += [
+            " same => n,Set(FAXOPT(ecm)=yes)",
+            " same => n,Answer()",
+            " same => n,Wait(1)",
+            " same => n,ReceiveFAX(${VEYRA_FAX_FILE})",
+            " same => n,Hangup()",
+            f"exten => h,1,UserEvent({FAX_EVENT},Direction: in,Inbox: {slug},Org: {org},"
+            "File: ${VEYRA_FAX_FILE},Status: ${FAXSTATUS},Error: ${FAXERROR},"
+            "Pages: ${FAXPAGES},Remote: ${REMOTESTATIONID},Caller: ${CALLERID(num)})",
+            "",
+        ]
+    return lines
 
 
 def _conference_contexts(rooms: list[dict[str, Any]]) -> list[str]:

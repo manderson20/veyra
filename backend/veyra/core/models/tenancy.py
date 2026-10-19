@@ -79,6 +79,10 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     users_play_own_recordings: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
+    # Fax (docs/USER_PORTAL.md §9): the page header and local station id sent
+    # with every fax of the organization unless the inbox sets its own.
+    fax_header: Mapped[str | None] = mapped_column(String(64))
+    fax_station_id: Mapped[str | None] = mapped_column(String(32))
 
 
 class Site(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

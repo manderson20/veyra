@@ -90,6 +90,8 @@ class ClassOfService(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         Boolean, default=True, server_default="true"
     )
     allow_intercom: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # May send faxes from My Phone (docs/USER_PORTAL.md §9).
+    allow_fax: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     # Simultaneous outside calls of the class's phones together; None: no limit.
     max_outbound_calls: Mapped[int | None] = mapped_column(Integer)
 

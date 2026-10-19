@@ -48,6 +48,8 @@ class SipTrunk(UUIDPrimaryKey, Timestamps, Base):
     default_caller_id: Mapped[str | None] = mapped_column(String(32))
     caller_id_header: Mapped[str] = mapped_column(String(8), default="pai")
     dtmf_mode: Mapped[str] = mapped_column(String(8), default="rfc4733")
+    # T.38 fax relay offered on this trunk (docs/USER_PORTAL.md §9).
+    fax_t38: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     qualify_frequency: Mapped[int] = mapped_column(Integer, default=60)
     register_expiry: Mapped[int] = mapped_column(Integer, default=3600)
 
@@ -131,6 +133,9 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     destination_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
     )
+    destination_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
+    )
     time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("time_conditions.id", ondelete="RESTRICT")
     )
@@ -158,6 +163,9 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     after_hours_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )
+    after_hours_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
