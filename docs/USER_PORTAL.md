@@ -357,6 +357,27 @@ faxed; inbound faxes arrive as PDF by email. `res_fax` and
   ships as 0.26.x right after, with the destination type and the tables in
   place from 0.26.0.
 
+*Built 2026-10-19 (0.26.3):* as designed, with these choices. Tables
+`fax_inboxes` and `fax_jobs` (migration `0052`); the destination kind
+`fax` on every holder; contexts `veyra-fax-out` (one per namespace:
+`send` runs `SendFAX` of the job named in the channel variables, `h`
+reports) and `veyra-fax-in-<slug>` (`ReceiveFAX` into
+`<data>/fax/incoming/`, `h` reports); both report with
+`UserEvent(VeyraFax,…)` and the API's event listener also watches
+`ChannelDestroyed` of `Local/` channels so a call that never connected
+(busy, no answer) is retried from the hang-up cause (three attempts; a fax
+that connected but failed is tried once more). The worker's short tick
+originates `Local/<number>@<outbound context>/n` through ARI with the job,
+file, header, station, caller ID and class of service as inherited channel
+variables (`veyra/fax/service.py`). Ghostscript renders to TIFF-G4 at
+204x196 dpi letter (`-dPDFFitPage`), the optional cover sheet is generated
+PostScript; pages are counted from the TIFF directory chain without a
+library; `tiff2pdf` makes the received PDF. Jobs and files follow the
+retention class `fax` (90 days, minimum 7). No per-trunk choice of fax
+trunk: the organization's outbound routes decide, T.38 is a trunk flag
+(`fax_t38` → `t38_udptl=yes`). `faxdetect` on voice DIDs stays P2.
+Verify checks `fax-tools`, `fax-engine`, `fax-dir`.
+
 ## 10. The portal canvas and templates (#78)
 
 Owner requirement (2026-10-18): users arrange, resize, add and hide the
@@ -467,9 +488,9 @@ My Phone as canvas — H. Fax (§9). Each slice lands as its own commit with
 tests, docs "Built" notes and issue comments; 0.26.0 at the end (H may
 follow as 0.26.x).
 
-*Outcome 2026-10-19:* A–G built on `milestone-20`; H (fax) ships as
-0.26.x as planned here, with the destination kind, tables, dialplan, worker,
-installer packages and pages in one patch series
+*Outcome 2026-10-19:* A–G built on `milestone-20` and released as 0.26.0;
+H (fax) followed as 0.26.3 on `fax-0.26.3` in three commits (engine and
+model, service and API, interface)
 ([MILESTONE_20_REPORT.md](milestones/MILESTONE_20_REPORT.md)).
 
 ## 14. Known limitations (planned)

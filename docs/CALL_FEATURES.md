@@ -384,7 +384,7 @@ and `a` (the `*` key) opens the box with `VoiceMailMain`. The locater
 
 `classes_of_service` per organization: `name`, `allowed_outbound_route_ids`,
 `allowed_feature_code_keys`, `allow_external_forwards`,
-`allow_external_follow_me`, `allow_intercom`, `max_outbound_calls`;
+`allow_external_follow_me`, `allow_intercom`, `allow_fax` (sending faxes from My Phone, [USER_PORTAL.md](USER_PORTAL.md) §9), `max_outbound_calls`;
 extensions reference one (`class_of_service_id`, default class per
 organization = everything allowed, so nothing changes until an
 administrator restricts). Generator: `set_var=VEYRA_COS=<slug>` on the

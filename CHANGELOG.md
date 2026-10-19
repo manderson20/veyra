@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+Migration `0052`; new permissions `fax.read` and `fax.manage`; the installer adds the packages `ghostscript` and `libtiff-tools` and the shared directory `<data>/fax`; `verify.sh` gains `fax-tools`, `fax-engine` and `fax-dir`.
+
+### Added
+- **Fax** (#77, Milestone 20 slice H): a **Fax** widget on My Phone sends a PDF (up to 20 MB and 50 pages) to a fax number with an optional cover sheet, over the organization's outbound routes with the user's caller ID; the widget follows each fax (waiting, dialling, sending, sent, failed with the reason, attempts), lets the user cancel a waiting fax, retry a failed one and download the PDF, and the user is emailed when a fax is delivered or given up on (busy and no answer are retried, three attempts in all). **Fax inboxes** ("Fax to email", Telephony → Fax) are a new destination for DIDs, inbound routes, menus, groups and queues: received pages arrive as a PDF at the inbox's recipients and are listed with the organization's faxes. Administrators see every fax of their organizations, retry, cancel and download; who may fax is a class-of-service flag ("May send faxes"), T.38 is offered per trunk ("Fax over T.38"), and the organization page carries the fax header and station ID. Faxes are kept 90 days (System → Retention, class "Faxes"). Everything is audited.
+
 ## 0.26.2 — 2026-10-19
 
 ### Changed

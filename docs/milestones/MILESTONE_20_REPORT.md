@@ -2,9 +2,9 @@
 
 Branch `milestone-20` (from `main` at 0.25.5). Design:
 [USER_PORTAL.md](../USER_PORTAL.md). Status: **released as 0.26.0 on 2026-10-19 (slices A–G);
-fax (slice H, #77) follows as 0.26.x as the design allowed**. Issues #31,
-#32, #33, #60, #75, #78 under "M20 — User portal"; #77 stays open for the
-fax patch. Pull request #90.
+fax (slice H, #77) released as 0.26.3 on 2026-10-19 from branch `fax-0.26.3`**.
+Issues #31, #32, #33, #60, #75, #77, #78 under "M20 — User portal". Pull
+request #90.
 
 ## 1. Scope (roadmap row 20)
 
@@ -24,6 +24,7 @@ keys, fax, and a per-user widget canvas with administrator templates.
 | D | Recent calls with the other party named from the contacts, filter, call back, CSV export; recordings of own calls when the organization allows it; forwards respect the class of service | Recent calls widget; organization page switch | #60, #33 |
 | E | Presence (available, away, busy, meeting, lunch, out) with a message and automatic actions (DND, forward); colleagues with presence, registration and on-call state | Presence and Colleagues widgets; `/directory` | #60 |
 | F | Own phone keys in the slots a profile leaves open ("User's choice"); every other key locked; speed dial from a contact or BLF on a colleague; phone reprovisioned | Phone keys widget; key editor | #75 |
+| H | Fax: send a PDF from My Phone (cover sheet, state, retry, cancel, PDF); inboxes "Fax to email" as a destination for DIDs and routes; T.38 per trunk; who may fax per class of service; administrators' Fax page | Fax widget; Telephony → Fax; destination pickers; trunk and class-of-service forms; organization page | #77 |
 | G | The canvas: tabs of widgets the user drags, resizes, adds and removes (keyboard arrows too), undo, save, reset; administrators' default layouts by role, department, building, organization or system with locked widgets and "push to users" | My Phone; System → Portal Layouts | #78 |
 
 ### Platform pieces
@@ -58,17 +59,19 @@ keys, fax, and a per-user widget canvas with administrator templates.
 * Building and department scopes for templates exist in the API and the
   resolution but take an id in the editor until those pages exist.
 * The announcement widget's text lives in the template's widget settings.
-* **Fax (slice H) was not built in 0.26.0**: `res_fax` and
-  `res_fax_spandsp` are loaded on dev1 and Ghostscript/`libtiff-tools` are
-  identified; the destination kind, jobs, dialplan, worker and pages follow
-  as 0.26.x (#77).
+* **Fax (slice H) shipped as 0.26.3**, not in 0.26.0: the destination kind,
+  tables, dialplan, service, worker, installer packages and pages came as a
+  patch series (USER_PORTAL.md §9 "Built"). The user's faxes go over the
+  organization's outbound routes (no separate fax trunk choice); a call that
+  never connects is retried from the hang-up cause, a failed transmission
+  once more.
 
 ## 3. Testing
 
 Backend: every slice has API tests (`test_vmstore.py`,
 `test_api_voicemail_inbox.py`, `test_api_contacts.py`,
 `test_api_portal_calls.py`, `test_api_presence.py`, `test_api_user_keys.py`,
-`test_api_portal_layout.py`), the migrations check passes at `0051`, mypy
+`test_api_portal_layout.py`, `test_fax.py` for 0.26.3), the migrations check passes at `0052`, mypy
 and ruff are clean; the full suite was run after each slice. Frontend:
 typecheck, lint and vitest (the layout engine has its own tests). CI on pull
 request #90 per increment.
@@ -98,11 +101,12 @@ template resolution with real buildings and departments.
 
 No call-me-to-play, no voicemail reports, no missed-call email, no WebRTC
 phone, no user-group object (roles and departments stand in), modules cannot
-contribute widgets yet, no fax until 0.26.x.
+contribute widgets yet, no `faxdetect` on voice DIDs, no fax trunk choice
+per organization.
 
 ## 6. Open items
 
-#77 fax (0.26.x); Companion reading `/me/contacts`; presence lamp with the
+Companion reading `/me/contacts`; presence lamp with the
 key type; buildings and departments pages (M21/M22) to complete the template
 editor; #84/#85/#88/#89 Updates cleanup (M22).
 

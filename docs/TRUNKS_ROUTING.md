@@ -39,6 +39,7 @@ stub before the new code runs).
 | `caller_id_header` | `pai` (P-Asserted-Identity, default), `rpid` (Remote-Party-ID) or `none` |
 | `status` (read-only) | `state` `online`/`offline` from the qualify ping, or, for a registration trunk whose registration the engine reports as anything but registered, `rejected`, `registering` or `unregistered` (Milestone 18, issue #45); `reachable`; `registration`, the engine's own word. The `trunk_down` alert fires on a refused registration even when the host answers pings. Telephony → Registrations lists the trunks with the same state |
 | `dtmf_mode` | `rfc4733` (default), `inband`, `info`, `auto` |
+| `fax_t38` | `false` (default); `true` offers T.38 fax relay to the carrier (`t38_udptl=yes`, redundancy error correction, NAT), audio fax when it declines ([USER_PORTAL.md](USER_PORTAL.md) §9) |
 | `qualify_frequency` | Seconds between OPTIONS pings (default 60; 0 disables). Drives the reachability status |
 | `register_expiry` | Registration lifetime in seconds (default 3600; registration mode) |
 | `is_enabled` | Disabled trunks stay in the database but are left out of the generated configuration and the routes skip them |
@@ -199,7 +200,7 @@ under `trunks.write` because they choose the installation's trunks.
 
 ```
 GET    /trunks?q=                         status included
-POST   /trunks                            {name, auth_mode, host, port?, transport?, username?, auth_username?, password?, from_user?, from_domain?, outbound_proxy?, match_addresses?, codecs?, max_channels?, default_caller_id?, caller_id_header?, dtmf_mode?, qualify_frequency?, register_expiry?, description?, is_enabled?}
+POST   /trunks                            {name, auth_mode, host, port?, transport?, username?, auth_username?, password?, from_user?, from_domain?, outbound_proxy?, match_addresses?, codecs?, max_channels?, default_caller_id?, caller_id_header?, dtmf_mode?, fax_t38?, qualify_frequency?, register_expiry?, description?, is_enabled?}
 GET    /trunks/{id}
 PATCH  /trunks/{id}                       password: set a new one; null clears it
 DELETE /trunks/{id}                       409 trunk_in_use
