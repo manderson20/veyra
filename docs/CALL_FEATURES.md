@@ -377,8 +377,19 @@ forwarding pattern. `voicemail_boxes.operator_extension` (an extension of
 the organization; the dialog field "Operator extension (press 0)") adds
 `operator=yes|exitcontext=veyra-vmx-<number>` to the box and a per-box
 context where `o` goes to the operator extension in the internal context
-and `a` (the `*` key) opens the box with `VoiceMailMain`. The locater
-(1 → follow me, 2 → a second destination) is left for the user portal.
+and `a` (the `*` key) opens the box with `VoiceMailMain`.
+
+*Locater, built 0.27.3 (#131, migration `0056`):* `voicemail_boxes.locater_1`
+and `locater_2` hold `followme` (key 1 of an extension's box) or a number of
+the organization (`number_owner`; not the box's own). A box with an
+operator or a locater gets the exit context; keys 1 and 2 there `Goto` the
+extension's `fm` label or the number in the internal context, and every
+`VoiceMail()` of the box takes `d(<exit context>)` so digits pressed during
+the greeting leave. Administrators set them in the box dialog, users under
+My Phone → Voicemail → Greeting keys (`PATCH /me/voicemail/{id}`); key 1 =
+follow me is dropped at generation when the extension has no follow-me
+list. The direct-to-voicemail code (`*<ext>`) now passes `u`: without it
+`VoiceMail()` plays no greeting at all.
 
 ### 3.8 Class of service
 

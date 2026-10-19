@@ -1251,6 +1251,9 @@ export interface VoicemailBox {
   ring_seconds: number;
   /** Pressing 0 while the greeting plays reaches this extension (CALL_FEATURES.md §3.7). */
   operator_extension?: string | null;
+  /** Pressing 1 / 2 during the greeting (#131): "followme" (1 only) or a number of the organization. */
+  locater_1?: string | null;
+  locater_2?: string | null;
   is_enabled: boolean;
   /** Settings → Email delivery is enabled; without it messages stay in the box. */
   email_delivery_enabled: boolean;
@@ -1281,6 +1284,9 @@ export interface VoicemailBoxInput {
   ring_seconds?: number;
   is_enabled?: boolean;
   operator_extension?: string | null;
+  /** Pressing 1 / 2 during the greeting (#131): "followme" (1 only) or a number of the organization. */
+  locater_1?: string | null;
+  locater_2?: string | null;
 }
 
 export interface MyVoicemail {
@@ -1295,6 +1301,8 @@ export interface MyVoicemail {
   email: string | null;
   ring_seconds: number;
   is_enabled: boolean;
+  locater_1?: string | null;
+  locater_2?: string | null;
 }
 
 /** A personal contact of the signed-in user (docs/USER_PORTAL.md §6). */

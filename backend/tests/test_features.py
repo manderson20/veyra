@@ -654,7 +654,8 @@ def test_generator_direct_voicemail_and_operator():
     d = files["extensions.conf"]
     feat = _section(d, "veyra-features")
     assert "exten => *1001,1,NoOp(Veyra direct to voicemail 1001)" in feat
-    assert "VoiceMail(1001@veyra,s)" in feat and "exten => *1002,1," in feat
+    # The unavailable greeting plays (u); VoiceMail plays no greeting without it.
+    assert "VoiceMail(1001@veyra,u)" in feat and "exten => *1002,1," in feat
     vmx = _section(d, "veyra-vmx-1001")
     assert "exten => o,1,NoOp(Veyra: voicemail 1001 operator)" in vmx
     assert "Goto(veyra-internal,1002,1)" in vmx and "exten => a,1,VoiceMailMain(1001@veyra)" in vmx
@@ -1061,3 +1062,49 @@ def test_user_manages_own_phone(admin, app):
         "extension.follow_me_update",
         True,
     ) in actions
+
+
+def test_generator_voicemail_locater():
+    """Keys 1 and 2 during the greeting (#131): VoiceMail takes d(<exit
+    context>) and the exit context has the targets."""
+    from test_generator_routing import _section, _snapshot
+
+    from veyra.telephony.asterisk.generator import generate
+
+    snap = _snapshot(feature_codes={"vm_direct": "*"})
+    box = {
+        "number": "1001",
+        "name": "Front",
+        "organization": "example",
+        "timezone": "UTC",
+        "pin": "1234",
+        "email": None,
+        "attach_audio": True,
+        "delete_after_email": False,
+        "ring_seconds": 20,
+        "operator_extension": None,
+        "locater_1": "followme",
+        "locater_2": "7000",
+        "follow_me": True,
+    }
+    snap["voicemail_boxes"] = [box]
+    files = {f.path: f.content for f in generate(snap)}
+    d = files["extensions.conf"]
+    vmx = _section(d, "veyra-vmx-1001")
+    assert "exten => 1,1,NoOp(Veyra: voicemail 1001 locater 1)" in vmx
+    assert "Goto(veyra-internal,1001,fm)" in vmx and "Goto(veyra-internal,7000,1)" in vmx
+    assert "exten => o," not in vmx  # no operator set
+    assert "VoiceMail(1001@veyra,ud(veyra-vmx-1001))" in d
+    assert "VoiceMail(1001@veyra,bd(veyra-vmx-1001))" in d
+    assert "|operator=no|exitcontext=veyra-vmx-1001" in files["voicemail.conf"]
+    # Follow me gone: key 1 is dropped, key 2 stays.
+    box["follow_me"] = False
+    d = {f.path: f.content for f in generate(snap)}["extensions.conf"]
+    assert "locater 1" not in d and "locater 2" in d
+    # No locater and no operator: plain VoiceMail, no exit context.
+    box.update(locater_1=None, locater_2=None)
+    d = {f.path: f.content for f in generate(snap)}["extensions.conf"]
+    assert "[veyra-vmx-1001]" not in d and "VoiceMail(1001@veyra,u)" in d
+    box["locater_2"] = "70a"
+    with pytest.raises(generator.GenerationError, match="locater"):
+        generate(snap)

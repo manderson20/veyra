@@ -39,6 +39,7 @@ from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.crypto import InstallationKey
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
+from veyra.telephony.numbering import number_owner
 from veyra.telephony.snapshot import pin_purpose
 from veyra.voicemail import service as vmsvc
 
@@ -101,6 +102,34 @@ def _operator(db: Session, organization_id: uuid.UUID, value: str | None) -> str
     return number
 
 
+def check_locater(
+    db: Session,
+    organization_id: uuid.UUID,
+    key: str,
+    value: str | None,
+    *,
+    own_number: str | None,
+    shared: bool,
+) -> str | None:
+    """A locater target (issue #131): ``followme`` for key 1 of an
+    extension's box, or a number of the organization other than the box's."""
+    v = (value or "").strip().lower()
+    field = f"locater_{key}"
+    if not v:
+        return None
+    if v == "followme":
+        if key != "1" or shared:
+            raise _validation(field, "follow me is for key 1 of an extension's box")
+        return v
+    if not v.isdigit():
+        raise _validation(field, "an internal number (digits)")
+    if v == own_number:
+        raise _validation(field, "the box's own number would come back to voicemail")
+    if number_owner(db, v, organization_id=organization_id) is None:
+        raise _validation(field, f"{v} is not a number of this organization")
+    return v
+
+
 class VoicemailBoxIn(BaseModel):
     # An extension's box, or (no extension) a shared inbox with its own
     # number and name (docs/PAGING_RECORDINGS.md §5).
@@ -118,6 +147,9 @@ class VoicemailBoxIn(BaseModel):
     ring_seconds: int = Field(RING_DEFAULT, ge=RING_MIN, le=RING_MAX)
     # Pressing 0 during the greeting reaches this extension (docs/CALL_FEATURES.md §3.7).
     operator_extension: str | None = Field(None, max_length=32)
+    # Pressing 1 or 2 during the greeting (issue #131).
+    locater_1: str | None = Field(None, max_length=32)
+    locater_2: str | None = Field(None, max_length=32)
     is_enabled: bool = True
 
     @field_validator("pin")
@@ -141,6 +173,8 @@ class VoicemailBoxPatch(BaseModel):
     delete_after_email: bool | None = None
     ring_seconds: int | None = Field(None, ge=RING_MIN, le=RING_MAX)
     operator_extension: str | None = Field(None, max_length=32)
+    locater_1: str | None = Field(None, max_length=32)
+    locater_2: str | None = Field(None, max_length=32)
     is_enabled: bool | None = None
 
     @field_validator("pin")
@@ -173,6 +207,8 @@ class VoicemailBoxOut(BaseModel):
     delete_after_email: bool
     ring_seconds: int
     operator_extension: str | None = None
+    locater_1: str | None = None
+    locater_2: str | None = None
     is_enabled: bool
     # Email delivery (Settings → Email delivery) is on; without it messages
     # stay in the box and are never deleted after an email.
@@ -284,6 +320,8 @@ def _outs(db: Session, rows: list[VoicemailBox]) -> list[VoicemailBoxOut]:
                 delete_after_email=r.delete_after_email,
                 ring_seconds=r.ring_seconds,
                 operator_extension=r.operator_extension,
+                locater_1=r.locater_1,
+                locater_2=r.locater_2,
                 is_enabled=r.is_enabled,
                 email_delivery_enabled=delivery,
                 in_use_by=shared_uses.get(r.id, 0) if shared else uses.get(r.extension_id, 0),
@@ -410,6 +448,12 @@ def create_box(
             delete_after_email=body.delete_after_email,
             ring_seconds=body.ring_seconds,
             operator_extension=_operator(db, org.id, body.operator_extension),
+            locater_1=check_locater(
+                db, org.id, "1", body.locater_1, own_number=body.number, shared=True
+            ),
+            locater_2=check_locater(
+                db, org.id, "2", body.locater_2, own_number=body.number, shared=True
+            ),
             is_enabled=body.is_enabled,
         )
         set_pin(box, pin, key)
@@ -464,6 +508,12 @@ def create_box(
         delete_after_email=body.delete_after_email,
         ring_seconds=body.ring_seconds,
         operator_extension=_operator(db, ext.organization_id, body.operator_extension),
+        locater_1=check_locater(
+            db, ext.organization_id, "1", body.locater_1, own_number=ext.number, shared=False
+        ),
+        locater_2=check_locater(
+            db, ext.organization_id, "2", body.locater_2, own_number=ext.number, shared=False
+        ),
         is_enabled=body.is_enabled,
     )
     set_pin(box, pin, key)
@@ -545,6 +595,22 @@ def update_box(
         if operator != box.operator_extension:
             box.operator_extension = operator
             details["operator_extension"] = operator
+    own_ext = db.get(Extension, box.extension_id) if box.extension_id else None
+    own_number = own_ext.number if own_ext else box.number
+    for key in ("1", "2"):
+        field = f"locater_{key}"
+        if field in changes:
+            value = check_locater(
+                db,
+                box.organization_id,
+                key,
+                changes[field],
+                own_number=own_number,
+                shared=box.extension_id is None,
+            )
+            if value != getattr(box, field):
+                setattr(box, field, value)
+                details[field] = value
     if box.delete_after_email and not box.email:
         raise _validation("delete_after_email", "needs an email address to deliver to")
     if not details:

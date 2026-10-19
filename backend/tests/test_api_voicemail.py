@@ -419,3 +419,33 @@ def test_shared_inbox_lifecycle_and_generated_configuration(admin, app, tmp_path
     assert r.status_code in (200, 204), r.text
     assert admin.get(f"{VM}/{box['id']}").json()["members"] == []
     assert admin.delete(f"{VM}/{box['id']}").status_code == 204
+
+
+def test_voicemail_locater_admin_and_self_service(admin, app):
+    """Keys 1 and 2 during the greeting (#131)."""
+    org = _org(admin)
+    me = _me(admin)
+    mine = _ext(admin, org["id"], "1001", "Mine", user_id=me["id"])
+    _ext(admin, org["id"], "1002", "Front desk")
+    r = admin.post(VM, json={"extension_id": mine["id"], "locater_2": "1002"})
+    assert r.status_code == 201, r.text
+    box = r.json()
+    assert box["locater_2"] == "1002" and box["locater_1"] is None
+    for bad in ({"locater_2": "followme"}, {"locater_1": "9999"}, {"locater_1": "1001"}):
+        r = admin.patch(f"{VM}/{box['id']}", json=bad)
+        assert r.status_code == 422, (bad, r.text)
+    r = admin.patch(f"{VM}/{box['id']}", json={"locater_1": "FollowMe"})
+    assert r.status_code == 200 and r.json()["locater_1"] == "followme"
+
+    # The user sets their own keys on My Phone.
+    r = admin.patch(f"/api/v1/me/voicemail/{box['id']}", json={"locater_2": ""})
+    assert r.status_code == 200 and r.json()["locater_2"] is None
+    assert r.json()["locater_1"] == "followme"
+    r = admin.patch(f"/api/v1/me/voicemail/{box['id']}", json={"locater_2": "12345"})
+    assert r.status_code == 422
+    other = _ext(admin, org["id"], "1003", "Other")
+    box_other = admin.post(VM, json={"extension_id": other["id"]}).json()
+    r = admin.patch(f"/api/v1/me/voicemail/{box_other['id']}", json={"locater_2": "1002"})
+    assert r.status_code == 404
+    events = admin.get("/api/v1/audit", params={"q": "voicemail.update"}).json()
+    assert events["total"] >= 2

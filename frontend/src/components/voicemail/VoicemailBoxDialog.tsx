@@ -7,6 +7,7 @@ import { MemberListEditor, membersFromIds, type MemberDraft } from "@/components
 import { Button, Callout, Checkbox, ConfirmDialog, Dialog, SelectField, Switch, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import type { Extension, Page, VoicemailBox, VoicemailBoxCreated, VoicemailBoxInput } from "@/lib/types";
+import { LocaterField } from "./LocaterField";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -25,13 +26,15 @@ interface Draft {
   delete_after_email: boolean;
   ring_seconds: string;
   operator_extension: string;
+  locater_1: string;
+  locater_2: string;
   is_enabled: boolean;
 }
 
-const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, ring_seconds: "20", operator_extension: "", is_enabled: true };
+const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, ring_seconds: "20", operator_extension: "", locater_1: "", locater_2: "", is_enabled: true };
 
 function fromBox(b: VoicemailBox): Draft {
-  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", is_enabled: b.is_enabled };
+  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", is_enabled: b.is_enabled };
 }
 
 /** How a box is named in titles and toasts: its extension, or a shared inbox's name. */
@@ -107,6 +110,8 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
       delete_after_email: draft.delete_after_email,
       ring_seconds: ring,
       operator_extension: draft.operator_extension.trim() || null,
+      locater_1: draft.locater_1 || null,
+      locater_2: draft.locater_2 || null,
       is_enabled: draft.is_enabled,
     };
     if (shared) {
@@ -228,6 +233,8 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
             <TextField label="Operator extension (press 0)" inputMode="numeric" value={draft.operator_extension} error={errors.fields.operator_extension}
               help="A caller who presses 0 while the greeting plays rings this extension; * opens the box. Empty: 0 does nothing." onChange={(e) => setDraft({ ...draft, operator_extension: e.target.value })} />
           </div>
+          <LocaterField key={`1-${box?.id ?? "new"}`} digit="1" value={draft.locater_1} followMe={!shared} error={errors.fields.locater_1} onChange={(v) => setDraft({ ...draft, locater_1: v })} />
+          <LocaterField key={`2-${box?.id ?? "new"}`} digit="2" value={draft.locater_2} followMe={false} error={errors.fields.locater_2} onChange={(v) => setDraft({ ...draft, locater_2: v })} />
           {!editing && !shared ? (
             <Checkbox label="Use the extension user's email address" description="Unassigned extensions get no email unless one is entered below." checked={draft.defaultEmail}
               onChange={(e) => setDraft({ ...draft, defaultEmail: e.target.checked })} />

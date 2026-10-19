@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import posixpath
 import re
+from contextvars import ContextVar
 from typing import Any
 
 from veyra.telephony import routing
@@ -409,16 +410,25 @@ def generate(
         str(o.get("slug") or ""): str(o.get("namespace") or "")
         for o in snapshot.get("organizations") or []
     }
-    with engine_names.namespaces(mapping):
-        files = _generate(
-            snapshot,
-            sip,
-            prompts_dir=prompts_dir,
-            mailqueue_command=mailqueue_command,
-            moh_dir=moh_dir,
-            recordings_dir=recordings_dir,
-            fax_dir=fax_dir,
-        )
+    dtmf = frozenset(
+        (engine_names.Names(mapping.get(str(b.get("organization") or ""), "")).voicemail, num)
+        for b in snapshot.get("voicemail_boxes") or []
+        if (num := str(b.get("number") or "")) and _locaters(b)
+    )
+    token = _vm_dtmf.set(dtmf)
+    try:
+        with engine_names.namespaces(mapping):
+            files = _generate(
+                snapshot,
+                sip,
+                prompts_dir=prompts_dir,
+                mailqueue_command=mailqueue_command,
+                moh_dir=moh_dir,
+                recordings_dir=recordings_dir,
+                fax_dir=fax_dir,
+            )
+    finally:
+        _vm_dtmf.reset(token)
     # Prove the organizations cannot reach each other (docs/MULTI_TENANCY.md §5).
     strict = bool((snapshot.get("installation") or {}).get("multi_tenancy_enabled"))
     if len(set(mapping.values())) > 1 or strict:
@@ -1697,7 +1707,6 @@ def _voicemail_direct(
     code = codes.get("vm_direct")
     if not code:
         return []
-    n = engine_names.current()
     guard = cos.code_guard("vm_direct") if cos else []
     lines: list[str] = []
     for number, _b in sorted(boxes, key=lambda kv: (len(kv[0]), kv[0])):
@@ -1705,25 +1714,67 @@ def _voicemail_direct(
             f"exten => {code}{number},1,NoOp(Veyra direct to voicemail {number})",
             *guard,
             " same => n,Answer()",
-            f" same => n,VoiceMail({number}@{n.voicemail},s)",
+            # The unavailable greeting (u); without it VoiceMail plays none.
+            f" same => n,{_vm(number, 'u')}",
             " same => n,Hangup()",
             *(COS_DENIED if guard else []),
         ]
     return lines
 
 
+def _has_exit(b: dict[str, Any]) -> bool:
+    return bool(b.get("operator_extension") or _locaters(b))
+
+
+def _locaters(b: dict[str, Any]) -> dict[str, str]:
+    """Key -> target of a box's locater (issue #131): ``followme`` (key 1,
+    when the extension has a follow-me list) or a number of the organization."""
+    out = {}
+    for key in ("1", "2"):
+        value = str(b.get(f"locater_{key}") or "")
+        if not value or (value == "followme" and (key != "1" or not b.get("follow_me"))):
+            continue
+        if value != "followme" and not _NUMBER_RE.match(value):
+            raise GenerationError(f"voicemail box: locater {key} {value!r} is not valid")
+        out[key] = value
+    return out
+
+
+# (voicemail context, box number) of boxes with a locater: their VoiceMail()
+# takes d(<exit context>) so 1 and 2 pressed during the greeting leave.
+_vm_dtmf: ContextVar[frozenset[tuple[str, str]]] = ContextVar("veyra_vm_dtmf", default=frozenset())
+
+
+def _vm(number: str, flags: str) -> str:
+    """``VoiceMail(<box>@<ns>,<flags>)``, with the locater's ``d()`` when set."""
+    n = engine_names.current()
+    if (n.voicemail, number) in _vm_dtmf.get():
+        flags += f"d({n.voicemail_exit(number)})"
+    return f"VoiceMail({number}@{n.voicemail},{flags})"
+
+
 def _voicemail_exit_contexts(boxes: list[tuple[str, dict[str, Any]]]) -> list[str]:
-    """Per box with an operator: 0 rings the operator, * opens the box."""
+    """Per box with an operator or a locater: 0 rings the operator, * opens
+    the box, 1 and 2 go to the locater's targets (docs/CALL_FEATURES.md §3.7)."""
     n = engine_names.current()
     lines: list[str] = []
     for number, b in sorted(boxes, key=lambda kv: (len(kv[0]), kv[0])):
-        operator = b.get("operator_extension")
-        if not operator:
+        if not _has_exit(b):
             continue
+        lines += [f"[{n.voicemail_exit(number)}]"]
+        operator = b.get("operator_extension")
+        if operator:
+            lines += [
+                f"exten => o,1,NoOp(Veyra: voicemail {number} operator)",
+                f" same => n,Goto({n.internal},{operator},1)",
+            ]
+        for key, target in _locaters(b).items():
+            lines.append(f"exten => {key},1,NoOp(Veyra: voicemail {number} locater {key})")
+            if target == "followme":
+                lines.append(f" same => n,Goto({n.internal},{number},fm)")
+            else:
+                lines.append(f" same => n,Goto({n.internal},{target},1)")
         lines += [
-            f"[{n.voicemail_exit(number)}]",
-            f"exten => o,1,NoOp(Veyra: voicemail {number} operator)",
-            f" same => n,Goto({n.internal},{operator},1)",
             f"exten => a,1,VoiceMailMain({number}@{n.voicemail})",
             " same => n,Hangup()",
             "",
@@ -2001,10 +2052,10 @@ def _internal(
             # (and Do Not Disturb) to the busy greeting (docs/VOICEMAIL_IVR.md §3.2).
             lines += [
                 *head,
-                f" same => n,VoiceMail({number}@{n.voicemail},u)",
+                f" same => n,{_vm(number, 'u')}",
                 " same => n,Hangup()",
                 *busy_branch,
-                f" same => n,VoiceMail({number}@{n.voicemail},b)",
+                f" same => n,{_vm(number, 'b')}",
                 " same => n,Hangup()",
                 *forward,
                 *fm_branch,
@@ -2014,7 +2065,7 @@ def _internal(
             continue
         lines += [
             f"exten => {number},1,NoOp(Veyra shared inbox {number})",
-            f" same => n,VoiceMail({number}@{n.voicemail},u)",
+            f" same => n,{_vm(number, 'u')}",
             " same => n,Hangup()",
         ]
     for g in ring_groups:
@@ -2421,7 +2472,7 @@ def _goto(dest: Any) -> list[str]:
             raise GenerationError(f"destination number {number!r} is not valid")
         if kind == "voicemail":
             return [
-                f" same => n,VoiceMail({number}@{engine_names.current().voicemail},u)",
+                f" same => n,{_vm(number, 'u')}",
                 " same => n,Hangup()",
             ]
         internal = engine_names.current().internal
@@ -3791,11 +3842,11 @@ def _box_lines(entries: list[tuple[str, dict[str, Any]]], delivery: bool) -> lis
         # exit context (docs/CALL_FEATURES.md §3.7).
         operator = b.get("operator_extension")
         exit_opts = ""
-        if operator:
-            if not _NUMBER_RE.match(str(operator)):
-                raise GenerationError(f"voicemail box {number}: operator {operator!r} is not valid")
+        if operator and not _NUMBER_RE.match(str(operator)):
+            raise GenerationError(f"voicemail box {number}: operator {operator!r} is not valid")
+        if _has_exit(b):
             ctx = engine_names.for_org(org).voicemail_exit(number)
-            exit_opts = f"|operator=yes|exitcontext={ctx}"
+            exit_opts = f"|operator={'yes' if operator else 'no'}|exitcontext={ctx}"
         lines.append(
             f"{number} => {pin},{name},{email},,"
             f"attach={attach}|delete={delete}|tz={org}|saycid=yes|envelope=yes{exit_opts}"
