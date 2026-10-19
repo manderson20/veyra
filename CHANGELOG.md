@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.2 — 2026-10-20
+
+More audit items. Migration `0055`. The Companion changes need the new Companion build (Settings → Companion).
 
 ### Added
 - **Conference recordings on the Call Recording page** (#133): recordings of conference rooms with recording on are stored like call recordings (kept 90 days, can be held) and listed with the room's name. Migration `0055`.
