@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 17,
+  "sequence": 18,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.1",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Forgot your password by email, hang up a call from Active Calls, closed days and moving holidays in time conditions, buildings and departments, and a fix: extensions can now be placed at a site so emergency routing and readiness count them.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "946950a10e",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.1/veyra-0.27.1.tar.gz",
+        "sha256": "251d40f0d276a2d5cc98fd9eba42f72b3fa77a20022ee2f89aefca83e9435853",
+        "size": 8246965
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -292,6 +309,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T18:55:09+00:00",
-  "expires_at": "2027-01-17T18:55:09+00:00"
+  "generated_at": "2026-10-19T21:22:35+00:00",
+  "expires_at": "2027-01-17T21:22:35+00:00"
 }
