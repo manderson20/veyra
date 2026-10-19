@@ -71,6 +71,7 @@ from veyra.core.models.platform import (
     UpdateHistory,
     UpdatePolicy,
 )
+from veyra.core.models.portal import UserContact
 from veyra.core.models.provisioning import (
     DeviceProfile,
     DeviceProfilePaging,
@@ -200,6 +201,7 @@ __all__ = [
     "UpdateHistory",
     "UpdatePolicy",
     "User",
+    "UserContact",
     "UserIdentity",
     "UserPreference",
     "UserSession",

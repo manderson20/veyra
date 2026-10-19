@@ -1278,6 +1278,30 @@ export interface MyVoicemail {
   is_enabled: boolean;
 }
 
+/** A personal contact of the signed-in user (docs/USER_PORTAL.md §6). */
+export interface ContactNumber { label: "work" | "mobile" | "home" | "other"; number: string }
+export interface Contact {
+  id: string;
+  name: string;
+  company: string | null;
+  numbers: ContactNumber[];
+  email: string | null;
+  favourite: boolean;
+  speed_dial: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface ContactInput {
+  name: string;
+  company: string | null;
+  numbers: ContactNumber[];
+  email: string | null;
+  favourite: boolean;
+  speed_dial: number | null;
+  notes: string | null;
+}
+
 /** One voicemail message as the store helper reports it (docs/USER_PORTAL.md §2). */
 export interface VoicemailMessage {
   number: number;

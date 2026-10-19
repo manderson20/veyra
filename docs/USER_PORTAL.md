@@ -211,6 +211,19 @@ Companion versions until 0.27). Speed-dial **keys on the phone** come from
 §8 (a user key of type `speed_dial` can pick a contact). The
 organization-wide directory (`GET /directory`) stays separate.
 
+*Built 2026-10-19 (slice C):* `core/models/portal.UserContact`, migration
+`0047`, `api/v1/me_contacts.py` (`GET/POST /me/contacts[?q=&favourite=]`,
+`GET/PATCH/DELETE /me/contacts/{id}`, `POST /me/contacts/import` `{text,
+replace}` with "name, company, number…" lines or the export's columns,
+`GET /me/contacts/export.csv`; 409 `speed_dial_in_use`, 409
+`too_many_contacts` at 500), frontend `components/portal/ContactsCard.tsx`
+(favourite toggle, call from the user's first enabled extension through
+`/calls/originate`, edit dialog, import dialog). Deviation from the design:
+the Companion extension keeps its own `companion.speed_dials` for now (it is
+a separately released client); it will read `/me/contacts` in its next
+version, and no data migration was done. Name resolution on call history
+and voicemail comes with slice D.
+
 ## 7. Presence (#60)
 
 `extension_states.presence` (`available`, `away`, `busy`, `meeting`,
