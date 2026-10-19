@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -64,6 +64,9 @@ class CallRecording(UUIDPrimaryKey, TenantScoped, Base):
     )
     # Relative to <data>/recordings.
     path: Mapped[str] = mapped_column(String(300))
+    # The file's own AES-256-GCM key wrapped by the installation key
+    # (issue #122); NULL: stored in the clear (before 0.27.4).
+    key_ciphertext: Mapped[str | None] = mapped_column(Text)
     format: Mapped[str] = mapped_column(String(16), default="ogg")
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     duration_seconds: Mapped[int] = mapped_column(Integer, default=0)

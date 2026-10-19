@@ -4,12 +4,12 @@ recorded, and the recordings with audited playback."""
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -35,6 +35,7 @@ from veyra.core.models import (
 )
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
+from veyra.core.security.crypto import try_load_installation_key
 from veyra.core.security.principal import Principal
 from veyra.reporting import recordings as files
 
@@ -472,6 +473,42 @@ def _recording(db: Session, principal: Principal, rec_id: uuid.UUID) -> CallReco
     return rec
 
 
+def audio_response(request: Request, data: bytes, filename: str | None) -> Response:
+    """The audio with byte-range support (players seek), never cached."""
+    headers = {"Cache-Control": "private, no-store", "Accept-Ranges": "bytes"}
+    if filename:
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    total = len(data)
+    rng = request.headers.get("range", "")
+    m = re.match(r"^bytes=(\d*)-(\d*)$", rng.strip())
+    if m and (m.group(1) or m.group(2)):
+        if m.group(1):
+            start = int(m.group(1))
+            end = min(int(m.group(2)), total - 1) if m.group(2) else total - 1
+        else:
+            start, end = max(0, total - int(m.group(2))), total - 1
+        if start >= total or start > end:
+            return Response(
+                status_code=416, headers={**headers, "Content-Range": f"bytes */{total}"}
+            )
+        headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+        return Response(data[start : end + 1], 206, media_type="audio/ogg", headers=headers)
+    return Response(data, media_type="audio/ogg", headers=headers)
+
+
+def recording_audio_bytes(request: Request, rec: CallRecording) -> bytes:
+    data = files.audio_of(
+        request.app.state.settings.recordings_dir,
+        rec,
+        try_load_installation_key(request.app.state.settings),
+    )
+    if data is None:
+        raise ProblemError(
+            404, "Missing", "The recording file is missing or unreadable.", code="file_missing"
+        )
+    return data
+
+
 @router.get("/recordings/{rec_id}/audio", summary="Listen (audited; byte ranges)")
 def recording_audio(
     rec_id: uuid.UUID,
@@ -480,13 +517,11 @@ def recording_audio(
     principal: Principal = Depends(current_principal),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
-) -> FileResponse:
+) -> Response:
     rec = _recording(db, principal, rec_id)
     if rec.deleted_at is not None:
         raise ProblemError(410, "Deleted", "This recording was deleted.", code="recording_deleted")
-    path = files.file_of(request.app.state.settings.recordings_dir, rec)
-    if path is None:
-        raise ProblemError(404, "Missing", "The recording file is missing.", code="file_missing")
+    data = recording_audio_bytes(request, rec)
     # One audit entry per listening, not per byte range the player asks for.
     if not request.headers.get("range", "").startswith("bytes=") or request.headers.get(
         "range", ""
@@ -502,12 +537,7 @@ def recording_audio(
             {"call_id": str(rec.call_id) if rec.call_id else None},
         )
         db.commit()
-    return FileResponse(
-        path,
-        media_type="audio/ogg",
-        filename=f"recording-{rec.ref}.ogg" if download else None,
-        headers={"Cache-Control": "private, no-store"},
-    )
+    return audio_response(request, data, f"recording-{rec.ref}.ogg" if download else None)
 
 
 class HoldIn(BaseModel):

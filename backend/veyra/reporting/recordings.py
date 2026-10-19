@@ -10,6 +10,7 @@ deleted unless held."""
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -29,6 +30,7 @@ from veyra.core.models import (
     RecordingPolicy,
 )
 from veyra.core.models.base import utcnow
+from veyra.core.security.crypto import DecryptionError, InstallationKey
 from veyra.telephony.audio import wav_duration
 
 log = logging.getLogger("veyra.reporting")
@@ -49,6 +51,103 @@ ORPHAN_AFTER = timedelta(hours=24)
 # MixMonitor writes a header even when nothing was bridged.
 EMPTY_WAV_BYTES = 1024
 DEFAULT_RETENTION_DAYS = 90
+
+
+# Recordings at rest (issue #122): each file has its own AES-256-GCM key,
+# stored in call_recordings.key_ciphertext wrapped by the installation key, so
+# a key rotation re-wraps keys and never rewrites audio.
+ENC_SUFFIX = ".enc"
+_MAGIC = b"VEYRAREC1\n"
+_NONCE = 12
+
+
+def key_purpose(rec_id: uuid.UUID | str) -> str:
+    return f"recording.key:{rec_id}"
+
+
+def _seal(data: bytes) -> tuple[bytes, bytes]:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    k = AESGCM.generate_key(bit_length=256)
+    nonce = os.urandom(_NONCE)
+    return _MAGIC + nonce + AESGCM(k).encrypt(nonce, data, _MAGIC), k
+
+
+def _unseal(blob: bytes, k: bytes) -> bytes:
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    if not blob.startswith(_MAGIC):
+        raise DecryptionError("not an encrypted recording")
+    body = blob[len(_MAGIC) :]
+    try:
+        return AESGCM(k).decrypt(body[:_NONCE], body[_NONCE:], _MAGIC)
+    except InvalidTag as e:
+        raise DecryptionError("the recording cannot be decrypted") from e
+
+
+def encrypt_file(
+    recordings_dir: Path, rel: Path, rec_id: uuid.UUID, key: InstallationKey
+) -> tuple[Path, str]:
+    """Encrypt ``<recordings>/<rel>`` in place as ``<rel>.enc``; returns the
+    new relative path and the wrapped file key. The clear file is removed."""
+    src = recordings_dir / rel
+    sealed, k = _seal(src.read_bytes())
+    new_rel = rel.with_name(rel.name + ENC_SUFFIX)
+    dst = recordings_dir / new_rel
+    tmp = dst.with_name(f".{dst.name}.tmp")
+    tmp.write_bytes(sealed)
+    os.chmod(tmp, 0o640)
+    tmp.replace(dst)
+    src.unlink(missing_ok=True)
+    return new_rel, key.encrypt(k.hex(), key_purpose(rec_id))
+
+
+def audio_of(recordings_dir: Path, rec: CallRecording, key: InstallationKey | None) -> bytes | None:
+    """The recording's audio, decrypted when stored encrypted; None when the
+    file is missing or cannot be read with this installation key."""
+    path = file_of(recordings_dir, rec)
+    if path is None:
+        return None
+    data = path.read_bytes()
+    if not rec.key_ciphertext:
+        return data
+    if key is None:
+        log.warning("recording %s is encrypted and the installation key is missing", rec.ref)
+        return None
+    try:
+        k = bytes.fromhex(key.decrypt(rec.key_ciphertext, key_purpose(rec.id)))
+        return _unseal(data, k)
+    except (DecryptionError, ValueError) as e:
+        log.warning("recording %s cannot be decrypted: %s", rec.ref, e)
+        return None
+
+
+def encrypt_existing(
+    db: Session, recordings_dir: Path, key: InstallationKey, limit: int = 20
+) -> int:
+    """Encrypt recordings stored before 0.27.4, a few per worker pass."""
+    rows = db.scalars(
+        select(CallRecording)
+        .where(CallRecording.key_ciphertext.is_(None), CallRecording.deleted_at.is_(None))
+        .limit(limit)
+    ).all()
+    done = 0
+    for rec in rows:
+        if file_of(recordings_dir, rec) is None:
+            continue
+        try:
+            new_rel, wrapped = encrypt_file(recordings_dir, Path(rec.path), rec.id, key)
+        except OSError as e:
+            log.warning("recording %s not encrypted: %s", rec.ref, e)
+            continue
+        rec.path, rec.key_ciphertext = str(new_rel), wrapped
+        rec.size_bytes = (recordings_dir / new_rel).stat().st_size
+        db.flush()
+        done += 1
+    if done:
+        log.info("Encrypted %d stored recordings", done)
+    return done
 
 
 class ConversionError(Exception):
@@ -104,6 +203,7 @@ def process(
     recordings_dir: Path,
     now: datetime | None = None,
     clock: float | None = None,
+    key: InstallationKey | None = None,
 ) -> int:
     """Convert finished recordings; returns how many were stored."""
     now = now or utcnow()
@@ -150,19 +250,24 @@ def process(
             log.warning("Recording %s not converted: %s", ref, e)
             continue
         retention = policy.retention_days if policy else DEFAULT_RETENTION_DAYS
+        rec_id = uuid.uuid4()
+        wrapped = None
+        if key is not None:
+            rel, wrapped = encrypt_file(recordings_dir, rel, rec_id, key)
         db.add(
             CallRecording(
-                id=uuid.uuid4(),
+                id=rec_id,
                 ref=ref,
                 organization_id=org_id,
                 call_id=call.id if call else None,
                 policy_id=policy.id if policy else None,
                 path=str(rel),
                 format="ogg",
-                size_bytes=dst.stat().st_size,
+                size_bytes=(recordings_dir / rel).stat().st_size,
                 duration_seconds=duration,
                 created_at=now,
                 delete_after=now + timedelta(days=retention),
+                key_ciphertext=wrapped,
             )
         )
         db.flush()
@@ -178,6 +283,7 @@ def process_conferences(
     recordings_dir: Path,
     now: datetime | None = None,
     clock: float | None = None,
+    key: InstallationKey | None = None,
 ) -> int:
     """Store finished conference recordings with the call recordings (#133)."""
     now = now or utcnow()
@@ -215,18 +321,23 @@ def process_conferences(
         except ConversionError as e:
             log.warning("Conference recording %s not converted: %s", ref, e)
             continue
+        rec_id = uuid.uuid4()
+        wrapped = None
+        if key is not None:
+            rel, wrapped = encrypt_file(recordings_dir, rel, rec_id, key)
         db.add(
             CallRecording(
-                id=uuid.uuid4(),
+                id=rec_id,
                 ref=ref,
                 organization_id=org_id,
                 conference_room_id=room.id if room else None,
                 path=str(rel),
                 format="ogg",
-                size_bytes=dst.stat().st_size,
+                size_bytes=(recordings_dir / rel).stat().st_size,
                 duration_seconds=duration,
                 created_at=now,
                 delete_after=now + timedelta(days=DEFAULT_RETENTION_DAYS),
+                key_ciphertext=wrapped,
             )
         )
         db.flush()

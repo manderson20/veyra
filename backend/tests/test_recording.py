@@ -293,3 +293,70 @@ def test_conference_recordings_are_stored_and_listed(admin, app):
     assert admin.get(f"/api/v1/recordings/{conf['id']}/audio").status_code == 200
     with session_scope() as db:  # a second pass does not store it again
         assert recordings.process_conferences(db, rec_dir) == 0
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_recordings_are_encrypted_at_rest(admin, app):
+    """Each recording has its own key, wrapped by the installation key (#122):
+    the file on disk is not audio, playback decrypts and seeks, older clear
+    files are encrypted by the worker, and a key rotation keeps them playable."""
+    import time
+    import uuid
+
+    from veyra.core.security import rotation
+    from veyra.core.security.crypto import InstallationKey, load_installation_key
+
+    key = load_installation_key(app.state.settings)
+    rec_dir = app.state.settings.recordings_dir
+    org = _org(admin)
+    policy = admin.post(
+        POL, json={"organization_id": org["id"], "name": "All", "inbound": True}
+    ).json()
+    wav = rec_dir / "incoming" / f"91.1--{policy['id']}.wav"
+    _wav(wav)
+    with session_scope() as db:
+        assert recordings.process(db, rec_dir, clock=time.time() + 90000, key=key) == 1
+        rec = db.scalar(select(CallRecording).where(CallRecording.ref == "91.1"))
+        rec_id = rec.id
+        assert rec.path.endswith(".ogg.enc") and rec.key_ciphertext
+        on_disk = (rec_dir / rec.path).read_bytes()
+    assert not on_disk.startswith(b"OggS") and b"OggS" not in on_disk[:64]
+    audio = admin.get(f"{REC}/{rec_id}/audio")
+    assert audio.status_code == 200 and audio.content[:4] == b"OggS"
+    part = admin.get(f"{REC}/{rec_id}/audio", headers={"Range": "bytes=0-3"})
+    assert part.status_code == 206 and part.content == b"OggS"
+    assert part.headers["content-range"] == f"bytes 0-3/{len(audio.content)}"
+    tail = admin.get(f"{REC}/{rec_id}/audio", headers={"Range": "bytes=-2"})
+    assert tail.status_code == 206 and tail.content == audio.content[-2:]
+
+    # A recording stored in the clear before 0.27.4 is encrypted by the worker.
+    clear = rec_dir / "example" / "old.ogg"
+    clear.parent.mkdir(parents=True, exist_ok=True)
+    clear.write_bytes(audio.content)
+    with session_scope() as db:
+        db.add(
+            CallRecording(
+                id=uuid.uuid4(),
+                ref="old",
+                organization_id=uuid.UUID(org["id"]),
+                path="example/old.ogg",
+                format="ogg",
+                size_bytes=len(audio.content),
+                duration_seconds=2,
+            )
+        )
+    with session_scope() as db:
+        assert recordings.encrypt_existing(db, rec_dir, key) == 1
+        old = db.scalar(select(CallRecording).where(CallRecording.ref == "old"))
+        old_id = old.id
+        assert old.path == "example/old.ogg.enc" and not clear.exists()
+    assert admin.get(f"{REC}/{old_id}/audio").content == audio.content
+
+    # Rotation re-wraps the file keys; the audio stays readable with the new key.
+    new = InstallationKey.generate()
+    with session_scope() as db:
+        assert rotation.rotate(db, key, new) >= 2
+    with session_scope() as db:
+        rec = db.get(CallRecording, rec_id)
+        assert recordings.audio_of(rec_dir, rec, new) == audio.content
+        assert recordings.audio_of(rec_dir, rec, key) is None

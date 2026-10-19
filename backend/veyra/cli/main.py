@@ -1185,12 +1185,19 @@ def cmd_worker(args: argparse.Namespace) -> int:
                 with session_scope() as db:
                     cdr.process(db)
                 # Recordings of finished calls (docs/REPORTING.md §4.2).
+                # Encrypted at rest with a key per file (issue #122) when the
+                # installation key is readable.
+                from veyra.core.security.crypto import try_load_installation_key
                 from veyra.reporting import recordings
 
+                rec_key = try_load_installation_key(settings)
                 with session_scope() as db:
-                    recordings.process(db, settings.recordings_dir)
+                    recordings.process(db, settings.recordings_dir, key=rec_key)
                 with session_scope() as db:
-                    recordings.process_conferences(db, settings.recordings_dir)
+                    recordings.process_conferences(db, settings.recordings_dir, key=rec_key)
+                if rec_key is not None:
+                    with session_scope() as db:
+                        recordings.encrypt_existing(db, settings.recordings_dir, rec_key)
                 # Queue events for the queue reports (docs/REPORTING.md §5.1).
                 from veyra.reporting import queues as queue_log
 

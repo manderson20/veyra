@@ -94,7 +94,7 @@ since Milestone 4 (Call History, Call Recording).
 * Recording is decided when the call is connected; a call transferred to
   a recorded phone after connecting is not recorded from that point.
 * Recordings are not encrypted at rest (as voicemail); the server's disk is
-  the boundary.
+  the boundary. *(Encrypted since 0.27.4, #122.)*
 * The backup alert waits for scheduled backups (M12/M17).
 * Reports cover at most 400 days per request; queue statistics count
   queue log events, so a caller who re-enters a queue counts twice.

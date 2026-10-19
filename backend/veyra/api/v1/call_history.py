@@ -12,8 +12,8 @@ from collections.abc import Iterator
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session
@@ -35,7 +35,6 @@ from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.portal import contacts as portal_contacts
-from veyra.reporting import recordings as recording_files
 
 router = APIRouter(tags=["call history"])
 
@@ -489,7 +488,7 @@ def my_call_recording(
     principal: Principal = Depends(require_me),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
-) -> FileResponse:
+) -> Response:
     """Only when the organization allows it (``users_play_own_recordings``,
     docs/USER_PORTAL.md §5) and the user's extension took part; audited like
     the administrator's listening."""
@@ -511,9 +510,9 @@ def my_call_recording(
     )
     if rec is None:
         raise ProblemError(404, "Not found", "This call has no recording.", code="not_found")
-    path = recording_files.file_of(request.app.state.settings.recordings_dir, rec)
-    if path is None:
-        raise ProblemError(404, "Missing", "The recording file is missing.", code="file_missing")
+    from veyra.api.v1.recording import audio_response, recording_audio_bytes
+
+    data = recording_audio_bytes(request, rec)
     rng = request.headers.get("range", "")
     if not rng.startswith("bytes=") or rng.startswith("bytes=0-"):
         audit.record(
@@ -529,9 +528,4 @@ def my_call_recording(
             details={"call_id": str(call.id), "self_service": True},
         )
         db.commit()
-    return FileResponse(
-        path,
-        media_type="audio/ogg",
-        filename=f"recording-{rec.ref}.ogg" if download else None,
-        headers={"Cache-Control": "private, no-store"},
-    )
+    return audio_response(request, data, f"recording-{rec.ref}.ogg" if download else None)

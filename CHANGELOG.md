@@ -11,6 +11,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ## Unreleased
 
 ### Added
+- **Call recordings are encrypted on disk** (#122): every new call and conference recording is stored encrypted with its own key, which is protected by the installation key; recordings made before are encrypted in the background. Listening and downloading work as before. Migration `0057`. Backups keep the recordings encrypted; restoring needs the installation key, as for every other secret.
 - **Yealink phones trust Veyra on their own** (#116): like the Poly phones, a Yealink phone pointed at Veyra over plain HTTP (DHCP option 66 on the staging network) now receives only the Veyra certificate authority and the HTTPS address, installs the certificate and continues over HTTPS — no manual certificate upload. The organization's enrollment credential is included when the organization allows it (Organizations → Provisioning credential).
 - **Intercom answers on the handset** (#129): the Poly (VVX, Edge E, CCX) and Yealink templates set the phone to answer Veyra's intercom calls on the speaker by itself, with the microphone open; the template variables "intercom_auto_answer" and "intercom_mic_muted" change that per profile or site. Phones pick it up at their next configuration check.
 

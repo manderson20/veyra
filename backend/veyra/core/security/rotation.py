@@ -19,6 +19,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from veyra.core.models import (
     Calendar,
     CallFlow,
+    CallRecording,
     ConferenceRoom,
     ConfigRevision,
     Device,
@@ -98,6 +99,11 @@ def ciphers(db: Session) -> Iterator[Cipher]:
 
     yield from _column(
         db, Extension, "sip_secret_ciphertext", lambda r: secret_purpose(r.id), "extension"
+    )
+    from veyra.reporting.recordings import key_purpose as recording_key_purpose
+
+    yield from _column(
+        db, CallRecording, "key_ciphertext", lambda r: recording_key_purpose(r.id), "recording"
     )
     yield from _column(
         db, SipTrunk, "password_ciphertext", lambda r: trunk_secret_purpose(r.id), "trunk"

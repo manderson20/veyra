@@ -200,9 +200,15 @@ on the System → Health page; a monitoring rule warns before the disk fills
 ### 4.4 Privacy
 
 Recordings never leave the server except by a user's download; they are
-not attached to emails. The files are not encrypted at rest in this
-milestone (the server's disk is the boundary, as for voicemail); the
-design leaves room for encryption with the installation key *(later)*.
+not attached to emails. Since 0.27.4 (#122, migration `0057`) every
+recording is encrypted at rest: the worker seals the converted file with
+its own AES-256-GCM key (`<ref>.ogg.enc`) and stores that key wrapped by
+the installation key in `call_recordings.key_ciphertext` (purpose
+`recording.key:<id>`, in the rotation registry, so a key rotation re-wraps
+keys and never rewrites audio). Playback decrypts in memory and serves byte
+ranges. Recordings stored before are encrypted by the worker, twenty per
+pass. Voicemail messages stay in Asterisk's spool, unencrypted (Asterisk
+must read them).
 
 ## 5. Reports and dashboards
 
@@ -330,7 +336,7 @@ the reports. Owner: a real inbound and outbound call through a trunk.
 
 Billing and rating, wallboards for queue agents (a later module), speech
 analytics and transcription (discussed 2026-10-15 as a separate optional
-module), call recording encryption at rest, SMS/Teams/Slack notifications
+module), SMS/Teams/Slack notifications
 (email only), long-term metrics storage (Prometheus does that).
 
 ## 12. Open questions for the owner
