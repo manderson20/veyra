@@ -93,7 +93,7 @@ Branch `milestone-9d` (from `main` at 0.13.0, with 0.13.1 merged). Design:
 ## 5. Known limitations
 
 * The bootstrap is Poly only; other brands get 404 over plain HTTP until
-  their templates add it.
+  their templates add it. *(Yealink since 0.27.4, #116.)*
 * Bans are per server; with high availability (M16) each node will apply
   its own table from the shared database.
 * The CA's name constraint lists today's host names; a new host name

@@ -3,13 +3,14 @@
 provisioning server hands out only public data, the Veyra CA certificate and
 the HTTPS address, so the phone switches to HTTPS and gets its secrets there.
 
-Poly only for now; other brands get 404 over HTTP (their templates add the
-same bootstrap later)."""
+Poly and Yealink (issue #116); other brands get 404 over HTTP until their
+templates add the same bootstrap."""
 
 from __future__ import annotations
 
 import ipaddress
 import logging
+import re
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
@@ -57,6 +58,41 @@ def client_allowed(
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
     return any(ip.version == n.version and ip in n for n in networks)
+
+
+def is_yealink(user_agent: str | None, device: Device | None) -> bool:
+    if device is not None:
+        return device.manufacturer.lower() == "yealink"
+    return "yealink" in (user_agent or "").lower()
+
+
+# Yealink phones fetch a per-model common file (y0000000000xx.cfg) before
+# the MAC file; over HTTP it is empty.
+YEALINK_COMMON_RE = re.compile(r"^y0{10}[0-9a-f]{2}\.cfg$")
+YEALINK_EMPTY = "#!version:1.0.0.1\n"
+
+
+def yealink_config(
+    ca_url: str, server_url: str, user: str | None = None, password: str | None = None
+) -> str:
+    """The Yealink MAC file of the bootstrap: install the Veyra CA (fetched
+    from ``ca_url``), trust it, and take the configuration over HTTPS."""
+    lines = [
+        "#!version:1.0.0.1",
+        "## Veyra bootstrap: trust the Veyra CA, then provision over HTTPS",
+        f"static.trusted_certificates.url = {ca_url}",
+        "static.security.trust_certificates = 1",
+        # 2: the built-in and the custom (Veyra) certificates are trusted.
+        "static.security.ca_cert = 2",
+        f"static.auto_provision.server.url = {server_url}",
+        "static.auto_provision.power_on = 1",
+    ]
+    if user and password:
+        lines += [
+            f"static.auto_provision.server.username = {user}",
+            f"static.auto_provision.server.password = {password}",
+        ]
+    return "\n".join(lines) + "\n"
 
 
 def is_poly(user_agent: str | None, device: Device | None) -> bool:

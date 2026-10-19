@@ -194,12 +194,18 @@ def _bootstrap(
     if filename == "000000000000.cfg":
         _log(db, request, filename=filename, mac=None, result="ok", status=200)
         return Response(EMPTY_MASTER, media_type="application/xml", headers=no_store)
+    ua = request.headers.get("user-agent")
+    if bootstrap.is_yealink(ua, None) and (
+        bootstrap.YEALINK_COMMON_RE.match(filename.lower()) or filename == bootstrap.CA_FILE
+    ):
+        return _yealink_public(filename, request, db)
     device = bootstrap.find_device(db, mac)
     is_master = mac is not None and filename.lower() == f"{mac}.cfg"
     is_config = mac is not None and filename.lower() == f"{bootstrap.BOOTSTRAP_PREFIX}{mac}.cfg"
     org_id = device.organization_id if device else None
-    if not (is_master or is_config) or not bootstrap.is_poly(
-        request.headers.get("user-agent"), device
+    yealink = bootstrap.is_yealink(ua, device)
+    if not (is_master or (is_config and not yealink)) or not (
+        yealink or bootstrap.is_poly(ua, device)
     ):
         _log(
             db,
@@ -243,10 +249,19 @@ def _bootstrap(
         )
         return Response(status_code=503, headers=no_store)
     assert mac is not None
-    if is_master:
+    host = (settings.public_host or request.headers.get("host") or "").split(":")[0]
+    media = "application/xml"
+    if yealink:
+        cred = bootstrap.enrollment_credential(db, key, device)
+        content = bootstrap.yealink_config(
+            f"http://{host}/provisioning/{bootstrap.CA_FILE}",
+            f"https://{host}/provisioning/",
+            *(cred if cred else (None, None)),
+        )
+        media = "text/plain"
+    elif is_master:
         content = bootstrap.poly_master(mac)
     else:
-        host = (settings.public_host or request.headers.get("host") or "").split(":")[0]
         cred = bootstrap.enrollment_credential(db, key, device)
         content = bootstrap.poly_config(
             ca, f"{host}/provisioning/", *(cred if cred else (None, None))
@@ -261,7 +276,22 @@ def _bootstrap(
         organization_id=org_id,
         device=device,
     )
-    return Response(content, media_type="application/xml", headers=no_store)
+    return Response(content, media_type=media, headers=no_store)
+
+
+def _yealink_public(filename: str, request: Request, db: Session) -> Response:
+    """The public parts of the Yealink bootstrap: an empty common file and
+    the Veyra CA certificate the MAC file points the phone at."""
+    no_store = {"Cache-Control": "no-store"}
+    if filename == bootstrap.CA_FILE:
+        ca = bootstrap.ca_certificate(request.app.state.settings.config_dir)
+        if ca is None:
+            _log(db, request, filename=filename, mac=None, result="no_ca", status=503)
+            return Response(status_code=503, headers=no_store)
+        _log(db, request, filename=filename, mac=None, result="bootstrap", status=200)
+        return Response(ca, media_type="application/x-x509-ca-cert", headers=no_store)
+    _log(db, request, filename=filename, mac=None, result="ok", status=200)
+    return Response(bootstrap.YEALINK_EMPTY, media_type="text/plain", headers=no_store)
 
 
 @router.get("/directory/{name}")

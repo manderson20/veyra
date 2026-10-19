@@ -258,8 +258,20 @@ phones that cannot take the CA.
 Poly parameter names are from the UC Software administrator guide
 *(spike: confirm on the owner's VVX firmware that a custom CA delivered in
 the master file is used for the provisioning connection after the
-reboot)*. Yealink (`static.trusted_certificates.url`) and Grandstream
-(P8463 custom certificate) get the same bootstrap in their templates later.
+reboot)*. Grandstream (P8463 custom certificate) gets the same bootstrap
+with its templates (#36).
+
+*Yealink, built 0.27.4 (#116):* over HTTP a Yealink phone (by its registered
+manufacturer, or the "Yealink" user agent) gets an empty common file
+(`y0000000000xx.cfg`), the CA itself at `/provisioning/veyra-ca.crt`, and a
+MAC file with `static.trusted_certificates.url` (that address),
+`static.security.trust_certificates = 1`, `static.security.ca_cert = 2`
+(built-in and custom trusted), `static.auto_provision.server.url =
+https://<host>/provisioning/` and, when the organization chose it, the
+enrollment credential (`static.auto_provision.server.username/password`).
+The same bootstrap networks and downgrade protection apply. *(Confirm on
+hardware: the phone takes the new server address at its next check or
+reboot.)*
 
 ### 6.4 How the phone gets its credential
 

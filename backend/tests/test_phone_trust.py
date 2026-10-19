@@ -97,5 +97,38 @@ def test_unknown_poly_gets_bootstrap_without_credential_and_others_404(admin, ap
         save_settings(db, FirewallSettings(bootstrap_networks=["172.16.3.0/24"]))
     phone = TestClient(app, base_url="http://veyra.test")
     assert phone.get(f"{PROV}/0004f2123456.cfg", headers=UA).status_code == 200
+    grandstream = {**UA, "User-Agent": "Grandstream GRP2614 1.0.5.33"}
+    assert phone.get(f"{PROV}/c074ad123456.cfg", headers=grandstream).status_code == 404
+
+
+def test_yealink_bootstrap(admin, app):
+    """Yealink phones get the CA and the HTTPS address over HTTP too (#116)."""
+    _ca(app)
+    with session_scope() as db:
+        save_settings(db, FirewallSettings(bootstrap_networks=["172.16.3.0/24"]))
+    phone = TestClient(app, base_url="http://veyra.test")
     yealink = {**UA, "User-Agent": "Yealink SIP-T54W 96.86.0.70"}
-    assert phone.get(f"{PROV}/805ec0123456.cfg", headers=yealink).status_code == 404
+    common = phone.get(f"{PROV}/y000000000096.cfg", headers=yealink)
+    assert common.status_code == 200 and common.text == "#!version:1.0.0.1\n"
+    cfg = phone.get(f"{PROV}/805ec0123456.cfg", headers=yealink)
+    assert cfg.status_code == 200
+    text = cfg.text
+    assert "static.trusted_certificates.url = http://veyra.test/provisioning/veyra-ca.crt" in text
+    assert "static.security.trust_certificates = 1" in text
+    assert "static.auto_provision.server.url = https://veyra.test/provisioning/" in text
+    assert "password" not in text and "account.1" not in text
+    ca = phone.get(f"{PROV}/veyra-ca.crt", headers=yealink)
+    assert ca.status_code == 200 and ca.text == CA
+    # The Poly second file is not offered to Yealink, and outside the networks nothing is.
+    assert phone.get(f"{PROV}/veyra-bootstrap-805ec0123456.cfg", headers=yealink).status_code == 404
+    outside = {**yealink, "X-Forwarded-For": "203.0.113.9"}
+    assert phone.get(f"{PROV}/veyra-ca.crt", headers=outside).status_code == 403
+    assert phone.get(f"{PROV}/805ec0123456.cfg", headers=outside).status_code == 403
+
+
+def test_yealink_config_with_credential():
+    text = bootstrap.yealink_config(
+        "http://h/provisioning/veyra-ca.crt", "https://h/provisioning/", "veyra-example", "s3cret"
+    )
+    assert "static.auto_provision.server.username = veyra-example" in text
+    assert "static.auto_provision.server.password = s3cret" in text
