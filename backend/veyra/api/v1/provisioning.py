@@ -421,13 +421,18 @@ def customize_template(
     sources = {}
     files = []
     for f in parent.manifest.files:
-        if f.name == "{mac}.cfg":
-            continue  # the master file is inherited unchanged
+        if f.source == "master.cfg.j2":
+            continue  # the Poly master file is inherited unchanged
+        if f.checksum_of:
+            files.append({"name": f.name, "checksum_of": f.checksum_of, "format": f.format})
+            continue
         files.append({"name": f.name, "source": f.source, "format": f.format})
+        note = "Your changes go here. Override other blocks of the parent as needed."
+        comment = f"  <!-- {note} -->" if f.format == "xml" else f"## {note}"
         sources[f.source] = (
             f'{{% extends "{pt.key}/{f.source}" %}}\n'
             "{% block model_settings %}\n"
-            "  <!-- Your changes go here. Override other blocks of the parent as needed. -->\n"
+            f"{comment}\n"
             "{% endblock %}\n"
         )
     manifest = {

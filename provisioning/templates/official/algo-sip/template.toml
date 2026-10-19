@@ -1,0 +1,60 @@
+spec_version = 2
+features = ["multi_line", "multicast_paging", "poly_group_paging", "ntp", "vlan", "firmware", "device_credential"]
+
+[template]
+key = "algo.sip"
+name = "Algo SIP endpoints"
+version = "0.1.0"
+manufacturer = "Algo"
+models = ["8180", "8186", "8188", "8189", "8190", "8196", "8197", "8198", "8199", "8507", "8410", "8420", "8301", "8305", "8312", "8373", "8028", "8028V", "8039", "8063", "8201", "8203", "8128", "8138", "8401", "8402", "8450"]
+firmware = "Algo firmware 5.5 and later"
+status = "experimental"
+description = """
+Every current Algo SIP endpoint (speakers, horns, display speakers, paging
+adapters, intercoms, visual alerters, clocks, console). Produces the
+device-specific file algom<MAC>.conf and its .md5 checksum: line 1 registers
+as the page extension, line 2 (if any) as the ring extension; the profile's
+subscribed paging zones become multicast listen zones (regular RTP, Poly group
+paging or both); time server, time zone, VLAN, firmware and the daily
+provisioning check over HTTPS with the device credential. Parameter names
+from Algo's provisioning reference for firmware 5.5. Not yet verified on
+hardware — see docs/PROVISIONING_BREADTH.md §7."""
+
+[[files]]
+name = "algom{mac_upper}.conf"
+source = "algom.conf.j2"
+format = "text"
+
+[[files]]
+name = "algom{mac_upper}.md5"
+checksum_of = "algom{mac_upper}.conf"
+format = "text"
+
+[[variables]]
+name = "sip_transport"
+description = "SIP transport (same values as the Poly and Yealink families)"
+default = "UDPOnly"
+pattern = "^(UDPOnly|TCPOnly|TLS|DNSnaptr)$"
+
+[[variables]]
+name = "registration_expires"
+type = "integer"
+description = "Registration interval in seconds"
+default = 300
+
+[[variables]]
+name = "polling_hour"
+type = "integer"
+description = "Hour (0-23) at which the device checks for new configuration every day"
+default = 3
+
+[[variables]]
+name = "multicast_format"
+description = "Multicast pages the device listens to: rtp (regular multicast), poly (Poly group paging) or both"
+default = "rtp"
+pattern = "^(rtp|poly|both)$"
+
+[[variables]]
+name = "algo_timezone"
+description = "Time zone as Algo spells it (for example US/Central); empty uses the site's or organization's zone"
+max_length = 64

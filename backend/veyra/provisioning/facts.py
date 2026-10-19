@@ -620,6 +620,9 @@ def build_facts(
             "transport": transport,
             "provisioning_url": f"{base}/provisioning/",
             "directory_url": f"{base}/provisioning/directory/",
+            # For devices that take the server and the path separately (Algo).
+            "host": _host(settings, host),
+            "provisioning_path": "provisioning",
             "provisioning_server_type": "HTTPS" if scheme == "https" else "HTTP",
             "ntp_server": str(values.get("ntp_server") or "pool.ntp.org"),
             "timezone": tz,

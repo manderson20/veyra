@@ -1,0 +1,58 @@
+{%- macro c(v) %}{{ (v ~ "") | replace("\n", " ") | replace("\r", " ") }}{% endmacro -%}
+{%- set tr = {"UDPOnly": "udp", "TCPOnly": "tcp", "TLS": "tls", "DNSnaptr": "auto"}[sip_transport] -%}
+sip.proxy = {{ server.sip_host }}:{{ server.sip_port }}
+sip.transp = {{ tr }}
+sip.regexp = {{ registration_expires }}
+{% if lines %}
+sip.u1.user = {{ lines[0].sip_username }}
+sip.u1.auth = {{ lines[0].sip_username }}
+sip.u1.pwd = {{ lines[0].sip_password }}
+sip.u1.dname = {{ c(lines[0].caller_id_name or lines[0].display_name or lines[0].extension_number) }}
+{% endif %}
+{% if lines | length > 1 %}
+sip.alert1.user = {{ lines[1].sip_username }}
+sip.alert1.auth = {{ lines[1].sip_username }}
+sip.alert1.pwd = {{ lines[1].sip_password }}
+sip.alert1.dname = {{ c(lines[1].caller_id_name or lines[1].display_name or lines[1].extension_number) }}
+{% endif %}
+{% if paging.enabled %}
+mcast.mode = 2
+mcast.polycom.mode = {{ {"rtp": 0, "poly": 1, "both": 3}[multicast_format] }}
+{% for g in paging.groups if g.subscribed and g.kind != "emergency" %}
+{% if loop.index <= 7 %}
+mcast.zone{{ loop.index }} = {{ g.multicast_address }}:{{ g.multicast_port }}
+{% endif %}
+{% endfor %}
+{% for g in paging.groups if g.subscribed and g.kind == "emergency" %}
+{% if loop.first %}
+mcast.zone9 = {{ g.multicast_address }}:{{ g.multicast_port }}
+{% endif %}
+{% endfor %}
+{% if multicast_format != "rtp" and paging.address %}
+mcast.polycom.zone = {{ paging.address }}:{{ paging.port }}
+mcast.polycom.groups = {{ paging.groups | selectattr("subscribed") | map(attribute="number") | join(",") }}
+{% if paging.default_group %}
+mcast.polycom.default = {{ paging.default_group }}
+{% endif %}
+{% endif %}
+{% else %}
+mcast.mode = 0
+{% endif %}
+net.time1 = {{ server.ntp_server }}
+admin.timezone = {{ algo_timezone or server.timezone }}
+{% if vlan_id %}
+net.vlan.use = manual
+net.vlan.id = {{ vlan_id }}
+{% endif %}
+prov.use = 1
+prov.server.method = static
+prov.download.method = {{ "https" if server.provisioning_server_type == "HTTPS" else "http" }}
+prov.server.static = {% if device.credential_user %}{{ device.credential_user }}:{{ device.credential_password }}@{% endif %}{{ server.host }}
+prov.download.cfgpath = {{ server.provisioning_path }}
+prov.sync.frequency = daily
+prov.sync.time = {{ "%02d" | format(polling_hour % 24) }}:00:00
+prov.sync.endtime = {{ "%02d" | format((polling_hour + 2) % 24) }}:00:00
+sip.interop.checksync = conditional-reboot
+{% if server.firmware_url %}
+prov.version.firmware = {{ server.firmware_url }}
+{% endif %}

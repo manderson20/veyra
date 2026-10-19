@@ -217,6 +217,25 @@ HP newsroom (Edge V, April 2026), distributor listings for Poly, Grandstream
 and CyberData. Models the owner still runs that are no longer sold are
 added to the matching family when named.
 
+*Built 2026-10-20 (Algo, #38):* one template `algo.sip` for every current
+Algo SIP endpoint (§4.1 list). Files `algom<MAC upper>.conf` (Algo's
+device-specific name, looked up before the generic `algop<model>.conf`) and
+`algom<MAC upper>.md5` — the template spec gained `checksum_of`, a file
+holding the MD5 of another rendered file in `md5sum` form, because Algo
+ignores a configuration without a matching checksum. Parameter names from
+Algo's provisioning reference for firmware 5.5: `sip.proxy`, `sip.transp`,
+`sip.regexp`, `sip.u1.*` (page extension = line 1), `sip.alert1.*` (ring
+extension = line 2), `mcast.mode`, `mcast.polycom.mode` (`multicast_format`
+rtp/poly/both), `mcast.zone1-7` from the subscribed zones and `mcast.zone9`
+from an emergency zone, `mcast.polycom.zone/groups/default`, `net.time1`,
+`admin.timezone` (`algo_timezone`, Algo's own spelling such as US/Central),
+`net.vlan.*`, `prov.*` (static HTTPS server with the device credential,
+path `provisioning`, daily sync window), `prov.version.firmware` (full URL,
+5.5+). Not set: the web admin password (Algo does not document its
+parameter), comments (no documented syntax). Facts gained `server.host` and
+`server.provisioning_path`. Template "Customize" now copies single-file and
+checksum families correctly (it used to skip every `{mac}.cfg`).
+
 ## 5. Phone directory
 
 `GET /provisioning/directory/{format}` (device credential required, like
