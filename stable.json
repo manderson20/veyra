@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 20,
+  "sequence": 21,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.4",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Intercom calls answer on the speaker (Poly and Yealink templates), Yealink phones install the Veyra certificate by themselves, and call recordings are encrypted on disk.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "6d89ecca48",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.4/veyra-0.27.4.tar.gz",
+        "sha256": "a7fc22f93f19214ee2051c8da193cc7a5a039e0dc395120a3d471d38fc5c434b",
+        "size": 8278391
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -343,6 +360,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T22:19:20+00:00",
-  "expires_at": "2027-01-17T22:19:20+00:00"
+  "generated_at": "2026-10-19T22:39:13+00:00",
+  "expires_at": "2027-01-17T22:39:13+00:00"
 }
