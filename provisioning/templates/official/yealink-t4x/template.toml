@@ -3,10 +3,10 @@ features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi"
 
 [template]
 key = "yealink.t4x"
-name = "Yealink T4X"
+name = "Yealink T4x series"
 version = "0.1.0"
 manufacturer = "Yealink"
-models = ["T43U", "T46U", "T48U"]
+models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]
 parent = "yealink.base"
 parent_version = "0.1.0"
 firmware = "Yealink firmware 66.86 / 96.86 and later"

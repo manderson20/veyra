@@ -123,3 +123,54 @@ def test_yealink_renders_and_directory_is_served(admin, app):
     assert "<phonenumber>1002</phonenumber>" in r.text
     r = phone.get("/provisioning/directory/contacts.csv", headers=auth)
     assert r.text.splitlines()[0] == "name,number" and "Front Office,1001" in r.text
+
+
+def test_yealink_lineup_and_conference_phone(admin, app):
+    """Every current Yealink SIP model resolves to a family; a conference
+    phone renders its line without line keys."""
+    makers = admin.get("/api/v1/provisioning/models").json()["manufacturers"]
+    yealink = {m for e in makers if e["name"] == "Yealink" for m in e["models"]}
+    for m in (
+        "T30",
+        "T34W",
+        "T42U",
+        "T44W",
+        "T58W Pro",
+        "VP59",
+        "T73U",
+        "T77U",
+        "T85W",
+        "T88",
+        "CP925",
+        "CP965",
+    ):
+        assert m in yealink, m
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    o = org["id"]
+    ext = _post(admin, EXT, {"organization_id": o, "number": "1009", "display_name": "Board room"})
+    profile = _post(
+        admin,
+        PROFILES,
+        {
+            "organization_id": o,
+            "name": "Yealink rooms",
+            "template_key": "yealink.base",
+            "keys": [{"type": "blf", "value": "1009"}],
+        },
+    )
+    device = _post(
+        admin,
+        DEVICES,
+        {
+            "organization_id": o,
+            "mac_address": "805ec0aa0001",
+            "manufacturer": "Yealink",
+            "model": "CP965",
+            "profile_id": profile["id"],
+            "primary_extension_id": ext["id"],
+        },
+    )
+    out = admin.get(f"{DEVICES}/{device['id']}/preview").json()
+    assert out["error"] is None and out["template_key"] == "yealink.cp", out
+    cfg = out["files"][0]["content"]
+    assert "account.1.enable = 1" in cfg and "linekey." not in cfg

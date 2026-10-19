@@ -3,10 +3,10 @@ features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi"
 
 [template]
 key = "yealink.t5x"
-name = "Yealink T5X"
+name = "Yealink T5x series"
 version = "0.1.0"
 manufacturer = "Yealink"
-models = ["T53", "T53W", "T54W", "T57W"]
+models = ["T53", "T53W", "T54W", "T57W", "T58W", "T58W Pro", "VP59"]
 parent = "yealink.base"
 parent_version = "0.1.0"
 firmware = "Yealink firmware 66.86 / 96.86 and later"

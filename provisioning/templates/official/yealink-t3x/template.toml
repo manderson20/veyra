@@ -3,10 +3,10 @@ features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi"
 
 [template]
 key = "yealink.t3x"
-name = "Yealink T3X"
+name = "Yealink T3x series"
 version = "0.1.0"
 manufacturer = "Yealink"
-models = ["T31P", "T31G", "T33G"]
+models = ["T30", "T30P", "T31", "T31G", "T31P", "T31W", "T33G", "T34W"]
 parent = "yealink.base"
 parent_version = "0.1.0"
 firmware = "Yealink firmware 66.86 / 96.86 and later"
