@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Intercom answers on the handset** (#129): the Poly (VVX, Edge E, CCX) and Yealink templates set the phone to answer Veyra's intercom calls on the speaker by itself, with the microphone open; the template variables "intercom_auto_answer" and "intercom_mic_muted" change that per profile or site. Phones pick it up at their next configuration check.
+
 ## 0.27.3 — 2026-10-20
 
 More audit items. Migration `0056`. Deploy the telephony configuration after installing: the greeting keys, presence keys and the direct-to-voicemail fix are in the generated dialplan.

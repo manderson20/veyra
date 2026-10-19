@@ -40,6 +40,7 @@ family's templates to `stable` in the next release.
 | 13 | Change a provisioning variable the phone uses | Within a minute the phone re-reads its configuration (NOTIFY) and shows the change |
 | 14 | Upload and assign a newer firmware image | The phone upgrades on its next check |
 | 15 | Phone book (Yealink: Directory → Remote phone book; Poly: Directory) | The organization's extensions are listed |
+| 16 | From another phone dial the intercom code and this extension (`*80<ext>`) | The phone answers on the speaker by itself with a tone; the microphone is open unless the profile sets "intercom_mic_muted" |
 
 ## Algo speakers, horns and adapters
 

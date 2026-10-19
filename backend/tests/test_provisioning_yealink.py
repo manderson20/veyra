@@ -89,6 +89,8 @@ def test_yealink_renders_and_directory_is_served(admin, app):
         "account.1.sip_server.1.transport_type = 1",
         "account.1.subscribe_mwi = 1",
         "voice_mail.number.1 = *97",
+        "features.intercom.allow = 1",
+        "features.intercom.mute = 0",
         "linekey.1.type = 15",
         "linekey.2.type = 16",
         "linekey.2.value = 1002",

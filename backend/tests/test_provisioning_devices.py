@@ -192,6 +192,10 @@ def test_device_preview_renders_lines_keys_paging_and_dst(admin, app):
     assert 'device.net.vlanId="20"' in cfg and 'prov.polling.time="04:00"' in cfg
     assert 'device.prov.user="dev-0004f2aabbcc"' in cfg and 'device.prov.password="********"' in cfg
     assert 'device.prov.serverType="HTTPS"' in cfg
+    # Intercom calls answer on the speaker (#129).
+    assert 'voIpProt.SIP.alertInfo.1.value="alert-autoanswer"' in cfg
+    assert 'voIpProt.SIP.alertInfo.1.class="autoAnswer"' in cfg
+    assert 'call.autoAnswer.micMute="0"' in cfg
     # A site time zone with DST turns the rules on.
     site = admin.post(
         "/api/v1/sites",

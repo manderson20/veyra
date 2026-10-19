@@ -112,4 +112,12 @@ remote_phonebook.data.1.password = {{ device.credential_password }}
 features.remote_phonebook.enable = 1
 {% endif %}
 {% endblock %}
+{% block intercom %}
+## Intercom (docs/CALL_FEATURES.md §3.6): Veyra's intercom calls carry
+## Call-Info answer-after=0, answered on the speaker.
+features.intercom.allow = {{ intercom_auto_answer | bool01 }}
+features.intercom.mute = {{ intercom_mic_muted | bool01 }}
+features.intercom.tone = 1
+features.intercom.barge = 0
+{% endblock %}
 {% block model_settings %}{% endblock %}

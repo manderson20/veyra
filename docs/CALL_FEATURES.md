@@ -356,8 +356,12 @@ with `b(veyra-intercom-hdr^s^1)`, a per-namespace routine that adds `Alert-Info:
 <sip:veyra>;answer-after=0` on the called phone's channel; Do Not Disturb
 answers busy; a denied extension hears `feature-not-avail-line`, an unknown
 number `pbx-invalid`. Paging zones use multicast and keep their own path.
-The phone option that honours the header (Poly `alertInfo` class, Yealink
-and Grandstream intercom allow) belongs to the templates, Milestone 21.
+The phone option that honours the header is in the templates since
+0.27.4 (#129): Poly `voIpProt.SIP.alertInfo.1` = `alert-autoanswer` → ring
+class `autoAnswer` (`ring-answer`), `call.autoAnswer.micMute`; Yealink
+`features.intercom.allow` / `.mute`; variables `intercom_auto_answer`
+(default on) and `intercom_mic_muted` (default off). Grandstream waits for
+its templates (#36).
 
 ### 3.7 Transfer to voicemail and the voicemail operator
 

@@ -128,5 +128,14 @@
     up.screenSaver.enable="{{ (screen_saver_minutes > 0) | bool01 }}"
     up.screenSaver.waitTime="{{ screen_saver_minutes if screen_saver_minutes > 0 else 10 }}" />
 {% endblock %}
+{% block intercom %}
+{% if intercom_auto_answer %}
+  <!-- Intercom (docs/CALL_FEATURES.md §3.6): Veyra's intercom calls carry
+       Alert-Info ...;info=alert-autoanswer, answered on the speaker. -->
+  <voIpProt voIpProt.SIP.alertInfo.1.value="alert-autoanswer" voIpProt.SIP.alertInfo.1.class="autoAnswer" />
+  <se se.rt.autoAnswer.type="ring-answer" />
+  <call call.autoAnswer.micMute="{{ intercom_mic_muted | bool01 }}" />
+{% endif %}
+{% endblock %}
 {% block model_settings %}{% endblock %}
 </polycomConfig>

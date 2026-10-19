@@ -1,10 +1,10 @@
 spec_version = 2
-features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
+features = ["intercom_auto_answer", "multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
 
 [template]
 key = "yealink.base"
 name = "Yealink (common settings)"
-version = "0.1.0"
+version = "0.2.0"
 manufacturer = "Yealink"
 abstract = true
 firmware = "Yealink firmware 66.86 / 96.86 and later"
@@ -51,3 +51,15 @@ name = "directory_enabled"
 type = "boolean"
 description = "Download the organization's directory as a remote phone book"
 default = true
+
+[[variables]]
+name = "intercom_auto_answer"
+type = "boolean"
+description = "Answer intercom calls automatically on the speaker (Veyra's intercom code sends the auto-answer header)"
+default = true
+
+[[variables]]
+name = "intercom_mic_muted"
+type = "boolean"
+description = "Keep the microphone muted when an intercom call is answered automatically (the user unmutes to talk back)"
+default = false
