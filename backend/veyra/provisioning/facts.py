@@ -292,6 +292,7 @@ def _keys(
 FEATURE_LABELS = {
     "voicemail": "Voicemail",
     "dnd": "DND",
+    "presence": "Presence",
     "intercom": "Intercom",
     "park": "Park",
     "agent": "Queue log-in",
@@ -310,7 +311,7 @@ def _feature_keys(
     original type. A lamp is a hint the generator publishes: pressing a BLF
     key dials the watched number, so each watched number is also the code."""
     kinds = {str(k.get("type") or "") for k in raw}
-    if not kinds & {"park", "voicemail", "transfer", "intercom", "dnd", "toggle"}:
+    if not kinds & {"park", "voicemail", "transfer", "intercom", "dnd", "toggle", "presence"}:
         return raw
     codes = features.active(db)
 
@@ -345,6 +346,21 @@ def _feature_keys(
                     "value": f"{code}{value}",
                     "feature": kind,
                     "label": label or f"Intercom {value}",
+                }
+            )
+        elif kind == "presence":
+            # A BLF on the colleague's presence hint (issue #132).
+            code = codes.get("presence_watch")
+            if not code:
+                note("a presence key: the colleague's presence code is off")
+                continue
+            out.append(
+                {
+                    **k,
+                    "type": "blf",
+                    "value": f"{code}{value}",
+                    "feature": kind,
+                    "label": label or f"{value}",
                 }
             )
         elif kind == "dnd":

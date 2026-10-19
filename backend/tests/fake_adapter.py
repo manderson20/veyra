@@ -62,6 +62,7 @@ class FakeAdapter(TelephonyAdapter):
         ]
         self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="example-1001")]
         self.hung_up: list[str] = []
+        self.presence_lamps: dict[tuple[str, str], str] = {}
         self.originated: list[tuple[str, str, str]] = []
         self.originated_channels: list[tuple[str, str, str, dict[str, str]]] = []
         self.fail_originate: str | None = None
@@ -135,6 +136,9 @@ class FakeAdapter(TelephonyAdapter):
 
     def extension_states(self) -> dict[tuple[str, str], dict[str, str]]:
         return {k: dict(v) for k, v in self.states.items()}
+
+    def set_presence_lamp(self, organization: str, number: str, state: str) -> None:
+        self.presence_lamps[(organization, number)] = state
 
     def set_switch(self, kind: str, organization: str, key: str, value: str | None) -> None:
         self.switch_calls.append((kind, organization, key, value))

@@ -1206,6 +1206,7 @@ def _dialplan(
                 _switch_hints(codes, mine(flows, ns), mine(tcs, ns))
                 + _agent_hints(codes, mine(queues, ns)),
                 mine(lots, ns),
+                codes.get("presence_watch"),
             )
     lines += _follow_me_contexts(spaces)
     if "intercom" in codes:
@@ -1934,6 +1935,7 @@ def _internal(
     conferences: list[dict[str, Any]] | None = None,
     extra_hints: list[str] | None = None,
     parking: list[dict[str, Any]] | None = None,
+    presence_code: str | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
@@ -1963,6 +1965,13 @@ def _internal(
         org_slug = _check_value(str(ext.get("organization") or ""), "organization")
         state = f"veyra/ext/{org_slug}/{number}"
         # Keys lit while Do Not Disturb or a forward is on (docs/CALL_FEATURES.md §3.2, §3.3).
+        if presence_code:
+            # A presence key (issue #132): a BLF on the colleague's presence
+            # state (extension_state.PRESENCE_LAMP); pressing it calls them.
+            lines += [
+                f"exten => {presence_code}{number},hint,Custom:veyra-presence-{org_slug}-{number}",
+                f"exten => {presence_code}{number},1,Goto({n.internal},{number},1)",
+            ]
         if dnd_toggle:
             lines.append(f"exten => {dnd_toggle}{number},hint,Custom:veyra-dnd-{org_slug}-{number}")
             # A DND key on the phone (docs/PROVISIONING_BREADTH.md §3) is a BLF

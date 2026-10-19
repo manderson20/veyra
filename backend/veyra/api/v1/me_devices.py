@@ -31,7 +31,7 @@ _NUMBER_RE = re.compile(r"^\+?[0-9*#]{1,32}$")
 
 class UserKeyIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Literal["speed_dial", "blf"]
+    type: Literal["speed_dial", "blf", "presence"]
     label: str | None = Field(None, max_length=40)
     value: str = Field(min_length=1, max_length=40)
     # A contact of the user: its first number becomes the value and its name the label.
@@ -189,6 +189,24 @@ def _check_targets(db: Session, principal: Principal, ext: Extension, body: User
                 f"{missing[0]} is not an extension, ring group or queue of your organization.",
                 code="validation_failed",
                 errors=[{"field": "keys", "message": f"{missing[0]}: not a number you can watch"}],
+            )
+    wanted_presence = {k.value for k in body.keys.values() if k and k.type == "presence"}
+    if wanted_presence:
+        extensions = set(
+            db.scalars(
+                select(Extension.number).where(
+                    Extension.organization_id == org, Extension.number.in_(wanted_presence)
+                )
+            )
+        )
+        missing = sorted(wanted_presence - extensions)
+        if missing:
+            raise ProblemError(
+                422,
+                "Unknown number",
+                f"{missing[0]} is not an extension of your organization.",
+                code="validation_failed",
+                errors=[{"field": "keys", "message": f"{missing[0]}: presence is of extensions"}],
             )
     for slot, k in body.keys.items():
         if k and k.contact_id is not None:

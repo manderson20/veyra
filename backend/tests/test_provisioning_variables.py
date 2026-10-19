@@ -239,6 +239,7 @@ def test_feature_keys_render_as_blf_and_speed_dials(admin, app):
         {"type": "toggle", "value": f"flow:{flow['slug']}"},
         {"type": "toggle", "value": "agent"},
         {"type": "transfer", "value": ""},
+        {"type": "presence", "value": "1002"},
     ]
     r = admin.patch(f"{DEVICES}/{d1['id']}", json={"keys": keys})
     assert r.status_code == 200, r.text
@@ -255,6 +256,7 @@ def test_feature_keys_render_as_blf_and_speed_dials(admin, app):
         "2972",
         f"{codes['callflow_toggle_prefix']}7",
         f"{codes['queue_login']}*1001",
+        f"{codes['presence_watch']}1002",
     ):
         assert f'.address="{watched}"' in content, watched
     assert any("transfer" in w for w in warnings)

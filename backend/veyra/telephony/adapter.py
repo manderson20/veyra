@@ -178,6 +178,11 @@ class TelephonyAdapter(ABC):
         None clears it. Capability.EXTENSION_STATE."""
         raise NotSupported("engine switches are not supported by this engine")
 
+    def set_presence_lamp(self, organization: str, number: str, state: str) -> None:
+        """The custom device state behind an extension's presence key
+        (issue #132): ``INUSE``, ``ONHOLD``, ``UNAVAILABLE`` or ``NOT_INUSE``."""
+        raise NotSupported("presence lamps are not supported by this engine")
+
     def switches(self) -> dict[tuple[str, str, str], str]:
         """(kind, organization slug, key) -> value for every switch that is on."""
         raise NotSupported("engine switches are not supported by this engine")

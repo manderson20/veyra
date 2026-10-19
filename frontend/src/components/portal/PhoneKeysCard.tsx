@@ -7,7 +7,8 @@ import { api, errorMessage } from "@/lib/api";
 import type { Contact, DirectoryEntry, MyDevice, MyDeviceSlot, UserKeyInput } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
-const TYPE_LABEL: Record<string, string> = { line: "Line", blf: "Busy lamp", speed_dial: "Speed dial", page: "Page", user: "Open" };
+const TYPE_LABEL: Record<string, string> = { line: "Line", blf: "Busy lamp", speed_dial: "Speed dial", page: "Page", user: "Open", presence: "Presence" };
+type UserKeyType = "speed_dial" | "blf" | "presence";
 
 /** The user's phones: locked keys greyed, open slots editable (docs/USER_PORTAL.md §8). */
 export function PhoneKeysCard() {
@@ -67,7 +68,7 @@ export function PhoneKeysCard() {
 function KeyDialog({ target, busy, onClose, onSave }: { target: { device: MyDevice; slot: MyDeviceSlot } | null; busy: boolean; onClose: () => void; onSave: (key: UserKeyInput) => void }) {
   const contacts = useApiData<Contact[]>(target ? "/me/contacts" : null);
   const dir = useApiData<{ results: DirectoryEntry[] }>(target ? "/directory" : null);
-  const [type, setType] = useState<"speed_dial" | "blf">((target?.slot.type as "speed_dial" | "blf") || "speed_dial");
+  const [type, setType] = useState<UserKeyType>((target?.slot.type as UserKeyType) || "speed_dial");
   const [value, setValue] = useState(target?.slot.value ?? "");
   const [label, setLabel] = useState(target?.slot.label ?? "");
   const [contactId, setContactId] = useState("");
@@ -87,7 +88,7 @@ function KeyDialog({ target, busy, onClose, onSave }: { target: { device: MyDevi
     <Dialog open={target !== null} onClose={onClose} busy={busy} title={target ? `Key ${target.slot.index} on ${target.device.label || target.device.model}` : ""}
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" loading={busy} disabled={!valid} onClick={() => onSave({ type, label: label.trim() || null, value: value.trim(), contact_id: type === "speed_dial" && contactId ? contactId : null })}>Save key</Button></>}>
       <div className="stack stack--sm">
-        <SelectField label="Kind" value={type} options={[{ value: "speed_dial", label: "Speed dial: call a number with one press" }, { value: "blf", label: "Busy lamp: watch a colleague, press to call or pick up" }]} onChange={(e) => { setType(e.target.value as "speed_dial" | "blf"); setValue(""); setContactId(""); setExt(""); }} />
+        <SelectField label="Kind" value={type} options={[{ value: "speed_dial", label: "Speed dial: call a number with one press" }, { value: "blf", label: "Busy lamp: watch a colleague, press to call or pick up" }, { value: "presence", label: "Presence: see whether a colleague is available, press to call" }]} onChange={(e) => { setType(e.target.value as UserKeyType); setValue(""); setContactId(""); setExt(""); }} />
         {type === "speed_dial" ? (
           <>
             {contacts.data?.length ? <SelectField label="From your contacts" value={contactId} placeholder="Choose a contact…" options={contacts.data.filter((c) => c.numbers.length).map((c) => ({ value: c.id, label: `${c.name} (${c.numbers[0]?.number ?? ""})` }))} onChange={(e) => pickContact(e.target.value)} /> : null}

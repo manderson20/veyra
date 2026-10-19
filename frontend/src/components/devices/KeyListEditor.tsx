@@ -7,13 +7,14 @@ import type { LineKey, LineKeyType, PagingZone } from "@/lib/types";
 export const KEY_TYPE_LABELS: Record<LineKeyType, string> = {
   line: "Line", blf: "BLF (watch a phone or group)", speed_dial: "Speed dial", page: "Page a zone", user: "User's choice (set from My Phone)",
   voicemail: "Voicemail", intercom: "Intercom to an extension", dnd: "Do Not Disturb (lit while on)", park: "Park (a lot, or watch a slot)",
-  toggle: "Toggle (call flow, time condition, queue log-in)", transfer: "Transfer",
+  toggle: "Toggle (call flow, time condition, queue log-in)", transfer: "Transfer", presence: "Presence of a colleague",
 };
 
 /** What the value field of a key type asks for (docs/PROVISIONING_BREADTH.md §3). */
 const VALUE_HINT: Partial<Record<LineKeyType, { placeholder: string; help: string }>> = {
   voicemail: { placeholder: "Line (optional)", help: "Dials voicemail; the lamp follows the line's messages." },
   intercom: { placeholder: "Extension", help: "Calls the extension on its speaker." },
+  presence: { placeholder: "Extension", help: "Lit while the colleague is busy or in a meeting, blinking while away, off when available; pressing it calls them." },
   park: { placeholder: "front-desk or front-desk:2972", help: "A parking lot parks a call; lot:slot watches that slot and picks the call up." },
   toggle: { placeholder: "flow:snow-day, tc:<id> or agent", help: "Lit while the call flow is switched, the override is set, or the phone is logged in to its queues." },
 };

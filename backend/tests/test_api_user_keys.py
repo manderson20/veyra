@@ -125,6 +125,12 @@ def test_user_keys_in_open_slots_locked_elsewhere(admin, app, monkeypatch):
         json={"keys": {"3": {"type": "blf", "value": "9999"}}},
     )
     assert r.status_code == 422
+    # A presence key watches an extension (#132); not a number outside the organization.
+    r = pat.put(
+        f"/api/v1/me/devices/{device['id']}/keys",
+        json={"keys": {"4": {"type": "presence", "value": "9999"}}},
+    )
+    assert r.status_code == 422
     # The administrator sees the user's keys on the device; the rendered key list carries both.
     d = admin.get(f"/api/v1/devices/{device['id']}").json()
     assert d["user_keys"]["3"]["value"] == "1002" and d["keys"] is None

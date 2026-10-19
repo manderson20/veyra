@@ -36,6 +36,7 @@ KeyType = Literal[
     "intercom",
     "dnd",
     "toggle",
+    "presence",
 ]
 _TOGGLE_RE = re.compile(r"^(flow:[a-z0-9]+(?:-[a-z0-9]+)*|tc:[0-9a-f-]{36}|agent)$")
 _PARK_RE = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)(?::([0-9]{1,6}))?$")
@@ -91,7 +92,7 @@ def check_keys(db: Session, organization_id: uuid.UUID, keys: list[LineKey], fie
         if key.type == "line":
             if not key.value.isdigit() or not 1 <= int(key.value) <= MAX_LINES:
                 raise validation(field, f"key {i}: a line key names a line number 1-{MAX_LINES}")
-        elif key.type in ("blf", "speed_dial", "intercom"):
+        elif key.type in ("blf", "speed_dial", "intercom", "presence"):
             if not _NUMBER_RE.match(key.value):
                 raise validation(field, f"key {i}: enter a number to dial or watch")
         elif key.type in ("dnd", "transfer"):
