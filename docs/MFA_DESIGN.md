@@ -79,8 +79,17 @@ details (the existing redaction covers `secret`, `code`, `token`).
    `mfa_grace_until` lets an administrator give existing users a window
    during which sign-in without MFA still works and the UI nags.
 
-"Remember this browser" is deliberately **not** offered in the first phase:
-it weakens the factor and needs a device-binding design of its own.
+"Remember this browser" was left out of the first phase because it weakens
+the factor. *Built 0.27.8 (#137, migration `0059`), off by default:* policy
+`trusted_browser_days` (0–90; 0 = off). After a successful code the user may
+tick "Trust this browser"; Veyra sets the `__Host-veyra_trusted` cookie
+(random token, HttpOnly, Secure, SameSite=Strict, the policy's lifetime) and
+stores only its digest in `trusted_browsers` (at most 20 per user). At
+sign-in a live token of the same user skips the code (audit `mfa:
+trusted_browser`). `revoke_user_sessions` — password change and reset,
+second-factor reset, "sign out of other sessions" — forgets them all; the
+Account page lists and forgets them (`GET/DELETE /auth/trusted-browsers[/{id}]`).
+The cookie is not bound to the device beyond the browser's cookie store.
 
 ## 5. Enrolment and management (account page)
 

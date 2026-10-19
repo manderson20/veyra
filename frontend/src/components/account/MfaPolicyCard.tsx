@@ -52,6 +52,9 @@ export function MfaPolicyCard({ editable }: { editable: boolean }) {
         <TextField label="Days to set it up" type="number" min={0} max={365} disabled={!editable} value={f.grace_days} error={errors.fields.grace_days}
           help="After the first sign-in with a role that requires it, users can still sign in without a second factor for this many days. 0 means they must set it up at once."
           onChange={(e) => setForm({ ...f, grace_days: e.target.value === "" ? 0 : Number(e.target.value) })} />
+        <TextField label="Trust a browser for (days)" type="number" min={0} max={90} disabled={!editable} value={f.trusted_browser_days ?? 0} error={errors.fields.trusted_browser_days}
+          help="After the code, users may tick “Trust this browser” and sign in there with the password only for this many days. 0 turns the choice off. Changing a password or resetting the second factor forgets every trusted browser."
+          onChange={(e) => setForm({ ...f, trusted_browser_days: e.target.value === "" ? 0 : Number(e.target.value) })} />
         <p className="subtle">The recovery administrator is not exempt; the server console command <span className="mono">veyra users mfa-reset</span> is the escape hatch. Users who sign in through an external identity provider rely on that provider&apos;s second factor.</p>
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
         {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save policy</Button></div> : null}

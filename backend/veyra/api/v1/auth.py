@@ -28,7 +28,7 @@ from veyra.core.deps import (
 from veyra.core.errors import ProblemError, conflict, not_found
 from veyra.core.models import Installation, PasswordResetToken, User, UserSession
 from veyra.core.models.base import utcnow
-from veyra.core.security import mfa, password_reset, passwords
+from veyra.core.security import mfa, password_reset, passwords, trusted
 from veyra.core.security.principal import Principal
 from veyra.core.security.ratelimit import SlidingWindowLimiter
 from veyra.core.security.sessions import (
@@ -99,6 +99,9 @@ class MfaMethodOut(BaseModel):
 
 class MfaChallengeOut(BaseModel):
     """Returned by sign-in (202) while the second factor is pending."""
+
+    # The "Trust this browser for N days" choice (#137); 0: not offered.
+    trust_days: int = 0
 
     mfa_pending: bool = True
     # True when policy requires a factor and none is enrolled: the pre-auth
@@ -225,6 +228,7 @@ def mfa_challenge(db: Session, user: User, session: UserSession) -> MfaChallenge
         email=user.email,
         display_name=user.display_name,
         expires_at=session.expires_at,
+        trust_days=mfa.load_policy(db).trusted_browser_days if methods else 0,
     )
 
 
@@ -452,7 +456,15 @@ def login(
         return standby_login(request, body, response, db, settings, ctx)
     user = check_credentials(db, settings, ctx, body.email, body.password)
     now = utcnow()
-    pending, _enrolled, mfa_state = mfa_decision(db, user, now)
+    pending, enrolled, mfa_state = mfa_decision(db, user, now)
+    # A browser the user chose to trust skips the code while the policy allows (#137).
+    if (
+        pending
+        and enrolled
+        and mfa.load_policy(db).trusted_browser_days > 0
+        and trusted.check(db, user, request.cookies.get(trusted.COOKIE), ctx.ip)
+    ):
+        pending, mfa_state = False, "trusted_browser"
     if not pending:
         user.last_login_at = now
     token, csrf, session = create_session(
@@ -584,6 +596,104 @@ def _apply_new_password(user: User, new_password: str) -> None:
 
 
 # ----------------------------------------------------------------- own sessions
+
+
+class TrustedBrowserOut(BaseModel):
+    id: uuid.UUID
+    label: str | None
+    created_at: datetime
+    expires_at: datetime
+    last_used_at: datetime | None
+    last_ip: str | None
+    current: bool
+
+
+@router.get(
+    "/trusted-browsers",
+    response_model=list[TrustedBrowserOut],
+    summary="Browsers that skip your second factor",
+)
+def list_trusted_browsers(
+    request: Request,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+) -> list[TrustedBrowserOut]:
+    from veyra.core.models import TrustedBrowser
+    from veyra.core.security import tokens
+
+    mine = request.cookies.get(trusted.COOKIE)
+    current = tokens.digest(mine) if mine else None
+    rows = db.scalars(
+        select(TrustedBrowser)
+        .where(TrustedBrowser.user_id == principal.user_id, TrustedBrowser.expires_at > utcnow())
+        .order_by(TrustedBrowser.created_at.desc())
+    ).all()
+    return [
+        TrustedBrowserOut(
+            id=r.id,
+            label=r.label,
+            created_at=r.created_at,
+            expires_at=r.expires_at,
+            last_used_at=r.last_used_at,
+            last_ip=r.last_ip,
+            current=r.token_hash == current,
+        )
+        for r in rows
+    ]
+
+
+@router.delete(
+    "/trusted-browsers",
+    response_model=MessageOut,
+    summary="Forget every browser: each asks for the code again",
+)
+def forget_trusted_browsers(
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    n = trusted.forget_all(db, principal.user_id)
+    audit.record(
+        db,
+        action="auth.trusted_browser_remove",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"removed": n},
+    )
+    db.commit()
+    return MessageOut(message=f"{n} browser{'s' if n != 1 else ''} will ask for the code again.")
+
+
+@router.delete(
+    "/trusted-browsers/{browser_id}",
+    response_model=MessageOut,
+    summary="Forget one trusted browser",
+)
+def forget_trusted_browser(
+    browser_id: uuid.UUID,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    from veyra.core.models import TrustedBrowser
+
+    row = db.get(TrustedBrowser, browser_id)
+    if row is None or row.user_id != principal.user_id:
+        raise not_found("Trusted browser")
+    db.delete(row)
+    audit.record(
+        db,
+        action="auth.trusted_browser_remove",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"removed": 1},
+    )
+    db.commit()
+    return MessageOut(message="That browser will ask for the code again.")
 
 
 @router.get("/sessions", response_model=list[UserSessionOut], summary="Your active sessions")

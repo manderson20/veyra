@@ -14,6 +14,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 - **Registration trunks keep trying after a carrier outage.** Asterisk stops registering a trunk after ten failed attempts, and for good after one rejected password challenge, until the configuration is reloaded; a carrier outage of about ten minutes could leave a trunk unregistered. Veyra's trunks now keep retrying, also after a refusal. Deploy the telephony configuration after installing.
 
 ### Added
+- **Trust this browser** (#137): an administrator can let users skip the authenticator code on a browser they trust for a number of days (System → Security → Two-factor policy → "Trust a browser for"; off by default). Users tick "Trust this browser" at the code step, and see and forget their trusted browsers on the Account page. Changing or resetting a password, resetting the second factor, or signing out of other sessions forgets them all. Migration `0059`.
 - **Trunk registration retries** (#142): a registration trunk sets the seconds between attempts after a failure, after "Forbidden", and optionally the number of attempts before it gives up (Telephony → SIP Trunks). Migration `0058`.
 
 ## 0.27.7 — 2026-10-20

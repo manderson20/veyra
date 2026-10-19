@@ -7,7 +7,7 @@ import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { TotpEnrolment } from "@/components/account/TotpEnrolment";
 import { AuthLayout } from "@/components/AuthLayout";
 import { BrandLogo } from "@/components/Brand";
-import { Button, buttonClass, Callout, LoadingState, TextField } from "@/components/ui";
+import { Button, buttonClass, Callout, Checkbox, LoadingState, TextField } from "@/components/ui";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { MfaChallenge, SessionInfo, SetupStatus, SsoProviderPublic } from "@/lib/types";
 import { useSession } from "@/hooks/useSession";
@@ -169,6 +169,7 @@ function LoginForm() {
 function MfaStep({ challenge, onDone, onStartOver }: { challenge: MfaChallenge; onDone: (s: SessionInfo) => Promise<void>; onStartOver: () => Promise<void> }) {
   const [code, setCode] = useState("");
   const [recovery, setRecovery] = useState(false);
+  const [trust, setTrust] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -177,7 +178,7 @@ function MfaStep({ challenge, onDone, onStartOver }: { challenge: MfaChallenge; 
     setBusy(true);
     setError(null);
     try {
-      const s = await api.post<SessionInfo>("/auth/mfa/verify", { code: code.trim() }, { noRedirect: true });
+      const s = await api.post<SessionInfo>("/auth/mfa/verify", { code: code.trim(), trust_browser: trust }, { noRedirect: true });
       await onDone(s);
     } catch (err) {
       // Locked after repeated failures, or the pre-auth session expired: back to the password.
@@ -207,6 +208,10 @@ function MfaStep({ challenge, onDone, onStartOver }: { challenge: MfaChallenge; 
           <TextField label="Authenticator code" required autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code}
             onChange={(e) => setCode(e.target.value.replace(/[^0-9 ]/g, ""))} help={challenge.methods.length > 1 ? `Any of your ${challenge.methods.length} devices.` : challenge.methods[0]?.label} />
         )}
+        {challenge.trust_days ? (
+          <Checkbox label={`Trust this browser for ${challenge.trust_days} days`} checked={trust} onChange={(e) => setTrust(e.target.checked)}
+            description="Signing in here then needs only your password. Not on a shared computer." />
+        ) : null}
         {error ? <Callout tone="danger">{error}</Callout> : null}
         <Button variant="primary" type="submit" loading={busy} block disabled={!code.trim()}>Verify</Button>
       </form>

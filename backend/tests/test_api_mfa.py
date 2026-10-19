@@ -296,3 +296,62 @@ def test_enrolment_secret_is_bound_to_the_user(admin, app):
     r = c.post(f"{MFA}/verify", json={"code": totp.totp(secret, time.time())})
     assert r.status_code == 503 and r.json()["code"] == "secret_unreadable"
     load_installation_key(app.state.settings)  # the key itself is fine
+
+
+def test_trusted_browser_skips_the_code_until_forgotten(admin, app, monkeypatch):
+    """ "Trust this browser" (#137): off by default, then the code is skipped on
+    that browser only, and a password change forgets it."""
+    import veyra.api.v1.auth as auth_mod
+    from veyra.core.security import trusted
+    from veyra.core.security.ratelimit import SlidingWindowLimiter
+
+    monkeypatch.setattr(auth_mod, "_limiter", lambda _settings: SlidingWindowLimiter(1000, 60))
+    secret, _codes = _enrol(admin)
+    step = [totp.step(time.time()) + 1]
+
+    def sign_in(client: TestClient, trust: bool) -> dict:
+        r = client.post(
+            "/api/v1/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+        )
+        if r.status_code == 200:
+            return {"skipped": True}
+        assert r.status_code == 202, r.text
+        client.headers.update(csrf_headers(client))
+        with session_scope() as db:  # replay protection: each sign-in reuses this step
+            for m in db.scalars(select(MfaMethod)):
+                m.last_used_step = None
+        code = totp.hotp(secret, step[0])
+        v = client.post(f"{MFA}/verify", json={"code": code, "trust_browser": trust})
+        assert v.status_code == 200, v.text
+        return {"skipped": False, "trust_days": r.json()["trust_days"]}
+
+    # Off by default: no choice offered, no cookie set.
+    c = _client(app)
+    assert sign_in(c, True) == {"skipped": False, "trust_days": 0}
+    assert trusted.COOKIE not in c.cookies
+    r = admin.put(f"{MFA}/policy", json={"trusted_browser_days": 30})
+    assert r.status_code == 200, r.text
+    c = _client(app)
+    assert sign_in(c, True) == {"skipped": False, "trust_days": 30}
+    assert trusted.COOKIE in c.cookies
+    c.headers.update(csrf_headers(c))
+    rows = c.get("/api/v1/auth/trusted-browsers").json()
+    assert len(rows) == 1 and rows[0]["current"] is True
+    # The same browser signs in without a code; another browser still asks.
+    browser = c.cookies.get(trusted.COOKIE)
+    again = _client(app)
+    again.cookies.set(trusted.COOKIE, browser)
+    assert sign_in(again, False) == {"skipped": True}
+    assert sign_in(_client(app), False)["skipped"] is False
+    # Changing the password forgets every trusted browser.
+    again.headers.update(csrf_headers(again))
+    new_pw = "another long enough passphrase"
+    r = again.post(
+        "/api/v1/auth/password",
+        json={"current_password": ADMIN_PASSWORD, "new_password": new_pw},
+    )
+    assert r.status_code == 200, r.text
+    with session_scope() as db:
+        from veyra.core.models import TrustedBrowser
+
+        assert db.query(TrustedBrowser).count() == 0

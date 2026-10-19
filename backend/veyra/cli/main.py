@@ -530,6 +530,9 @@ def purge_expired(db: Any, settings: Any) -> tuple[int, int]:
 
     # Expired bearer tokens follow the session retention (ADR 0015).
     purge_tokens(db, settings)
+    from veyra.core.security import trusted
+
+    trusted.purge_expired(db)
     return purge_sessions(db, settings), purge_reset_tokens(db, settings)
 
 

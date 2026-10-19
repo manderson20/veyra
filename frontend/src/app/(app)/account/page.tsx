@@ -9,6 +9,7 @@ import { MissedCallEmailCard } from "@/components/account/MissedCallEmailCard";
 import { MyCallsCard } from "@/components/account/MyCallsCard";
 import { MyVoicemailCard } from "@/components/account/MyVoicemailCard";
 import { SessionsTable } from "@/components/account/SessionsTable";
+import { TrustedBrowsersCard } from "@/components/account/TrustedBrowsersCard";
 import { TwoFactorCard } from "@/components/account/TwoFactorCard";
 import { Badge, Button, Callout, Card, ConfirmDialog, LoadingState, PageHeader, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -56,6 +57,7 @@ function AccountPage() {
         </Card>
       </div>
       <TwoFactorCard />
+      <TrustedBrowsersCard />
       <MyVoicemailCard />
       <MissedCallEmailCard />
       <MyCallsCard />

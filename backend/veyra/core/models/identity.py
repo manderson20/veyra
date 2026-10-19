@@ -215,6 +215,25 @@ class ApiToken(UUIDPrimaryKey, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class TrustedBrowser(UUIDPrimaryKey, Base):
+    """A browser that skips the second factor for a while (issue #137): the
+    cookie holds a random token, the row its digest. Changing or resetting the
+    password, resetting the second factor or signing out of other sessions
+    forgets every trusted browser of the user."""
+
+    __tablename__ = "trusted_browsers"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    label: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_ip: Mapped[str | None] = mapped_column(String(45))
+
+
 class UserPreference(Base):
     """Per-user settings document (companion speed dials and the like)."""
 

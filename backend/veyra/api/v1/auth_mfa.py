@@ -62,6 +62,8 @@ router = APIRouter(prefix="/auth/mfa", tags=["authentication"])
 
 class VerifyIn(BaseModel):
     code: str = Field(min_length=1, max_length=64)
+    # Skip the code on this browser for the days the policy allows (#137).
+    trust_browser: bool = False
 
 
 class TotpBeginIn(BaseModel):
@@ -301,6 +303,13 @@ def verify(
         method="recovery_code" if used == "recovery_code" else "totp",
         recovery_codes_remaining=remaining,
     )
+    days = mfa.load_policy(db).trusted_browser_days
+    if body.trust_browser and days > 0:
+        from veyra.core.security import trusted
+
+        token, _row = trusted.issue(db, user, days, label=ctx.user_agent, ip=ctx.ip)
+        trusted.set_cookie(response, settings, token, days)
+        _record(db, ctx, user, "auth.trusted_browser_add", days=days)
     db.commit()
     session_token = request.cookies.get(SESSION_COOKIE, "")
     _set_cookies(response, settings, session_token, csrf)

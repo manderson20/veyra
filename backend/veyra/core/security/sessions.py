@@ -129,6 +129,10 @@ def revoke_user_sessions(
         if s.id != except_id:
             s.revoked_at = now
             count += 1
+    # A browser that skipped the second factor must ask for it again (#137).
+    from veyra.core.security import trusted
+
+    trusted.forget_all(db, user_id)
     return count
 
 

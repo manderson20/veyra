@@ -53,6 +53,9 @@ class MfaPolicy(BaseModel):
 
     required_for: list[str] = Field(default_factory=lambda: ["platform_admin", "org_admin"])
     grace_days: int = Field(14, ge=0, le=365)
+    # Days a browser may skip the second factor after "Trust this browser"
+    # (issue #137); 0: never.
+    trusted_browser_days: int = Field(0, ge=0, le=90)
     allowed_methods: list[str] = Field(default_factory=lambda: [METHOD_TOTP])
 
     @field_validator("required_for")

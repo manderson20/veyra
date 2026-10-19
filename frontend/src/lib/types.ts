@@ -60,6 +60,8 @@ export interface MfaChallenge {
   email: string;
   display_name: string;
   expires_at: string;
+  /** "Trust this browser for N days" (#137); 0: not offered. */
+  trust_days?: number;
 }
 
 export interface TotpBegin {
@@ -85,6 +87,8 @@ export interface MfaMethods {
 export interface MfaPolicy {
   required_for: string[];
   grace_days: number;
+  /** Days a browser may skip the second factor; 0: never (#137). */
+  trusted_browser_days?: number;
   allowed_methods: string[];
 }
 
