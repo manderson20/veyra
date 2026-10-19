@@ -25,6 +25,7 @@ from veyra.core.models import (
     TimeCondition,
 )
 from veyra.core.models.base import utcnow
+from veyra.telephony import routing
 from veyra.telephony.routing import DAYS
 
 Group = Literal[
@@ -245,10 +246,33 @@ def _business_hours(tc: TimeCondition) -> Any:
         for r in tc.ranges or []
     ]
     inside: Any = or_(*ranges) if ranges else false()
-    holidays = list(tc.holidays or [])
+    holidays = [_holiday(h, local, weekday) for h in tc.holidays or []]
     if holidays:
-        inside = and_(inside, not_(func.to_char(local, "MM-DD").in_(holidays)))
+        inside = and_(inside, not_(or_(*holidays)))
     return inside
+
+
+def _holiday(h: str, local: Any, weekday: Any) -> Any:
+    """SQL: the local start time falls on holiday ``h`` (routing.holiday_matches)."""
+    md = func.to_char(local, "MM-DD")
+    ymd = func.to_char(local, "YYYY-MM-DD")
+    if ".." in h:
+        a, b = h.split("..")
+        col = md if len(a) == 5 else ymd
+        return col.between(a, b) if a <= b else or_(col >= a, col <= b)
+    if len(h) == 5:
+        return md == h
+    if len(h) == 10 and h[4] == "-":
+        return ymd == h
+    n, wd, m = h.split("-")
+    day = cast(func.extract("day", local), Integer)
+    last = routing.MONTH_DAYS[int(m) - 1]
+    first = last - 6 if n == "last" else (int(n) - 1) * 7 + 1
+    return and_(
+        cast(func.extract("month", local), Integer) == int(m),
+        weekday == DAYS.index(wd) + 1,
+        day.between(first, first + 6),
+    )
 
 
 def _group_expr(g: str, tz: str) -> Any:

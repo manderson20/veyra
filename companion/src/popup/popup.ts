@@ -320,16 +320,18 @@ function renderSignedIn(s: StateResult): void {
     }
   });
 
-  // Speed dials
+  // Favourites: the user's favourite contacts on My Phone (#128); the old
+  // Companion speed dials until they are moved there.
   const sections: HTMLElement[] = [];
-  if (s.preferences.speed_dials.length > 0) {
+  const dials = s.favourites.length > 0 ? s.favourites : s.preferences.speed_dials;
+  if (dials.length > 0) {
     const chips = el("div", { class: "chips" });
-    for (const sd of s.preferences.speed_dials) {
+    for (const sd of dials) {
       const chip = el("button", { type: "button", text: sd.label, title: sd.number });
       chip.addEventListener("click", () => dialNumber(sd.number));
       chips.append(chip);
     }
-    sections.push(el("section", {}, [el("h2", { text: "Speed dials" }), chips]));
+    sections.push(el("section", {}, [el("h2", { text: "Favourites" }), chips]));
   }
 
   // Directory

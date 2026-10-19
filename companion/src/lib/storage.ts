@@ -9,6 +9,7 @@ import type {
   MyExtension,
   RecentCall,
 } from "./types";
+import type { Favourite } from "./favourites";
 
 export interface StoredState {
   serverUrl?: string;
@@ -22,6 +23,8 @@ export interface StoredState {
   connection?: ConnectionState;
   /** Missed-call notifications waiting for a "Call back" click: id -> number. */
   callbacks?: Record<string, string>;
+  /** Favourite contacts from My Phone, cached for the popup when offline. */
+  favourites?: Favourite[];
 }
 
 export type StoredKey = keyof StoredState;
@@ -36,6 +39,7 @@ export const STORED_KEYS: readonly StoredKey[] = [
   "recent",
   "connection",
   "callbacks",
+  "favourites",
 ];
 
 export async function getStored(): Promise<StoredState> {

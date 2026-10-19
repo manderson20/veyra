@@ -63,7 +63,7 @@ extension), and the deploy-mode drop-down on the Deploy changes button.
   configurable.
 * Registration and call data are polled (15 s / 5 s), not pushed; ARI
   events over a WebSocket are a later refinement.
-* Active calls cannot be hung up from the interface yet.
+* Active calls cannot be hung up from the interface yet. *(Resolved in 0.27.1, #109.)*
 * A phone that has just registered shows as unregistered until the engine's
   first qualify ping (`qualify_frequency` 60 s): ARI's endpoint state follows
   contact reachability, not the REGISTER. A later refinement could read

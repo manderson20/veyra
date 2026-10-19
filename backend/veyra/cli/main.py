@@ -95,6 +95,29 @@ def cmd_setup_token(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_emergency_readiness(args: argparse.Namespace) -> int:
+    """Sites with extensions that miss a readiness check (docs/PRODUCTION_HARDENING.md
+    §6); exit 3 when any does, so installer/verify.sh can warn."""
+    from veyra.core.db import session_scope
+    from veyra.emergency import service as emergency
+
+    with session_scope() as db:
+        sites = [s for s in emergency.sites_overview(db) if s["extensions"]]
+    not_ready = [s for s in sites if not s["ready"]]
+    if args.json:
+        print(json.dumps({"sites": sites, "not_ready": len(not_ready)}, indent=2))
+    elif not sites:
+        print("no site has extensions")
+    elif not not_ready:
+        print(f"{len(sites)} of {len(sites)} sites with extensions are emergency-ready")
+    else:
+        print(
+            f"{len(not_ready)} of {len(sites)} sites with extensions are not emergency-ready: "
+            + "; ".join(f"{s['name']} (missing: {', '.join(s['missing'])})" for s in not_ready)
+        )
+    return 3 if not_ready else 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     from sqlalchemy import text
 
@@ -1166,6 +1189,8 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     recordings.process(db, settings.recordings_dir)
+                with session_scope() as db:
+                    recordings.process_conferences(db, settings.recordings_dir)
                 # Queue events for the queue reports (docs/REPORTING.md §5.1).
                 from veyra.reporting import queues as queue_log
 
@@ -1945,6 +1970,13 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_db_upgrade
     )
     db.add_parser("current", help="Show schema revision").set_defaults(func=cmd_db_current)
+
+    em = sub.add_parser("emergency", help="Emergency calling").add_subparsers(
+        dest="emergency_cmd", metavar="<action>", required=True
+    )
+    s = em.add_parser("readiness", help="Sites with extensions that are not emergency-ready")
+    s.add_argument("--json", action="store_true", help="Print JSON")
+    s.set_defaults(func=cmd_emergency_readiness)
 
     s = sub.add_parser("setup-token", help="Issue a one-time first-run setup token")
     s.add_argument("--quiet", action="store_true", help="Print only the token")

@@ -119,12 +119,15 @@ only on CHANUNAVAIL or CONGESTION. When every trunk failed the caller hears
 | `organization_id`, `name`, `description` | |
 | `timezone` | IANA name (`America/Chicago`); defaults to the organization's time zone |
 | `ranges` | List of `{days: ["mon", …], start: "HH:MM", end: "HH:MM"}`; `end` is exclusive at minute resolution. Overnight ranges are entered as two ranges |
-| `holidays` | List of `MM-DD` dates (repeat yearly) that count as closed all day |
+| `holidays` | Days that count as closed all day, one string each: `MM-DD` (every year), `MM-DD..MM-DD` (every year, may cross New Year), `YYYY-MM-DD` and `YYYY-MM-DD..YYYY-MM-DD` (once: a snow day, this year's winter break), `N-ddd-MM` or `last-ddd-MM` (the first to fourth or last weekday of a month every year: `4-thu-11` is Thanksgiving, `last-mon-05` Memorial Day; not `last-…-02`) |
 
 `GET` responses carry `open_now` computed by the server in the condition's
 time zone, so the interface can show "open" or "closed" without guessing.
 The dialplan uses `GotoIfTime(times,days,mdays,months,timezone?label)` for
-each range and holiday; the evaluation happens on the server's clock in the
+each range and yearly holiday (a weekday rule is a weekday within a
+seven-day span of the month), and a comparison of
+`${STRFTIME(${EPOCH},zone,%Y%m%d)}` for one-off dates, because `GotoIfTime`
+has no year; the evaluation happens on the server's clock in the
 configured zone.
 
 ## 6. Loop detection and limits
@@ -219,7 +222,7 @@ DELETE /routing/outbound/{id}
 PUT    /routing/outbound/order            {ids:[...]}
 
 GET    /routing/time-conditions?organization_id=
-POST   /routing/time-conditions           {organization_id, name, timezone?, ranges:[{days, start, end}], holidays?:["MM-DD"], description?}
+POST   /routing/time-conditions           {organization_id, name, timezone?, ranges:[{days, start, end}], holidays?:["MM-DD" | "YYYY-MM-DD" | "…..…" | "4-thu-11"], description?}
 GET    /routing/time-conditions/{id}
 PATCH  /routing/time-conditions/{id}
 DELETE /routing/time-conditions/{id}      409 time_condition_in_use
@@ -242,6 +245,4 @@ actions: `trunk.create/update/delete`, `inbound_route.create/update/delete`,
 * Inbound destinations are extensions only; outbound routes apply to every
   organization; no per-trunk inbound caller-ID manipulation beyond the name
   prefix; no least-cost or time-based outbound selection.
-* Holidays repeat yearly (`MM-DD`), because `GotoIfTime` cannot express a
-  year.
 * Emergency calling remains **not certified** ([EMERGENCY_CALLING.md](EMERGENCY_CALLING.md)).

@@ -507,8 +507,9 @@ then `ConfBridge(<room>,<bridge>,<profile>,<menu>)`. The phone context
 dials the room by number and carries `hint,confbridge:<room>` so a line key
 lights while the room is in use. Recordings go to
 `<recordings>/conferences/<org>--<slug>-<timestamp>.wav` (directory created
-by the installer, `2770 veyra:asterisk`); they are not yet listed on the
-Call Recording page.
+by the installer, `2770 veyra:asterisk`); once a file has not grown for two
+minutes the worker converts it like a call recording and lists it on the
+Call Recording page with its room (0.27.2, #133; 90 days' retention).
 
 API `GET/POST /conferences`, `GET/PATCH/DELETE /conferences/{id}`
 (`groups.read` / `groups.write`); deleting a room in use is refused (`409

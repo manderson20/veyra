@@ -220,6 +220,10 @@ class TelephonyAdapter(ABC):
         in ``context`` (click-to-dial). Returns the engine's channel id."""
         raise NotSupported(f"{self.name}: click-to-dial not implemented")
 
+    def hangup(self, channel_id: str) -> None:
+        """End one channel of a call in progress (Capability.ACTIVE_CALLS)."""
+        raise NotSupported(f"{self.name}: hanging up calls not implemented")
+
     def originate_channel(
         self,
         endpoint: str,

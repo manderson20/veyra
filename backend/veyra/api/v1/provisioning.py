@@ -32,7 +32,7 @@ from veyra.provisioning.renderer import (
     render,
     validate,
 )
-from veyra.provisioning.spec import CORE_VARIABLES, TemplateError, parse_template_manifest
+from veyra.provisioning.spec import TemplateError, parse_template_manifest
 
 router = APIRouter(prefix="/provisioning", tags=["provisioning"])
 
@@ -97,11 +97,6 @@ def _summary(rec: TemplateRecord) -> dict[str, Any]:
         "source": rec.source,
         "features": rec.manifest.features,
     }
-
-
-@router.get("/variables", summary="Approved template variables")
-def variables(principal: Principal = Depends(require("provisioning.read"))) -> list[dict[str, Any]]:
-    return [v.model_dump() for v in CORE_VARIABLES]
 
 
 @router.get("/models", summary="Manufacturers and models known to the template catalog")
@@ -426,13 +421,18 @@ def customize_template(
     sources = {}
     files = []
     for f in parent.manifest.files:
-        if f.name == "{mac}.cfg":
-            continue  # the master file is inherited unchanged
+        if f.source == "master.cfg.j2":
+            continue  # the Poly master file is inherited unchanged
+        if f.checksum_of:
+            files.append({"name": f.name, "checksum_of": f.checksum_of, "format": f.format})
+            continue
         files.append({"name": f.name, "source": f.source, "format": f.format})
+        note = "Your changes go here. Override other blocks of the parent as needed."
+        comment = f"  <!-- {note} -->" if f.format == "xml" else f"## {note}"
         sources[f.source] = (
             f'{{% extends "{pt.key}/{f.source}" %}}\n'
             "{% block model_settings %}\n"
-            "  <!-- Your changes go here. Override other blocks of the parent as needed. -->\n"
+            f"{comment}\n"
             "{% endblock %}\n"
         )
     manifest = {

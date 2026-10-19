@@ -3,7 +3,7 @@
 A browser extension (Chrome and Edge, Manifest V3) that puts the phone
 system next to the user's browser: sign in with Veyra credentials, dial any
 number so the desk phone rings first and then places the call, look people
-up, see who is calling, and keep personal speed dials. It replaces a
+up, see who is calling, and call favourite contacts from My Phone. It replaces a
 vendor desktop dialler. Delivered in Milestone 6b together with the server
 pieces it needs: scoped bearer tokens, a call-event stream, a directory
 endpoint and per-user preferences.
@@ -19,7 +19,7 @@ endpoint and per-user preferences.
   cannot change configuration or read other people's data.
 * No new network exposure: the extension talks to the same HTTPS port as
   the browser, and Asterisk stays on loopback.
-* Everything personal lives on the server (speed dials, dial prefix,
+* Everything personal lives on the server (favourite contacts, dial prefix,
   notification choices), so it follows the user to another browser.
 
 ## 2. Architecture

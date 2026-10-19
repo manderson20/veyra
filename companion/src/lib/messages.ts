@@ -11,6 +11,7 @@ import type {
   MyExtension,
   RecentCall,
 } from "./types";
+import type { Favourite } from "./favourites";
 import type { SsoProvider } from "./sso";
 
 export interface ErrorResult {
@@ -38,6 +39,8 @@ export type DialRequest = { type: "dial"; number: string; extensionId?: string }
 export type DirectoryRequest = { type: "directory"; q: string };
 export type SavePreferencesRequest = { type: "savePreferences"; companion: CompanionPreferences };
 export type StateRequest = { type: "state" };
+/** Copy the Companion's own speed dials to favourite contacts on My Phone. */
+export type MoveSpeedDialsRequest = { type: "moveSpeedDials" };
 
 export type Request =
   | LoginRequest
@@ -47,7 +50,8 @@ export type Request =
   | DialRequest
   | DirectoryRequest
   | SavePreferencesRequest
-  | StateRequest;
+  | StateRequest
+  | MoveSpeedDialsRequest;
 
 export type LoginResult =
   | { status: "ok" }
@@ -57,6 +61,9 @@ export type LoginResult =
 export type LogoutResult = { status: "ok" };
 export type DialResult = { status: "ok"; message: string } | ErrorResult;
 export type DirectoryResult = { status: "ok"; results: DirectoryEntry[] } | ErrorResult;
+export type MoveSpeedDialsResult =
+  | { status: "ok"; moved: number; preferences: CompanionPreferences }
+  | ErrorResult;
 export type SavePreferencesResult =
   | { status: "ok"; preferences: CompanionPreferences }
   | ErrorResult;
@@ -72,6 +79,9 @@ export interface StateResult {
   user: CompanionUser | null;
   extensions: MyExtension[];
   preferences: CompanionPreferences;
+  /** Favourite contacts from My Phone; the popup falls back to the old
+   * `preferences.speed_dials` while there are none. */
+  favourites: Favourite[];
   recent: RecentCall[];
   connection: ConnectionState;
 }
@@ -88,7 +98,9 @@ export type ResponseFor<R extends Request> = R extends LoginRequest | VerifyRequ
           ? SavePreferencesResult
           : R extends StateRequest
             ? StateResult
-            : never;
+            : R extends MoveSpeedDialsRequest
+              ? MoveSpeedDialsResult
+              : never;
 
 export type Response =
   | LoginResult
@@ -96,6 +108,7 @@ export type Response =
   | DialResult
   | DirectoryResult
   | SavePreferencesResult
+  | MoveSpeedDialsResult
   | StateResult;
 
 export function isRequest(value: unknown): value is Request {

@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """One-time password reset links.
 
-Veyra has no email delivery until Milestone 7, so reset links are issued by
-an administrator in the UI (``POST /users/{id}/password-reset-link``) or by
-``veyra users reset-password`` on the server, and handed to the user out of
-band. The link carries a random token whose digest is stored; it is valid
-for ``settings.password_reset_ttl_hours`` and can be used once. Issuing a
-new link invalidates the previous one. The same token model will back the
-self-service "forgot password" email flow when email delivery exists.
+Links are issued by an administrator in the UI
+(``POST /users/{id}/password-reset-link``) or by ``veyra users
+reset-password`` on the server and handed to the user out of band, or, when
+email delivery is set up, requested by the user from the sign-in page
+(``POST /auth/password-reset/request``) and emailed. The link carries a
+random token whose digest is stored; it is valid for
+``settings.password_reset_ttl_hours`` and can be used once. Issuing a
+new link invalidates the previous one.
 """
 
 from __future__ import annotations

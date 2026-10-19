@@ -66,7 +66,7 @@ reference: [TRUNKS_ROUTING.md](../TRUNKS_ROUTING.md).
 * Inbound destinations are extensions only until ring groups, IVRs and
   voicemail exist; outbound routes apply to every organization until
   Milestone 14.
-* Holidays repeat yearly (`MM-DD`); `GotoIfTime` cannot express a year.
+* Holidays repeat yearly (`MM-DD`); `GotoIfTime` cannot express a year. *(Resolved in 0.27.1, #113.)*
 * Emergency calling is **not certified** (`docs/EMERGENCY_CALLING.md`).
 * Calls are identified as a trunk by source address first (Asterisk's
   default `endpoint_identifier_order`), so a phone that shares a trunk's

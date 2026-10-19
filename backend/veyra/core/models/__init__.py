@@ -79,6 +79,7 @@ from veyra.core.models.provisioning import (
     FirmwareImage,
     PagingZone,
     ProvisioningRequest,
+    ProvisioningVariable,
 )
 from veyra.core.models.recording import CallRecording, RecordingPolicy
 from veyra.core.models.routing import (
@@ -187,6 +188,7 @@ __all__ = [
     "Prompt",
     "ProvisioningRequest",
     "ProvisioningTemplate",
+    "ProvisioningVariable",
     "QueueEvent",
     "QueueMember",
     "RecordingPolicy",

@@ -46,6 +46,7 @@ router = APIRouter(prefix="/provisioning", include_in_schema=False, tags=["provi
 
 _MAC_IN_NAME = re.compile(r"(?<![0-9a-f])([0-9a-f]{12})(?![0-9a-f])")
 _FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_DIRECTORY_RE = re.compile(r"^[0-9a-fA-F]{12}-directory\.xml$")
 EMPTY_MASTER = (
     '<?xml version="1.0" standalone="yes"?>\n'
     '<APPLICATION APP_FILE_PATH="" CONFIG_FILES="" MISC_FILES="" LOG_FILE_DIRECTORY="" />\n'
@@ -263,6 +264,45 @@ def _bootstrap(
     return Response(content, media_type="application/xml", headers=no_store)
 
 
+@router.get("/directory/{name}")
+def get_directory(name: str, request: Request, db: Session = Depends(get_db)) -> Response:
+    """The organization's phone directory (docs/PROVISIONING_BREADTH.md §5),
+    for a phone with its device or organization credential."""
+    from veyra.core.models import Organization
+    from veyra.provisioning import directory
+
+    no_store = {"Cache-Control": "no-store"}
+    if name not in directory.FORMATS:
+        return Response(status_code=404, headers=no_store)
+    settings = request.app.state.settings
+    cred = authenticate(
+        db, try_load_installation_key(settings), request.headers.get("authorization")
+    )
+    org_id = (
+        cred.device.organization_id
+        if cred and cred.device
+        else (cred.organization_id if cred else None)
+    )
+    if cred is None or org_id is None:
+        _log(db, request, filename=f"directory/{name}", mac=None, result="unauthorized", status=401)
+        return _unauthorized()
+    org = db.get(Organization, org_id)
+    content = directory.render(
+        name, directory.entries(db, org_id), org.name if org else "Directory"
+    )
+    _log(
+        db,
+        request,
+        filename=f"directory/{name}",
+        mac=cred.device.mac_address if cred.device else None,
+        result="ok",
+        status=200,
+        organization_id=org_id,
+        device=cred.device,
+    )
+    return Response(content, media_type=directory.FORMATS[name], headers=no_store)
+
+
 @router.get("/{filename}")
 def get_file(filename: str, request: Request, db: Session = Depends(get_db)) -> Response:
     settings = request.app.state.settings
@@ -276,6 +316,10 @@ def get_file(filename: str, request: Request, db: Session = Depends(get_db)) -> 
     if cred is None:
         _log(db, request, filename=filename, mac=mac, result="unauthorized", status=401)
         return _unauthorized()
+    if _DIRECTORY_RE.match(filename):
+        # Poly phones fetch <MAC>-directory.xml by themselves: the
+        # organization's directory (docs/PROVISIONING_BREADTH.md §5).
+        return get_directory("poly.xml", request, db)
     if filename == "000000000000.cfg":
         _log(
             db,

@@ -1,0 +1,9 @@
+{% extends "yealink.base/phone.cfg.j2" %}
+{% block keys %}
+## Conference phone: no programmable line keys.
+features.pickup.direct_pickup_enable = 1
+features.pickup.direct_pickup_code = {{ server.pickup_prefix }}
+{% endblock %}
+{% block model_settings %}
+## Yealink conference phones (no line keys; the room's single line, voicemail, directory and time).
+{% endblock %}

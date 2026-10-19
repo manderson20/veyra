@@ -24,6 +24,7 @@ import {
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import type { Extension, NextNumber, Page, RegistrationContact, User } from "@/lib/types";
+import { EMPTY_PLACE, PlaceFields, placeBody, type Place } from "@/components/extensions/PlaceFields";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
@@ -158,7 +159,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
   const [cidName, setCidName] = useState("");
   const [cidNumber, setCidNumber] = useState("");
   const [emergencyCid, setEmergencyCid] = useState("");
-  const [location, setLocation] = useState("");
+  const [place, setPlace] = useState<Place>(EMPTY_PLACE);
   const [enabled, setEnabled] = useState(true);
   const [plan, setPlan] = useState<string>("");
   const [suggesting, setSuggesting] = useState(false);
@@ -186,6 +187,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
       setUserId("");
       setCidName("");
       setCidNumber("");
+      setPlace(EMPTY_PLACE);
       setEnabled(true);
       errors.clear();
       void suggest();
@@ -210,7 +212,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
         caller_id_name: cidName.trim() || null,
         caller_id_number: cidNumber.trim() || null,
         emergency_caller_id_number: emergencyCid.trim() || null,
-        location: location.trim() || null,
+        ...placeBody(place),
         is_enabled: enabled,
       });
       toast.success(`Extension ${created.number} created`, "Show the SIP credentials to configure the phone, then deploy the configuration.");
@@ -235,7 +237,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
       <form id="ext-create" className="stack stack--sm" onSubmit={submit}>
         {organizations.length > 1 ? (
           <SelectField label="Organization" required value={effectiveOrg} error={errors.fields.organization_id} placeholder="Choose an organization"
-            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setUserId(""); }} />
+            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setUserId(""); setPlace(EMPTY_PLACE); }} />
         ) : null}
         <div className="form-grid">
           <TextField label="Extension number" required autoFocus inputMode="numeric" autoComplete="off" value={number} error={errors.fields.number}
@@ -256,9 +258,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
         <TextField label="Emergency caller ID number" inputMode="tel" value={emergencyCid} error={errors.fields.emergency_caller_id_number}
           help="Presented on emergency calls (911) instead of the regular caller ID: the building's registered number. Otherwise the emergency route's number is used."
           onChange={(e) => setEmergencyCid(e.target.value)} />
-        <TextField label="Location (dispatchable)" value={location} error={errors.fields.location} placeholder="Room 101, first floor"
-          help="Floor and room the on-site notification carries on an emergency call (docs/EMERGENCY_CALLING.md). Counts toward the site's emergency readiness."
-          onChange={(e) => setLocation(e.target.value)} />
+        <PlaceFields organizationId={effectiveOrg} value={place} onChange={setPlace} errors={errors.fields} />
         <Switch label="Enabled" description="Disabled extensions are kept but left out of the engine configuration." checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>

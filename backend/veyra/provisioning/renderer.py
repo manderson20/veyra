@@ -13,6 +13,7 @@ Security properties:
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -48,6 +49,7 @@ EMPTY_FACTS: dict[str, Any] = {
     "paging": {"enabled": False, "groups": []},
     "server": {},
     "features": {},
+    "vars": {},
 }
 MAX_SOURCE_BYTES = 256 * 1024
 MAX_OUTPUT_BYTES = 1024 * 1024
@@ -74,6 +76,11 @@ class ResolvedTemplate:
     files: list[FileSpec]
     variables: dict[str, VariableDef]
     defaults: dict[str, Any]
+
+    @property
+    def features(self) -> set[str]:
+        """Features declared anywhere in the inheritance chain."""
+        return {f for r in self.chain for f in r.manifest.features}
 
 
 @dataclass
@@ -284,6 +291,8 @@ def validate(resolved: ResolvedTemplate) -> list[str]:
         return problems  # rendered only through a concrete child template
     allowed = set(resolved.variables) | set(DEVICE_VARIABLES) | set(FACT_NAMES)
     for f in resolved.files:
+        if f.checksum_of:
+            continue  # no source to check
         env = _environment(resolved.chain, autoescape=f.format == "xml")
         try:
             source, _, _ = env.loader.get_source(env, f.source)  # type: ignore[union-attr]
@@ -338,6 +347,8 @@ def render(
         context[name] = facts.get(name, EMPTY_FACTS[name])
     rendered: list[RenderedFile] = []
     for f in resolved.files:
+        if f.checksum_of:
+            continue  # computed below, from the rendered file it covers
         env = _environment(resolved.chain, autoescape=f.format == "xml")
         try:
             content = env.get_template(f.source).render(context)
@@ -354,6 +365,20 @@ def render(
         if len(content.encode()) > MAX_OUTPUT_BYTES:
             raise TemplateError(f"{f.name}: output is too large")
         rendered.append(RenderedFile(output_filename(f.name, mac, model), f.format, content))
+    by_name = {r.filename: r for r in rendered}
+    for f in resolved.files:
+        if not f.checksum_of:
+            continue
+        target_name = output_filename(f.checksum_of, mac, model)
+        target = by_name.get(target_name)
+        if target is None:
+            raise TemplateError(f"{f.name}: checksum of {target_name!r}, which is not rendered")
+        digest = hashlib.md5(target.content.encode(), usedforsecurity=False).hexdigest()
+        rendered.append(
+            RenderedFile(
+                output_filename(f.name, mac, model), f.format, f"{digest}  {target_name}\n"
+            )
+        )
     return rendered
 
 

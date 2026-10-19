@@ -216,8 +216,8 @@ range):
 * **Average ring time and talk time**, inbound answered within 20 s.
 * **Top extensions** by calls and talk time; **missed calls by
   extension**.
-* **Trunk usage**: calls and peak simultaneous calls per trunk (from
-  `call_samples` and the calls table).
+* **Trunk usage**: calls, talk time and the most calls up at once per trunk
+  (a sweep over the calls table's start and end times; 0.27.2, #121).
 * **Queues** (from `queue_events`): calls offered, answered, abandoned,
   average wait, answered within the service level, per agent answered.
 * **Ring groups**: answered by whom, missed.

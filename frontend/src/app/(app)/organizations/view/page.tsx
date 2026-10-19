@@ -22,6 +22,7 @@ import { formatDateTime } from "@/lib/format";
 import { HoldMusicSelect } from "@/components/holdmusic/HoldMusicSelect";
 import { timeZones } from "@/lib/timezones";
 import type { Organization } from "@/lib/types";
+import { DepartmentsCard } from "@/components/organizations/DepartmentsCard";
 import { ProvisioningCredentialCard } from "@/components/organizations/ProvisioningCredentialCard";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -123,10 +124,11 @@ function OrganizationView() {
             <dt>Created</dt><dd>{formatDateTime(o.created_at)}</dd>
           </dl>
           <div style={{ marginTop: 16 }}>
-            <Callout tone="neutral">Sites are managed under Directory → Sites.</Callout>
+            <Callout tone="neutral">Sites and their buildings are managed under Directory → Sites.</Callout>
           </div>
         </Card>
         {can("devices.read") ? <ProvisioningCredentialCard organizationId={o.id} editable={can("devices.write") && can("organizations.write")} bootstrapIncludesCredential={o.bootstrap_includes_credential ?? false} /> : null}
+        <DepartmentsCard organizationId={o.id} editable={editable} />
       </div>
     </div>
   );

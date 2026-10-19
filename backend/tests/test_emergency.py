@@ -316,3 +316,15 @@ def test_emergency_api(admin, app):
             == "Room 101, first floor"
         )
         assert db.query(EmergencyCall).count() == 1
+
+
+def test_cli_readiness_for_verify(admin, app, capsys):
+    from veyra.cli.main import main
+
+    _site_and_ext(admin)
+    rc = main(["emergency", "readiness"])
+    out = capsys.readouterr().out
+    assert rc == 3, out
+    assert "1 of 1 sites with extensions are not emergency-ready: Main Campus (missing:" in out
+    assert main(["emergency", "readiness", "--json"]) == 3
+    assert '"not_ready": 1' in capsys.readouterr().out

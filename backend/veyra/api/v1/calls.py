@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from veyra.api.v1.extensions import _visible as visible_extensions
+from veyra.api.v1.schemas import MessageOut
 from veyra.core import audit, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
@@ -198,6 +199,82 @@ def originate(
         number=number,
         message=f"Extension {ext.number} is ringing; pick it up to call {number}.",
     )
+
+
+_CHANNEL_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+
+
+@router.delete(
+    "/{channel_id}",
+    response_model=MessageOut,
+    summary="Hang up a call in progress",
+)
+def hangup(
+    channel_id: str,
+    request: Request,
+    principal: Principal = Depends(require("calls.hangup")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    """Ends the channel; the other side of the call is cleared by the engine.
+    Platform administrators may end any channel, others the channels of
+    extensions in organizations where they hold ``calls.hangup``."""
+    adapter = _adapter(request)
+    if Capability.ACTIVE_CALLS not in adapter.capabilities() or not _CHANNEL_RE.match(channel_id):
+        raise not_found("Call")
+    try:
+        calls = adapter.active_calls()
+    except (EngineUnavailable, NotSupported) as e:
+        raise conflict(f"The engine cannot report calls: {e}", "not_available") from e
+    call = next((c for c in calls if c.channel_id == channel_id), None)
+    if call is None:
+        raise not_found("Call")
+    rows = db.scalars(visible_extensions(principal, "calls.hangup")).all()
+    ext = next(
+        (e for e in rows if e.endpoint_name == call.endpoint),
+        next((e for e in rows if e.number == call.caller), None),
+    )
+    if ext is None and not principal.is_platform_admin:
+        raise not_found("Call")
+    details = {
+        "channel": channel_id,
+        "from": call.caller,
+        "to": call.callee,
+        "duration_seconds": call.duration_seconds,
+    }
+    try:
+        adapter.hangup(channel_id)
+    except (EngineUnavailable, NotSupported) as e:
+        audit.record(
+            db,
+            action="call.hangup",
+            outcome="failure",
+            actor_user_id=principal.user_id,
+            actor_label=principal.label,
+            organization_id=ext.organization_id if ext else None,
+            target_type="extension" if ext else None,
+            target_id=ext.id if ext else None,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={**details, "error": str(e)},
+        )
+        db.commit()
+        raise conflict(f"The engine did not hang up the call: {e}", "hangup_failed") from e
+    audit.record(
+        db,
+        action="call.hangup",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=ext.organization_id if ext else None,
+        target_type="extension" if ext else None,
+        target_id=ext.id if ext else None,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details=details,
+    )
+    db.commit()
+    who = ext.number if ext else (call.endpoint or channel_id)
+    return MessageOut(message=f"The call on {who} was hung up.")
 
 
 def calls_for(calls: list[ActiveCall], endpoint: str) -> list[ActiveCall]:

@@ -219,7 +219,7 @@ below are the reasons a FreePBX site would hesitate.
 | Text to Speech destination and engines | no | ✘ | P3 (module) |
 | Time conditions with time zone, holidays, "open now" | yes | ✔ | |
 | Reusable time groups | schedule lives in the condition | ◐ | P3 |
-| Floating holidays (fourth Thursday) and month-day ranges | fixed MM-DD holidays | ◐ | P2 |
+| Floating holidays (fourth Thursday) and month-day ranges | yearly dates and ranges, one-off dates and ranges, weekday rules (0.27.1, #113) | ✔ | — |
 | Calendar-driven time conditions (Google, iCal, CalDAV, Outlook) | calendars exist and drive bells, not time conditions | ◐ | P2 (small: link the existing calendars) |
 | **Time condition override** (feature code, BLF, temporary vs permanent, PIN) | no | ✘ | **P1** |
 | **Call Flow Control** (day/night toggles `*28x`, BLF, 100 switches) | no | ✘ | **P1** |

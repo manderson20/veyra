@@ -140,7 +140,7 @@ new contexts beyond the automated checks.
 ## 5. Known limitations
 
 Conference recordings are written but not listed on the Call Recording
-page; the directory has no custom entries or operator key; `*32` records
+page (listed since 0.27.2, #133); the directory has no custom entries or operator key; `*32` records
 only outside calls that reached the phone directly (not through a group or
 queue); refused calls are counted on the block list, not in the call
 history; agent state and break-out exits are not yet in the queue reports;

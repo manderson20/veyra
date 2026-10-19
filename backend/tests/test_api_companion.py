@@ -424,3 +424,22 @@ def test_ari_event_translation():
         )
         == []
     )
+
+
+def test_companion_reads_and_adds_favourite_contacts(admin, app):
+    """The Companion shows My Phone favourites and moves its old speed dials
+    there (#128): its token may use /me/contacts."""
+    _make_user(admin, "fav@district.local")
+    token = _companion_login(app, "fav@district.local").json()["token"]
+    c = _bearer(app, token)
+    r = c.post(
+        "/api/v1/me/contacts",
+        json={"name": "Nurse", "numbers": [{"label": "work", "number": "1003"}], "favourite": True},
+    )
+    assert r.status_code == 201, r.text
+    c.post(
+        "/api/v1/me/contacts",
+        json={"name": "Vendor", "numbers": [{"label": "work", "number": "5551234"}]},
+    )
+    favs = c.get("/api/v1/me/contacts", params={"favourite": "true"}).json()
+    assert [f["name"] for f in favs] == ["Nurse"]

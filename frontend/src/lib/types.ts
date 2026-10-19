@@ -359,8 +359,15 @@ export interface Extension {
   provisioned_phones?: number;
   /** The effective limit: the larger of max_registrations and provisioned_phones, at least 1. */
   registration_limit?: number;
+  /** The site the phone is at (its emergency route and caller ID); a building implies its site. */
+  site_id?: string | null;
+  site_name?: string | null;
   building_id?: string | null;
+  building_name?: string | null;
   location?: string | null;
+  /** Groups extensions for My Phone layout templates. */
+  department_id?: string | null;
+  department_name?: string | null;
   is_enabled: boolean;
   sip_secret_set: boolean;
   sip_secret_changed_at: string | null;
@@ -1869,6 +1876,36 @@ export interface Site {
   emergency_caller_id_number: string | null;
   extensions: number;
   devices: number;
+  buildings?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A building of a site, with its own civic address when it differs (#126). */
+export interface Building {
+  id: string;
+  organization_id: string;
+  site_id: string;
+  site_name: string;
+  name: string;
+  street: string | null;
+  city: string | null;
+  region: string | null;
+  postal_code: string | null;
+  country: string | null;
+  has_own_address: boolean;
+  extensions: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Department {
+  id: string;
+  organization_id: string;
+  name: string;
+  site_id: string | null;
+  site_name: string | null;
+  extensions: number;
   created_at: string;
   updated_at: string;
 }
@@ -1999,7 +2036,7 @@ export interface PageLogEntry {
 }
 
 /** "user": an open slot the phone's user fills from My Phone (docs/USER_PORTAL.md §8). */
-export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user";
+export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user" | "park" | "voicemail" | "transfer" | "intercom" | "dnd" | "toggle";
 
 export interface LineKey {
   type: LineKeyType;
@@ -2152,6 +2189,37 @@ export interface DevicePreview {
   files: RenderedFile[];
   error: string | null;
   error_code: string | null;
+  /** Variables a template or key referenced but nobody defined. */
+  warnings?: string[];
+}
+
+/** Provisioning variables (docs/PROVISIONING_BREADTH.md §2). */
+export type VariableScope = "installation" | "organization" | "site" | "profile";
+
+export interface ProvisioningVariable {
+  id: string | null;
+  source: "core" | "defined";
+  scope: VariableScope | null;
+  scope_id: string | null;
+  scope_name: string | null;
+  organization_id: string | null;
+  name: string;
+  value: string | null;
+  sensitive: boolean;
+  description: string | null;
+  type?: string | null;
+  default?: string | number | boolean | null;
+  affected_devices?: number | null;
+  updated_at?: string | null;
+}
+
+export interface ResolvedVariable {
+  name: string;
+  value: string;
+  scope: VariableScope;
+  scope_id: string | null;
+  sensitive: boolean;
+  description: string | null;
 }
 
 export interface ReprovisionResult {
@@ -2514,6 +2582,9 @@ export interface CallRecordingItem {
   from_number: string | null;
   from_name: string | null;
   to_number: string | null;
+  /** A conference room's recording (#133) instead of a call's. */
+  conference_room_id?: string | null;
+  conference_name?: string | null;
   duration_seconds: number;
   size_bytes: number;
   created_at: string;

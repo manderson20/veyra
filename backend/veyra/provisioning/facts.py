@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from veyra.core.config import Settings
 from veyra.core.models import (
+    CallFlow,
     Device,
     DeviceProfile,
     DeviceProfilePaging,
@@ -26,8 +27,10 @@ from veyra.core.models import (
     FirmwareImage,
     Organization,
     PagingZone,
+    ParkingLot,
     RingGroup,
     Site,
+    TimeCondition,
     VoicemailBox,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
@@ -39,6 +42,9 @@ from veyra.provisioning.renderer import (
     render,
 )
 from veyra.provisioning.spec import TemplateError
+from veyra.provisioning.variables import VarsView, resolve_reference, scopes_of
+from veyra.provisioning.variables import resolve as resolve_variables
+from veyra.telephony import features
 from veyra.telephony.settings import load_sip_settings
 from veyra.telephony.snapshot import secret_purpose
 
@@ -223,8 +229,18 @@ def merge_user_keys(
 
 
 def _keys(
-    db: Session, org_id: uuid.UUID, raw: list[dict[str, Any]], zones: dict[str, PagingZone]
+    db: Session,
+    org_id: uuid.UUID,
+    raw: list[dict[str, Any]],
+    zones: dict[str, PagingZone],
+    variables: VarsView | None = None,
+    own_number: str | None = None,
+    warnings: list[str] | None = None,
 ) -> list[dict[str, Any]]:
+    # A key value may be "$name": the variable's value for this phone
+    # (docs/PROVISIONING_BREADTH.md §2.3).
+    raw = [{**k, "value": resolve_reference(k.get("value"), variables)} for k in raw]
+    raw = _feature_keys(db, org_id, raw, own_number, warnings)
     numbers = {k.get("value") for k in raw if k.get("type") in ("blf", "speed_dial")}
     names: dict[str, str] = {}
     if numbers:
@@ -247,6 +263,8 @@ def _keys(
         value = str(k.get("value") or "")
         label = k.get("label") or None
         entry: dict[str, Any] = {"index": i, "type": kind, "value": value, "label": label}
+        if k.get("feature"):
+            entry["feature"] = k["feature"]
         if kind == "blf":
             blf += 1
             entry["blf_index"] = blf
@@ -260,6 +278,8 @@ def _keys(
             if zone is None:
                 continue  # zone removed since the key was saved
             entry["group"] = zone.poly_group
+            entry["multicast_address"] = zone.multicast_address
+            entry["multicast_port"] = zone.multicast_port
             entry["label"] = label or zone.name
         elif kind == "line":
             entry["label"] = label or f"Line {value}"
@@ -267,6 +287,158 @@ def _keys(
             continue  # an open slot the user has not filled: no key rendered
         out.append(entry)
     return out
+
+
+FEATURE_LABELS = {
+    "voicemail": "Voicemail",
+    "dnd": "DND",
+    "intercom": "Intercom",
+    "park": "Park",
+    "agent": "Queue log-in",
+}
+
+
+def _feature_keys(
+    db: Session,
+    org_id: uuid.UUID,
+    raw: list[dict[str, Any]],
+    own_number: str | None,
+    warnings: list[str] | None,
+) -> list[dict[str, Any]]:
+    """The M21 key types (docs/PROVISIONING_BREADTH.md §3) as the BLF and
+    speed-dial keys every template already renders; ``feature`` keeps the
+    original type. A lamp is a hint the generator publishes: pressing a BLF
+    key dials the watched number, so each watched number is also the code."""
+    kinds = {str(k.get("type") or "") for k in raw}
+    if not kinds & {"park", "voicemail", "transfer", "intercom", "dnd", "toggle"}:
+        return raw
+    codes = features.active(db)
+
+    def note(text: str) -> None:
+        if warnings is not None:
+            warnings.append(text)
+
+    out: list[dict[str, Any]] = []
+    for k in raw:
+        kind = str(k.get("type") or "")
+        value = str(k.get("value") or "")
+        label = k.get("label") or None
+        if kind == "voicemail":
+            out.append(
+                {
+                    **k,
+                    "type": "speed_dial",
+                    "value": VOICEMAIL_NUMBER,
+                    "feature": kind,
+                    "label": label or FEATURE_LABELS[kind],
+                }
+            )
+        elif kind == "intercom":
+            code = codes.get("intercom")
+            if not code:
+                note("an intercom key: the intercom code is turned off")
+                continue
+            out.append(
+                {
+                    **k,
+                    "type": "speed_dial",
+                    "value": f"{code}{value}",
+                    "feature": kind,
+                    "label": label or f"Intercom {value}",
+                }
+            )
+        elif kind == "dnd":
+            code = codes.get("dnd_toggle")
+            if not code or not own_number:
+                note("a DND key: the DND toggle code is off or the phone has no extension")
+                continue
+            out.append(
+                {
+                    **k,
+                    "type": "blf",
+                    "value": f"{code}{own_number}",
+                    "feature": kind,
+                    "label": label or FEATURE_LABELS[kind],
+                }
+            )
+        elif kind == "park":
+            lot_slug, _, slot = value.partition(":")
+            lot = db.scalar(
+                select(ParkingLot).where(
+                    ParkingLot.organization_id == org_id, ParkingLot.slug == lot_slug
+                )
+            )
+            if lot is None:
+                note(f"a park key: parking lot {lot_slug} no longer exists")
+                continue
+            if slot:
+                out.append(
+                    {
+                        **k,
+                        "type": "blf",
+                        "value": slot,
+                        "feature": kind,
+                        "label": label or f"Park {slot}",
+                    }
+                )
+            else:
+                out.append(
+                    {
+                        **k,
+                        "type": "speed_dial",
+                        "value": lot.park_exten,
+                        "feature": kind,
+                        "label": label or f"Park ({lot.name})",
+                    }
+                )
+        elif kind == "toggle":
+            entry = _toggle_key(db, org_id, value, codes, own_number)
+            if entry is None:
+                note(f"a toggle key {value}: its target or code is gone")
+                continue
+            number, default_label = entry
+            out.append(
+                {
+                    **k,
+                    "type": "blf",
+                    "value": number,
+                    "feature": kind,
+                    "label": label or default_label,
+                }
+            )
+        elif kind == "transfer":
+            # Kept as its own type: families with a transfer key render it
+            # (feature "key_transfer"); render_device warns for the others.
+            out.append({**k, "type": "transfer", "feature": kind, "label": label or "Transfer"})
+        else:
+            out.append(k)
+    return out
+
+
+def _toggle_key(
+    db: Session, org_id: uuid.UUID, value: str, codes: dict[str, str], own_number: str | None
+) -> tuple[str, str] | None:
+    if value == "agent":
+        login = codes.get("queue_login")
+        return (f"{login}*{own_number}", FEATURE_LABELS["agent"]) if login and own_number else None
+    if value.startswith("flow:"):
+        prefix = codes.get("callflow_toggle_prefix")
+        flow = db.scalar(
+            select(CallFlow).where(CallFlow.organization_id == org_id, CallFlow.slug == value[5:])
+        )
+        if not prefix or flow is None or flow.code_index is None:
+            return None
+        return f"{prefix}{flow.code_index}", flow.name
+    if value.startswith("tc:"):
+        prefix = codes.get("tc_override_prefix")
+        try:
+            tc = db.get(TimeCondition, uuid.UUID(value[3:]))
+        except ValueError:
+            tc = None
+        if not prefix or tc is None or tc.organization_id != org_id or tc.code_index is None:
+            return None
+        return f"{prefix}{tc.code_index}", tc.name
+    return None
 
 
 def _paging(db: Session, profile: DeviceProfile) -> dict[str, Any]:
@@ -352,9 +524,12 @@ def build_facts(
     mask_secrets: bool = False,
     scheme: str = "https",
     values: dict[str, Any] | None = None,
+    variables: dict[str, Any] | None = None,
+    warnings: list[str] | None = None,
 ) -> dict[str, Any]:
     device, profile, org = ctx.device, ctx.profile, ctx.organization
     values = values or {}
+    vars_view = VarsView(variables or {})
     ext_ids = [device.primary_extension_id] if device.primary_extension_id else []
     for line in device.lines:
         try:
@@ -390,7 +565,16 @@ def build_facts(
         for z in db.scalars(select(PagingZone).where(PagingZone.organization_id == org.id))
     }
     raw_keys = device.keys if device.keys is not None else profile.keys
-    keys = _keys(db, org.id, merge_user_keys(list(raw_keys or []), device.user_keys), zones)
+    own_number = lines[0]["extension_number"] if lines else None
+    keys = _keys(
+        db,
+        org.id,
+        merge_user_keys(list(raw_keys or []), device.user_keys),
+        zones,
+        vars_view,
+        own_number,
+        warnings,
+    )
     paging = _paging(db, profile)
     sip = load_sip_settings(db)
     transport = str(values.get("sip_transport") or "UDPOnly")
@@ -435,6 +619,10 @@ def build_facts(
             "sip_port": sip_port,
             "transport": transport,
             "provisioning_url": f"{base}/provisioning/",
+            "directory_url": f"{base}/provisioning/directory/",
+            # For devices that take the server and the path separately (Algo).
+            "host": _host(settings, host),
+            "provisioning_path": "provisioning",
             "provisioning_server_type": "HTTPS" if scheme == "https" else "HTTP",
             "ntp_server": str(values.get("ntp_server") or "pool.ntp.org"),
             "timezone": tz,
@@ -450,6 +638,7 @@ def build_facts(
             "blf": any(k["type"] == "blf" for k in keys),
             "paging": paging["enabled"],
         },
+        "vars": vars_view,
     }
 
 
@@ -463,13 +652,23 @@ def render_device(
     host: str | None = None,
     mask_secrets: bool = False,
     scheme: str = "https",
+    warnings: list[str] | None = None,
 ) -> list[RenderedFile]:
-    """Every file the device's template produces, with the profile's values,
-    the device's overrides and the facts (§4.1). Raises ``ProvisioningError``
-    or ``TemplateError``."""
+    """Every file the device's template produces, with the provisioning
+    variables (docs/PROVISIONING_BREADTH.md §2: a defined variable with a
+    template variable's name fills it unless the profile or device set it),
+    the profile's values, the device's overrides and the facts (§4.1). A
+    ``warnings`` list, when given, receives the variables templates and keys
+    referenced but nobody defined. Raises ``ProvisioningError`` or
+    ``TemplateError``."""
     ctx = resolve_device(catalog, db, device)
     resolved = catalog.resolve(ctx.template_key)
-    values: dict[str, Any] = {**dict(ctx.profile.values), **dict(device.values)}
+    variables = resolve_variables(db, **scopes_of(device, ctx.profile))
+    values: dict[str, Any] = {
+        **{k: v for k, v in variables.items() if k in resolved.variables},
+        **dict(ctx.profile.values),
+        **dict(device.values),
+    }
     facts = build_facts(
         db,
         settings,
@@ -479,6 +678,8 @@ def render_device(
         mask_secrets=mask_secrets,
         scheme=scheme,
         values=values,
+        variables=variables,
+        warnings=warnings,
     )
     line1 = facts["lines"][0] if facts["lines"] else None
     core = {
@@ -497,7 +698,7 @@ def render_device(
         if values.get(name) in (None, ""):
             values[name] = value
     try:
-        return render(
+        files = render(
             resolved,
             values,
             mac=device.mac_address,
@@ -507,6 +708,15 @@ def render_device(
         )
     except TemplateError as e:
         raise ProvisioningError("render_error", "; ".join(e.errors)) from e
+    if warnings is not None:
+        warnings.extend(f"variable {n} is not defined" for n in sorted(facts["vars"].missing))
+        if "key_transfer" not in resolved.features and any(
+            k["type"] == "transfer" for k in facts["keys"]
+        ):
+            warnings.append(
+                "a transfer key: this template has no transfer key; the phone's softkey does it"
+            )
+    return files
 
 
 def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]:
@@ -571,6 +781,7 @@ def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]
             "firmware_version": None,
         },
         "features": {"voicemail": True, "blf": False, "paging": False},
+        "vars": {},
     }
 
 

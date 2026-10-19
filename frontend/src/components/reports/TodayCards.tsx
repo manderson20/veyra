@@ -17,15 +17,25 @@ interface Totals {
 /** "Calls today" and "Alerts" items of the dashboard (docs/REPORTING.md §5.2). */
 export function TodayCards() {
   const { can } = useSession();
-  const [since] = useState(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
+  // Today so far, and the same weekday last week up to the same time of day.
+  const [period] = useState(() => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const week = 7 * 24 * 3600 * 1000;
+    return {
+      since: start.toISOString(),
+      lastFrom: new Date(start.getTime() - week).toISOString(),
+      lastTo: new Date(now.getTime() - week).toISOString(),
+      weekday: start.toLocaleDateString(undefined, { weekday: "long" }),
+    };
   });
-  const today = useApiData<Totals>(can("reports.read") ? "/reports/calls" : null, { from: since });
+  const today = useApiData<Totals>(can("reports.read") ? "/reports/calls" : null, { from: period.since });
+  const lastWeek = useApiData<Totals>(can("reports.read") ? "/reports/calls" : null, { from: period.lastFrom, to: period.lastTo });
   const alerts = useApiData<Page<AlertItem>>(can("alerts.read") ? "/alerts" : null, { state: "open", limit: 5 });
   if (!can("reports.read") && !can("alerts.read")) return null;
   const t = today.data?.totals;
+  const last = lastWeek.data?.totals;
   const dirs = today.data?.by_day.reduce((acc, d) => ({ inbound: acc.inbound + d.inbound, outbound: acc.outbound + d.outbound, internal: acc.internal + d.internal }), { inbound: 0, outbound: 0, internal: 0 });
   return (
     <div className="grid grid--2">
@@ -34,6 +44,7 @@ export function TodayCards() {
           {t ? (
             <dl className="dl">
               <dt>Calls</dt><dd><strong>{t.calls}</strong> · {t.answered} answered</dd>
+              {last ? <><dt>Last {period.weekday}</dt><dd><Trend now={t.calls} before={last.calls} /> <span className="subtle">{last.calls} by this time</span></dd></> : null}
               <dt>Missed</dt><dd>{t.missed}{t.voicemail ? ` · ${t.voicemail} to voicemail` : ""}</dd>
               <dt>Directions</dt><dd>{dirs ? `${dirs.inbound} inbound · ${dirs.outbound} outbound · ${dirs.internal} internal` : "—"}</dd>
             </dl>
@@ -58,4 +69,12 @@ export function TodayCards() {
       ) : null}
     </div>
   );
+}
+
+/** Up or down compared with the same time last week. */
+function Trend({ now, before }: { now: number; before: number }) {
+  if (before === 0) return now === 0 ? <span className="subtle">Same</span> : <Badge tone="neutral">New</Badge>;
+  const pct = Math.round(((now - before) / before) * 100);
+  if (pct === 0) return <span className="subtle">Same</span>;
+  return <Badge tone={pct > 0 ? "accent" : "neutral"}>{pct > 0 ? "▲" : "▼"} {Math.abs(pct)}%</Badge>;
 }

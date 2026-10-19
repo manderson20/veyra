@@ -10,6 +10,7 @@ import { DevicesCard } from "@/components/extensions/DevicesCard";
 import { VoicemailCard } from "@/components/extensions/VoicemailCard";
 import { CallHandlingCard } from "@/components/extensions/CallHandlingCard";
 import { FollowMeCard } from "@/components/extensions/FollowMeCard";
+import { EMPTY_PLACE, PlaceFields, placeBody, placeOf, samePlace, type Place } from "@/components/extensions/PlaceFields";
 import { CopyButton } from "@/components/common/CopyButton";
 import {
   Badge,
@@ -68,6 +69,7 @@ function ExtensionView() {
   const [cos, setCos] = useState("");
   const [maxReg, setMaxReg] = useState("");
   const [enabled, setEnabled] = useState(true);
+  const [place, setPlace] = useState<Place>(EMPTY_PLACE);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -98,6 +100,7 @@ function ExtensionView() {
       setCos(x.class_of_service_id ?? "");
       setMaxReg(x.max_registrations ? String(x.max_registrations) : "");
       setEnabled(x.is_enabled);
+      setPlace(placeOf(x));
     }
   });
 
@@ -105,7 +108,7 @@ function ExtensionView() {
   if (ext.error) return <ErrorState title="Could not load extension" error={ext.error} onRetry={ext.reload} />;
   if (!ext.data) return <LoadingState />;
   const x = ext.data;
-  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || cos !== (x.class_of_service_id ?? "") || maxReg !== (x.max_registrations ? String(x.max_registrations) : "") || enabled !== x.is_enabled;
+  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || cos !== (x.class_of_service_id ?? "") || maxReg !== (x.max_registrations ? String(x.max_registrations) : "") || enabled !== x.is_enabled || !samePlace(place, placeOf(x));
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === x.organization_id && (u.is_active || u.id === x.user_id));
 
   const save = async (e: FormEvent) => {
@@ -126,6 +129,7 @@ function ExtensionView() {
         intercom,
         class_of_service_id: cos || null,
         max_registrations: maxReg.trim() ? Number(maxReg) : null,
+        ...placeBody(place),
         is_enabled: enabled,
       }));
       setChanged((n) => n + 1);
@@ -200,6 +204,7 @@ function ExtensionView() {
       <Tabs idBase="ext" active={tab} onChange={setTab} tabs={tabs} />
 
       <TabPanel idBase="ext" id="general" active={tab}>
+        <div className="stack">
         <div className="grid grid--2" style={{ alignItems: "start" }}>
           <Card title="Details" subtitle={readOnly}>
             <form className="stack stack--sm" onSubmit={save}>
@@ -229,6 +234,13 @@ function ExtensionView() {
               <dt>Extension ID</dt><dd className="mono">{x.id}</dd>
             </dl>
           </Card>
+        </div>
+        <Card title="Location" subtitle={readOnly ?? "Where the phone is: its site's emergency route and caller ID, and the address and room an emergency notification gives."}>
+          <form className="stack stack--sm" onSubmit={save}>
+            <PlaceFields organizationId={x.organization_id} value={place} onChange={setPlace} errors={errors.fields} disabled={!editable} />
+            {saveBar}
+          </form>
+        </Card>
         </div>
       </TabPanel>
 

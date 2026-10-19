@@ -254,3 +254,42 @@ def test_worker_converts_retains_and_api_plays(admin, app):
         rec = db.get(CallRecording, rec_id)
         assert rec.deleted_at is not None and not (rec_dir / rec.path).exists()
     assert admin.get(f"{REC}/{rec_id}/audio").status_code in (404, 410)
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_conference_recordings_are_stored_and_listed(admin, app):
+    """ConfBridge recordings land on the Call Recording page with their room (#133)."""
+    import os
+    import time
+
+    org = _org(admin)
+    room = admin.post(
+        "/api/v1/conferences",
+        json={"organization_id": org["id"], "name": "Board", "number": "7100", "record": True},
+    )
+    assert room.status_code == 201, room.text
+    slug = room.json()["slug"]
+    rec_dir = app.state.settings.recordings_dir
+    ts = int(time.time()) - 600
+    done = rec_dir / "conferences" / f"example--{slug}-{ts}.wav"
+    _wav(done, seconds=3)
+    old = time.time() - 300
+    os.utime(done, (old, old))
+    live = rec_dir / "conferences" / f"example--{slug}-{ts + 1}.wav"
+    _wav(live)  # still being written: left alone
+    (rec_dir / "conferences" / "not-ours.wav").write_bytes(b"x")
+    with session_scope() as db:
+        assert recordings.process_conferences(db, rec_dir) == 1
+    assert not done.exists() and live.exists()
+    items = admin.get("/api/v1/recordings").json()["items"]
+    conf = next(i for i in items if i["conference_room_id"])
+    assert conf["conference_name"] == "Board" and conf["call_id"] is None
+    assert conf["duration_seconds"] == 3
+    assert conf["started_at"].startswith(
+        __import__("datetime")
+        .datetime.fromtimestamp(ts, __import__("datetime").UTC)
+        .isoformat()[:16]
+    )
+    assert admin.get(f"/api/v1/recordings/{conf['id']}/audio").status_code == 200
+    with session_scope() as db:  # a second pass does not store it again
+        assert recordings.process_conferences(db, rec_dir) == 0

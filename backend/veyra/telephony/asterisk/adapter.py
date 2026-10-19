@@ -465,6 +465,9 @@ class AsteriskAdapter(TelephonyAdapter):
         ch = self.ari.originate(f"PJSIP/{endpoint}", number, context, caller_id, timeout)
         return str(ch.get("id") or "")
 
+    def hangup(self, channel_id: str) -> None:
+        self.ari.hangup(channel_id)
+
     def originate_channel(
         self,
         endpoint: str,

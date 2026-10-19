@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BuildingsDialog } from "@/components/sites/BuildingsDialog";
 import { SiteDialog } from "@/components/sites/SiteDialog";
 import { Button, Card, ConfirmDialog, DataTable, EmptyState, PageHeader, Pagination, SearchInput, SelectField, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -23,6 +24,7 @@ export default function SitesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Site | undefined>();
   const [deleting, setDeleting] = useState<Site | undefined>();
+  const [buildingsOf, setBuildingsOf] = useState<Site | undefined>();
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -55,6 +57,7 @@ export default function SitesPage() {
     { key: "tz", header: "Time zone", render: (s) => s.timezone ?? <span className="subtle">Organization default</span> },
     { key: "ecid", header: "Emergency caller ID", render: (s) => s.emergency_caller_id_number ? <span className="mono">{s.emergency_caller_id_number}</span> : <span className="subtle">—</span> },
     { key: "counts", header: "Extensions / phones", render: (s) => <span>{s.extensions} / {s.devices}</span> },
+    { key: "buildings", header: "Buildings", render: (s) => <Button size="sm" variant="ghost" icon="building" onClick={(e) => { e.stopPropagation(); setBuildingsOf(s); }} aria-label={`Buildings of ${s.name}`}>{s.buildings ?? 0}</Button> },
     ...(editable ? [{ key: "actions", header: "", render: (s: Site) => <span className="row" style={{ gap: 4, justifyContent: "flex-end" }}><Button size="sm" onClick={(e) => { e.stopPropagation(); setEditing(s); }}>Edit</Button><Button size="sm" variant="ghost" icon="trash" onClick={(e) => { e.stopPropagation(); setDeleting(s); }} aria-label={`Delete ${s.name}`} /></span> }] : []),
   ];
 
@@ -74,8 +77,9 @@ export default function SitesPage() {
       </Card>
       <SiteDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => list.reload()} />
       <SiteDialog open={!!editing} site={editing} onClose={() => setEditing(undefined)} onSaved={() => list.reload()} />
+      <BuildingsDialog site={buildingsOf} editable={editable} onClose={() => setBuildingsOf(undefined)} onChanged={() => list.reload()} />
       <ConfirmDialog open={!!deleting} title={`Delete the site "${deleting?.name ?? ""}"?`} confirmLabel="Delete site" tone="danger" busy={deleteBusy} error={deleteError} onConfirm={remove} onCancel={() => { setDeleting(undefined); setDeleteError(null); }}>
-        <p>Extensions, phones, profiles and zones of this site keep working without a site.</p>
+        <p>Extensions, phones, profiles and zones of this site keep working without a site. A site with buildings cannot be deleted; delete its buildings first.</p>
       </ConfirmDialog>
     </div>
   );

@@ -8,6 +8,48 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.2 — 2026-10-20
+
+More audit items. Migration `0055`. The Companion changes need the new Companion build (Settings → Companion).
+
+### Added
+- **Conference recordings on the Call Recording page** (#133): recordings of conference rooms with recording on are stored like call recordings (kept 90 days, can be held) and listed with the room's name. Migration `0055`.
+- **Reports** (#121): the dashboard's "Calls today" compares with the same weekday last week up to the same time of day; the Reports trunk table shows the most calls up at once on each trunk in the period, to compare with the carrier's channel limit.
+
+### Changed
+- **Companion favourites come from My Phone** (#128): the Companion popup shows your favourite contacts from My Phone (star a contact to add it) instead of a separate speed-dial list. The Companion's options page moves its old speed dials to My Phone favourites in one click; until then the popup keeps showing them.
+
+### Fixed
+- **Update window: the "Full log on the server" line** no longer overlaps the scrolling installer output; it sits above it.
+
+## 0.27.1 — 2026-10-20
+
+First items from the milestone audit (issues #108–#147). No migration. Note the fix below: after installing, open each extension's Location card and choose its site (or building) so emergency routing and readiness count it.
+
+### Fixed
+- **Extensions can be placed at a site.** The site of an extension decides its emergency route, emergency caller ID and the site's emergency readiness, but it could not be set from the interface or the API, so no extension counted toward any site. Extensions now take a site (or a building, which implies its site).
+
+### Added
+- **Forgot your password?** (#108): when email delivery is set up, the sign-in page offers "Forgot your password?"; the user enters their address and receives a one-time link to choose a new password. The page answers the same whether or not the address has an account, sends at most one link per account every five minutes, and skips accounts that sign in through Google or Microsoft. Administrators can still issue links as before.
+- **Hang up a call** (#109): Active Calls has a Hang up button (with a confirmation) for administrators and technicians (new permission "Hang up calls in progress"); each hang-up is in the audit log.
+- **Buildings and departments** (#126): Sites → Buildings lists each site's buildings, with their own street address when it differs from the site's (emergency notifications give that address). Organizations → Departments groups extensions. An extension's new Location card (and the New extension dialog) places it at a site, in a building and room, and in a department; My Phone layout templates can now be assigned to a building or a department by picking it from a list.
+- **Emergency readiness in the installer check** (#124): `verify.sh` warns when a site with extensions is not ready for emergency calls and names what is missing (`veyra emergency readiness`).
+- **Closed days and moving holidays** (#113): time conditions take holidays as dates every year, date ranges every year (winter break, even across New Year), one-off dates and ranges (a snow day, this year's spring break), and rules such as the fourth Thursday of November or the last Monday of May. The holiday list is now an editor with one row per holiday and says each one in words; the report builder's business-hours filter follows the same holidays.
+
+## 0.27.0 — 2026-10-20 (Milestone 21: provisioning breadth)
+
+Design: [docs/PROVISIONING_BREADTH.md](docs/PROVISIONING_BREADTH.md); report [docs/milestones/MILESTONE_21_REPORT.md](docs/milestones/MILESTONE_21_REPORT.md). Migration `0054`. The new templates are marked experimental until checked on hardware (docs/PROVISIONING_HARDWARE_CHECKS.md).
+
+### Added
+- **Provisioning variables** (#76): Provisioning → Variables defines values phones share once — an all-call zone per building, the time server, an admin password — for the installation, an organization, a site or a device profile; each phone takes the nearest one. Line keys use them as `$name` (a page key `$all_call` on one profile pages each building's own zone), templates as `{{ vars.name }}`, and a variable named like a template setting fills that setting for every profile that leaves it empty. Saving a value asks the phones it reaches to re-read their configuration. The device page shows the values a phone resolves and where each comes from, and the configuration preview warns about variables nobody defined.
+- **Yealink phones** (#35): official templates for every current Yealink SIP phone — T3x (T30, T30P, T31, T31G, T31P, T31W, T33G, T34W), T4x (T42U, T43U, T44U, T44W, T46U, T48U), T5x (T53, T53W, T54W, T57W, T58W, T58W Pro, VP59), T7x (T73U, T73W, T74U, T74W, T77U), T8x (T85W, T87W, T88) and the CP925, CP935W and CP965 conference phones (their line, voicemail, directory and time; no line keys) — from the same profiles, keys and variables as the Poly phones: every line, BLF, speed dial, transfer and multicast paging keys, voicemail indication, the profile's paging zones as multicast listen addresses, time zone and daylight saving, VLAN, firmware, the daily provisioning check with the device credential. Experimental until checked on hardware.
+- **Algo paging endpoints** (#38): one official template for every current Algo SIP device — speakers and horns (8180, 8186, 8188, 8189, 8190, 8196–8199, 8507), display speakers (8410, 8420), paging adapters (8301, 8305, 8312, 8373), intercoms and door controllers (8028, 8028V, 8039, 8063, 8201, 8203), visual alerters (8128, 8138), clocks (8401, 8402) and the 8450 console. The page extension (and a ring extension), the profile's paging zones as multicast listen zones in regular multicast, Poly group paging or both — so speakers and Poly phones play the same page in sync — the emergency zone as the priority zone, time server and zone, VLAN, firmware, and the daily configuration check with the device credential. Veyra serves the checksum file Algo requires beside the configuration. Experimental until checked on hardware.
+- **Poly Edge E and CCX** (#39): official templates for the Edge E100–E550 and the CCX 350–700 (Open SIP), on the same settings as the VVX phones; the CCX has no group paging.
+- **Redirect services**: the Provisioning page explains how new phones find Veyra (Yealink RPS, Poly ZTP, DHCP option 66 for Algo, Grandstream GDMS) and exports each vendor's MAC addresses with the provisioning URL as CSV for bulk registration.
+- **Hardware checklist** (docs/PROVISIONING_HARDWARE_CHECKS.md): the steps that move a template family from experimental to stable.
+- **Phone directory** (§5 of the design): phones download the organization's extensions and ring groups as a phone book (Yealink, Poly, Grandstream and CSV formats) with their provisioning credential; Yealink phones are set up to use it (variable "directory_enabled") and Poly phones receive it as their directory automatically.
+- **More line key types** (#40): Voicemail, Intercom to an extension, Do Not Disturb (lit while on), Park (a lot, or watch a slot and pick the parked call up — every parking lot now publishes its slots' lamps), and Toggle for a call flow, a time condition override or queue log-in (lit while switched or logged in). They work with the existing Poly templates; a Transfer key is accepted but the Poly phones keep their transfer softkey, and the configuration preview says so.
+
 ## 0.26.7 — 2026-10-19
 
 ### Changed

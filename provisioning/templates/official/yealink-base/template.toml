@@ -1,0 +1,53 @@
+spec_version = 2
+features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
+
+[template]
+key = "yealink.base"
+name = "Yealink (common settings)"
+version = "0.1.0"
+manufacturer = "Yealink"
+abstract = true
+firmware = "Yealink firmware 66.86 / 96.86 and later"
+status = "experimental"
+description = """
+Shared configuration for Yealink SIP phones (T3x, T4x, T5x). Produces the
+per-phone file ({mac}.cfg) with every line, the line keys (BLF, speed dials,
+transfer, multicast paging), voicemail indication, multicast paging
+listening, time and DST rules, VLAN, firmware, the provisioning schedule with
+the device credential and the remote phone directory. Not yet verified on
+hardware — see docs/PROVISIONING_BREADTH.md §7."""
+
+[[files]]
+name = "{mac}.cfg"
+source = "phone.cfg.j2"
+format = "cfg"
+
+[[variables]]
+name = "sip_transport"
+description = "SIP transport for the registrations (same values as the Poly family)"
+default = "UDPOnly"
+pattern = "^(UDPOnly|TCPOnly|TLS|DNSnaptr)$"
+
+[[variables]]
+name = "registration_expires"
+type = "integer"
+description = "Registration interval in seconds"
+default = 300
+
+[[variables]]
+name = "admin_password"
+description = "Web and phone administrator password (blank keeps the factory default)"
+sensitive = true
+max_length = 32
+
+[[variables]]
+name = "polling_hour"
+type = "integer"
+description = "Hour (0-23) at which the phone checks for new configuration every day"
+default = 3
+
+[[variables]]
+name = "directory_enabled"
+type = "boolean"
+description = "Download the organization's directory as a remote phone book"
+default = true

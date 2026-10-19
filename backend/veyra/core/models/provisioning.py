@@ -19,7 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -142,3 +142,24 @@ class ProvisioningRequest(UUIDPrimaryKey, Base):
     # ok | uploaded | unauthorized | unknown_device | disabled | not_found | render_error
     result: Mapped[str] = mapped_column(String(32))
     status: Mapped[int] = mapped_column(Integer)
+
+
+class ProvisioningVariable(UUIDPrimaryKey, Timestamps, Base):
+    """A named value templates read as ``vars.<name>`` and key lists reference
+    as ``$name`` (docs/PROVISIONING_BREADTH.md §2), defined at installation,
+    organization, site or profile scope; the nearest scope wins per phone."""
+
+    __tablename__ = "provisioning_variables"
+    __table_args__ = (UniqueConstraint("scope", "scope_id", "name"),)
+
+    scope: Mapped[str] = mapped_column(String(16))  # installation | organization | site | profile
+    scope_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    # The organization the scope belongs to (NULL for installation): the
+    # permission check and the list filter use it.
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(40))
+    value: Mapped[str] = mapped_column(Text)
+    sensitive: Mapped[bool] = mapped_column(Boolean, default=False)
+    description: Mapped[str | None] = mapped_column(Text)

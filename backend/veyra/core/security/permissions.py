@@ -119,6 +119,11 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin", "technician", "standard_user", "read_only"),
     ),
     PermissionDef(
+        "calls.hangup",
+        "Hang up calls in progress",
+        default_roles=("org_admin", "site_admin", "technician"),
+    ),
+    PermissionDef(
         "trunks.read",
         "View SIP trunks and their status",
         default_roles=("org_admin", "technician"),

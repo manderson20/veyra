@@ -19,7 +19,7 @@ function ResetForm() {
   const token = useSearchParams().get("token") ?? "";
   const errors = useFormErrors();
   const [state, setState] = useState<State>(() =>
-    token ? { kind: "checking" } : { kind: "invalid", message: "This link is missing its reset code. Ask an administrator for a new link." },
+    token ? { kind: "checking" } : { kind: "invalid", message: "This link is missing its reset code. Request a new one from the sign-in page, or ask an administrator." },
   );
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");

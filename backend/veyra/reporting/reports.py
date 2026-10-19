@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Integer, and_, case, cast, func, select
+from sqlalchemy import Integer, and_, case, cast, func, literal, select, union_all
 from sqlalchemy.orm import Session
 
 from veyra.core import tenancy
@@ -35,6 +35,48 @@ def _scope(stmt: Any, org_ids: set[uuid.UUID] | None, organization_id: uuid.UUID
     if organization_id is not None:
         stmt = stmt.where(CallRecord.organization_id == organization_id)
     return stmt
+
+
+def _trunk_peaks(
+    db: Session,
+    period: Any,
+    until: datetime,
+    org_ids: set[uuid.UUID] | None,
+    organization_id: uuid.UUID | None,
+) -> list[Any]:
+    """Most calls up at once on each trunk in the period (REPORTING.md §5.1):
+    a sweep over call starts (+1) and ends (-1); at equal times the end
+    comes first, so back-to-back calls do not overlap. A call still up
+    counts until the end of the period."""
+    on_trunk = and_(period, CallRecord.trunk_id.is_not(None))
+    ends = func.coalesce(CallRecord.ended_at, until)
+    events = union_all(
+        _scope(
+            select(
+                CallRecord.trunk_id.label("trunk_id"),
+                CallRecord.started_at.label("t"),
+                literal(1).label("d"),
+            ).where(on_trunk),
+            org_ids,
+            organization_id,
+        ),
+        _scope(
+            select(CallRecord.trunk_id, ends, literal(-1)).where(on_trunk),
+            org_ids,
+            organization_id,
+        ),
+    ).subquery()
+    running = select(
+        events.c.trunk_id,
+        func.sum(events.c.d)
+        .over(partition_by=events.c.trunk_id, order_by=(events.c.t, events.c.d))
+        .label("up"),
+    ).subquery()
+    return list(
+        db.execute(
+            select(running.c.trunk_id, func.max(running.c.up)).group_by(running.c.trunk_id)
+        ).all()
+    )
 
 
 def calls_report(
@@ -190,10 +232,14 @@ def calls_report(
                 "inbound": 0,
                 "outbound": 0,
                 "talk_seconds": 0,
+                "peak_calls": 0,
             },
         )
         t[direction] = t.get(direction, 0) + n
         t["talk_seconds"] += int(talk)
+    for trunk_id, most in _trunk_peaks(db, period, until, org_ids, organization_id):
+        if str(trunk_id) in trunks:
+            trunks[str(trunk_id)]["peak_calls"] = int(most or 0)
     peak = db.scalar(
         select(func.max(CallSample.calls_external)).where(
             CallSample.at >= since, CallSample.at < until

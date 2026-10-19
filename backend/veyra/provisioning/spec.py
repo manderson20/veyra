@@ -84,7 +84,7 @@ CORE_VARIABLES: tuple[VariableDef, ...] = (
 DEVICE_VARIABLES = ("mac", "mac_upper", "model", "model_slug")
 # Structured facts (spec version 2, docs/DEVICE_PROVISIONING.md §4.1): read-only
 # objects Veyra builds from the device, its profile, extensions and zones.
-FACT_NAMES = ("device", "organization", "lines", "keys", "paging", "server", "features")
+FACT_NAMES = ("device", "organization", "lines", "keys", "paging", "server", "features", "vars")
 CORE_NAMES = {v.name for v in CORE_VARIABLES}
 
 
@@ -94,8 +94,13 @@ class FileSpec(BaseModel):
     name: str = Field(
         description="Output filename pattern, may use {mac}, {mac_upper}, {model_slug}"
     )
-    source: str = Field(description="Template source file, relative to the template directory")
+    source: str = Field("", description="Template source file, relative to the template directory")
     format: Format
+    # A checksum file instead of a template: the MD5 of another output file
+    # in ``md5sum`` form (Algo, docs/PROVISIONING_BREADTH.md §4).
+    checksum_of: str | None = Field(
+        None, description="Output filename pattern of the file whose MD5 this file holds"
+    )
 
     @field_validator("name")
     @classmethod
@@ -113,10 +118,18 @@ class FileSpec(BaseModel):
     @field_validator("source")
     @classmethod
     def _source(cls, v: str) -> str:
+        if not v:
+            return v  # a checksum file has no source (checked below)
         p = PurePosixPath(v)
-        if p.is_absolute() or ".." in p.parts or "\\" in v or not v:
+        if p.is_absolute() or ".." in p.parts or "\\" in v:
             raise ValueError("source must be a relative path inside the template")
         return v
+
+    @model_validator(mode="after")
+    def _source_or_checksum(self) -> FileSpec:
+        if bool(self.source) == bool(self.checksum_of):
+            raise ValueError("a file has either a source or checksum_of")
+        return self
 
 
 class TemplateInfo(BaseModel):

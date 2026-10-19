@@ -11,11 +11,12 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.companion import _origin
 from veyra.api.v1.schemas import Email, MessageOut, UserOut, UserSessionOut
-from veyra.core import audit
+from veyra.core import audit, mail
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
 from veyra.core.deps import (
@@ -25,7 +26,7 @@ from veyra.core.deps import (
     request_context,
 )
 from veyra.core.errors import ProblemError, conflict, not_found
-from veyra.core.models import Installation, User, UserSession
+from veyra.core.models import Installation, PasswordResetToken, User, UserSession
 from veyra.core.models.base import utcnow
 from veyra.core.security import mfa, password_reset, passwords
 from veyra.core.security.principal import Principal
@@ -137,6 +138,14 @@ class ResetTokenInfo(BaseModel):
     display_name: str
     email: str
     expires_at: str
+
+
+class ResetRequestIn(BaseModel):
+    email: Email
+
+
+class ResetOptionsOut(BaseModel):
+    self_service: bool
 
 
 class PasswordResetIn(BaseModel):
@@ -655,7 +664,7 @@ def _reset_not_found() -> ProblemError:
         404,
         "Reset link not valid",
         "This password reset link is invalid, has expired or has already been used. "
-        "Ask an administrator for a new one.",
+        "Request a new one from the sign-in page, or ask an administrator.",
         code="reset_token_invalid",
     )
 
@@ -731,3 +740,126 @@ def reset_password(
     )
     db.commit()
     return MessageOut(message="Password set. Sign in with your new password.")
+
+
+# ----------------------------------------------------------------- self-service reset
+
+# A new emailed link for the same account at most this often, so a stranger
+# cannot flood a mailbox or keep replacing a link an administrator issued.
+SELF_SERVICE_INTERVAL = timedelta(minutes=5)
+SELF_SERVICE_ISSUER = "self-service"
+_REQUEST_ACCEPTED = (
+    "If an account with that address can reset its password here, a link is on its way. "
+    "Check your email; the link works once."
+)
+
+
+def _self_service_ready(db: Session) -> mail.SmtpSettings | None:
+    smtp = mail.load_smtp_settings(db)
+    return smtp if smtp.enabled and not smtp.problems() else None
+
+
+@router.get(
+    "/password-reset/options",
+    response_model=ResetOptionsOut,
+    summary='Whether the sign-in page offers "Forgot your password?"',
+)
+def reset_options(db: Session = Depends(get_db)) -> ResetOptionsOut:
+    return ResetOptionsOut(self_service=_self_service_ready(db) is not None)
+
+
+@router.post(
+    "/password-reset/request",
+    response_model=MessageOut,
+    status_code=202,
+    summary="Email a one-time reset link to the account with this address",
+)
+def request_reset(
+    body: ResetRequestIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    """The answer is the same whether or not the address has an account, so
+    the form cannot be used to find out who has one."""
+    if not _reset_limit(settings).hit(ctx.ip or "unknown"):
+        raise _too_many("Too many attempts. Wait a minute and try again.")
+    smtp = _self_service_ready(db)
+    if smtp is None:
+        raise ProblemError(
+            409,
+            "Not available",
+            "Password reset by email is not set up here. Ask an administrator for a reset link.",
+            code="self_service_reset_unavailable",
+        )
+    user = db.scalar(select(User).where(func.lower(User.email) == body.email.lower()))
+    reason = None
+    if user is None:
+        reason = "unknown_address"
+    elif not user.is_active:
+        reason = "disabled"
+    elif (user.auth_source != "local" and not user.is_recovery_admin) or sso.password_blocked(
+        db, user
+    ):
+        reason = "external_sign_in"
+    elif db.scalar(
+        select(PasswordResetToken.id).where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.issued_by == SELF_SERVICE_ISSUER,
+            PasswordResetToken.created_at > utcnow() - SELF_SERVICE_INTERVAL,
+        )
+    ):
+        reason = "recently_sent"
+    if user is None or reason is not None:
+        audit.record(
+            db,
+            action="auth.password_reset_request",
+            outcome="failure",
+            actor_label="anonymous",
+            target_type="user" if user else None,
+            target_id=user.id if user else None,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={"reason": reason},
+        )
+        db.commit()
+        return MessageOut(message=_REQUEST_ACCEPTED)
+    token, row = password_reset.issue_reset_token(
+        db, user, settings, issued_by=SELF_SERVICE_ISSUER, issued_from_ip=ctx.ip
+    )
+    inst = db.scalar(select(Installation))
+    from_address, from_name = mail.sender(smtp, inst.name if inst else "Veyra")
+    base = f"https://{settings.public_host}" if settings.public_host else _origin(request)
+    hours = settings.password_reset_ttl_hours
+    msg = mail.compose(
+        from_address=from_address,
+        from_name=from_name,
+        to=user.email,
+        subject="Reset your phone system password",
+        text=(
+            f"Hello {user.display_name},\n\n"
+            "Someone (hopefully you) asked to reset the password of this account. "
+            "Open the link below to choose a new one:\n\n"
+            f"{base}{password_reset.reset_link_path(token)}\n\n"
+            f"The link works once and expires in {hours} hour{'s' if hours != 1 else ''}. "
+            "Setting a new password signs out your other sessions.\n\n"
+            "If you did not ask for this, ignore this message: your password stays as it is. "
+            f"The request came from {ctx.ip or 'an unknown address'}.\n"
+        ),
+    )
+    mail.enqueue(settings.mailqueue_dir, msg.as_bytes())
+    audit.record(
+        db,
+        action="auth.password_reset_request",
+        actor_label="anonymous",
+        organization_id=user.home_organization_id,
+        target_type="user",
+        target_id=user.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"expires_at": row.expires_at.isoformat()},
+    )
+    db.commit()
+    return MessageOut(message=_REQUEST_ACCEPTED)

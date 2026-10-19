@@ -236,9 +236,10 @@ replace}` with "name, company, number…" lines or the export's columns,
 `too_many_contacts` at 500), frontend `components/portal/ContactsCard.tsx`
 (favourite toggle, call from the user's first enabled extension through
 `/calls/originate`, edit dialog, import dialog). Deviation from the design:
-the Companion extension keeps its own `companion.speed_dials` for now (it is
-a separately released client); it will read `/me/contacts` in its next
-version, and no data migration was done. Name resolution on call history
+no data migration was done; since 0.27.2 (#128) the Companion popup reads
+`/me/contacts?favourite=true` and its options page moves the old
+`companion.speed_dials` to favourite contacts on request (the popup shows
+the old list while the user has no favourites). Name resolution on call history
 and voicemail comes with slice D.
 
 ## 7. Presence (#60)
@@ -440,9 +441,9 @@ breakpoints), `WidgetRenderer.tsx`, `PortalCanvasPage.tsx` (tabs, add
 drawer, undo, save, reset); My Phone renders the canvas; System → Portal
 layouts edits templates with the same canvas. Deviations: the announcement
 widget's text comes from the template's widget `settings` (no separate
-object); modules cannot register widgets yet; buildings and departments
-have no pages (and no list API) of their own yet, so the template editor
-takes their id in a field and the pickers come with those pages (M21/M22).
+object); modules cannot register widgets yet (#134). Buildings (Sites →
+Buildings) and departments (Organizations → Departments) have their own
+pages since 0.27.1 (#126), and the template editor picks them from a list.
 
 *Built 2026-10-19 (0.26.4, #92):* widgets fit their size instead of being
 cropped. Inside a canvas item the card is a flex column: the title stays
