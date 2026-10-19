@@ -50,7 +50,7 @@ def test_presence_rules_and_directory(admin, app):
     assert [s["key"] for s in r.json()["states"]][:2] == ["available", "away"]
     # Rules: in a meeting → DND on; out → forward to the office; available → both off.
     prefs = pat.get("/api/v1/me/preferences").json()
-    assert prefs["portal"] == {"presence_rules": {}}
+    assert prefs["portal"]["presence_rules"] == {} and prefs["portal"]["layout"] is None
     r = pat.put(
         "/api/v1/me/preferences",
         json={
