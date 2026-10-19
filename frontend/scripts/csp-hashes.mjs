@@ -14,7 +14,7 @@ function walk(dir) {
     if (statSync(p).isDirectory()) walk(p);
     else if (name.endsWith(".html")) {
       const html = readFileSync(p, "utf8");
-      for (const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
+      for (const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script\s*>/gi)) {
         if (m[1].trim()) hashes.add(`'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
       }
     }

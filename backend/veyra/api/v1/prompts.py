@@ -7,6 +7,7 @@ the catalogue entry menus point at."""
 
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from datetime import UTC, datetime
@@ -276,11 +277,14 @@ def _audit(
 def _recording_path(base: Path, org: Organization, file: str) -> Path:
     if not _RECORDING_RE.match(file):
         raise not_found("Recording")
-    folder = (base / org.slug / INCOMING).resolve()
-    path = (folder / file).resolve()
-    # The pattern leaves no path characters; the containment check makes it
-    # evident (and holds if the pattern ever loosens).
-    if path.parent != folder or not path.is_file():
+    # The pattern leaves no path characters; the normalized-prefix check makes
+    # containment evident (and holds if the pattern ever loosens).
+    folder = os.path.normpath(str(base / org.slug / INCOMING))
+    candidate = os.path.normpath(os.path.join(folder, file))
+    if not candidate.startswith(folder + os.sep):
+        raise not_found("Recording")
+    path = Path(candidate)
+    if not path.is_file():
         raise not_found("Recording")
     return path
 
