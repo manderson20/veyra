@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 7,
+  "sequence": 8,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.25.5",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Fixes from the Milestone 19 live check: the in-call codes (*1 record, *2 attended transfer, ## blind transfer) never reached the phone system because the engine's features reload used a console command Asterisk 22 no longer has; and queue agent state set from the page now writes the marks the phone's *45/*46 toggles read. Deploy the configuration once after installing to activate the in-call codes. Notes: https://github.com/manderson20/veyra/releases/tag/v0.25.5",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.1.0",
+      "revision": "bf26e0077d",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.25.5/veyra-0.25.5.tar.gz",
+        "sha256": "a0af011a2b73f3fdc44a1bc1666c42869a16eb7618369ddcc05bb7616e877bdc",
+        "size": 8010023
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -122,6 +139,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-18T23:42:13+00:00",
-  "expires_at": "2027-01-16T23:42:13+00:00"
+  "generated_at": "2026-10-19T00:23:22+00:00",
+  "expires_at": "2027-01-17T00:23:22+00:00"
 }
