@@ -8,6 +8,10 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.26.0 (Milestone 20)
+
+Design: [docs/USER_PORTAL.md](docs/USER_PORTAL.md). Entries are added as each slice lands.
+
 ## 0.25.5 — 2026-10-19
 
 ### Fixed
