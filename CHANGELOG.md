@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.1 — 2026-10-20
+
+First items from the milestone audit (issues #108–#147). No migration. Note the fix below: after installing, open each extension's Location card and choose its site (or building) so emergency routing and readiness count it.
 
 ### Fixed
 - **Extensions can be placed at a site.** The site of an extension decides its emergency route, emergency caller ID and the site's emergency readiness, but it could not be set from the interface or the API, so no extension counted toward any site. Extensions now take a site (or a building, which implies its site).
