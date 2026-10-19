@@ -323,3 +323,87 @@ def test_cross_site_mutations_are_refused(admin):
 def test_logout_clears_site_data(admin):
     r = admin.post("/api/v1/auth/logout")
     assert r.headers.get("Clear-Site-Data") == '"cookies"'
+
+
+# ----------------------------------------------------------------- self-service reset
+
+
+def _enable_mail():
+    from veyra.core import mail
+
+    with session_scope() as db:
+        mail.save_smtp_settings(
+            db,
+            mail.SmtpSettings(
+                enabled=True, host="smtp.example.org", from_address="veyra@example.org"
+            ),
+        )
+
+
+def _queued(settings):
+    from email import policy
+    from email.parser import BytesParser
+
+    return [
+        BytesParser(policy=policy.default).parsebytes(p.read_bytes())
+        for p in sorted(settings.mailqueue_dir.glob("*.eml"))
+    ]
+
+
+def test_self_service_reset_by_email(admin, app, settings):
+    import veyra.api.v1.auth as auth_mod
+
+    auth_mod._reset_limiter = None
+    jo = _make_user(admin)
+    anon = TestClient(app, base_url="http://veyra.test")
+    assert anon.get("/api/v1/auth/password-reset/options").json() == {"self_service": False}
+    r = anon.post("/api/v1/auth/password-reset/request", json={"email": jo["email"]})
+    assert r.status_code == 409 and r.json()["code"] == "self_service_reset_unavailable"
+
+    _enable_mail()
+    assert anon.get("/api/v1/auth/password-reset/options").json() == {"self_service": True}
+    r = anon.post("/api/v1/auth/password-reset/request", json={"email": jo["email"].upper()})
+    assert r.status_code == 202, r.text
+    unknown = anon.post("/api/v1/auth/password-reset/request", json={"email": "nobody@x.org"})
+    assert unknown.status_code == 202 and unknown.json() == r.json()  # same answer
+    again = anon.post("/api/v1/auth/password-reset/request", json={"email": jo["email"]})
+    assert again.status_code == 202
+
+    msgs = _queued(settings)
+    assert len(msgs) == 1  # the unknown address and the repeat within 5 minutes send nothing
+    assert msgs[0]["To"] == jo["email"]
+    body = msgs[0].get_content()
+    token = body.split("/reset-password/?token=")[1].split()[0]
+    assert "http://veyra.test/reset-password/?token=" in body
+    with session_scope() as db:
+        row = db.scalar(select(PasswordResetToken))
+        assert row.issued_by == "self-service" and row.token_hash != token
+
+    ok = anon.post(
+        "/api/v1/auth/password-reset", json={"token": token, "new_password": NEW_PASSWORD}
+    )
+    assert ok.status_code == 200, ok.text
+    login(TestClient(app, base_url="http://veyra.test"), jo["email"], NEW_PASSWORD)
+    events = admin.get("/api/v1/audit", params={"q": "auth.password_reset_request"}).json()
+    assert events["total"] == 3
+    auth_mod._reset_limiter = None
+
+
+def test_self_service_reset_skips_disabled_and_sso_accounts(admin, app, settings):
+    import veyra.api.v1.auth as auth_mod
+
+    auth_mod._reset_limiter = None
+    _enable_mail()
+    jo = _make_user(admin)
+    admin.patch(f"/api/v1/users/{jo['id']}", json={"is_active": False})
+    sso = _make_user(admin, email="sso@district.local")
+    with session_scope() as db:
+        db.get(User, __import__("uuid").UUID(sso["id"])).auth_source = "oidc"
+    anon = TestClient(app, base_url="http://veyra.test")
+    for addr in (jo["email"], sso["email"]):
+        assert (
+            anon.post("/api/v1/auth/password-reset/request", json={"email": addr}).status_code
+            == 202
+        )
+    assert _queued(settings) == []
+    auth_mod._reset_limiter = None

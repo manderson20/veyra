@@ -2,8 +2,9 @@
 "use client";
 
 import { Checkbox, TextArea, TextField } from "@/components/ui";
-import { parseList } from "@/lib/routing";
+import { formatHoliday, holidayComplete, parseHoliday, type Holiday } from "@/lib/holidays";
 import type { TimeCondition, TimeConditionInput, TimeRange } from "@/lib/types";
+import { HolidaysEditor } from "./HolidaysEditor";
 import { DEFAULT_RANGE, RangesEditor } from "./RangesEditor";
 
 export interface TimeConditionDraft {
@@ -11,8 +12,7 @@ export interface TimeConditionDraft {
   description: string;
   timezone: string;
   ranges: TimeRange[];
-  /** Comma separated MM-DD. */
-  holidays: string;
+  holidays: Holiday[];
   /** Digits after the override code (*27<index>); empty: no code. */
   code_index: string;
   /** Typed to set or replace the PIN; empty: unchanged (edit) or none (create). */
@@ -25,7 +25,7 @@ export const EMPTY_TIME_CONDITION: TimeConditionDraft = {
   description: "",
   timezone: "",
   ranges: [{ ...DEFAULT_RANGE, days: [...DEFAULT_RANGE.days] }],
-  holidays: "",
+  holidays: [],
   code_index: "",
   pin: "",
   clear_pin: false,
@@ -38,7 +38,7 @@ export function timeConditionDraft(tc: TimeCondition, organizationTimezone?: str
     // The API returns the effective zone; show it as inherited when it equals the organization's.
     timezone: organizationTimezone && tc.timezone === organizationTimezone ? "" : tc.timezone,
     ranges: tc.ranges.map((r) => ({ ...r, days: [...r.days] })),
-    holidays: tc.holidays.join(", "),
+    holidays: tc.holidays.map(parseHoliday),
     code_index: tc.code_index === null ? "" : String(tc.code_index),
     pin: "",
     clear_pin: false,
@@ -51,7 +51,7 @@ export function timeConditionBody(d: TimeConditionDraft): TimeConditionInput {
     description: d.description.trim() || null,
     timezone: d.timezone.trim() || null,
     ranges: d.ranges,
-    holidays: parseList(d.holidays),
+    holidays: d.holidays.map(formatHoliday).filter(Boolean),
     code_index: d.code_index.trim() === "" ? null : Number(d.code_index),
     ...(d.clear_pin ? { pin: null } : d.pin.trim() ? { pin: d.pin.trim() } : {}),
   };
@@ -60,6 +60,7 @@ export function timeConditionBody(d: TimeConditionDraft): TimeConditionInput {
 export function timeConditionValid(d: TimeConditionDraft): boolean {
   const idx = d.code_index.trim();
   return d.name.trim().length > 0 && d.ranges.length > 0 && d.ranges.every((r) => r.days.length > 0 && r.start && r.end)
+    && d.holidays.every(holidayComplete)
     && (idx === "" || (/^[0-9]{1,2}$/.test(idx) && Number(idx) <= 99))
     && (!d.pin.trim() || /^[0-9]{4,10}$/.test(d.pin.trim()));
 }
@@ -83,8 +84,7 @@ export function TimeConditionFields({ draft, onChange, errors, timezonePlacehold
           help="IANA name such as America/Chicago. Empty: the organization's time zone." onChange={(e) => onChange({ timezone: e.target.value })} />
       </div>
       <RangesEditor ranges={draft.ranges} onChange={(ranges) => onChange({ ranges })} error={errors.ranges} disabled={disabled} />
-      <TextField label="Holidays" disabled={disabled} value={draft.holidays} error={errors.holidays} autoComplete="off" spellCheck={false} placeholder="01-01, 07-04, 12-25"
-        help="Dates as MM-DD, comma separated. The condition is closed all day on these dates every year." onChange={(e) => onChange({ holidays: e.target.value })} />
+      <HolidaysEditor holidays={draft.holidays} onChange={(holidays) => onChange({ holidays })} error={errors.holidays} disabled={disabled} />
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />
       <div className="form-grid">
         <TextField label="Override code index" disabled={disabled} value={draft.code_index} error={errors.code_index} inputMode="numeric" placeholder="None"

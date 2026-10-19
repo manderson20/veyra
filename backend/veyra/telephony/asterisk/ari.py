@@ -103,6 +103,12 @@ class AriClient:
     def channels(self) -> list[dict[str, Any]]:
         return list(self._request("GET", "channels") or [])
 
+    def hangup(self, channel_id: str) -> None:
+        """``DELETE /channels/{id}``: hang the channel up (normal clearing)."""
+        self._request(
+            "DELETE", f"channels/{urllib.parse.quote(channel_id, safe='')}", {"reason": "normal"}
+        )
+
     def originate(
         self,
         endpoint: str,

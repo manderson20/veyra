@@ -32,6 +32,7 @@ SCOPES: dict[str, str] = {
     "bells.write": "Ring bell schedules now",
     "calls.read": "See active calls",
     "calls.originate": "Place click-to-dial calls",
+    "calls.hangup": "Hang up calls in progress",
     "calls.history.read": "Read the call history",
     "calls.history.export": "Export the call history as CSV",
     "directory.read": "Read the directory",

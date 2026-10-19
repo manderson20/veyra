@@ -15,6 +15,7 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
+import { describeHoliday } from "@/lib/holidays";
 
 function TimeConditionView() {
   const id = useSearchParams().get("id");
@@ -133,7 +134,7 @@ function TimeConditionView() {
         <Card title="Information">
           <dl className="dl">
             <dt>Open hours</dt><dd>{summarizeRanges(t.ranges)}</dd>
-            <dt>Holidays</dt><dd>{t.holidays.length ? <span className="mono">{t.holidays.join(", ")}</span> : <span className="subtle">None</span>}</dd>
+            <dt>Holidays</dt><dd>{t.holidays.length ? <ul style={{ margin: 0, paddingLeft: "1.1em" }}>{t.holidays.map((h) => <li key={h}>{describeHoliday(h)}</li>)}</ul> : <span className="subtle">None</span>}</dd>
             <dt>Time zone</dt><dd><span className="mono">{t.timezone}</span>{orgTimezone && t.timezone === orgTimezone ? <span className="subtle"> (organization default)</span> : null}</dd>
             <dt>Organization</dt><dd>{t.organization_name}</dd>
             <dt>Created</dt><dd>{formatDateTime(t.created_at)}</dd>

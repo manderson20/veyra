@@ -2345,10 +2345,9 @@ def _destination_lines_of(r: dict[str, Any], conditions: dict[str, dict[str, Any
     cond = conditions.get(str(cond_key)) if cond_key else None
     if cond is not None:
         tz = routing.check_timezone(str(cond.get("timezone") or "UTC"))
-        closed, opened = routing.gotoiftime_args(
-            routing.check_ranges(list(cond.get("ranges") or [])),
-            routing.check_holidays(list(cond.get("holidays") or [])),
-            tz,
+        opened = routing.gotoiftime_args(routing.check_ranges(list(cond.get("ranges") or [])), tz)
+        closed = routing.holiday_apps(
+            routing.check_holidays(list(cond.get("holidays") or [])), tz, "closed"
         )
         # An override forced from a phone or the interface wins over the
         # schedule (docs/CALL_FEATURES.md §4.6).
@@ -2361,7 +2360,7 @@ def _destination_lines_of(r: dict[str, Any], conditions: dict[str, dict[str, Any
                 ' same => n,GotoIf($["${VEYRA_TC}"="open"]?open)',
                 ' same => n,GotoIf($["${VEYRA_TC}"="closed"]?closed)',
             ]
-        out += [f" same => n,GotoIfTime({args}?closed)" for args in closed]
+        out += [f" same => n,{app}" for app in closed]
         out += [f" same => n,GotoIfTime({args}?open)" for args in opened]
         out.append(" same => n(closed),NoOp(Veyra: outside the hours of ${VEYRA_DID})")
         out += _goto(after)
@@ -2924,10 +2923,9 @@ def _tc_override_codes(
         seen[idx] = str(c.get("name") or key)
         name = _check_value(str(c.get("name") or key), "time condition name")
         tz = routing.check_timezone(str(c.get("timezone") or "UTC"))
-        closed, opened = routing.gotoiftime_args(
-            routing.check_ranges(list(c.get("ranges") or [])),
-            routing.check_holidays(list(c.get("holidays") or [])),
-            tz,
+        opened = routing.gotoiftime_args(routing.check_ranges(list(c.get("ranges") or [])), tz)
+        closed = routing.holiday_apps(
+            routing.check_holidays(list(c.get("holidays") or [])), tz, "isclosed"
         )
         store = f"{SWITCH_FAMILY}/tc/{org}/{key}"
         device = f"Custom:veyra-tc-{org}-{key}"
@@ -2937,7 +2935,7 @@ def _tc_override_codes(
             f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?nophone)',
             *pin,
             f' same => n,GotoIf($["${{DB({store})}}"!=""]?clear)',
-            *[f" same => n,GotoIfTime({args}?isclosed)" for args in closed],
+            *[f" same => n,{app}" for app in closed],
             *[f" same => n,GotoIfTime({args}?isopen)" for args in opened],
             f" same => n(isclosed),NoOp(Veyra time condition {name}: closed now, forcing open)",
             *_tc_force(store, device, org, key, "open"),

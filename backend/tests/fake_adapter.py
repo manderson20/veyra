@@ -61,6 +61,7 @@ class FakeAdapter(TelephonyAdapter):
             )
         ]
         self.calls = [ActiveCall("ch1", "1001", "1002", "Up", 12, endpoint="example-1001")]
+        self.hung_up: list[str] = []
         self.originated: list[tuple[str, str, str]] = []
         self.originated_channels: list[tuple[str, str, str, dict[str, str]]] = []
         self.fail_originate: str | None = None
@@ -106,6 +107,10 @@ class FakeAdapter(TelephonyAdapter):
 
     def active_calls(self) -> list[ActiveCall]:
         return list(self.calls)
+
+    def hangup(self, channel_id: str) -> None:
+        self.hung_up.append(channel_id)
+        self.calls = [c for c in self.calls if c.channel_id != channel_id]
 
     def registrations(self) -> list[Registration]:
         return list(self.contacts)

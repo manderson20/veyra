@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Forgot your password?** (#108): when email delivery is set up, the sign-in page offers "Forgot your password?"; the user enters their address and receives a one-time link to choose a new password. The page answers the same whether or not the address has an account, sends at most one link per account every five minutes, and skips accounts that sign in through Google or Microsoft. Administrators can still issue links as before.
+- **Hang up a call** (#109): Active Calls has a Hang up button (with a confirmation) for administrators and technicians (new permission "Hang up calls in progress"); each hang-up is in the audit log.
+- **Closed days and moving holidays** (#113): time conditions take holidays as dates every year, date ranges every year (winter break, even across New Year), one-off dates and ranges (a snow day, this year's spring break), and rules such as the fourth Thursday of November or the last Monday of May. The holiday list is now an editor with one row per holiday and says each one in words; the report builder's business-hours filter follows the same holidays.
+
 ## 0.27.0 — 2026-10-20 (Milestone 21: provisioning breadth)
 
 Design: [docs/PROVISIONING_BREADTH.md](docs/PROVISIONING_BREADTH.md); report [docs/milestones/MILESTONE_21_REPORT.md](docs/milestones/MILESTONE_21_REPORT.md). Migration `0054`. The new templates are marked experimental until checked on hardware (docs/PROVISIONING_HARDWARE_CHECKS.md).

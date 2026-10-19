@@ -6,7 +6,7 @@ and time conditions. Shared by the API (validation) and the generator
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -154,22 +154,146 @@ def check_ranges(ranges: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+# Holidays (docs/ROUTING.md §time conditions; issue #113), one string each:
+#   12-25                    every year on that date
+#   12-21..01-02             every year, a range of dates (may cross New Year)
+#   2026-11-27               once, on that date
+#   2026-12-21..2027-01-02   once, a range of dates
+#   4-thu-11, last-mon-05    every year, the nth (1-4) or last weekday of a month
+_MD = r"(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])"
+_YMD = r"(20[0-9]{2})-" + _MD
+_YEARLY_RE = re.compile(rf"^{_MD}$")
+_YEARLY_RANGE_RE = re.compile(rf"^{_MD}\.\.{_MD}$")
+_DATE_RE = re.compile(rf"^{_YMD}$")
+_DATE_RANGE_RE = re.compile(rf"^{_YMD}\.\.{_YMD}$")
+_NTH_RE = re.compile(r"^(1|2|3|4|last)-(mon|tue|wed|thu|fri|sat|sun)-(0[1-9]|1[0-2])$")
+MONTH_DAYS = (31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+HOLIDAY_HELP = (
+    "holidays are MM-DD (every year), MM-DD..MM-DD, YYYY-MM-DD (once), "
+    "YYYY-MM-DD..YYYY-MM-DD, or N-ddd-MM / last-ddd-MM (for example 4-thu-11)"
+)
+
+
+def _md_ok(m: str, d: str) -> bool:
+    return int(d) <= MONTH_DAYS[int(m) - 1]
+
+
+def _ymd(y: str, m: str, d: str) -> date | None:
+    try:
+        return date(int(y), int(m), int(d))
+    except ValueError:
+        return None
+
+
+def _check_holiday(h: str) -> str:
+    if (g := _YEARLY_RE.match(h)) and _md_ok(*g.groups()):
+        return h
+    if (g := _YEARLY_RANGE_RE.match(h)) and _md_ok(*g.groups()[:2]) and _md_ok(*g.groups()[2:]):
+        first, last = h.split("..")
+        return first if first == last else h
+    if (g := _DATE_RE.match(h)) and _ymd(*g.groups()):
+        return h
+    if g := _DATE_RANGE_RE.match(h):
+        start, end = _ymd(*g.groups()[:3]), _ymd(*g.groups()[3:])
+        if start and end and start <= end:
+            return h.split("..")[0] if start == end else h
+        if start and end:
+            raise ValueError(f"holiday {h}: the range ends before it starts")
+    if g := _NTH_RE.match(h):
+        if g.group(1) == "last" and g.group(3) == "02":
+            raise ValueError(f"holiday {h}: the last weekday of February is not supported")
+        return h
+    raise ValueError(f"{HOLIDAY_HELP}; {h!r} is not one of them")
+
+
 def check_holidays(holidays: list[str]) -> list[str]:
     out = []
     for h in holidays:
-        h = str(h).strip()
-        if not _HOLIDAY_RE.match(h):
-            raise ValueError("holidays are MM-DD dates")
+        h = _check_holiday(str(h).strip().lower())
         if h not in out:
             out.append(h)
     return sorted(out)
+
+
+def holiday_matches(h: str, day: date) -> bool:
+    """Whether the (checked) holiday ``h`` falls on ``day``."""
+    md = day.strftime("%m-%d")
+    if _YEARLY_RE.match(h):
+        return md == h
+    if _YEARLY_RANGE_RE.match(h):
+        a, b = h.split("..")
+        return a <= md <= b if a <= b else (md >= a or md <= b)
+    if _DATE_RE.match(h):
+        return day.isoformat() == h
+    if _DATE_RANGE_RE.match(h):
+        a, b = h.split("..")
+        return a <= day.isoformat() <= b
+    if g := _NTH_RE.match(h):
+        n, wd, m = g.groups()
+        if day.month != int(m) or DAYS[day.weekday()] != wd:
+            return False
+        if n == "last":
+            return day.day > MONTH_DAYS[day.month - 1] - 7
+        return (day.day - 1) // 7 + 1 == int(n)
+    return False
+
+
+def _span(d: int, end: int, last: int) -> str:
+    if d == end:
+        return str(d)
+    return "*" if d == 1 and end == last else f"{d}-{end}"
+
+
+def _mday_spans(a: tuple[int, int], b: tuple[int, int]) -> list[tuple[str, str]]:
+    """(mdays, month) pairs for GotoIfTime covering month/day ``a`` to ``b``
+    inclusive, crossing New Year when ``b`` comes before ``a``."""
+    out = []
+    m, d = a
+    wrapped = b < a
+    while True:
+        last = MONTH_DAYS[m - 1]
+        final = m == b[0] and not wrapped
+        out.append((_span(d, b[1] if final else last, last), MONTHS[m - 1]))
+        if final:
+            return out
+        m = m % 12 + 1
+        if m == 1:
+            wrapped = False
+        d = 1
+
+
+def holiday_apps(holidays: list[str], timezone: str, label: str) -> list[str]:
+    """Dialplan applications that jump to ``label`` when today is one of the
+    (checked) ``holidays`` in ``timezone``."""
+    today = f"${{STRFTIME(${{EPOCH}},{timezone},%Y%m%d)}}"
+    out = []
+    for h in holidays:
+        if _YEARLY_RE.match(h):
+            month, day = h.split("-")
+            out.append(f"GotoIfTime(*,*,{int(day)},{MONTHS[int(month) - 1]},{timezone}?{label})")
+        elif _YEARLY_RANGE_RE.match(h):
+            (m1, d1), (m2, d2) = ((int(x) for x in part.split("-")) for part in h.split(".."))
+            for mdays, month in _mday_spans((m1, d1), (m2, d2)):
+                out.append(f"GotoIfTime(*,*,{mdays},{month},{timezone}?{label})")
+        elif _DATE_RE.match(h):
+            out.append(f"GotoIf($[{today} = {h.replace('-', '')}]?{label})")
+        elif _DATE_RANGE_RE.match(h):
+            lo, hi = (x.replace("-", "") for x in h.split(".."))
+            out.append(f"GotoIf($[{today} >= {lo} & {today} <= {hi}]?{label})")
+        elif g := _NTH_RE.match(h):
+            n, wd, m = g.groups()
+            last = MONTH_DAYS[int(m) - 1]
+            first = last - 6 if n == "last" else (int(n) - 1) * 7 + 1
+            end = last if n == "last" else first + 6
+            out.append(f"GotoIfTime(*,{wd},{first}-{end},{MONTHS[int(m) - 1]},{timezone}?{label})")
+    return out
 
 
 def is_open(
     ranges: list[dict[str, Any]], holidays: list[str], timezone: str, now: datetime | None = None
 ) -> bool:
     now = (now or datetime.now(ZoneInfo(timezone))).astimezone(ZoneInfo(timezone))
-    if now.strftime("%m-%d") in holidays:
+    if any(holiday_matches(h, now.date()) for h in holidays):
         return False
     day = DAYS[now.weekday()]
     hhmm = now.strftime("%H:%M")
@@ -188,17 +312,11 @@ def day_spans(days: list[str]) -> list[str]:
     return [DAYS[s[0]] if len(s) == 1 else f"{DAYS[s[0]]}-{DAYS[s[-1]]}" for s in spans]
 
 
-def gotoiftime_args(
-    ranges: list[dict[str, Any]], holidays: list[str], timezone: str
-) -> tuple[list[str], list[str]]:
-    """Argument strings for GotoIfTime: (closed-on-holiday checks, open checks).
-    Each is ``times,days,mdays,months,timezone``."""
-    closed = []
-    for h in holidays:
-        month, day = h.split("-")
-        closed.append(f"*,*,{int(day)},{MONTHS[int(month) - 1]},{timezone}")
+def gotoiftime_args(ranges: list[dict[str, Any]], timezone: str) -> list[str]:
+    """Argument strings for GotoIfTime, one per open range and weekday span:
+    ``times,days,mdays,months,timezone``. Holidays: :func:`holiday_apps`."""
     opened = []
     for r in ranges:
         for span in day_spans(r["days"]):
             opened.append(f"{r['start']}-{r['end']},{span},*,*,{timezone}")
-    return closed, opened
+    return opened

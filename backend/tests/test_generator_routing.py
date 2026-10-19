@@ -468,3 +468,73 @@ def test_shared_extensions_get_more_contacts_and_the_notify_file_is_managed():
     snap["extensions"][0]["max_contacts"] = 99
     with pytest.raises(generator.GenerationError, match="max_contacts"):
         generator.generate(snap)
+
+
+def test_holiday_forms_validate_match_and_generate():
+    from datetime import date
+
+    given = ["12-25", "12-21..01-02", "2026-11-27", "2026-12-21..2027-01-02", "4-THU-11"]
+    given += ["last-mon-05", "2026-12-24..2026-12-24", "12-25"]
+    hs = routing.check_holidays(given)
+    assert hs == [
+        "12-21..01-02",
+        "12-25",
+        "2026-11-27",
+        "2026-12-21..2027-01-02",
+        "2026-12-24",
+        "4-thu-11",
+        "last-mon-05",
+    ]
+    for bad in ["13-01", "02-30", "2026-02-29", "2027-01-02..2026-12-21", "last-mon-02"]:
+        with pytest.raises(ValueError):
+            routing.check_holidays([bad])
+    for bad in ["5-mon-01", "xmas", "2026/12/25"]:
+        with pytest.raises(ValueError):
+            routing.check_holidays([bad])
+
+    m = routing.holiday_matches
+    assert m("4-thu-11", date(2026, 11, 26)) and not m("4-thu-11", date(2026, 11, 19))
+    assert m("last-mon-05", date(2026, 5, 25)) and not m("last-mon-05", date(2026, 5, 18))
+    assert m("1-mon-09", date(2026, 9, 7)) and not m("1-mon-09", date(2026, 9, 14))
+    assert m("12-21..01-02", date(2027, 1, 1)) and m("12-21..01-02", date(2026, 12, 21))
+    assert not m("12-21..01-02", date(2027, 1, 3))
+    assert m("2026-11-27", date(2026, 11, 27)) and not m("2026-11-27", date(2027, 11, 27))
+    assert m("2026-12-21..2027-01-02", date(2027, 1, 2))
+    assert not m("2026-12-21..2027-01-02", date(2027, 12, 22))
+
+    apps = routing.holiday_apps(["12-21..01-02", "03-30..04-02", "4-thu-11"], "UTC", "closed")
+    assert apps == [
+        "GotoIfTime(*,*,21-31,dec,UTC?closed)",
+        "GotoIfTime(*,*,1-2,jan,UTC?closed)",
+        "GotoIfTime(*,*,30-31,mar,UTC?closed)",
+        "GotoIfTime(*,*,1-2,apr,UTC?closed)",
+        "GotoIfTime(*,thu,22-28,nov,UTC?closed)",
+    ]
+    # A range across several whole months lists each month.
+    assert routing.holiday_apps(["06-10..08-20"], "UTC", "x")[1] == "GotoIfTime(*,*,*,jul,UTC?x)"
+    once = routing.holiday_apps(["2026-12-21..2027-01-02"], "America/Chicago", "closed")
+    assert once == [
+        "GotoIf($[${STRFTIME(${EPOCH},America/Chicago,%Y%m%d)} >= 20261221"
+        " & ${STRFTIME(${EPOCH},America/Chicago,%Y%m%d)} <= 20270102]?closed)"
+    ]
+
+
+def test_holiday_sql_matches_python(app):
+    from datetime import date, timedelta
+
+    from sqlalchemy import DateTime, Integer, cast, func, literal, select
+
+    from veyra.core.db import session_scope
+    from veyra.reporting.builder import _holiday
+
+    hs = ["12-25", "12-21..01-02", "03-30..04-02", "2026-11-27", "2026-12-21..2027-01-02"]
+    hs += ["4-thu-11", "last-mon-05", "1-mon-09"]
+    days = [date(2026, 1, 1) + timedelta(days=i) for i in range(0, 400, 3)]
+    days += [date(2026, 11, 26), date(2026, 5, 25), date(2026, 9, 7), date(2027, 1, 2)]
+    with session_scope() as db:
+        for d in days:
+            local = cast(literal(f"{d.isoformat()} 10:00:00"), DateTime)
+            weekday = cast(func.extract("isodow", local), Integer)
+            for h in hs:
+                got = db.scalar(select(_holiday(h, local, weekday)))
+                assert bool(got) == routing.holiday_matches(h, d), (h, d)

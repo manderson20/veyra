@@ -153,12 +153,13 @@ def test_time_conditions_crud_open_now_and_in_use(admin):
             "ranges": [
                 {"days": ["mon", "tue", "wed", "thu", "fri"], "start": "07:30", "end": "16:00"}
             ],
-            "holidays": ["12-25", "01-01", "12-25"],
+            "holidays": ["12-25", "01-01", "12-25", "4-thu-11", "2026-12-21..2027-01-02"],
         },
     )
     assert r.status_code == 201, r.text
     tc = r.json()
-    assert tc["holidays"] == ["01-01", "12-25"] and tc["in_use_by"] == 0
+    assert tc["holidays"] == ["01-01", "12-25", "2026-12-21..2027-01-02", "4-thu-11"]
+    assert tc["in_use_by"] == 0
     assert isinstance(tc["open_now"], bool) and tc["organization_name"] == org["name"]
     # default time zone comes from the organization
     r = admin.post(

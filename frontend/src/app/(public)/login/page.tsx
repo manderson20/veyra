@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { TotpEnrolment } from "@/components/account/TotpEnrolment";
@@ -34,6 +35,7 @@ function LoginForm() {
   const [checking, setChecking] = useState(true);
   const [stage, setStage] = useState<Stage>({ kind: "password" });
   const [providers, setProviders] = useState<SsoProviderPublic[]>([]);
+  const [selfReset, setSelfReset] = useState(false);
   const next = safeNext(params.get("next"));
   const ssoError = params.get("sso_error");
 
@@ -42,6 +44,10 @@ function LoginForm() {
       .get<SsoProviderPublic[]>("/auth/sso/providers", undefined, { noRedirect: true })
       .then(setProviders)
       .catch(() => setProviders([]));
+    api
+      .get<{ self_service: boolean }>("/auth/password-reset/options", undefined, { noRedirect: true })
+      .then((o) => setSelfReset(o.self_service))
+      .catch(() => setSelfReset(false));
   }, []);
 
   const finish = async (s: SessionInfo | undefined) => {
@@ -148,8 +154,11 @@ function LoginForm() {
           Sign in
         </Button>
       </form>
+      {selfReset ? (
+        <p style={{ textAlign: "center", margin: 0 }}><Link href="/forgot-password/">Forgot your password?</Link></p>
+      ) : null}
       <p className="subtle">
-        Forgotten your password? Ask an administrator for a reset link. The local recovery administrator can always
+        {selfReset ? "" : "Forgotten your password? Ask an administrator for a reset link. "}The local recovery administrator can always
         sign in here, even when single sign-on is configured, and can be reset from the server with{" "}
         <span className="mono">veyra users reset-password</span>.
       </p>

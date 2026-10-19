@@ -72,7 +72,7 @@ type-check, lint and build).
 
 1. **Reset links instead of email** for this milestone (ADR 0011); the
    self-service "forgot password" flow waits for email delivery (M7) and
-   reuses the same tokens.
+   reuses the same tokens. *(Built in 0.27.1, #108.)*
 2. **Administrator-set passwords are temporary by default.** An
    administrator can untick "require change" when creating a user or
    setting a password (for example for a service account).

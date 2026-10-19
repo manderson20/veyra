@@ -224,3 +224,31 @@ def test_cli_deploy_when_idle(admin, app, tmp_path, capsys, monkeypatch):
     adapter.calls = []
     with session_scope() as db:
         assert deployer.run_once(db).state == "deployed"
+
+
+def test_hang_up_a_call(admin, app, tmp_path):
+    adapter, _, _ = _fake(app, tmp_path)
+    a = _org(admin)["id"]
+    enable_multi_tenancy()
+    b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    ea = _create(admin, a, "1001", "Alpha desk")
+    eb = _create(admin, b, "2001", "Beta desk")
+    adapter.calls = [
+        ActiveCall("1697.1", "1001", "1002", "Up", 30, endpoint=ea["endpoint_name"]),
+        ActiveCall("1697.2", "2001", "*43", "Ring", 2, endpoint=eb["endpoint_name"]),
+    ]
+    _user(admin, "tech@beta.local", "technician", b)
+    t = login(TestClient(app, base_url="http://veyra.test"), "tech@beta.local", ADMIN_PASSWORD)
+    assert t.delete("/api/v1/calls/1697.1").status_code == 404  # another organization's call
+    assert adapter.hung_up == []
+    r = t.delete("/api/v1/calls/1697.2")
+    assert r.status_code == 200 and "2001" in r.json()["message"]
+    assert adapter.hung_up == ["1697.2"]
+    assert admin.delete("/api/v1/calls/1697.2").status_code == 404  # gone
+    assert admin.delete("/api/v1/calls/bad%2Fid").status_code == 404
+    assert admin.delete("/api/v1/calls/1697.1").status_code == 200
+    events = admin.get("/api/v1/audit", params={"q": "call.hangup"}).json()
+    assert events["total"] == 2
+    _user(admin, "ro@beta.local", "read_only", b)
+    ro = login(TestClient(app, base_url="http://veyra.test"), "ro@beta.local", ADMIN_PASSWORD)
+    assert ro.delete("/api/v1/calls/1697.2").status_code == 403
