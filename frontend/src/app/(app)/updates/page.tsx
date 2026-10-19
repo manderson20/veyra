@@ -197,6 +197,11 @@ export default function UpdatesPage() {
         </Callout>
       ) : null}
 
+      <Card title="Available updates" flush>
+        <DataTable columns={availableColumns} rows={available.data} rowKey={(u) => u.id} loading={available.loading} error={available.error} onRetry={available.reload}
+          caption="Available updates" empty={<EmptyState compact icon="checkCircle" title="No updates found">No updates were found as of the last check.</EmptyState>} />
+      </Card>
+
       <div className="grid grid--2" style={{ alignItems: "start" }}>
         <Card title="Last check">
           {latest.error ? <ErrorState compact error={latest.error} onRetry={latest.reload} /> : latest.loading && latest.data === undefined ? <LoadingState /> : !latest.data ? (
@@ -212,11 +217,6 @@ export default function UpdatesPage() {
         </Card>
         <SourceCard editable={manage} onSaved={() => policies.reload()} />
       </div>
-
-      <Card title="Available updates" flush>
-        <DataTable columns={availableColumns} rows={available.data} rowKey={(u) => u.id} loading={available.loading} error={available.error} onRetry={available.reload}
-          caption="Available updates" empty={<EmptyState compact icon="checkCircle" title="No updates found">No updates were found as of the last check.</EmptyState>} />
-      </Card>
 
       <section aria-labelledby="policies-title" className="stack stack--sm">
         <div>

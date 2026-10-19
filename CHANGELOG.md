@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.26.7 — 2026-10-19
+
+### Changed
+- **Updates page: available updates first.** The list of updates (and the install progress) now sits directly under the page title; the last check, the source, the policies, the operating system packages and the history follow below, so starting an installation needs no scrolling (first step of #85).
+
 ## 0.26.6 — 2026-10-19
 
 ### Fixed
