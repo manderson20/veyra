@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 21,
+  "sequence": 22,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.5",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Emergency-call pop-up in the Companion for the site's responders, editable rows on module pages (AND Clocks 0.2.0), missed-call emails, Add to contacts from a call, and saving one setting no longer resets others.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "5f9dd1f9a2",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.5/veyra-0.27.5.tar.gz",
+        "sha256": "ff0698c853d507a285ef15b753f5240c38be4b9b51dcb44428dde4ba6c16daff",
+        "size": 8287594
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -360,6 +377,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T22:39:13+00:00",
-  "expires_at": "2027-01-17T22:39:13+00:00"
+  "generated_at": "2026-10-19T23:06:53+00:00",
+  "expires_at": "2027-01-17T23:06:53+00:00"
 }
