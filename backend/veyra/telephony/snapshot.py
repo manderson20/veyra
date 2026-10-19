@@ -763,6 +763,7 @@ def _voicemail_ivr(
     (docs/VOICEMAIL_IVR.md §3, §5). Fills ``targets`` with the deployable
     boxes and menus."""
     ext_by_id = {e.id: e for e in extensions}
+    with_follow_me = {fm.extension_id for fm in db.scalars(select(FollowMe)) if fm.members}
     boxes = [
         b
         for b in db.scalars(select(VoicemailBox).order_by(VoicemailBox.created_at)).all()
@@ -832,6 +833,10 @@ def _voicemail_ivr(
                 "delete_after_email": b.delete_after_email,
                 "ring_seconds": b.ring_seconds,
                 "operator_extension": b.operator_extension,
+                "locater_1": b.locater_1,
+                "locater_2": b.locater_2,
+                # Key 1 = follow me needs the extension's follow-me list.
+                "follow_me": b.extension_id in with_follow_me,
             }
             for b in boxes
         ],

@@ -44,6 +44,10 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # Pressing 0 while the greeting plays reaches this extension
     # (docs/CALL_FEATURES.md §3.7); none: 0 does nothing.
     operator_extension: Mapped[str | None] = mapped_column(String(32))
+    # Pressing 1 or 2 during the greeting (issue #131): "followme" (key 1
+    # only) or a number of the organization; none: the key does nothing.
+    locater_1: Mapped[str | None] = mapped_column(String(32))
+    locater_2: Mapped[str | None] = mapped_column(String(32))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

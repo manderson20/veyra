@@ -423,6 +423,14 @@ class MyVoicemailOut(BaseModel):
     email: str | None
     ring_seconds: int
     is_enabled: bool
+    # Pressing 1 or 2 during the greeting (issue #131).
+    locater_1: str | None = None
+    locater_2: str | None = None
+
+
+class LocaterIn(BaseModel):
+    locater_1: str | None = Field(None, max_length=32)
+    locater_2: str | None = Field(None, max_length=32)
 
 
 class PinIn(BaseModel):
@@ -476,6 +484,8 @@ def _my_box_out(box: VoicemailBox, ext: Extension | None) -> MyVoicemailOut:
         email=box.email,
         ring_seconds=box.ring_seconds,
         is_enabled=box.is_enabled,
+        locater_1=box.locater_1,
+        locater_2=box.locater_2,
     )
 
 
@@ -544,6 +554,48 @@ def my_voicemail_pin(
     configmgmt.mark_changed(db, by=principal.label, what=f"voicemail.pin_change {ext.number}")
     db.commit()
     return Response(status_code=204)
+
+
+@router.patch(
+    "/voicemail/{box_id}",
+    response_model=MyVoicemailOut,
+    summary="Set what 1 and 2 do during your greeting",
+)
+def my_voicemail_locater(
+    box_id: uuid.UUID,
+    body: LocaterIn,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MyVoicemailOut:
+    """Callers who press 1 or 2 while your greeting plays reach follow me
+    (1 only) or another number of your organization (issue #131)."""
+    from veyra.api.v1.voicemail import check_locater
+
+    for box, ext in _own_boxes(db, principal):
+        if box.id != box_id:
+            continue
+        if ext is None:
+            raise forbidden("Shared inboxes are set up by an administrator.")
+        changes = body.model_dump(exclude_unset=True)
+        details: dict[str, Any] = {}
+        for key in ("1", "2"):
+            field = f"locater_{key}"
+            if field not in changes:
+                continue
+            value = check_locater(
+                db, box.organization_id, key, changes[field], own_number=ext.number, shared=False
+            )
+            if value != getattr(box, field):
+                setattr(box, field, value)
+                details[field] = value
+        if details:
+            db.flush()
+            _box_audit(db, ctx, principal, "voicemail.update", box, details)
+            configmgmt.mark_changed(db, by=principal.label, what=f"voicemail locater {ext.number}")
+            db.commit()
+        return _my_box_out(box, ext)
+    raise not_found("Voicemail box")
 
 
 # ------------------------------------------------- voicemail messages (§2)
