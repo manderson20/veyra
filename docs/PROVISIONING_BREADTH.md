@@ -196,6 +196,27 @@ family (`sip_transport` UDPOnly/TCPOnly/TLS/DNSnaptr, `admin_password`,
 both. Facts gained `server.directory_url` and the zone's multicast address
 on page keys; the resolved template exposes the chain's `features`.
 
+### 4.1 Current lineups (researched 2026-10-20)
+
+Owner direction (2026-10-20): cover every model the vendors sell today;
+the owner names the end-of-life models still in production and those are
+added on request. Templates group models by **configuration format**, not by
+model, so one family template covers a whole lineup.
+
+| Vendor | Format family | Current models (vendor or distributor pages) | Plan |
+|---|---|---|---|
+| Yealink | one `.cfg` format for every SIP phone | T8: T85W, T87W, T88 · T7: T73U, T73W, T74U, T74W, T77U · T5: T53, T53W, T54W, T57W, T58W (Pro), VP59 · T4: T42U, T43U, T44U, T44W, T46U, T48U · T3: T30, T30P, T31, T31G, T31P, T31W, T33G, T34W · conference: CP925, CP935W, CP965 | extend the slice C family: model lists for T3x/T4x/T5x, new `yealink.t7x`, `yealink.t8x`, `yealink.cp` (no line keys). DECT (W70B/W80/W90 bases, W5x/W7x handsets) and Wi-Fi AX8x are a separate format: on request |
+| Poly | UC Software XML (VVX, Edge E, CCX) | Edge E: E100, E220, E300, E320, E350, E400, E450, E500, E550 · CCX: CCX 350, 400, 500, 505, 600, 700 · VVX: end of sale (VVX 350 EOL June 2026) · Edge V (announced April 2026, availability September 2026): V200, V250, V250 Plus, V400, V450, V650, V800, V850 | Edge E and CCX on the VVX base (slice F); Edge V once its configuration format is documented (not stated in the announcement) |
+| Algo | one `algop{mac}.conf` key=value format for every SIP endpoint | speakers 8180, 8186, 8188, 8189, 8190, 8196, 8197, 8198, 8199, 8507 · display speakers 8410, 8420 · paging adapters 8301, 8305, 8312, 8373 · intercoms 8028, 8028V, 8039, 8063, 8201, 8203 · alerters 8128, 8138 · clocks 8401, 8402 · console 8450 · controller 8300 | one family `algo.base` with role variables (page listener, ring, intercom); the owner's speakers and horns first |
+| CyberData | XML autoprovision per device type | SIP Paging Server+ 011600/011601 (2026, replaces the paging adapter and paging server), SIP speakers, outdoor horn 011457, paging amplifier 011324 | on request (not in the owner's fleet) |
+| Grandstream | P-value XML | GRP2600 (GRP2602, 2610, 2611, 2612/P/W/G, 2613-2616), GXP1600, GXP2100, ATAs HT801/HT802 v2, HT812/814/818, HT813 | on request (not in the owner's fleet); the ATA remains the fax pass-through candidate |
+| Advanced Network Devices (AND) | not SIP-provisioned (web/TFTP/SLP; IPClockWise) | IPCSS-RWB, IPSWD-RWB, IPSIGNL-RWB, IPSWS-SM-O | out of scope for templates; messaging is the 9c / module item |
+
+Sources: algosolutions.com/products, yealink.com/en/product-list/ip-phone,
+HP newsroom (Edge V, April 2026), distributor listings for Poly, Grandstream
+and CyberData. Models the owner still runs that are no longer sold are
+added to the matching family when named.
+
 ## 5. Phone directory
 
 `GET /provisioning/directory/{format}` (device credential required, like
