@@ -1,0 +1,19 @@
+spec_version = 2
+features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
+
+[template]
+key = "yealink.t3x"
+name = "Yealink T3X"
+version = "0.1.0"
+manufacturer = "Yealink"
+models = ["T31P", "T31G", "T33G"]
+parent = "yealink.base"
+parent_version = "0.1.0"
+firmware = "Yealink firmware 66.86 / 96.86 and later"
+status = "experimental"
+description = "Yealink T3x (2–4 line keys). Not yet verified on hardware."
+
+[[files]]
+name = "{mac}.cfg"
+source = "phone.cfg.j2"
+format = "cfg"

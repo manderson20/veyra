@@ -182,16 +182,37 @@ recorded (§7). Templates ship in the repository under
 `provisioning/templates/official/` and are read-only; *Customize* copies a
 family into local templates as today.
 
+*Built 2026-10-20 (slice C, #35):* `yealink.base` (abstract) with
+`yealink.t3x` (T31P, T31G, T33G), `yealink.t4x` (T43U, T46U, T48U) and
+`yealink.t5x` (T53, T53W, T54W, T57W); one `{mac}.cfg` per phone (the
+common `y0000…cfg` files get a 404 and the phone goes on to its own file).
+Keys: line 15, BLF 16 with the pickup code, speed dial 13, transfer 3 (the
+family declares `key_transfer`, so no preview warning), multicast paging 24
+on the zone's address; up to ten multicast listen addresses from the
+profile's subscribed zones; DST as week-based rules (Yealink counts the
+weekday from Monday); the variables share names and values with the Poly
+family (`sip_transport` UDPOnly/TCPOnly/TLS/DNSnaptr, `admin_password`,
+`polling_hour`, `registration_expires`) so one organization variable fills
+both. Facts gained `server.directory_url` and the zone's multicast address
+on page keys; the resolved template exposes the chain's `features`.
+
 ## 5. Phone directory
 
 `GET /provisioning/directory/{format}` (device credential required, like
 the configuration files): the organization's extensions (number, display
 name) and ring groups, as `poly` (`000000000000-directory.xml`), `yealink`
 (remote phonebook XML), `grandstream` (phonebook XML), `csv`. Profiles gain
-`directory_enabled` (default on); the templates write the directory URL
+`directory_enabled` (default on; a Yealink variable in slice C, the other
+families follow); the templates write the directory URL
 (`dir.corp.*` for Poly, `remote_phonebook.data.1.url` for Yealink,
 `P331`-style for Grandstream). Later: the external directory of #93 as a
 second book.
+
+*Built 2026-10-20 (slice C):* `GET /provisioning/directory/{poly.xml,
+yealink.xml,grandstream.xml,contacts.csv}` with the device or organization
+credential (logged like configuration files), `veyra/provisioning/directory.py`;
+enabled extensions and ring groups sorted by name. The Yealink family uses
+it; the Poly `dir.corp` wiring arrives with slice F.
 
 ## 6. Vendor redirect services
 

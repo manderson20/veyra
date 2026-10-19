@@ -76,6 +76,11 @@ class ResolvedTemplate:
     variables: dict[str, VariableDef]
     defaults: dict[str, Any]
 
+    @property
+    def features(self) -> set[str]:
+        """Features declared anywhere in the inheritance chain."""
+        return {f for r in self.chain for f in r.manifest.features}
+
 
 @dataclass
 class RenderedFile:

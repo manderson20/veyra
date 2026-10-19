@@ -278,6 +278,8 @@ def _keys(
             if zone is None:
                 continue  # zone removed since the key was saved
             entry["group"] = zone.poly_group
+            entry["multicast_address"] = zone.multicast_address
+            entry["multicast_port"] = zone.multicast_port
             entry["label"] = label or zone.name
         elif kind == "line":
             entry["label"] = label or f"Line {value}"
@@ -405,7 +407,9 @@ def _feature_keys(
                 }
             )
         elif kind == "transfer":
-            note("a transfer key: this template has no transfer key; the phone's softkey does it")
+            # Kept as its own type: families with a transfer key render it
+            # (feature "key_transfer"); render_device warns for the others.
+            out.append({**k, "type": "transfer", "feature": kind, "label": label or "Transfer"})
         else:
             out.append(k)
     return out
@@ -615,6 +619,7 @@ def build_facts(
             "sip_port": sip_port,
             "transport": transport,
             "provisioning_url": f"{base}/provisioning/",
+            "directory_url": f"{base}/provisioning/directory/",
             "provisioning_server_type": "HTTPS" if scheme == "https" else "HTTP",
             "ntp_server": str(values.get("ntp_server") or "pool.ntp.org"),
             "timezone": tz,
@@ -702,6 +707,12 @@ def render_device(
         raise ProvisioningError("render_error", "; ".join(e.errors)) from e
     if warnings is not None:
         warnings.extend(f"variable {n} is not defined" for n in sorted(facts["vars"].missing))
+        if "key_transfer" not in resolved.features and any(
+            k["type"] == "transfer" for k in facts["keys"]
+        ):
+            warnings.append(
+                "a transfer key: this template has no transfer key; the phone's softkey does it"
+            )
     return files
 
 
