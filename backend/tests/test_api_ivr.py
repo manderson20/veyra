@@ -405,3 +405,39 @@ def test_audio_library_kinds_licence_and_filter(admin):
         files={"file": ("x.wav", make_wav(1.0, 8000, 1), "audio/wav")},
     )
     assert r.status_code == 422
+
+
+def test_builtin_sounds_list_play_and_copy(admin, app):
+    """Synthesized bells and chimes shipped with Veyra (#114)."""
+    import io
+    import wave
+
+    from veyra.telephony import sounds
+
+    r = admin.get("/api/v1/prompts/builtin")
+    assert r.status_code == 200
+    items = {s["key"]: s for s in r.json()}
+    assert set(items) == {s.key for s in sounds.SOUNDS}
+    assert (
+        items["school-bell"]["kind"] == "bell" and items["school-bell"]["duration_seconds"] == 3.0
+    )
+    audio = admin.get("/api/v1/prompts/builtin/westminster/audio")
+    assert audio.status_code == 200 and audio.headers["content-type"] == "audio/wav"
+    with wave.open(io.BytesIO(audio.content)) as w:
+        assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (8000, 1, 2)
+    assert admin.get("/api/v1/prompts/builtin/nope/audio").status_code == 404
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    r = admin.post("/api/v1/prompts/builtin/school-bell/copy", json={"organization_id": org})
+    assert r.status_code == 201, r.text
+    p = r.json()
+    assert p["name"] == "School bell" and p["source"] == "builtin" and p["kind"] == "bell"
+    assert p["license"] == sounds.LICENSE and p["file_present"] is True
+    again = admin.post("/api/v1/prompts/builtin/school-bell/copy", json={"organization_id": org})
+    assert again.status_code == 201 and again.json()["slug"] != p["slug"]
+    named = admin.post(
+        "/api/v1/prompts/builtin/school-bell/copy",
+        json={"organization_id": org, "name": "Passing period"},
+    )
+    assert named.status_code == 201 and named.json()["name"] == "Passing period"
+    assert admin.get(f"/api/v1/prompts/{p['id']}/audio").status_code == 200

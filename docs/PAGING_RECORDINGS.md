@@ -157,9 +157,16 @@ credit is shown in the product. Asterisk's own sound sets (`asterisk-core-sounds
 package and may be referenced by the dialplan, but their share-alike
 terms mean they are not copied into Veyra's library.
 
-The shipped set lives in `provisioning/../sounds/` (name to be settled
-with the installer: `/opt/veyra/current/sounds`), is listed in the Audio
-page as "Built-in" (read-only, copy to edit), and converts on first use.
+*Built 0.27.3 (#114):* the synthesized set only, generated in
+`veyra/telephony/sounds.py` (no files in the repository, nothing to
+license): school bell (3 s and 6 s), Westminster chime, two-tone and
+three-tone chimes rising and falling, a soft chime, hi-lo and whoop alerts,
+the temporal-3 drill pattern, "door held open" beeps and a single beep, all
+8 kHz mono WAV. The Audio page lists them under **Built-in sounds** with play
+and **Add to library** (`GET /prompts/builtin`, `GET
+/prompts/builtin/{key}/audio`, `POST /prompts/builtin/{key}/copy`
+`{organization_id, name?}`; the copy has source `builtin`, licence "Veyra
+built-in (synthesized)"). The CC0 recordings are not included yet.
 
 ### 3.2 Hold music
 

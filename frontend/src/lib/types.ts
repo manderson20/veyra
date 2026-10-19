@@ -1408,7 +1408,7 @@ export interface Prompt {
   name: string;
   slug: string;
   description: string | null;
-  source: "upload" | "recording";
+  source: "upload" | "recording" | "builtin";
   /** What the recording is for (docs/PAGING_RECORDINGS.md §3). */
   kind: AudioKind;
   license: string | null;

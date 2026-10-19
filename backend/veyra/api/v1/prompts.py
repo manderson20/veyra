@@ -29,7 +29,7 @@ from veyra.core.events import Event, bus
 from veyra.core.models import Announcement, IvrMenu, MohClass, MohClassTrack, Organization, Prompt
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
-from veyra.telephony import audio, routing
+from veyra.telephony import audio, routing, sounds
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
@@ -422,6 +422,110 @@ def delete_recording(
 
 
 # ----------------------------------------------------------------- prompts
+
+
+# ----------------------------------------------------------------- built-in sounds
+
+
+class BuiltinOut(BaseModel):
+    key: str
+    name: str
+    kind: str
+    description: str
+    duration_seconds: float
+    license: str
+
+
+class BuiltinCopyIn(BaseModel):
+    organization_id: uuid.UUID
+    name: str | None = Field(None, min_length=1, max_length=100)
+
+
+def _builtin(key: str) -> sounds.Sound:
+    sound = sounds.BY_KEY.get(key)
+    if sound is None:
+        raise not_found("Sound")
+    return sound
+
+
+@router.get("/builtin", response_model=list[BuiltinOut], summary="Sounds shipped with Veyra")
+def list_builtin(principal: Principal = Depends(require("ivr.read"))) -> list[BuiltinOut]:
+    return [
+        BuiltinOut(
+            key=s.key,
+            name=s.name,
+            kind=s.kind,
+            description=s.description,
+            duration_seconds=round(sounds.duration(s.key), 1),
+            license=sounds.LICENSE,
+        )
+        for s in sounds.SOUNDS
+    ]
+
+
+@router.get("/builtin/{key}/audio", summary="Listen to a built-in sound")
+def builtin_audio(key: str, principal: Principal = Depends(require("ivr.read"))) -> Response:
+    sound = _builtin(key)
+    return Response(
+        sounds.wav(sound.key),
+        media_type=_PROMPT_MEDIA_TYPE,
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
+@router.post(
+    "/builtin/{key}/copy",
+    response_model=PromptOut,
+    status_code=201,
+    summary="Add a built-in sound to an organization's audio library",
+)
+def copy_builtin(
+    key: str,
+    body: BuiltinCopyIn,
+    request: Request,
+    principal: Principal = Depends(require("ivr.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> PromptOut:
+    sound = _builtin(key)
+    org = _org_for(db, principal, body.organization_id, "ivr.write")
+    name = (body.name or sound.name).strip() or sound.name
+    data = sounds.wav(sound.key)
+    prompt = Prompt(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        name=name,
+        slug=_unique_slug(db, org.id, name),
+        description=sound.description,
+        source="builtin",
+        kind=sound.kind,
+        license=sounds.LICENSE,
+        credit=sounds.CREDIT,
+        duration_seconds=sounds.duration(sound.key),
+        size_bytes=len(data),
+    )
+    db.add(prompt)
+    try:
+        db.flush()
+    except IntegrityError as e:
+        db.rollback()
+        raise conflict(
+            "A recording with that name exists in this organization; choose another name.",
+            "name_in_use",
+        ) from e
+    _store(prompt_path(prompts_dir(request), org.slug, prompt.slug), data)
+    _audit(
+        db,
+        ctx,
+        principal,
+        "prompt.create",
+        organization_id=org.id,
+        target_id=prompt.id,
+        details={"name": prompt.name, "slug": prompt.slug, "source": "builtin", "sound": key},
+    )
+    db.commit()
+    bus.publish(Event("prompt.created", {"id": str(prompt.id)}))
+    return _outs(request, db, [prompt])[0]
 
 
 @router.get("", response_model=Page[PromptOut], summary="List prompts")
