@@ -723,6 +723,8 @@ export interface UiView {
   write_permission: string | null;
   columns: UiColumn[];
   create_form: UiFormField[];
+  /** Module API 1.2: clicking a row opens this form; changes go as PATCH <endpoint>/<id>. */
+  edit_form?: UiFormField[];
   delete: boolean;
   empty_title: string;
   empty_body: string | null;

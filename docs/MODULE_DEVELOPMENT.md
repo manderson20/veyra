@@ -241,7 +241,7 @@ cross-site scripting and supply-chain risk in the administrative origin.
 Instead, modules declare:
 
 * `ui.nav`: entries in the "Modules" navigation section, hidden from users without the permission.
-* `ui.views` of type `resource_table`: a paginated table backed by `GET <endpoint>` returning `{items,total,limit,offset}`, an optional create form posting JSON to `POST <endpoint>`, and an optional delete action calling `DELETE <endpoint>/<id>`. Form field types: `text`, `textarea`, `integer`, `boolean`, `choice` and *(1.1)* `password` (masked input; empty fields are sent as `""` and integers as `null`).
+* `ui.views` of type `resource_table`: a paginated table backed by `GET <endpoint>` returning `{items,total,limit,offset}`, an optional create form posting JSON to `POST <endpoint>`, *(1.2)* an optional `edit_form` (same field types) that opens when a row is clicked, filled from the row, and sends only the changed fields to `PATCH <endpoint>/<id>` (an empty password field is left out), and an optional delete action calling `DELETE <endpoint>/<id>`. A view with an edit form needs a `write_permission`. Form field types: `text`, `textarea`, `integer`, `boolean`, `choice` and *(1.1)* `password` (masked input; empty fields are sent as `""` and integers as `null`).
 
 More view types (detail forms, settings, charts) will be added as module API
 minor versions.
@@ -254,5 +254,4 @@ minor versions.
 
 ## 9. Not yet available
 
-* Editing rows in `resource_table` views (delete and add again for now).
 * The service runtime for community and third-party modules (M11).

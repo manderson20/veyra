@@ -195,6 +195,9 @@ class UiView(_Strict):
     write_permission: str | None = None
     columns: list[UiColumn]
     create_form: list[UiFormField] = Field(default_factory=list)
+    # (module API 1.2) Clicking a row opens this form filled from the row;
+    # the changed fields are sent as PATCH <endpoint>/<id> (issue #115).
+    edit_form: list[UiFormField] = Field(default_factory=list)
     delete: bool = False
     empty_title: str = "Nothing here yet"
     empty_body: str | None = None
@@ -271,6 +274,8 @@ class Manifest(_Strict):
                     raise ValueError(f"view {v.id!r} uses undeclared permission {perm!r}")
             if v.create_form and not v.write_permission:
                 raise ValueError(f"view {v.id!r} has a create form but no write_permission")
+            if v.edit_form and not v.write_permission:
+                raise ValueError(f"view {v.id!r} has an edit form but no write_permission")
         if self.ui.views and self.api is None:
             raise ValueError("ui.views require an [api] section")
         if self.database:

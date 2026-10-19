@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Select, Table, delete, func, insert, select
+from sqlalchemy import Select, Table, delete, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -43,6 +43,20 @@ class ClockIn(BaseModel):
     group_name: str = Field("", max_length=100)
     model: str = Field("", max_length=100)
     organization_id: uuid.UUID | None = None
+
+    @field_validator("name", "address", "group_name", "model", mode="before")
+    @classmethod
+    def _strip(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
+
+class ClockPatch(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=100)
+    address: str | None = Field(
+        None, min_length=1, max_length=255, pattern=r"^[A-Za-z0-9.\-:\[\]]+$"
+    )
+    group_name: str | None = Field(None, max_length=100)
+    model: str | None = Field(None, max_length=100)
 
     @field_validator("name", "address", "group_name", "model", mode="before")
     @classmethod
@@ -262,6 +276,46 @@ def build_router(ctx: ModuleContext) -> APIRouter:
         )
         db.commit()
         return {**row, "id": str(row["id"]), "organization_id": str(org)}
+
+    @router.patch("/clocks/{clock_id}")
+    def update_clock(
+        clock_id: uuid.UUID,
+        body: ClockPatch,
+        principal: Principal = Depends(can_write),
+        db: Session = Depends(get_db),
+    ) -> dict[str, Any]:
+        row = owned(db, principal, clocks, clock_id, WRITE, "Clock")
+        changes = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+        changes = {k: v for k, v in changes.items() if v != getattr(row, k)}
+        if "name" in changes:
+            taken = db.scalar(
+                select(func.count())
+                .select_from(clocks)
+                .where(
+                    clocks.c.organization_id == row.organization_id,
+                    func.lower(clocks.c.name) == changes["name"].lower(),
+                    clocks.c.id != clock_id,
+                )
+            )
+            if taken:
+                raise conflict(f"A clock called {changes['name']} already exists.")
+        if "address" in changes:
+            changes["reachability"] = "unknown"
+            changes["last_checked_at"] = None
+        if changes:
+            db.execute(update(clocks).where(clocks.c.id == clock_id).values(**changes))
+            ctx.audit(
+                db,
+                principal,
+                "clock.update",
+                organization_id=row.organization_id,
+                target_type="clock",
+                target_id=clock_id,
+                details={k: v for k, v in changes.items() if k != "last_checked_at"},
+            )
+            db.commit()
+        new = db.execute(select(clocks).where(clocks.c.id == clock_id)).first()
+        return _ids(new)
 
     @router.delete("/clocks/{clock_id}")
     def delete_clock(

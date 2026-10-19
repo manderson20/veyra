@@ -7,12 +7,12 @@ health_check = true
 id = "veyra.and-clocks"
 name = "AND Clock Messages"
 description = "Send text messages and alerts to Advanced Network Devices (AND) IP clocks and signs: to one clock, a group or all of them, now or at a set time, and with the bells."
-version = "0.1.0"
+version = "0.2.0"
 author = "Veyra Project"
 license = "AGPL-3.0-or-later"
 
 [compatibility]
-core_api = ">=1.1.0 <2.0.0"
+core_api = ">=1.2.0 <2.0.0"
 engines = []
 
 [runtime]
@@ -137,6 +137,12 @@ create_form = [
   { key = "name", label = "Name", type = "text", required = true, max_length = 100 },
   { key = "address", label = "Address", type = "text", required = true, max_length = 255, help = "IP address or host name, optionally with :port." },
   { key = "group_name", label = "Group", type = "text", max_length = 100, help = "For example a building or a wing. Messages can go to a whole group." },
+  { key = "model", label = "Model", type = "text", max_length = 100 },
+]
+edit_form = [
+  { key = "name", label = "Name", type = "text", required = true, max_length = 100 },
+  { key = "address", label = "Address", type = "text", required = true, max_length = 255, help = "IP address or host name, optionally with :port." },
+  { key = "group_name", label = "Group", type = "text", max_length = 100 },
   { key = "model", label = "Model", type = "text", max_length = 100 },
 ]
 

@@ -305,3 +305,27 @@ def test_worker_loads_enabled_modules_and_runs_tasks(clocks_admin, settings):
     with session_scope() as db:
         worker.sync_worker(db)
     assert not worker.is_enabled(MOD) and MOD not in worker.loaded
+
+
+def test_clocks_can_be_edited(clocks_admin):
+    """Editing rows of a resource table (#115, module API 1.2)."""
+    admin = clocks_admin
+    a = admin.post(f"{BASE}/clocks", json={"name": "Gym", "address": "192.0.2.10"}).json()
+    admin.post(f"{BASE}/clocks", json={"name": "Office", "address": "192.0.2.11"})
+    r = admin.patch(
+        f"{BASE}/clocks/{a['id']}", json={"address": "192.0.2.20", "group_name": "East wing"}
+    )
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["address"] == "192.0.2.20" and out["group_name"] == "East wing"
+    assert out["reachability"] == "unknown"
+    assert admin.patch(f"{BASE}/clocks/{a['id']}", json={"name": "office"}).status_code == 409
+    assert admin.patch(f"{BASE}/clocks/{a['id']}", json={"address": "bad one"}).status_code == 422
+    view = next(
+        v
+        for e in admin.get("/api/v1/modules/ui-extensions").json()
+        if e["module_id"] == "veyra.and-clocks"
+        for v in e["views"]
+        if v["id"] == "clocks"
+    )
+    assert [f["key"] for f in view["edit_form"]] == ["name", "address", "group_name", "model"]

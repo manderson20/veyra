@@ -41,6 +41,7 @@ function moduleApi(apiBase: string) {
   return {
     path: (p: string) => `${rel}/${p}`,
     post: <T,>(p: string, body: unknown) => base.post<T>(`${rel}/${p}`, body),
+    patch: <T,>(p: string, body: unknown) => base.patch<T>(`${rel}/${p}`, body),
     del: <T,>(p: string) => base.del<T>(`${rel}/${p}`),
   };
 }
@@ -61,10 +62,13 @@ function ResourceTable({ ext, view }: { ext: UiExtension; view: UiView }) {
   const [offset, setOffset] = useState(0);
   const list = useApiData<Page<Row>>(api.path(view.endpoint), { limit: LIMIT, offset });
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
   const [delBusy, setDelBusy] = useState(false);
   const [delError, setDelError] = useState<string | null>(null);
   const canWrite = view.write_permission ? can(view.write_permission) : false;
+  const editFields = view.edit_form ?? [];
+  const canEdit = canWrite && editFields.length > 0;
 
   const columns: Column<Row>[] = view.columns.map((c) => ({ key: c.key, header: c.label, render: (r) => renderCell(r[c.key], c.format) }));
   if (view.delete && canWrite) {
@@ -108,6 +112,8 @@ function ResourceTable({ ext, view }: { ext: UiExtension; view: UiView }) {
           error={list.error}
           onRetry={() => list.reload()}
           caption={view.title}
+          onRowClick={canEdit ? (r) => (r.id ? setEditing(r) : undefined) : undefined}
+          rowLabel={() => "Edit"}
           empty={<EmptyState icon="note" title={view.empty_title}>{view.empty_body}</EmptyState>}
           pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null}
         />
@@ -115,6 +121,8 @@ function ResourceTable({ ext, view }: { ext: UiExtension; view: UiView }) {
       <p className="subtle">Provided by the {ext.module_name} module.</p>
       <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} fields={view.create_form} title={`Add to ${view.title}`}
         submit={(body) => api.post(view.endpoint, body)} onCreated={() => { toast.success("Saved"); setOffset(0); list.reload(); }} />
+      <CreateDialog open={editing !== null} onClose={() => setEditing(null)} fields={editFields} title={`Edit in ${view.title}`} initial={editing ?? undefined}
+        submit={(body) => api.patch(`${view.endpoint}/${encodeURIComponent(String(editing?.id ?? ""))}`, body)} onCreated={() => { toast.success("Saved"); list.reload(); }} />
       <ConfirmDialog open={deleting !== null} title="Delete this item?" confirmLabel="Delete" tone="danger" busy={delBusy} error={delError}
         onConfirm={doDelete} onCancel={() => { setDeleting(null); setDelError(null); }}>
         <p>This cannot be undone.</p>
@@ -123,9 +131,13 @@ function ResourceTable({ ext, view }: { ext: UiExtension; view: UiView }) {
   );
 }
 
-function CreateDialog({ open, onClose, fields, title, submit, onCreated }: {
+/** The create form, or (with ``initial``, module API 1.2) the edit form of a
+ * row: filled from the row, sending only the changed fields; an empty
+ * password field leaves the stored value as it is. */
+function CreateDialog({ open, onClose, fields, title, submit, onCreated, initial }: {
   open: boolean; onClose: () => void; fields: UiFormField[]; title: string;
   submit: (body: Record<string, unknown>) => Promise<unknown>; onCreated: () => void;
+  initial?: Row;
 }) {
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [busy, setBusy] = useState(false);
@@ -134,7 +146,12 @@ function CreateDialog({ open, onClose, fields, title, submit, onCreated }: {
 
   useOnChange(open, () => {
     if (open) {
-      setValues(Object.fromEntries(fields.map((f) => [f.key, f.type === "boolean" ? false : ""])));
+      setValues(Object.fromEntries(fields.map((f) => {
+        const v = initial?.[f.key];
+        if (f.type === "boolean") return [f.key, Boolean(v)];
+        if (f.type === "password" || v === null || v === undefined) return [f.key, ""];
+        return [f.key, typeof v === "object" ? JSON.stringify(v) : String(v)];
+      })));
       setMessage(null);
       setFieldErrors({});
     }
@@ -147,6 +164,12 @@ function CreateDialog({ open, onClose, fields, title, submit, onCreated }: {
     const body: Record<string, unknown> = {};
     for (const f of fields) {
       const v = values[f.key];
+      if (initial) {
+        if (f.type === "password" && v === "") continue;
+        const before = initial[f.key];
+        const same = f.type === "boolean" ? Boolean(before) === v : String(before ?? "") === String(v);
+        if (same) continue;
+      }
       if (f.type === "integer") body[f.key] = v === "" ? null : Number(v);
       else body[f.key] = v;
     }
