@@ -105,7 +105,7 @@ export default function PromptsPage() {
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (p: Prompt) => <span>{p.organization_name}</span> }] : []),
     { key: "kind", header: "Kind", render: (p) => <span>{AUDIO_KIND_LABELS[p.kind] ?? p.kind}{p.license ? <span className="table__secondary" style={{ display: "block" }}>{p.license}</span> : null}</span> },
     { key: "len", header: "Length", render: (p) => <span className="mono">{formatSeconds(p.duration_seconds)}</span> },
-    { key: "source", header: "Source", render: (p) => <Badge tone="outline" icon={p.source === "recording" ? "mic" : "upload"}>{p.source === "recording" ? "Recorded from a phone" : "Uploaded"}</Badge> },
+    { key: "source", header: "Source", render: (p) => <Badge tone="outline" icon={p.source === "recording" ? "mic" : p.source === "builtin" ? "audio" : "upload"}>{p.source === "recording" ? "Recorded from a phone" : p.source === "builtin" ? "Built-in sound" : "Uploaded"}</Badge> },
     { key: "use", header: "Used by", render: (p) => p.in_use_by ? <span>{p.in_use_by} menu{p.in_use_by === 1 ? "" : "s"}</span> : <span className="subtle">—</span> },
     ...(editable ? [{
       key: "actions",
@@ -148,6 +148,7 @@ export default function PromptsPage() {
           pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null}
         />
       </Card>
+      <BuiltinCard editable={editable} player={player} organizations={organizations} defaultOrg={defaultOrg} onAdded={() => list.reload()} />
       <RecordingsCard recordings={recordings.data} loading={recordings.loading} error={recordings.error} onRetry={recordings.reload} editable={editable} player={player}
         onChanged={() => { recordings.reload(); list.reload(); }} />
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} organizationId={defaultOrg} organizations={organizations} onCreated={() => list.reload()} />
@@ -280,7 +281,7 @@ function EditPromptDialog({ prompt, onClose, onSaved }: { prompt: Prompt | null;
       <form id="prompt-edit" className="stack stack--sm" onSubmit={submit}>
         <TextField label="Name" required autoFocus value={name} error={errors.fields.name} help={<>File name <span className="mono">{prompt.slug}.wav</span> stays the same.</>} onChange={(e) => setName(e.target.value)} />
         <TextArea label="Description" rows={2} value={description} error={errors.fields.description} onChange={(e) => setDescription(e.target.value)} />
-        <TextField label="Replace the audio" type="file" accept={ACCEPT} error={errors.fields.file} help={`Current recording: ${formatSeconds(prompt.duration_seconds)}, ${formatBytes(prompt.size_bytes)}, ${prompt.source === "recording" ? "recorded from a phone" : "uploaded"} ${formatRelative(prompt.updated_at)}.`} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <TextField label="Replace the audio" type="file" accept={ACCEPT} error={errors.fields.file} help={`Current recording: ${formatSeconds(prompt.duration_seconds)}, ${formatBytes(prompt.size_bytes)}, ${prompt.source === "recording" ? "recorded from a phone" : prompt.source === "builtin" ? "added from the built-in sounds" : "uploaded"} ${formatRelative(prompt.updated_at)}.`} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>
@@ -382,5 +383,68 @@ function AdoptDialog({ recording, onClose, onAdopted }: { recording: Recording |
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>
+  );
+}
+
+interface BuiltinSound {
+  key: string;
+  name: string;
+  kind: AudioKind;
+  description: string;
+  duration_seconds: number;
+  license: string;
+}
+
+/** Sounds shipped with Veyra (#114): synthesized bells, chimes and attention
+ * tones, free to use. Adding one copies it into the organization's library,
+ * where bells, pages and menus can use it. */
+function BuiltinCard({ editable, player, organizations, defaultOrg, onAdded }: {
+  editable: boolean;
+  player: ReturnType<typeof usePlayer>;
+  organizations: { id: string; name: string }[];
+  defaultOrg: string;
+  onAdded: () => void;
+}) {
+  const toast = useToast();
+  const list = useApiData<BuiltinSound[]>("/prompts/builtin");
+  const [org, setOrg] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
+  const target = org || defaultOrg || (organizations.length === 1 ? organizations[0]!.id : "");
+  const add = async (s: BuiltinSound) => {
+    setAdding(s.key);
+    try {
+      const p = await api.post<Prompt>(`/prompts/builtin/${s.key}/copy`, { organization_id: target });
+      toast.success(`"${p.name}" added to the library`, "Bell schedules, pages and menus can use it now.");
+      onAdded();
+    } catch (err) {
+      toast.error("Not added", errorMessage(err));
+    } finally {
+      setAdding(null);
+    }
+  };
+  const columns: Column<BuiltinSound>[] = [
+    {
+      key: "play", header: <span className="sr-only">Play</span>,
+      render: (s) => <IconButton icon={player.playing === `builtin:${s.key}` ? "stop" : "play"} label={player.playing === `builtin:${s.key}` ? `Stop ${s.name}` : `Play ${s.name}`} size="sm"
+        onClick={() => player.toggle(`builtin:${s.key}`, `/api/v1/prompts/builtin/${s.key}/audio`)} />,
+    },
+    { key: "name", header: "Sound", render: (s) => <span><span className="table__primary" style={{ display: "block" }}>{s.name}</span><span className="table__secondary">{s.description}</span></span> },
+    { key: "kind", header: "Kind", render: (s) => <Badge tone="neutral">{AUDIO_KIND_LABELS[s.kind] ?? s.kind}</Badge> },
+    { key: "len", header: "Length", render: (s) => <span className="nowrap">{formatSeconds(s.duration_seconds)}</span> },
+    ...(editable ? [{
+      key: "add", header: <span className="sr-only">Actions</span>,
+      render: (s: BuiltinSound) => <Button size="sm" icon="plus" loading={adding === s.key} disabled={!target} onClick={() => add(s)}>Add to library</Button>,
+    }] : []),
+  ];
+  return (
+    <Card title="Built-in sounds" subtitle="Bells, chimes and attention tones that come with Veyra, made by Veyra itself and free to use. Add one to the library to use it in a bell schedule, before a page or in a menu. Paging is not a fire alarm: the alert tones are for drills and attention." flush>
+      {editable && organizations.length > 1 ? (
+        <div className="table-toolbar">
+          <SelectField label={<span className="sr-only">Add to organization</span>} value={target} placeholder="Add to which organization?"
+            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => setOrg(e.target.value)} />
+        </div>
+      ) : null}
+      <DataTable columns={columns} rows={list.data} rowKey={(s) => s.key} loading={list.loading} error={list.error} onRetry={list.reload} caption="Built-in sounds" />
+    </Card>
   );
 }

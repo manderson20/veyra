@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Built-in sounds** (#114): Telephony → Audio lists bells, chimes and attention tones that come with Veyra — a school bell (short and long), the Westminster chime, two- and three-tone chimes, a soft chime, hi-lo and whoop alerts, a temporal-3 drill tone, "door held open" beeps and a beep. Play any of them, then **Add to library** to use it in a bell schedule, before a page or in a menu. Veyra generates them itself, so they are free to use.
+
 ## 0.27.2 — 2026-10-20
 
 More audit items. Migration `0055`. The Companion changes need the new Companion build (Settings → Companion).
