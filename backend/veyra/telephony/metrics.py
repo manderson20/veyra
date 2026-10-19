@@ -32,6 +32,9 @@ class Reading:
     calls_internal: int
     calls_external: int
     registrations: int
+    # Phones the engine knows, registered or not (the dashboard graphs online
+    # against offline).
+    endpoints: int = 0
 
     def as_dict(self) -> dict[str, int]:
         return {
@@ -39,17 +42,18 @@ class Reading:
             "calls_internal": self.calls_internal,
             "calls_external": self.calls_external,
             "registrations": self.registrations,
+            "endpoints": self.endpoints,
         }
 
 
-def classify(calls: list[ActiveCall], registrations: int) -> Reading:
+def classify(calls: list[ActiveCall], registrations: int, endpoints: int = 0) -> Reading:
     """Channels are the engine legs with an endpoint (``Local/`` helper
     channels have none); each outside call has exactly one trunk leg; the
     remaining legs pair up into internal calls (an estimate during set-up)."""
     legs = [c for c in calls if c.endpoint]
     external = sum(1 for c in legs if c.endpoint and c.endpoint.startswith(TRUNK_PREFIX))
     internal = max(0, (len(legs) - 2 * external) // 2)
-    return Reading(len(legs), internal, external, registrations)
+    return Reading(len(legs), internal, external, registrations, endpoints)
 
 
 def read(adapter: TelephonyAdapter) -> Reading | None:
@@ -61,14 +65,11 @@ def read(adapter: TelephonyAdapter) -> Reading | None:
         if Capability.ACTIVE_CALLS not in caps:
             return None
         calls = adapter.active_calls()
-        registrations = (
-            sum(1 for e in adapter.endpoint_statuses() if e.registered)
-            if Capability.ENDPOINT_STATUS in caps
-            else 0
-        )
+        statuses = adapter.endpoint_statuses() if Capability.ENDPOINT_STATUS in caps else []
+        registrations = sum(1 for e in statuses if e.registered)
     except EngineUnavailable:
         return None
-    return classify(calls, registrations)
+    return classify(calls, registrations, len(statuses))
 
 
 def record_sample(db: Session, adapter: TelephonyAdapter) -> Reading | None:
@@ -106,6 +107,7 @@ def series(db: Session, range_key: str, now: datetime | None = None) -> dict[str
             "calls_internal": r.calls_internal,
             "calls_external": r.calls_external,
             "registrations": r.registrations,
+            "endpoints": r.endpoints or 0,
         }
         if b is None:
             buckets[key] = values

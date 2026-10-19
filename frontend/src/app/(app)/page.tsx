@@ -59,7 +59,11 @@ function CallGraphs() {
   const m = metrics.data;
   const picker = <RangePicker value={range} onChange={setRange} />;
   const unavailable = m && !m.available && m.points.length === 0;
+  // Phones online against phones the engine knows but cannot reach.
+  const phonePoints = (m?.points ?? []).map((p) => ({ ...p, online: p.registrations, offline: Math.max(0, (p.endpoints ?? 0) - p.registrations) }));
+  const phonesNow = m?.current ? `${m.current.registrations} of ${m.current.endpoints ?? m.current.registrations} phones online now` : "Registered phones against phones not reachable";
   return (
+    <div className="stack">
     <div className="grid grid--2">
       <Card title="Channels" subtitle={m?.current ? `${m.current.channels} now · ${m.current.registrations} phones registered` : "Engine channels over time"} actions={picker}>
         {metrics.error ? <ErrorState compact error={metrics.error} onRetry={metrics.reload} /> : !m ? <LoadingState /> : unavailable ? (
@@ -77,6 +81,17 @@ function CallGraphs() {
             series={[{ key: "calls_internal", label: "Internal", color: "var(--primary)" }, { key: "calls_external", label: "External", color: "var(--danger)" }]} />
         )}
       </Card>
+    </div>
+    <div className="grid grid--2">
+      <Card title="Phones online" subtitle={phonesNow} actions={picker}>
+        {metrics.error ? <ErrorState compact error={metrics.error} onRetry={metrics.reload} /> : !m ? <LoadingState /> : unavailable ? (
+          <NotAvailable text="The telephony engine is not reporting its phones." />
+        ) : (
+          <Chart points={phonePoints} rangeSeconds={RANGE_SECONDS[range]} ariaLabel="Phones online and offline over time"
+            series={[{ key: "online", label: "Online (registered)", color: "var(--ok)", area: true }, { key: "offline", label: "Offline", color: "var(--danger)", area: true }]} />
+        )}
+      </Card>
+    </div>
     </div>
   );
 }

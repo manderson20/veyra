@@ -23,3 +23,5 @@ class CallSample(UUIDPrimaryKey, Base):
     calls_internal: Mapped[int] = mapped_column(Integer)
     calls_external: Mapped[int] = mapped_column(Integer)
     registrations: Mapped[int] = mapped_column(Integer)
+    # Phones the engine knows (registered or not); NULL before 0.26.5.
+    endpoints: Mapped[int | None] = mapped_column(Integer)

@@ -10,6 +10,9 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased
 
+### Added
+- **Phones online graph** on the overview: registered phones against phones the engine knows but cannot reach, over the same time ranges as the channel and call graphs, with the current count in the title (samples from 0.26.5 on carry the total; older samples show registered only).
+
 ### Security
 - Hardening from the first CodeQL review of the public repository: the alert check that reads a peer certificate's expiry no longer accepts TLS 1.0/1.1; the backup unit's job name is validated before it reaches systemctl; prompt recording paths are resolved and checked to stay inside the organization's folder; the CSP hash script matches `<SCRIPT>` tags in any case. The remaining CodeQL alerts were reviewed and dismissed with reasons (React text rendering, server-generated cookies, administrator-only error messages, development tools).
 

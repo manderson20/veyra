@@ -2204,6 +2204,8 @@ export interface CallMetricPoint {
   calls_internal: number;
   calls_external: number;
   registrations: number;
+  /** Phones the engine knows, registered or not; null in samples before 0.26.5. */
+  endpoints: number | null;
 }
 
 export interface CallMetrics {

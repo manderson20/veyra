@@ -24,9 +24,9 @@ def test_classify_counts_trunk_legs_as_external_and_pairs_the_rest():
         _call("d", "trunk-carrier"),  # external call: phone leg + trunk leg
         _call("e", None),  # Local/ helper channel: ignored
     ]
-    r = metrics.classify(calls, registrations=7)
+    r = metrics.classify(calls, registrations=7, endpoints=9)
     assert r.channels == 4 and r.calls_external == 1 and r.calls_internal == 1
-    assert r.registrations == 7
+    assert r.registrations == 7 and r.endpoints == 9 and r.as_dict()["endpoints"] == 9
     # A call being set up (one phone leg only) does not go negative.
     assert metrics.classify([_call("a", "example-1001")], 0).calls_internal == 0
     assert metrics.classify([_call("a", "trunk-x"), _call("b", "trunk-y")], 0).calls_internal == 0
@@ -43,6 +43,7 @@ def test_record_prune_and_series(app, admin):
     with session_scope() as db:
         reading = metrics.record_sample(db, adapter)
         assert reading is not None and reading.calls_external == 1 and reading.registrations == 1
+        assert reading.endpoints == 2  # one registered, one not: the dashboard's online/offline
         # Old rows are pruned, recent ones kept.
         db.add(
             CallSample(
