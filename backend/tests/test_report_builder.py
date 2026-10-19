@@ -5,6 +5,7 @@ scheduled email with its CSV attachment."""
 
 import email
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from test_api_routing import TCS
 from test_call_history import _setup, line
@@ -289,7 +290,14 @@ def test_saved_scheduled_and_emailed(admin, app):
         rep = db.get(SavedReport, saved["id"])
         due = rep.next_run_at
         assert schedule.process(db, queue_dir, now=due + timedelta(minutes=1)) == 1
-        assert rep.next_run_at == due + timedelta(days=7) and rep.last_error is None
+        # A week on, at the organization's local hour: across the end of
+        # daylight saving time that is not 7 x 24 hours.
+        tz = schedule.org_tz(db, rep.organization_id)
+        expected = schedule.next_run(schedule.Schedule.model_validate(rep.schedule), tz, due)
+        assert rep.next_run_at == expected and rep.last_error is None
+        zone = ZoneInfo(tz)
+        assert (rep.next_run_at.astimezone(zone).date() - due.astimezone(zone).date()).days == 7
+        assert rep.next_run_at.astimezone(zone).hour == due.astimezone(zone).hour
     # Without email delivery the error is kept, and the next run still moves on.
     with session_scope() as db:
         mail.save_smtp_settings(db, mail.SmtpSettings(enabled=False))
