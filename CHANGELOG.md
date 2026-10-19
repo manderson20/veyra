@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.3 — 2026-10-20
+
+More audit items. Migration `0056`. Deploy the telephony configuration after installing: the greeting keys, presence keys and the direct-to-voicemail fix are in the generated dialplan.
 
 ### Added
 - **Presence keys** (#132): a phone key of the new type "Presence of a colleague" shows whether that colleague is available (off), busy or in a meeting (lit), away or at lunch, or out, as set on My Phone; pressing it calls them. Administrators put them on profiles and phones; users can put them on their own keys. The feature code is `*36` (Telephony → Feature Codes); takes effect at the next deployment.
