@@ -159,6 +159,17 @@ delete, and "record from your phone" (the `*97` menu, as today).
   The box's `GET` now reports `greetings: {unavail: true, …}`
   (VOICEMAIL_IVR.md §3.3 asked for it).
 
+*Built 2026-10-19 (slice B):* routes `GET /me/voicemail/{id}/greetings`,
+`GET …/greetings/{kind}/audio`, `PUT …/greetings/{kind}` (multipart `file`;
+`service.greeting_save`: `audio.convert_any` → 8 kHz mono WAV, 415
+`unsupported_audio`, 422 `greeting_too_long` above 60 s), `DELETE
+…/greetings/{kind}`; the same under `/voicemail/{id}/greetings…`
+(`voicemail.read`/`voicemail.write`). Frontend `GreetingsPanel`
+(MediaRecorder with a counter and preview; the recording is uploaded as
+webm/opus and converted by ffmpeg) inside `VoicemailBoxPanel` (Messages |
+Greetings). Deviation: the box's `GET` does not report greeting presence (it
+would query the helper per box in lists); the greetings route does.
+
 ## 4. Self-service controls (#33)
 
 Built in Milestone 18 (CALL_FEATURES §3.9). This milestone verifies and

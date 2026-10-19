@@ -18,6 +18,7 @@ from veyra.core import tenancy
 from veyra.core.config import Settings
 from veyra.core.errors import ProblemError
 from veyra.core.models import Extension, VoicemailBox
+from veyra.telephony import audio as audio_tools
 from veyra.voicemail.client import StoreClient, StoreClientError, StoreUnavailable
 from veyra.voicemail.store import FOLDERS, GREETINGS
 
@@ -258,3 +259,74 @@ def greetings(db: Session, settings: Settings, box: VoicemailBox) -> list[dict[s
         }
         for k in GREETINGS
     ]
+
+
+# ------------------------------------------------------------ greetings (§3)
+
+# Asterisk's maxgreet in the generated voicemail.conf (generator._voicemail).
+MAX_GREETING_SECONDS = 60
+
+
+class GreetingOut(BaseModel):
+    kind: str
+    label: str
+    recorded: bool
+    format: str | None
+    size_bytes: int
+
+
+def greeting_list(db: Session, settings: Settings, box: VoicemailBox) -> list[GreetingOut]:
+    return [GreetingOut(**g) for g in greetings(db, settings, box)]
+
+
+def greeting_audio(
+    db: Session, settings: Settings, box: VoicemailBox, kind: str
+) -> tuple[str, bytes]:
+    check_greeting(kind)
+    context, mailbox = location(db, box)
+    try:
+        fmt, data = client(settings).greeting_get(context, mailbox, kind)
+    except StoreClientError as e:
+        raise problem(e) from e
+    return MEDIA_TYPES.get(fmt, "application/octet-stream"), data
+
+
+def greeting_save(
+    db: Session,
+    settings: Settings,
+    box: VoicemailBox,
+    kind: str,
+    data: bytes,
+    filename: str | None,
+) -> float:
+    """Convert an upload or a browser recording to the engine's WAV (8 kHz
+    mono) and store it as the greeting; returns the duration."""
+    check_greeting(kind)
+    if not data:
+        raise ProblemError(415, "Empty file", "The audio file is empty.", code="unsupported_audio")
+    try:
+        wav, duration = audio_tools.convert_any(data, filename)
+    except audio_tools.AudioError as e:
+        raise ProblemError(415, "Unsupported audio", str(e), code="unsupported_audio") from e
+    if duration > MAX_GREETING_SECONDS:
+        raise ProblemError(
+            422,
+            "Greeting too long",
+            f"The greeting is {duration:.0f} s long; the limit is {MAX_GREETING_SECONDS} s.",
+            code="greeting_too_long",
+        )
+    context, mailbox = location(db, box)
+    try:
+        client(settings).greeting_put(context, mailbox, kind, wav, "wav")
+    except StoreClientError as e:
+        raise problem(e) from e
+    return duration
+
+
+def greeting_remove(db: Session, settings: Settings, box: VoicemailBox, kind: str) -> bool:
+    check_greeting(kind)
+    context, mailbox = location(db, box)
+    try:
+        return client(settings).greeting_delete(context, mailbox, kind)
+    except StoreClientError as e:
+        raise problem(e) from e

@@ -209,3 +209,71 @@ def test_inbox_without_the_helper(admin, app, tmp_path):
     box = admin.post("/api/v1/voicemail", json={"extension_id": ext["id"]}).json()
     r = admin.get(f"/api/v1/voicemail/{box['id']}/messages")
     assert r.status_code == 503 and r.json()["code"] == "vmstore_unavailable"
+
+
+def _wav(seconds: float, rate: int = 8000) -> bytes:
+    import io
+    import struct
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        n = int(seconds * rate)
+        w.writeframes(struct.pack("<" + "h" * n, *([1000, -1000] * (n // 2) + [0] * (n % 2))))
+    return buf.getvalue()
+
+
+def test_greetings_upload_play_limit_and_delete(admin, app, helper):
+    uid = _user(admin, "lee@example.org")
+    ext = _ext(admin, "1004", uid)
+    box = admin.post("/api/v1/voicemail", json={"extension_id": ext["id"]}).json()
+    ctx = _context(admin)
+    user = login(TestClient(app, base_url="http://veyra.test"), "lee@example.org", ADMIN_PASSWORD)
+    base = f"/api/v1/me/voicemail/{box['id']}/greetings"
+
+    r = user.get(base)
+    assert r.status_code == 200, r.text
+    assert [g["kind"] for g in r.json()] == ["unavail", "busy", "greet", "temp"]
+    assert not any(g["recorded"] for g in r.json())
+    # Upload a 16 kHz stereo-ish WAV: converted to the engine's 8 kHz mono WAV.
+    r = user.put(base + "/unavail", files={"file": ("hello.wav", _wav(2.0, 16000), "audio/wav")})
+    assert r.status_code == 200, r.text
+    g = {x["kind"]: x for x in r.json()}
+    assert (
+        g["unavail"]["recorded"] and g["unavail"]["format"] == "wav" and not g["busy"]["recorded"]
+    )
+    stored = helper / ctx / "1004" / "unavail.wav"
+    assert stored.exists() and stored.read_bytes()[:4] == b"RIFF"
+    r = user.get(base + "/unavail/audio")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("audio/wav")
+    assert user.get(base + "/busy/audio").status_code == 404
+    # Longer than maxgreet (60 s) is refused; so is a non-audio file and a bad kind.
+    r = user.put(base + "/busy", files={"file": ("long.wav", _wav(61.0), "audio/wav")})
+    assert r.status_code == 422 and r.json()["code"] == "greeting_too_long"
+    r = user.put(base + "/busy", files={"file": ("x.wav", b"not audio at all", "audio/wav")})
+    assert r.status_code == 415
+    assert (
+        user.put(base + "/hello", files={"file": ("a.wav", _wav(1), "audio/wav")}).status_code
+        == 422
+    )
+    # Delete; a second delete is a no-op.
+    r = user.delete(base + "/unavail")
+    assert r.status_code == 200 and not {x["kind"]: x for x in r.json()}["unavail"]["recorded"]
+    assert not stored.exists()
+    events = admin.get("/api/v1/audit", params={"action": "voicemail.greeting_set"}).json()["items"]
+    assert (
+        events
+        and events[0]["details"]["kind"] == "unavail"
+        and events[0]["details"]["self_service"]
+    )
+    # Administrator parity.
+    r = admin.put(
+        f"/api/v1/voicemail/{box['id']}/greetings/temp",
+        files={"file": ("temp.wav", _wav(1.0), "audio/wav")},
+    )
+    assert r.status_code == 200 and {x["kind"]: x for x in r.json()}["temp"]["recorded"]
+    assert admin.get(f"/api/v1/voicemail/{box['id']}/greetings/temp/audio").status_code == 200
+    assert admin.delete(f"/api/v1/voicemail/{box['id']}/greetings/temp").status_code == 200

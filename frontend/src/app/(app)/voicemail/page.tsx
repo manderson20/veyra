@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { VoicemailBoxDialog } from "@/components/voicemail/VoicemailBoxDialog";
-import { VoicemailInbox } from "@/components/voicemail/VoicemailInbox";
+import { VoicemailBoxPanel } from "@/components/voicemail/VoicemailBoxPanel";
 import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, PageHeader, Pagination, SearchInput, SelectField, type Column } from "@/components/ui";
 import type { Page, VoicemailBox } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -108,9 +108,9 @@ export default function VoicemailPage() {
       <VoicemailBoxDialog open={editing !== null} onClose={() => setEditing(null)} box={editing ?? undefined} onSaved={() => { list.reload(); setChanged((n) => n + 1); }} />
       <Dialog open={messagesFor !== null} onClose={() => setMessagesFor(null)} size="lg"
         title={messagesFor ? (messagesFor.shared ? `Messages of ${messagesFor.name}` : `Messages of ${messagesFor.extension_number} ${messagesFor.extension_name}`) : ""}
-        description="What the user hears with *97. Listening, moving, forwarding and deleting are written to the audit log.">
+        description="What the user hears with *97: messages and greetings. Listening and every change are written to the audit log.">
         {messagesFor ? (
-          <VoicemailInbox base={`/voicemail/${messagesFor.id}`} editable={editable}
+          <VoicemailBoxPanel base={`/voicemail/${messagesFor.id}`} idBase={`vm-admin-${messagesFor.id}`} editable={editable}
             targets={(list.data?.items ?? []).filter((b) => b.id !== messagesFor.id && b.organization_id === messagesFor.organization_id).map((b) => ({ id: b.id, label: b.shared ? `${b.number} ${b.name}` : `${b.extension_number} ${b.extension_name}` }))} />
         ) : null}
       </Dialog>

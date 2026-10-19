@@ -334,7 +334,8 @@ broken; deleting a box or a menu that something points at is refused.
   helper that runs as the asterisk user; [USER_PORTAL.md](USER_PORTAL.md)
   §2). "Call me to play" and voicemail reports are not built.
 * The greetings live in Asterisk's spool; the phone menu (`*97`) records
-  them, and the web interface manages them from 0.26.0 (USER_PORTAL.md §3).
+  them, and since 0.26.0 the web interface lists, plays, uploads, records
+  (browser microphone) and removes them (USER_PORTAL.md §3).
 * Prompt conversion is basic (linear interpolation); studio-quality prompts
   should be exported at 8 kHz mono from an audio tool.
 * Email delivery depends on the configured SMTP server; failures are

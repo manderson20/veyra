@@ -4,7 +4,7 @@
 import { CallHandlingCard } from "@/components/extensions/CallHandlingCard";
 import { FollowMeCard } from "@/components/extensions/FollowMeCard";
 import { MyVoicemailCard } from "@/components/account/MyVoicemailCard";
-import { VoicemailInbox } from "@/components/voicemail/VoicemailInbox";
+import { VoicemailBoxPanel } from "@/components/voicemail/VoicemailBoxPanel";
 import { Badge, Callout, Card, EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
 import type { MyExtension, MyVoicemail } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -43,9 +43,9 @@ export default function MyPhonePage() {
       ))}
       {(boxes.data ?? []).map((b) => (
         <Card key={b.id} title={b.shared ? `Voicemail: ${b.name}` : `Voicemail ${b.number}`}
-          subtitle={b.shared ? `Shared inbox ${b.number}; you are one of its members.` : "Your messages, as the phone has them. Playing, moving and deleting here changes what *97 plays."}>
-          <VoicemailInbox base={`/me/voicemail/${b.id}`}
-            targets={(boxes.data ?? []).filter((o) => o.id !== b.id).map((o) => ({ id: o.id, label: o.shared ? `${o.number} ${o.name}` : `${o.number} ${o.name}` }))} />
+          subtitle={b.shared ? `Shared inbox ${b.number}; you are one of its members.` : "Your messages and greetings, as the phone has them. Changes here change what *97 plays."}>
+          <VoicemailBoxPanel base={`/me/voicemail/${b.id}`} idBase={`my-vm-${b.id}`}
+            targets={(boxes.data ?? []).filter((o) => o.id !== b.id).map((o) => ({ id: o.id, label: `${o.number} ${o.name}` }))} />
         </Card>
       ))}
       <MyVoicemailCard />

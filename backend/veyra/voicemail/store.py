@@ -325,7 +325,7 @@ class VoicemailStore:
         src = self._folder_dir(args.get("context"), args.get("mailbox"), folder_name)
         dst_box = self._box_dir(args.get("to_context"), args.get("to_mailbox"))
         if not dst_box.exists():
-            dst_box.mkdir(mode=0o755, parents=False)
+            dst_box.mkdir(mode=0o755, parents=True)
         dst = dst_box / "INBOX"
         if not dst.exists():
             dst.mkdir(mode=0o755)
@@ -391,7 +391,7 @@ class VoicemailStore:
             raise StoreError("bad_argument", "the audio is empty or too large")
         box = self._box_dir(args.get("context"), args.get("mailbox"))
         if not box.exists():
-            box.mkdir(mode=0o755, parents=False)
+            box.mkdir(mode=0o755, parents=True)
         tmp = box / f".{kind}.{fmt}.tmp"
         tmp.write_bytes(data)
         os.chmod(tmp, 0o644)

@@ -1292,6 +1292,15 @@ export interface VoicemailMessage {
   size_bytes: number;
 }
 
+/** One of the four greetings of a box (docs/USER_PORTAL.md §3). */
+export interface VoicemailGreeting {
+  kind: "unavail" | "busy" | "greet" | "temp";
+  label: string;
+  recorded: boolean;
+  format: string | null;
+  size_bytes: number;
+}
+
 export interface VoicemailMessages {
   folder: string;
   messages: VoicemailMessage[];

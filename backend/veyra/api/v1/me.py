@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, File, Request, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -605,3 +605,83 @@ def my_message_delete(
     )
     db.commit()
     return Response(status_code=204)
+
+
+# ------------------------------------------------- voicemail greetings (§3)
+
+
+@router.get(
+    "/voicemail/{box_id}/greetings",
+    response_model=list[vmsvc.GreetingOut],
+    summary="Your greetings (unavailable, busy, name, temporary)",
+)
+def my_greetings(
+    box_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> list[vmsvc.GreetingOut]:
+    box = _own_box(db, principal, box_id)
+    return vmsvc.greeting_list(db, request.app.state.settings, box)
+
+
+@router.get("/voicemail/{box_id}/greetings/{kind}/audio", summary="Listen to one of your greetings")
+def my_greeting_audio(
+    box_id: uuid.UUID,
+    kind: str,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> Response:
+    box = _own_box(db, principal, box_id)
+    media, data = vmsvc.greeting_audio(db, request.app.state.settings, box, kind)
+    return Response(content=data, media_type=media, headers={"Cache-Control": "private, no-store"})
+
+
+@router.put(
+    "/voicemail/{box_id}/greetings/{kind}",
+    response_model=list[vmsvc.GreetingOut],
+    summary="Upload or record one of your greetings",
+)
+async def my_greeting_put(
+    box_id: uuid.UUID,
+    kind: str,
+    request: Request,
+    file: UploadFile = File(...),
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> list[vmsvc.GreetingOut]:
+    box = _own_box(db, principal, box_id)
+    data = await file.read(vmsvc.audio_tools.MAX_COMPRESSED_BYTES + 1)
+    duration = vmsvc.greeting_save(db, request.app.state.settings, box, kind, data, file.filename)
+    _box_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.greeting_set",
+        box,
+        {"kind": kind, "duration_seconds": round(duration, 1), "filename": file.filename},
+    )
+    db.commit()
+    return vmsvc.greeting_list(db, request.app.state.settings, box)
+
+
+@router.delete(
+    "/voicemail/{box_id}/greetings/{kind}",
+    response_model=list[vmsvc.GreetingOut],
+    summary="Remove one of your greetings (the phone system's default plays)",
+)
+def my_greeting_delete(
+    box_id: uuid.UUID,
+    kind: str,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> list[vmsvc.GreetingOut]:
+    box = _own_box(db, principal, box_id)
+    if vmsvc.greeting_remove(db, request.app.state.settings, box, kind):
+        _box_audit(db, ctx, principal, "voicemail.greeting_delete", box, {"kind": kind})
+        db.commit()
+    return vmsvc.greeting_list(db, request.app.state.settings, box)
