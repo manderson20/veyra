@@ -11,6 +11,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ## Unreleased
 
 ### Added
+- **Presence keys** (#132): a phone key of the new type "Presence of a colleague" shows whether that colleague is available (off), busy or in a meeting (lit), away or at lunch, or out, as set on My Phone; pressing it calls them. Administrators put them on profiles and phones; users can put them on their own keys. The feature code is `*36` (Telephony → Feature Codes); takes effect at the next deployment.
 - **Voicemail greeting keys** (#131): callers who reach a voicemail box can press 1 or 2 while the greeting plays to try the person's follow-me numbers or ring another number of the organization (an extension, ring group or queue), alongside 0 for the operator. Administrators set them in the voicemail box; each user can set their own under Account → Voicemail → Greeting keys. Migration `0056`; takes effect at the next deployment.
 - **Built-in sounds** (#114): Telephony → Audio lists bells, chimes and attention tones that come with Veyra — a school bell (short and long), the Westminster chime, two- and three-tone chimes, a soft chime, hi-lo and whoop alerts, a temporal-3 drill tone, "door held open" beeps and a beep. Play any of them, then **Add to library** to use it in a bell schedule, before a page or in a menu. Veyra generates them itself, so they are free to use.
 

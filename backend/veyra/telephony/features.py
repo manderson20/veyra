@@ -163,6 +163,15 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         19,
     ),
     FeatureCodeDef(
+        "presence_watch",
+        "*36",
+        "Colleague's presence",
+        "Followed by an extension: a BLF key on it shows that colleague's presence; "
+        "pressing it calls them.",
+        21,
+        True,
+    ),
+    FeatureCodeDef(
         "vm_direct",
         "*",
         "Direct to voicemail",

@@ -33,6 +33,15 @@ _ROW_FIELD = {"fmfm": "fmfm_enabled"}
 _NUMBER_RE = re.compile(r"^\+?[0-9]{2,20}$")
 # Presence states a user may show (docs/USER_PORTAL.md §7).
 PRESENCE_STATES = ("available", "away", "busy", "meeting", "lunch", "out")
+# The lamp of a presence key (docs/USER_PORTAL.md §7; issue #132).
+PRESENCE_LAMP = {
+    "available": "NOT_INUSE",
+    "busy": "INUSE",
+    "meeting": "INUSE",
+    "away": "ONHOLD",
+    "lunch": "ONHOLD",
+    "out": "UNAVAILABLE",
+}
 PRESENCE_LABELS = {
     "available": "Available",
     "away": "Away",
@@ -118,6 +127,14 @@ def set_presence(
         row.updated_by = by
         row.updated_at = utcnow()
         db.flush()
+    if "presence" in changed and adapter is not None:
+        org = db.get(Organization, extension.organization_id)
+        try:
+            adapter.set_presence_lamp(
+                org.slug if org else "", extension.number, PRESENCE_LAMP[state]
+            )
+        except (EngineUnavailable, NotSupported, ValueError) as e:
+            log.warning("presence lamp of %s not set: %s", extension.number, e)
     actions = (rules or {}).get(state) or {}
     wanted: dict[str, Any] = {}
     if actions.get("dnd") is not None:

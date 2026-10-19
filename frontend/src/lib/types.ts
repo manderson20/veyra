@@ -1375,7 +1375,7 @@ export interface MyDevice {
   slots: MyDeviceSlot[];
   user_slots: number;
 }
-export interface UserKeyInput { type: "speed_dial" | "blf"; label: string | null; value: string; contact_id?: string | null }
+export interface UserKeyInput { type: "speed_dial" | "blf" | "presence"; label: string | null; value: string; contact_id?: string | null }
 
 /** One voicemail message as the store helper reports it (docs/USER_PORTAL.md §2). */
 export interface VoicemailMessage {
@@ -2044,7 +2044,7 @@ export interface PageLogEntry {
 }
 
 /** "user": an open slot the phone's user fills from My Phone (docs/USER_PORTAL.md §8). */
-export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user" | "park" | "voicemail" | "transfer" | "intercom" | "dnd" | "toggle";
+export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user" | "park" | "voicemail" | "transfer" | "intercom" | "dnd" | "toggle" | "presence";
 
 export interface LineKey {
   type: LineKeyType;

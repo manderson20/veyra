@@ -320,6 +320,15 @@ class AsteriskAdapter(TelephonyAdapter):
             f"devstate change Custom:veyra-{kind}-{org}-{k} {'INUSE' if value else 'NOT_INUSE'}"
         )
 
+    def set_presence_lamp(self, organization: str, number: str, state: str) -> None:
+        org = _check_token(organization, "organization")
+        num = _check_token(number, "extension")
+        if state not in ("INUSE", "ONHOLD", "UNAVAILABLE", "NOT_INUSE"):
+            raise ValueError(f"unknown device state {state!r}")
+        ok, out = cli.run(f"devstate change Custom:veyra-presence-{org}-{num} {state}")
+        if not ok:
+            raise EngineUnavailable(f"could not set the presence lamp: {out[:200]}")
+
     def store_entries(self, family: str) -> dict[str, str]:
         fam = _check_family(family)
         ok, out = cli.run(f"database show {fam}")

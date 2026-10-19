@@ -1108,3 +1108,41 @@ def test_generator_voicemail_locater():
     box["locater_2"] = "70a"
     with pytest.raises(generator.GenerationError, match="locater"):
         generate(snap)
+
+
+def test_presence_hint_and_lamp(admin, app):
+    """Presence keys (#132): one hint per extension, and the lamp follows."""
+    from test_generator_routing import _snapshot
+
+    from veyra.telephony.asterisk.generator import generate
+    from veyra.telephony.extension_state import PRESENCE_LAMP
+
+    snap = _snapshot(feature_codes={"presence_watch": "*36"})
+    d = {f.path: f.content for f in generate(snap)}["extensions.conf"]
+    assert "exten => *361001,hint,Custom:veyra-presence-example-1001" in d
+    assert "exten => *361001,1,Goto(veyra-internal,1001,1)" in d
+    assert (
+        "Custom:veyra-presence"
+        not in {f.path: f.content for f in generate({**snap, "feature_codes": {}})}[
+            "extensions.conf"
+        ]
+    )
+
+    adapter = FakeAdapter()
+    app.state.telephony = adapter
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    me = admin.get("/api/v1/auth/session").json()["user"]
+    ext = admin.post(
+        "/api/v1/extensions",
+        json={
+            "organization_id": org["id"],
+            "number": "1001",
+            "display_name": "Me",
+            "user_id": me["id"],
+        },
+    ).json()
+    r = admin.put(f"/api/v1/me/extensions/{ext['id']}/presence", json={"state": "meeting"})
+    assert r.status_code == 200, r.text
+    assert adapter.presence_lamps[(org["slug"], "1001")] == PRESENCE_LAMP["meeting"] == "INUSE"
+    admin.put(f"/api/v1/me/extensions/{ext['id']}/presence", json={"state": "out"})
+    assert adapter.presence_lamps[(org["slug"], "1001")] == "UNAVAILABLE"

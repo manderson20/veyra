@@ -255,8 +255,13 @@ in the **Colleagues** widget and the directory (`GET /directory` adds
 `extension_state.apply` when the state changes, so the engine sees them
 immediately (no deployment). A BLF hint `Custom:veyra-presence-<org>-<ext>`
 (INUSE for busy/meeting, ONHOLD for away/lunch, UNAVAILABLE for out,
-NOT_INUSE for available) lets a phone key show a colleague's presence
-(key type later, with #40's park type). Not in this slice: phone-side
+NOT_INUSE for available) lets a phone key show a colleague's presence.
+*Built 0.27.3 (#132):* feature code `presence_watch` (`*36`): the generator
+writes `exten => *36<ext>,hint,Custom:veyra-presence-<org>-<ext>` and a
+dial line to the colleague for every extension; `set_presence` sets the
+device state through `adapter.set_presence_lamp`; key type `presence`
+(profiles, devices, and the user's own keys) renders as a BLF on
+`*36<ext>`. Not in this slice: phone-side
 presence menus, calendar integration.
 
 *Built 2026-10-19 (slice E):* `extension_states.presence` /
