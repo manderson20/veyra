@@ -412,7 +412,7 @@ def test_received_fax_becomes_pdf_by_email_and_retention(admin, app, monkeypatch
     # Administrators list it with the inbox name and download the PDF.
     r = admin.get(JOBS, params={"direction": "in"})
     assert r.status_code == 200
-    mine = [j for j in r.json()["items"] if j["id"] == str(job_id)][0]
+    mine = next(j for j in r.json()["items"] if j["id"] == str(job_id))
     assert mine["inbox_name"] == "Attendance" and mine["has_file"]
     assert admin.get(f"{JOBS}/{job_id}/file").content == PDF
     # Retention removes old faxes and their files, never those in progress.
