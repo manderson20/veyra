@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /** The options page: dial prefix, default extension, notifications, tel:
- * links and the speed-dial editor. Everything is saved to the server. */
+ * links, and moving old speed dials to My Phone favourites. Everything is
+ * saved to the server. */
 
 import "./options.css";
 import { byId, el } from "../lib/format";
 import { sendRequest, type StateResult } from "../lib/messages";
-import type { SpeedDial } from "../lib/types";
 
-const MAX_SPEED_DIALS = 50;
 const TEL_PERMISSIONS: chrome.permissions.Permissions = {
   permissions: ["scripting"],
   origins: ["https://*/*"],
@@ -29,44 +28,6 @@ function renderSignedOut(serverUrl: string | null): void {
   );
 }
 
-function speedDialRow(dial: SpeedDial, onRemove: () => void): HTMLDivElement {
-  const label = el("input", {
-    type: "text",
-    class: "label",
-    placeholder: "Label",
-    maxlength: "40",
-    value: dial.label,
-    "aria-label": "Speed dial label",
-  });
-  const number = el("input", {
-    type: "tel",
-    placeholder: "Number",
-    maxlength: "32",
-    value: dial.number,
-    "aria-label": "Speed dial number",
-  });
-  const remove = el("button", { type: "button", class: "remove", title: "Remove", "aria-label": "Remove speed dial", text: "✕" });
-  const row = el("div", { class: "row speed-dial" }, [label, number, remove]);
-  remove.addEventListener("click", () => {
-    row.remove();
-    onRemove();
-  });
-  return row;
-}
-
-function readSpeedDials(container: HTMLElement): SpeedDial[] {
-  const out: SpeedDial[] = [];
-  for (const row of container.querySelectorAll<HTMLElement>(".speed-dial")) {
-    const inputs = row.querySelectorAll("input");
-    const label = inputs[0]?.value.trim() ?? "";
-    const number = inputs[1]?.value.trim() ?? "";
-    if (label === "" && number === "") {
-      continue;
-    }
-    out.push({ label, number });
-  }
-  return out;
-}
 
 async function telPermissionGranted(): Promise<boolean> {
   try {
@@ -141,21 +102,38 @@ function renderOptions(state: StateResult, telGranted: boolean): void {
       });
   });
 
-  const speedDials = el("div", { class: "speed-dials" });
-  const addButton = el("button", { type: "button", text: "Add speed dial" });
-  const updateAdd = (): void => {
-    addButton.disabled = speedDials.querySelectorAll(".speed-dial").length >= MAX_SPEED_DIALS;
-  };
-  const addRow = (dial: SpeedDial): void => {
-    speedDials.append(speedDialRow(dial, updateAdd));
-    updateAdd();
-  };
-  for (const dial of prefs.speed_dials) addRow(dial);
-  addButton.addEventListener("click", () => {
-    addRow({ label: "", number: "" });
-    const rows = speedDials.querySelectorAll<HTMLInputElement>(".speed-dial input");
-    rows[rows.length - 2]?.focus();
+  // Favourites live on My Phone (#128); old Companion speed dials can be moved there.
+  const myPhone = state.serverUrl ? `${state.serverUrl.replace(/\/$/, "")}/my-phone/` : null;
+  const favouritesInfo = el("p", { class: "muted" }, [
+    "The popup shows your favourite contacts from My Phone",
+    myPhone ? " (" : ".",
+    ...(myPhone ? [el("a", { href: myPhone, target: "_blank", rel: "noopener", text: "open My Phone" }), ")."] : []),
+    " Mark a contact with the star to add it.",
+  ]);
+  const legacy = prefs.speed_dials;
+  const moveButton = el("button", { type: "button", text: `Move my ${legacy.length} speed dial${legacy.length === 1 ? "" : "s"} to My Phone` });
+  const moveStatus = el("div");
+  moveButton.addEventListener("click", () => {
+    moveButton.disabled = true;
+    moveStatus.replaceChildren(message("info", "Moving…"));
+    void (async () => {
+      const result = await sendRequest({ type: "moveSpeedDials" });
+      if (result.status === "ok") {
+        moveStatus.replaceChildren(message("info", `${result.moved} speed dial${result.moved === 1 ? "" : "s"} are now favourite contacts on My Phone.`));
+        moveButton.remove();
+      } else {
+        moveButton.disabled = false;
+        moveStatus.replaceChildren(message("error", result.detail));
+      }
+    })();
   });
+  const favouritesSection = el("section", {}, [
+    el("h2", { text: "Favourites" }),
+    favouritesInfo,
+    ...(legacy.length
+      ? [el("p", { class: "muted small", text: `This Companion still has ${legacy.length} speed dial${legacy.length === 1 ? "" : "s"} of its own; the popup shows them until you have favourites on My Phone.` }), el("div", {}, [moveButton]), moveStatus]
+      : []),
+  ]);
 
   const save = el("button", { type: "submit", class: "primary", text: "Save" });
   const signOut = el("button", { type: "button", class: "danger", text: "Sign out" });
@@ -187,11 +165,7 @@ function renderOptions(state: StateResult, telGranted: boolean): void {
       el("label", { class: "check" }, [telLinks, "Handle tel: links"]),
       telHint,
     ]),
-    el("section", {}, [
-      el("h2", { text: `Speed dials (up to ${MAX_SPEED_DIALS})` }),
-      speedDials,
-      el("div", {}, [addButton]),
-    ]),
+    favouritesSection,
     status,
     el("div", { class: "actions" }, [
       save,
@@ -202,19 +176,13 @@ function renderOptions(state: StateResult, telGranted: boolean): void {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const dials = readSpeedDials(speedDials);
-    const incomplete = dials.find((d) => d.label === "" || d.number === "");
-    if (incomplete) {
-      status.replaceChildren(message("error", "Every speed dial needs both a label and a number."));
-      return;
-    }
     save.disabled = true;
     status.replaceChildren(message("info", "Saving…"));
     void (async () => {
       const result = await sendRequest({
         type: "savePreferences",
         companion: {
-          speed_dials: dials,
+          speed_dials: prefs.speed_dials,
           dial_prefix: prefix.value,
           default_extension_id: extension.value || null,
           notify_incoming: notifyIncoming.checked,

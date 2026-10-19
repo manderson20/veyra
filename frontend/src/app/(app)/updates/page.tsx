@@ -417,13 +417,13 @@ function InstallProgressBody({ progress, reloadButton = true, fill = false }: { 
       ) : null}
       {run?.error ? <p>{run.error}</p> : null}
       {pending?.error ? <p>{pending.error}</p> : null}
+      {run?.log_file ? <p className="subtle" style={{ flex: "0 0 auto", margin: 0 }}>Full log on the server: <code>{run.log_file}</code></p> : null}
       {lines.length ? (
-        <details open={outcome !== "succeeded"} style={fill ? { display: "flex", flexDirection: "column", ...grow } : undefined}>
+        <details open={outcome !== "succeeded"} style={fill ? { display: "flex", flexDirection: "column", overflow: "hidden", ...grow } : undefined}>
           <summary>Installer output{run?.state === "running" ? " (live)" : ""}</summary>
           <pre ref={logRef} className="mono" style={{ ...(fill ? { ...grow, maxHeight: "60vh" } : { maxHeight: 240 }), overflow: "auto", whiteSpace: "pre-wrap", margin: 0 }}>{lines.join("\n")}</pre>
         </details>
       ) : null}
-      {run?.log_file ? <p className="subtle">Full log on the server: <code>{run.log_file}</code></p> : null}
     </div>
   );
 }

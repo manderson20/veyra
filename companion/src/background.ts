@@ -17,11 +17,13 @@ import type {
   DialResult,
   DirectoryResult,
   LoginResult,
+  MoveSpeedDialsResult,
   Request,
   Response,
   SavePreferencesResult,
   StateResult,
 } from "./lib/messages";
+import { favouritesFrom, type Favourite, type MyContact } from "./lib/favourites";
 import { looksLikeNumber, normalizeNumber } from "./lib/numbers";
 import {
   applyToRecent,
@@ -422,9 +424,62 @@ async function handleState(): Promise<StateResult> {
     user: signedIn ? (stored.user ?? null) : null,
     extensions: signedIn ? (stored.extensions ?? []) : [],
     preferences: preferencesOf(stored),
+    favourites: signedIn ? await refreshFavourites(stored) : [],
     recent: signedIn ? (stored.recent ?? []) : [],
     connection: signedIn ? connectionState() : "disabled",
   };
+}
+
+/** Favourite contacts from My Phone (#128), cached for when the server is
+ * out of reach. */
+async function refreshFavourites(stored: StoredState): Promise<Favourite[]> {
+  const client = await clientFromStorage();
+  if (!client) {
+    return [];
+  }
+  try {
+    const contacts = await client.get<MyContact[]>("/api/v1/me/contacts?favourite=true");
+    const favourites = favouritesFrom(contacts);
+    await setStored({ favourites });
+    return favourites;
+  } catch (error) {
+    log("favourites refresh failed", error);
+    return stored.favourites ?? [];
+  }
+}
+
+/** Copy the Companion's own speed dials to favourite contacts on My Phone,
+ * then empty them: from now on My Phone is where favourites are kept. */
+async function handleMoveSpeedDials(): Promise<MoveSpeedDialsResult> {
+  const client = await clientFromStorage();
+  if (!client) {
+    return { status: "error", code: "not_signed_in", detail: "Sign in first." };
+  }
+  const stored = await getStored();
+  const preferences = preferencesOf(stored);
+  let moved = 0;
+  try {
+    for (const dial of preferences.speed_dials) {
+      await client.post("/api/v1/me/contacts", {
+        name: dial.label,
+        numbers: [{ label: "work", number: dial.number }],
+        favourite: true,
+      });
+      moved += 1;
+    }
+    const out = await client.put<PreferencesOut>("/api/v1/me/preferences", {
+      companion: { ...preferences, speed_dials: [] },
+    });
+    const next = { ...DEFAULT_PREFERENCES, ...out.companion };
+    await setStored({ preferences: next });
+    await refreshFavourites(await getStored());
+    return { status: "ok", moved, preferences: next };
+  } catch (error) {
+    const result = errorResult(error);
+    return moved
+      ? { ...result, detail: `${moved} moved, then: ${result.detail}` }
+      : result;
+  }
 }
 
 async function refreshExtensions(client: VeyraClient): Promise<void> {
@@ -845,6 +900,8 @@ async function dispatch(request: Request): Promise<Response> {
       return handleSavePreferences(request.companion);
     case "state":
       return handleState();
+    case "moveSpeedDials":
+      return handleMoveSpeedDials();
   }
 }
 

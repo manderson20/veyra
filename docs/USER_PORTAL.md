@@ -236,9 +236,10 @@ replace}` with "name, company, number…" lines or the export's columns,
 `too_many_contacts` at 500), frontend `components/portal/ContactsCard.tsx`
 (favourite toggle, call from the user's first enabled extension through
 `/calls/originate`, edit dialog, import dialog). Deviation from the design:
-the Companion extension keeps its own `companion.speed_dials` for now (it is
-a separately released client); it will read `/me/contacts` in its next
-version, and no data migration was done. Name resolution on call history
+no data migration was done; since 0.27.2 (#128) the Companion popup reads
+`/me/contacts?favourite=true` and its options page moves the old
+`companion.speed_dials` to favourite contacts on request (the popup shows
+the old list while the user has no favourites). Name resolution on call history
 and voicemail comes with slice D.
 
 ## 7. Presence (#60)

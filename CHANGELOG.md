@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Changed
+- **Companion favourites come from My Phone** (#128): the Companion popup shows your favourite contacts from My Phone (star a contact to add it) instead of a separate speed-dial list. The Companion's options page moves its old speed dials to My Phone favourites in one click; until then the popup keeps showing them.
+
+### Fixed
+- **Update window: the "Full log on the server" line** no longer overlaps the scrolling installer output; it sits above it.
+
 ## 0.27.1 — 2026-10-20
 
 First items from the milestone audit (issues #108–#147). No migration. Note the fix below: after installing, open each extension's Location card and choose its site (or building) so emergency routing and readiness count it.
