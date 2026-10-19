@@ -10,6 +10,9 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased
 
+### Added
+- **Reports** (#121): the dashboard's "Calls today" compares with the same weekday last week up to the same time of day; the Reports trunk table shows the most calls up at once on each trunk in the period, to compare with the carrier's channel limit.
+
 ### Changed
 - **Companion favourites come from My Phone** (#128): the Companion popup shows your favourite contacts from My Phone (star a contact to add it) instead of a separate speed-dial list. The Companion's options page moves its old speed dials to My Phone favourites in one click; until then the popup keeps showing them.
 

@@ -28,7 +28,7 @@ interface CallsReport {
   by_day: { day: string; inbound: number; outbound: number; internal: number; answered: number; missed: number; total: number }[];
   heatmap: number[][];
   extensions: { extension_id: string; number: string; display_name: string; answered: number; talk_seconds: number; missed: number }[];
-  trunks: { trunk_id: string; name: string; inbound: number; outbound: number; talk_seconds: number }[];
+  trunks: { trunk_id: string; name: string; inbound: number; outbound: number; talk_seconds: number; peak_calls?: number }[];
   peak_external_calls: number;
 }
 
@@ -88,6 +88,7 @@ export function ReportsOverview() {
     { key: "in", header: "Inbound", render: (t) => t.inbound },
     { key: "out", header: "Outbound", render: (t) => t.outbound },
     { key: "talk", header: "Talk time", render: (t) => <span className="mono">{clock(t.talk_seconds)}</span> },
+    { key: "peak", header: "Most at once", render: (t) => <span title="The most calls up at the same time on this trunk in the period: compare with the carrier's channel limit">{t.peak_calls ?? "—"}</span> },
   ];
   const queueColumns: Column<QueueRow>[] = [
     { key: "q", header: "Queue", render: (q) => <><span>{q.name}</span> <span className="subtle mono">{q.number}</span></> },

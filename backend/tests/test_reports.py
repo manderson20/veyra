@@ -112,6 +112,7 @@ def test_calls_report_buckets_in_org_time(admin):
     assert top["1002"]["answered"] == 1 and top["1002"]["missed"] == 1
     assert top["1001"]["answered"] == 1
     assert rep["trunks"][0]["inbound"] == 1 and rep["trunks"][0]["outbound"] == 1
+    assert rep["trunks"][0]["peak_calls"] == 1  # the two trunk calls do not overlap
     # Bad periods and zones.
     assert admin.get(f"{REP}/calls", params={"tz": "Mars/Base"}).status_code == 422
     assert (
@@ -167,3 +168,61 @@ def test_queue_log_and_queue_report(admin, app):
         db.get(User, user["id"]).must_change_password = False
     u = login(TestClient(app, base_url="http://veyra.test"), "u@example.org", ADMIN_PASSWORD)
     assert u.get(f"{REP}/calls").status_code == 403
+
+
+def test_peak_calls_per_trunk(admin):
+    import uuid
+
+    from veyra.core.models import CallRecord, SipTrunk
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    t0 = datetime(2026, 10, 12, 14, 0, tzinfo=UTC)
+    with session_scope() as db:
+        trunks = []
+        for name in ("Carrier A", "Carrier B"):
+            t = SipTrunk(
+                id=uuid.uuid4(),
+                name=name,
+                slug=name.lower().replace(" ", "-"),
+                auth_mode="ip",
+                host="sip.example.org",
+            )
+            db.add(t)
+            trunks.append(t.id)
+        db.flush()
+
+        def call(trunk, start, end):
+            db.add(
+                CallRecord(
+                    id=uuid.uuid4(),
+                    linkedid=str(uuid.uuid4()),
+                    organization_id=uuid.UUID(org),
+                    direction="outbound",
+                    outcome="answered",
+                    from_number="1001",
+                    to_number="5551234",
+                    trunk_id=trunk,
+                    started_at=t0 + timedelta(minutes=start),
+                    answered_at=t0 + timedelta(minutes=start),
+                    ended_at=t0 + timedelta(minutes=end) if end is not None else None,
+                    ring_seconds=0,
+                    talk_seconds=60,
+                    leg_count=1,
+                )
+            )
+
+        # A: 0-10, 5-15, 8-9 overlap (3 at once), then 15-20 starts as one ends.
+        call(trunks[0], 0, 10)
+        call(trunks[0], 5, 15)
+        call(trunks[0], 8, 9)
+        call(trunks[0], 15, 20)
+        # B: back to back, and one still up at the end of the period.
+        call(trunks[1], 0, 5)
+        call(trunks[1], 5, 10)
+        call(trunks[1], 7, None)
+    r = admin.get(
+        f"{REP}/calls",
+        params={"from": t0.isoformat(), "to": (t0 + timedelta(hours=1)).isoformat()},
+    ).json()
+    peaks = {t["name"]: t["peak_calls"] for t in r["trunks"]}
+    assert peaks == {"Carrier A": 3, "Carrier B": 2}
