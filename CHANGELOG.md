@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.10 — 2026-10-20
+
+Migration `0061`. Deploy the telephony configuration after installing.
 
 ### Added
 - **Dial by name: your own names and an operator** (#135): Telephony → Dial by Name adds names callers may spell besides the people with a voicemail box — "Front office" on the office ring group, "Nurse" on the health office — and the number 0 reaches. Migration `0061`; deploy the telephony configuration after installing.
