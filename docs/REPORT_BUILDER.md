@@ -20,7 +20,7 @@ a schedule:
 | **Filters** | period, organization, directions, outcomes, extensions (any side), DIDs, trunks, queues, ring groups, caller number contains, minimum talk seconds, **business hours** (inside or outside a time condition's ranges and holidays) |
 | **Period** | relative: `today`, `yesterday`, `last_7_days`, `last_30_days`, `this_week`, `last_week`, `this_month`, `last_month`, `this_year`; or `custom` from/to dates. Relative periods are resolved in the organization's time zone when the report runs, so a scheduled "yesterday" is always the previous day there |
 | **Show as** | `table`, `bars`, `line` (the table is always available) |
-| **Sort and limit** | by any measure or the grouping, ascending or descending; top N (default 100, at most 1000 rows) |
+| **Sort and limit** | by any measure or the grouping, ascending or descending; top N (default 100, at most 5000 rows since 0.27.30, #139) |
 
 Two groupings give a pivot-like table: for example *answered_by* × *week*
 with *calls* and *avg_talk*.
@@ -41,7 +41,7 @@ otherwise only the owner and administrators), and an optional schedule.
 ## 3. Scheduled email
 
 A schedule says **when** (`daily` at an hour; `weekly` on a weekday at an
-hour; `monthly` on day 1-28 at an hour, all in the organization's time
+hour; `monthly` on day 1-31 at an hour (a shorter month sends on its last day; 0.27.30), all in the organization's time
 zone) and **to whom** (up to 20 addresses). The worker checks every pass;
 a due report is run, rendered as CSV (and a short plain-text summary of the
 first rows in the message body) and queued as an email with the CSV
@@ -86,3 +86,5 @@ sharing. Live: a saved report emailed to a local SMTP sink on dev1.
 
 * 2026-10-15: owner asked for a report builder with scheduled email, before
   module management (now 0.17.0).
+
+*0.27.30 (issue #139):* up to three groupings (the chart uses the first for its axis and the second for its series), at most 5000 rows, the chart's measure is chosen under the chart, monthly schedules on any day.

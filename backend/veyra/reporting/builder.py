@@ -101,7 +101,7 @@ MEASURE_LABELS: dict[str, tuple[str, str]] = {
 }
 TIME_GROUPS = {"day", "week", "month", "hour", "weekday"}
 WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-MAX_ROWS = 1000
+MAX_ROWS = 5000
 MAX_DAYS = 400
 
 
@@ -152,7 +152,7 @@ class Period(BaseModel):
 
 class Definition(BaseModel):
     organization_id: uuid.UUID | None = None
-    group_by: list[Group] = Field(default_factory=list, max_length=2)
+    group_by: list[Group] = Field(default_factory=list, max_length=3)
     measures: list[Measure] = Field(default_factory=lambda: _default_measures(), min_length=1)
     filters: Filters = Field(default_factory=Filters)
     period: Period = Field(default_factory=Period)

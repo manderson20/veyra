@@ -176,7 +176,7 @@ function SaveDialog({ open, onClose, definition, saved, onSaved }: {
                   onChange={(e) => setSched({ ...sched, weekday: Number(e.target.value) })} />
               ) : null}
               {sched.frequency === "monthly" ? (
-                <SelectField label="On day" value={String(sched.day)} options={Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                <SelectField label="On day" value={String(sched.day)} help={sched.day > 28 ? "A shorter month sends on its last day." : undefined} options={Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
                   onChange={(e) => setSched({ ...sched, day: Number(e.target.value) })} />
               ) : null}
             </div>
@@ -200,6 +200,7 @@ export function ReportBuilder({ definition, setDefinition, saved, onSaved }: {
   const toast = useToast();
   const { can } = useSession();
   const { organizations } = useOrganizationOptions(true);
+  const [chartMeasure, setChartMeasure] = useState<string | null>(null);
   const d = definition;
   const set = <K extends keyof ReportDefinition>(k: K, v: ReportDefinition[K]) => setDefinition({ ...d, [k]: v });
   const setFilter = <K extends keyof ReportDefinition["filters"]>(k: K, v: ReportDefinition["filters"][K]) => setDefinition({ ...d, filters: { ...d.filters, [k]: v } });
@@ -243,7 +244,9 @@ export function ReportBuilder({ definition, setDefinition, saved, onSaved }: {
     ...groupCols.map((c, i) => ({ key: c.key, header: c.label, render: (r: Row) => r.group[i]?.label ?? "" })),
     ...measureCols.map((c) => ({ key: c.key, header: c.label, render: (r: Row) => <span className="mono">{formatMeasure(r[c.key], c.unit)}</span> })),
   ];
-  const firstMeasure = measureCols[0]?.key;
+  // The chart shows one measure (units differ); the user picks which (#139).
+  const chartCol = measureCols.find((m) => m.key === chartMeasure) ?? measureCols[0];
+  const firstMeasure = chartCol?.key;
   const chart = result && firstMeasure && groupCols.length > 0 && d.show_as !== "table" && result.rows.length > 0 ? chartData(result, firstMeasure) : null;
   const filtersOn = activeFilters(d);
 
@@ -268,7 +271,11 @@ export function ReportBuilder({ definition, setDefinition, saved, onSaved }: {
               onChange={(e) => set("group_by", e.target.value ? [e.target.value as ReportGroup, ...d.group_by.slice(1).filter((g) => g !== e.target.value)] : [])} />
             {d.group_by.length ? (
               <SelectField label="Then by" value={d.group_by[1] ?? ""} placeholder="Nothing" options={GROUPS.filter((g) => g.value !== d.group_by[0])}
-                onChange={(e) => set("group_by", e.target.value ? [d.group_by[0]!, e.target.value as ReportGroup] : [d.group_by[0]!])} />
+                onChange={(e) => set("group_by", e.target.value ? [d.group_by[0]!, e.target.value as ReportGroup, ...d.group_by.slice(2).filter((g) => g !== e.target.value)] : [d.group_by[0]!])} />
+            ) : null}
+            {d.group_by.length >= 2 ? (
+              <SelectField label="And by" value={d.group_by[2] ?? ""} placeholder="Nothing" options={GROUPS.filter((g) => g.value !== d.group_by[0] && g.value !== d.group_by[1])}
+                onChange={(e) => set("group_by", e.target.value ? [d.group_by[0]!, d.group_by[1]!, e.target.value as ReportGroup] : [d.group_by[0]!, d.group_by[1]!])} />
             ) : null}
             <SelectField label="Show as" value={d.show_as}
               options={[{ value: "table", label: "Table" }, { value: "bars", label: "Bars and table" }, { value: "line", label: "Line and table" }]}
@@ -330,7 +337,7 @@ export function ReportBuilder({ definition, setDefinition, saved, onSaved }: {
               onChange={(e) => set("sort_by", e.target.value || null)} />
             <SelectField label="Order" value={d.sort_desc ? "desc" : "asc"} options={[{ value: "desc", label: "Highest first" }, { value: "asc", label: "Lowest first" }]}
               onChange={(e) => set("sort_desc", e.target.value === "desc")} />
-            <TextField label="Show at most (rows)" type="number" min={1} max={1000} value={d.limit} onChange={(e) => set("limit", Number(e.target.value) || 100)} />
+            <TextField label="Show at most (rows)" type="number" min={1} max={5000} value={d.limit} onChange={(e) => set("limit", Number(e.target.value) || 100)} />
             {d.measures.includes("within_sl") ? (
               <TextField label="Service level (seconds)" type="number" min={1} max={600} value={d.sl_seconds} onChange={(e) => set("sl_seconds", Number(e.target.value) || 20)} />
             ) : null}
@@ -348,9 +355,14 @@ export function ReportBuilder({ definition, setDefinition, saved, onSaved }: {
           {chart ? (
             <div style={{ padding: 16 }}>
               {d.show_as === "line"
-                ? <LineChart data={chart.data} series={chart.series} xKey="x" xLabel={(x) => x} caption={`${measureCols[0]!.label} by ${groupCols[0]!.label}`} />
-                : <StackedBars data={chart.data} series={chart.series} xKey="x" xLabel={(x) => x} caption={`${measureCols[0]!.label} by ${groupCols[0]!.label}`} xHeader={groupCols[0]!.label} />}
-              <p className="subtle" style={{ margin: "4px 0 0" }}>The chart shows {measureCols[0]!.label.toLowerCase()}; the table shows every measure.</p>
+                ? <LineChart data={chart.data} series={chart.series} xKey="x" xLabel={(x) => x} caption={`${chartCol!.label} by ${groupCols[0]!.label}`} />
+                : <StackedBars data={chart.data} series={chart.series} xKey="x" xLabel={(x) => x} caption={`${chartCol!.label} by ${groupCols[0]!.label}`} xHeader={groupCols[0]!.label} />}
+              <div className="row" style={{ gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginTop: 4 }}>
+                {measureCols.length > 1 ? (
+                  <SelectField label="Chart" value={chartCol!.key} options={measureCols.map((m) => ({ value: m.key, label: m.label }))} onChange={(e) => setChartMeasure(e.target.value)} />
+                ) : null}
+                <p className="subtle" style={{ margin: 0 }}>The chart shows {chartCol!.label.toLowerCase()}; the table shows every measure.</p>
+              </div>
             </div>
           ) : null}
           {groupCols.length ? (

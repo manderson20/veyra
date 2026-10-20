@@ -55,6 +55,14 @@ def test_schedule_next_run_follows_local_hour_across_dst():
     assert schedule.next_run(monthly, "UTC", datetime(2026, 12, 15, tzinfo=UTC)) == datetime(
         2027, 1, 1, tzinfo=UTC
     )
+    # Day 31 (issue #139): a shorter month sends on its last day.
+    last = schedule.Schedule(frequency="monthly", day=31, hour=0, recipients=["a@example.org"])
+    assert schedule.next_run(last, "UTC", datetime(2027, 2, 2, tzinfo=UTC)) == datetime(
+        2027, 2, 28, tzinfo=UTC
+    )
+    assert schedule.next_run(last, "UTC", datetime(2027, 3, 2, tzinfo=UTC)) == datetime(
+        2027, 3, 31, tzinfo=UTC
+    )
 
 
 def _fixture(admin):
@@ -181,6 +189,9 @@ def test_groupings_measures_filters(admin):
     r = run(group_by=["answered_by", "direction"], measures=["calls"], sort_by="calls")
     labels = [(row["group"][0]["label"], row["group"][1]["label"]) for row in r["rows"]]
     assert ("1002 Nurse", "Internal") in labels and ("1003 Library", "Inbound") in labels
+    # Three groupings (issue #139).
+    r = run(group_by=["answered_by", "direction", "outcome"], measures=["calls"])
+    assert all(len(row["group"]) == 3 for row in r["rows"]) and r["rows"]
 
     r = run(group_by=["queue"], measures=["calls", "within_sl"], sl_seconds=10)
     by = {row["group"][0]["key"]: row for row in r["rows"]}

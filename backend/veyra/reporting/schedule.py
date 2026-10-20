@@ -29,7 +29,8 @@ class Schedule(BaseModel):
     frequency: Literal["daily", "weekly", "monthly"]
     hour: int = Field(7, ge=0, le=23)
     weekday: int = Field(0, ge=0, le=6)  # Monday = 0, for weekly
-    day: int = Field(1, ge=1, le=28)  # for monthly
+    # For monthly: 1-31; a month without that day sends on its last day.
+    day: int = Field(1, ge=1, le=31)
     recipients: list[str] = Field(min_length=1, max_length=20)
 
     @field_validator("recipients")
@@ -47,6 +48,12 @@ class Schedule(BaseModel):
         return sorted(set(out))
 
 
+def _month_days(d: date) -> int:
+    import calendar
+
+    return calendar.monthrange(d.year, d.month)[1]
+
+
 def next_run(s: Schedule, tz: str, after: datetime) -> datetime:
     """The first send time strictly after ``after``, in UTC; the hour is the
     organization's local hour (so it follows daylight saving)."""
@@ -57,7 +64,7 @@ def next_run(s: Schedule, tz: str, after: datetime) -> datetime:
         due = (
             s.frequency == "daily"
             or (s.frequency == "weekly" and d.weekday() == s.weekday)
-            or (s.frequency == "monthly" and d.day == s.day)
+            or (s.frequency == "monthly" and d.day == min(s.day, _month_days(d)))
         )
         if due:
             at = datetime.combine(d, time(s.hour), zone)

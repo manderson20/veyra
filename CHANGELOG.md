@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.30 — 2026-10-20
+
+No migration.
+
+### Changed
+- **Report builder** (#139): group by up to three things (for example who answered, then direction, then outcome); show up to 5000 rows; choose which measure the chart draws; schedule monthly reports on any day — a month without that day sends on its last day.
+
 ## 0.27.29 — 2026-10-20
 
 No migration.
