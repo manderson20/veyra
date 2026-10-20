@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 28,
+  "sequence": 29,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.12",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Built-in hold music pieces free to play to callers, and stream hold music falls back to recordings when the station is unreachable.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "6247fed19c",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.12/veyra-0.27.12.tar.gz",
+        "sha256": "9e68758b2103de47b39610d391c55a6942c8a5d08086754041fc45656e8f69b8",
+        "size": 8311892
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -479,6 +496,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T01:21:04+00:00",
-  "expires_at": "2027-01-18T01:21:04+00:00"
+  "generated_at": "2026-10-20T02:03:08+00:00",
+  "expires_at": "2027-01-18T02:03:08+00:00"
 }
