@@ -199,10 +199,19 @@ managed object (Telephony → Hold Music):
 * **Streams**, built 0.27.11 (#138, migration `0063`): a set may name an
   http(s) station (`moh_classes.stream_url`) instead of recordings; the
   class becomes `mode=custom`, `format=slin`, with
-  `application=/usr/bin/ffmpeg -nostdin -loglevel quiet -reconnect 1
-  -reconnect_streamed 1 -reconnect_delay_max 30 -i <url> -f s16le -ar 8000
-  -ac 1 -`. The address is validated for the command line (no spaces,
-  quotes, commas). The set reports a problem when ffmpeg is missing.
+  `application=/opt/veyra/current/installer/bin/veyra-moh-stream <url>
+  <set directory>`: the helper decodes the station with ffmpeg (reconnecting)
+  and, when it cannot be reached or drops, plays the set's own recordings
+  once (fallback; ten seconds of silence without any), then tries the
+  station again, all as 8 kHz signed linear audio. The address is validated
+  for the command line (no spaces, quotes, commas). The set reports a
+  problem when ffmpeg is missing. Veyra ships no station addresses:
+  retransmitting a station to callers needs the station's permission and the
+  music's performance rights.
+* **Built-in hold music** (0.27.12, #138): three original pieces generated in
+  `veyra/telephony/sounds.py` (Calm chords, Warm pads, Soft bells; kind
+  `music`), offered under Audio → Built-in sounds like the bells; free to
+  play to callers.
 * **Licensing note shown in the interface**: commercial music played to
   callers needs performance rights in most jurisdictions; the built-in set
   and Creative Commons licensed music do not. The licence recorded with each

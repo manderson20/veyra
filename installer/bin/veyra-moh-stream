@@ -1,0 +1,28 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Hold music from an internet stream with a fallback (docs/PAGING_RECORDINGS.md
+# §3.2; issue #138): Asterisk's custom music class runs this and reads raw
+# 8 kHz signed linear audio from standard output. While the station plays,
+# callers hear it; when it cannot be reached or drops, the set's own
+# recordings play once through (or ten seconds of silence when it has none),
+# then the station is tried again. Asterisk stops the process when nobody is
+# on hold.
+#
+# Usage: veyra-moh-stream URL [DIR]
+set -u
+url="${1:?stream address}"
+dir="${2:-}"
+ff=/usr/bin/ffmpeg
+out() { "$ff" -nostdin -loglevel quiet "$@" -f s16le -ar 8000 -ac 1 -; }
+while :; do
+    out -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 30 -rw_timeout 15000000 -i "$url"
+    played=0
+    if [ -n "$dir" ] && [ -d "$dir" ]; then
+        for f in "$dir"/*; do
+            [ -f "$f" ] || continue
+            out -re -i "$f"
+            played=1
+        done
+    fi
+    [ "$played" = 1 ] || out -re -f lavfi -t 10 -i anullsrc=r=8000:cl=mono
+done

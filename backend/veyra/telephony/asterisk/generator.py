@@ -182,6 +182,8 @@ CONTEXT_RECORD = "veyra-record"
 MOH_CLASS_PREFIX = "veyra-"
 MOH_BUILTIN = "default"
 DEFAULT_MAILQUEUE_COMMAND = "/opt/veyra/current/installer/bin/veyra-mailqueue"
+# Plays a stream set's station, falling back to its recordings (issue #138).
+MOH_STREAM_COMMAND = "/opt/veyra/current/installer/bin/veyra-moh-stream"
 PROMPT_RECORD_MAX_SECONDS = 300
 PROMPT_RECORD_SILENCE = 5
 
@@ -558,17 +560,16 @@ def _moh_conf(moh: MohSets, moh_dir: str) -> GeneratedFile:
         n = engine_names.for_org(owner)
         stream = str(m.get("stream_url") or "")
         if stream:
-            # An internet station (issue #138): ffmpeg decodes it to the raw
-            # 8 kHz signed linear audio a custom class reads.
+            # An internet station (issue #138): the helper decodes it with
+            # ffmpeg to the raw 8 kHz signed linear audio a custom class reads,
+            # and plays the set's recordings while the station is unreachable.
             if not _STREAM_URL_RE.match(stream):
                 raise GenerationError(f"hold music {slug}: stream address is not valid")
             lines += [
                 f"[{n.moh_class(slug)}]",
-                f"; {name} ({org}); stream",
+                f"; {name} ({org}); stream, fallback tracks: {', '.join(files) or 'none'}",
                 "mode=custom",
-                f"application={FFMPEG} -nostdin -loglevel quiet -reconnect 1 "
-                f"-reconnect_streamed 1 -reconnect_delay_max 30 -i {stream} "
-                "-f s16le -ar 8000 -ac 1 -",
+                f"application={MOH_STREAM_COMMAND} {stream} {moh_dir}/{n.moh_dir(slug)}",
                 "format=slin",
                 "",
             ]

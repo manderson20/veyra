@@ -122,13 +122,75 @@ def _temporal3(rounds: int) -> Samples:
     return _seq(*(one for _ in range(rounds)))
 
 
+def _pad(freqs: list[float], seconds: float, level: float = 0.25) -> Samples:
+    """A soft chord: each note with its octave and sub-octave, swelling in and out."""
+    n = int(seconds * RATE)
+    attack, release = int(1.2 * RATE), int(1.5 * RATE)
+    out = [0.0] * n
+    for f in freqs:
+        for ratio, amp in ((1.0, 1.0), (2.0, 0.3), (0.5, 0.4)):
+            w = 2 * math.pi * f * ratio / RATE
+            a = amp * level
+            for i in range(n):
+                out[i] += a * math.sin(w * i)
+    for i in range(n):
+        out[i] *= min(1.0, i / attack, (n - i) / release)
+    return out
+
+
+_PROGRESSIONS = {
+    # Root-position triads, one per bar.
+    "calm": [("C4", "E4", "G4"), ("G3", "B3", "D4"), ("A3", "C4", "E4"), ("F3", "A3", "C4")],
+    "warm": [("A3", "C4", "E4"), ("F3", "A3", "C4"), ("C4", "E4", "G4"), ("G3", "B3", "D4")],
+}
+
+
+def _hold_piece(progression: str, bar: float, rounds: int, arpeggio: bool) -> Samples:
+    """Original hold music: a chord progression of pads, optionally with a
+    gentle bell arpeggio on the chord tones. Deterministic (seeded), and it
+    loops cleanly: it starts and ends quiet."""
+    import random
+
+    rng = random.Random(7)  # noqa: S311 (a fixed seed for the same melody, not security)
+    parts: list[tuple[float, Samples]] = []
+    at = 0.0
+    for _ in range(rounds):
+        for chord in _PROGRESSIONS[progression]:
+            freqs = [_note(c) for c in chord]
+            parts.append((at, _pad(freqs, bar + 0.8)))
+            if arpeggio:
+                tones = [f * 2 for f in freqs] + [freqs[0] * 4]
+                for k in range(int(bar / 0.5)):
+                    tone = tones[k % len(tones)] if k % 4 else rng.choice(tones)
+                    parts.append((at + k * 0.5, [0.35 * v for v in _bell(tone, 1.4, decay=3.0)]))
+            at += bar
+    return _mix(*parts)
+
+
+def _bell_melody(seconds: float) -> Samples:
+    """Soft bells on a pentatonic scale over a low drone."""
+    import random
+
+    rng = random.Random(11)  # noqa: S311 (a fixed seed for the same melody, not security)
+    scale = [_note(n) for n in ("C5", "D5", "E5", "G5", "A5", "C6")]
+    parts: list[tuple[float, Samples]] = [(0.0, _pad([_note("C3"), _note("G3")], seconds, 0.18))]
+    t, i = 0.5, 2
+    while t < seconds - 2:
+        i = max(0, min(len(scale) - 1, i + rng.choice((-2, -1, 1, 2))))
+        parts.append((t, [0.4 * v for v in _bell(scale[i], 2.0, decay=2.2)]))
+        t += rng.choice((0.75, 0.75, 1.5))
+    return _mix(*parts)
+
+
 @dataclass(frozen=True)
 class Sound:
     key: str
     name: str
-    kind: str  # the library kind: bell or announcement
+    kind: str  # the library kind: bell, announcement or music
     description: str
     make: Callable[[], Samples]
+    # Known length in seconds, so listing does not synthesize long pieces.
+    seconds: float | None = None
 
 
 SOUNDS: tuple[Sound, ...] = (
@@ -221,6 +283,31 @@ SOUNDS: tuple[Sound, ...] = (
         "A short beep, for example before a recorded message.",
         lambda: _tone(1000, 0.3),
     ),
+    # Hold music (#138): original pieces made here, free to play to callers.
+    Sound(
+        "hold-calm",
+        "Calm chords",
+        "music",
+        "Soft chords with a gentle bell arpeggio, about a minute; loops.",
+        lambda: _hold_piece("calm", 4.0, 4, True),
+        seconds=64.9,
+    ),
+    Sound(
+        "hold-warm",
+        "Warm pads",
+        "music",
+        "Slow, warm chords without a melody, about a minute; loops.",
+        lambda: _hold_piece("warm", 5.0, 3, False),
+        seconds=60.8,
+    ),
+    Sound(
+        "hold-bells",
+        "Soft bells",
+        "music",
+        "A quiet bell melody over a low drone, about 45 seconds; loops.",
+        lambda: _bell_melody(45.0),
+        seconds=45.0,
+    ),
 )
 BY_KEY = {s.key: s for s in SOUNDS}
 
@@ -245,5 +332,8 @@ def wav(key: str) -> bytes:
 
 
 def duration(key: str) -> float:
+    known = BY_KEY[key].seconds
+    if known is not None:
+        return known
     data = wav(key)
     return (len(data) - 44) / (2 * RATE)

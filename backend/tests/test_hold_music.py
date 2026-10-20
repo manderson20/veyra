@@ -319,9 +319,8 @@ def test_streamed_hold_music(admin):
     radio = conf.split("[veyra-radio]")[1].split("[")[0]
     assert "mode=custom" in radio and "format=slin" in radio
     assert (
-        f"application={generator.FFMPEG} -nostdin -loglevel quiet -reconnect 1 "
-        "-reconnect_streamed 1 -reconnect_delay_max 30 "
-        "-i https://stream.example.org:8443/live.mp3?quality=low -f s16le -ar 8000 -ac 1 -"
+        f"application={generator.MOH_STREAM_COMMAND} "
+        "https://stream.example.org:8443/live.mp3?quality=low /var/lib/veyra/moh/radio"
     ) in radio
     snap["hold_music"][-1]["stream_url"] = "https://x.example/a b"
     with pytest.raises(generator.GenerationError, match="stream"):

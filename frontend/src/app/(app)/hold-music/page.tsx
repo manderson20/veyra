@@ -93,10 +93,10 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
           <TextField label="Stream address" required value={stream} error={errors.fields.stream_url} spellCheck={false} placeholder="https://stream.example.org/live.mp3"
             help="An MP3, AAC or Ogg station, decoded by ffmpeg on the server and reconnected when it drops. Use a station you are licensed to play to callers." onChange={(e) => setStream(e.target.value)} />
         ) : null}
-        {source === "tracks" ? (<>
         <div className="field">
-          <span className="field__label">Recordings</span>
-          {tracks.length === 0 ? <p className="subtle">No recordings yet: callers would hear silence.</p> : (
+          <span className="field__label">{source === "stream" ? "Fallback recordings" : "Recordings"}</span>
+          {source === "stream" ? <p className="subtle" style={{ margin: 0 }}>Played while the station cannot be reached, then the station is tried again.</p> : null}
+          {tracks.length === 0 ? <p className="subtle">{source === "stream" ? "None: callers hear silence while the station is down." : "No recordings yet: callers would hear silence."}</p> : (
             <ol className="list-plain">
               {tracks.map((id, i) => {
                 const p = byId.get(id);
@@ -125,10 +125,9 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
           </div>
           <Checkbox label="Offer every recording, not only those marked as hold music" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
           {errors.fields.tracks ? <p className="field__error" role="alert">{errors.fields.tracks}</p> : null}
-          <p className="subtle">Upload music under <Link href="/prompts/">Telephony → Audio</Link> with the kind “Hold music”.</p>
+          <p className="subtle">Upload music under <Link href="/prompts/">Telephony → Audio</Link> with the kind “Hold music”, or add Veyra&apos;s own pieces there (Built-in sounds: Calm chords, Warm pads, Soft bells), which are free to play to callers.</p>
         </div>
-        <Checkbox label="Shuffle" description="Play the recordings in a random order instead of the listed one." checked={random} onChange={(e) => setRandom(e.target.checked)} />
-        </>) : null}
+        {source === "tracks" ? <Checkbox label="Shuffle" description="Play the recordings in a random order instead of the listed one." checked={random} onChange={(e) => setRandom(e.target.checked)} /> : null}
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>
