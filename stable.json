@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 52,
+  "sequence": 53,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.36",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Delete old voicemail automatically (per box). Migration 0067.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "4185889ba4",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.36/veyra-0.27.36.tar.gz",
+        "sha256": "0d56ce81b05cb06fc7fe6e77afe34294d35fcfa7de9bb7f7191b016371b64060",
+        "size": 8457769
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -887,6 +904,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T09:18:10+00:00",
-  "expires_at": "2027-01-18T09:18:10+00:00"
+  "generated_at": "2026-10-20T09:33:02+00:00",
+  "expires_at": "2027-01-18T09:33:02+00:00"
 }
