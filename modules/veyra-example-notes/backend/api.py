@@ -36,7 +36,7 @@ def build_router(ctx: ModuleContext) -> APIRouter:
     can_read = ctx.require("example_notes.read")
     can_write = ctx.require("example_notes.write")
 
-    def visible(principal: Principal):  # type: ignore[no-untyped-def]
+    def visible(principal: Principal):
         stmt = select(notes)
         orgs = principal.organization_ids_with("example_notes.read")
         if orgs is not None:

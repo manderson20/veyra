@@ -754,7 +754,7 @@ From `backend/`:
 `mypy veyra` checks the core only (`packages = ["veyra"]` in
 `backend/pyproject.toml`). To type-check the module too, run
 `../backend/.venv/bin/mypy --config-file ../backend/pyproject.toml backend`
-from the module's directory.
+from the module's directory; CI does this for every module in `modules/`.
 
 From `frontend/` (needed only when you changed the core interface):
 

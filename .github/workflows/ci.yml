@@ -61,6 +61,11 @@ jobs:
           ruff format --check veyra tests ../modules
       - name: Type check (mypy)
         run: mypy
+      - name: Type check bundled modules (mypy)
+        run: |
+          for d in ../modules/*/; do
+            (cd "$d" && mypy --config-file ../../backend/pyproject.toml backend)
+          done
       - name: Migrations match models
         env:
           VEYRA_ENV_FILE: /dev/null
