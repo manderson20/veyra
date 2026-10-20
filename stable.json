@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 26,
+  "sequence": 27,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.10",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Dial by name gets your own names (an office, a role) and an operator on 0. Deploy the telephony configuration after installing.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "0f81ddb274",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.10/veyra-0.27.10.tar.gz",
+        "sha256": "87087a6bada2ac0f05ef04525a417402947094b51eeb9bfb9f08c9565b62ba56",
+        "size": 8308951
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -445,6 +462,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T00:37:30+00:00",
-  "expires_at": "2027-01-18T00:37:30+00:00"
+  "generated_at": "2026-10-20T01:04:09+00:00",
+  "expires_at": "2027-01-18T01:04:09+00:00"
 }
