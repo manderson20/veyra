@@ -929,7 +929,17 @@ def update_extension(
         raise conflict(f"Extension {ext.number} already exists.", code="number_in_use") from e
     _record(db, ctx, principal, "extension.update", ext, details)
     db.commit()
-    bus.publish(Event("extension.updated", {"extension_id": str(ext.id), "changes": details}))
+    bus.publish(
+        Event(
+            "extension.updated",
+            {
+                "extension_id": str(ext.id),
+                "organization_id": str(ext.organization_id),
+                "number": ext.number,
+                "changes": details,
+            },
+        )
+    )
     return _out(db, ext)
 
 

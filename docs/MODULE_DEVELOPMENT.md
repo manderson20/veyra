@@ -164,7 +164,7 @@ Core events a module may subscribe to include `organization.created`,
 platform-wide access), and check `principal.has(<permission>, org_id)`
 before writing. The example module shows the pattern.
 
-`MODULE_API_VERSION` follows semantic versioning (currently 1.1.0; a module
+`MODULE_API_VERSION` follows semantic versioning (currently 1.2.0; a module
 using the 1.1 additions declares `core_api = ">=1.1.0 <2.0.0"`). A breaking change to
 `ModuleContext` bumps the major version, and modules declare the range
 they support.

@@ -37,7 +37,7 @@ subscription for self-hosted use.
 
 - [Installation](docs/INSTALLATION.md) · [Development](docs/DEVELOPMENT.md) · [Architecture](docs/ARCHITECTURE.md)
 - [HA architecture](docs/HA_ARCHITECTURE.md) · [Engine evaluation](docs/ENGINE_EVALUATION.md) · [ADRs](docs/adr/)
-- [Module development](docs/MODULE_DEVELOPMENT.md) · [Provisioning templates](docs/PROVISIONING_TEMPLATES.md) · [Update management](docs/UPDATE_MANAGEMENT.md)
+- [Module development](docs/MODULE_DEVELOPMENT.md) · [Module author guide](docs/MODULE_AUTHOR_GUIDE.md) · [Provisioning templates](docs/PROVISIONING_TEMPLATES.md) · [Update management](docs/UPDATE_MANAGEMENT.md)
 - [API](docs/API.md) · [Database schema](docs/DATABASE_SCHEMA.md) · [Networking](docs/NETWORKING.md)
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [Licensing evaluation](docs/LICENSING.md)
 - [Installation reports](docs/installations/) · [Milestone reports](docs/milestones/)
