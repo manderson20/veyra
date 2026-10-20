@@ -138,20 +138,18 @@ def test_download_approve_start_and_finish(admin, app, tmp_path, served, monkeyp
     art, _meta, _priv = _publish(tmp_path, root, base, settings.trust_dir)
     app.state.keyring = Keyring.load(settings.trust_dir)
 
+    # One fixed source (issue #84); outside production the server setting
+    # may point at a local feed, and only the recipients are set here.
+    official = admin.get("/api/v1/updates/source").json()
+    assert official["effective_url"] == manager.OFFICIAL_FEED_URL and official["official"]
+    monkeypatch.setattr(settings, "update_metadata_url", f"{base}/stable.json")
     r = admin.put(
         "/api/v1/updates/source",
-        json={
-            "url": f"{base}/stable.json",
-            "token": "secret-token",
-            "recipients": ["a@example.org"],
-        },
+        json={"url": "https://example.org/other.json", "recipients": ["a@example.org"]},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["token_set"] and r.json()["effective_url"] == f"{base}/stable.json"
-    assert "secret-token" not in r.text
-    assert (
-        admin.put("/api/v1/updates/source", json={"url": "http://example.org/x"}).status_code == 422
-    )
+    assert r.json()["effective_url"] == f"{base}/stable.json" and not r.json()["official"]
+    assert r.json()["recipients"] == ["a@example.org"]
 
     assert admin.post("/api/v1/updates/check").json()["outcome"] == "ok"
     upd = admin.get("/api/v1/updates/available").json()[0]
@@ -267,7 +265,7 @@ def test_failed_start_and_policy_modes(admin, app, tmp_path, served, monkeypatch
     settings = app.state.settings
     _publish(tmp_path, root, base, settings.trust_dir)
     app.state.keyring = Keyring.load(settings.trust_dir)
-    admin.put("/api/v1/updates/source", json={"url": f"{base}/stable.json"})
+    monkeypatch.setattr(settings, "update_metadata_url", f"{base}/stable.json")
     # Mode C downloads by itself; mode D approves allowed categories for the window.
     r = admin.put(
         "/api/v1/updates/policies/veyra_core",
@@ -498,9 +496,7 @@ def test_cli_install_uses_the_same_states(admin, app, tmp_path, served, monkeypa
     root, base = served
     settings = app.state.settings
     _publish(tmp_path, root, base, settings.trust_dir)
-    assert (
-        admin.put("/api/v1/updates/source", json={"url": f"{base}/stable.json"}).status_code == 200
-    )
+    monkeypatch.setattr(settings, "update_metadata_url", f"{base}/stable.json")
     monkeypatch.setattr(config, "get_settings", lambda: settings)
     monkeypatch.setenv("SUDO_USER", "owner")
     calls = []
@@ -536,3 +532,28 @@ def test_cli_install_uses_the_same_states(admin, app, tmp_path, served, monkeypa
         assert ev.details["via"] == "cli" and ev.actor_label == "cli (owner)"
     # Nothing newer than an offered version that is not there.
     assert cli(["updates", "install", "--no-check", "1.2.3"]) == 1
+
+
+def test_download_and_install_in_one_request(admin, app, tmp_path, served, monkeypatch):
+    """Issue #89: one request downloads, verifies, approves and starts."""
+    root, base = served
+    settings = app.state.settings
+    _publish(tmp_path, root, base, settings.trust_dir)
+    app.state.keyring = Keyring.load(settings.trust_dir)
+    monkeypatch.setattr(settings, "update_metadata_url", f"{base}/stable.json")
+    assert admin.post("/api/v1/updates/check").json()["outcome"] == "ok"
+    uid = admin.get("/api/v1/updates/available").json()[0]["id"]
+    calls = []
+
+    class Done:
+        returncode = 0
+        stderr = ""
+
+    app.state.systemctl_run = lambda cmd: calls.append(cmd) or Done()
+    r = admin.post(f"/api/v1/updates/available/{uid}/install", json={"when": "now"})
+    assert r.status_code == 200 and r.json()["state"] == "installing", r.text
+    assert calls == [["systemctl", "start", "--no-block", f"veyra-upgrade@{NEW}.service"]]
+    assert (settings.updates_dir / NEW / "release.tar.gz").exists()
+    # Already installing: the request is refused, nothing starts twice.
+    r = admin.post(f"/api/v1/updates/available/{uid}/install", json={"when": "now"})
+    assert r.status_code == 409 and len(calls) == 1

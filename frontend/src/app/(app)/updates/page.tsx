@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -18,6 +18,8 @@ import {
   Pagination,
   SelectField,
   Switch,
+  TabPanel,
+  Tabs,
   TextArea,
   TextField,
   useToast,
@@ -45,6 +47,11 @@ import type {
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
 import { useOnChange } from "@/hooks/useOnChange";
+import { useUrlTab } from "@/hooks/useUrlTab";
+
+// Issue #85: acting on updates first; the rarely touched settings and the
+// operating system packages on their own tabs.
+const TAB_IDS = ["updates", "settings", "packages"] as const;
 
 const MODES: { value: UpdateMode; label: string; help: string }[] = [
   { value: "manual", label: "Manual only", help: "Veyra never checks automatically. An administrator checks, downloads and installs." },
@@ -79,7 +86,11 @@ function formatSize(bytes: number | null | undefined): string {
   return bytes > 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 }
 
-export default function UpdatesPage() {
+export default function Page() {
+  return <Suspense fallback={<LoadingState />}><UpdatesPage /></Suspense>;
+}
+
+function UpdatesPage() {
   const { can } = useSession();
   const toast = useToast();
   const policies = useApiData<UpdatePolicies>("/updates/policies");
@@ -92,6 +103,7 @@ export default function UpdatesPage() {
   const [checking, setChecking] = useState(false);
   const [review, setReview] = useState<string | null>(null);
   const manage = can("updates.manage");
+  const [tab, setTab] = useUrlTab(TAB_IDS, "updates");
 
   // An approved "install now" or a running installation: watch its progress
   // and refresh the list until it is over (the worker starts the upgrade
@@ -197,47 +209,59 @@ export default function UpdatesPage() {
         </Callout>
       ) : null}
 
-      <Card title="Available updates" flush>
-        <DataTable columns={availableColumns} rows={available.data} rowKey={(u) => u.id} loading={available.loading} error={available.error} onRetry={available.reload}
-          caption="Available updates" empty={<EmptyState compact icon="checkCircle" title="No updates found">No updates were found as of the last check.</EmptyState>} />
-      </Card>
+      <Tabs idBase="upd" active={tab} onChange={setTab} tabs={[
+        { id: "updates", label: "Updates" },
+        { id: "settings", label: "Settings" },
+        { id: "packages", label: `System packages${packages.data?.packages.length ? ` (${packages.data.packages.length})` : ""}` },
+      ]} />
 
-      <div className="grid grid--2" style={{ alignItems: "start" }}>
-        <Card title="Last check">
-          {latest.error ? <ErrorState compact error={latest.error} onRetry={latest.reload} /> : latest.loading && latest.data === undefined ? <LoadingState /> : !latest.data ? (
-            <EmptyState compact icon="clock" title="Never checked">{manage ? "Use “Check now” to check for updates." : "No update check has run yet."}</EmptyState>
-          ) : (
-            <dl className="dl">
-              <dt>Result</dt><dd><Badge tone={CHECK_OUTCOME[latest.data.outcome]?.tone ?? "neutral"}>{CHECK_OUTCOME[latest.data.outcome]?.label ?? latest.data.outcome}</Badge></dd>
-              <dt>When</dt><dd>{formatDateTime(latest.data.checked_at)}</dd>
-              <dt>Details</dt><dd>{latest.data.message ?? "—"}</dd>
-              {latest.data.source ? <><dt>Source</dt><dd className="mono">{latest.data.source}</dd></> : null}
-            </dl>
-          )}
-        </Card>
-        <SourceCard editable={manage} onSaved={() => policies.reload()} />
-      </div>
-
-      <section aria-labelledby="policies-title" className="stack stack--sm">
-        <div>
-          <h2 className="card__title" id="policies-title">Update policies</h2>
-          <p className="muted">Each component has its own policy. Modules update from the module catalog; operating system packages are listed below and applied with the package manager.</p>
+      <TabPanel idBase="upd" id="updates" active={tab}>
+        <div className="stack">
+          <Card title="Available updates" flush>
+            <DataTable columns={availableColumns} rows={available.data} rowKey={(u) => u.id} loading={available.loading} error={available.error} onRetry={available.reload}
+              caption="Available updates" empty={<EmptyState compact icon="checkCircle" title="No updates found">No updates were found as of the last check.</EmptyState>} />
+          </Card>
+          <Card title="Last check">
+            {latest.error ? <ErrorState compact error={latest.error} onRetry={latest.reload} /> : latest.loading && latest.data === undefined ? <LoadingState /> : !latest.data ? (
+              <EmptyState compact icon="clock" title="Never checked">{manage ? "Use “Check now” to check for updates." : "No update check has run yet."}</EmptyState>
+            ) : (
+              <dl className="dl">
+                <dt>Result</dt><dd><Badge tone={CHECK_OUTCOME[latest.data.outcome]?.tone ?? "neutral"}>{CHECK_OUTCOME[latest.data.outcome]?.label ?? latest.data.outcome}</Badge></dd>
+                <dt>When</dt><dd>{formatDateTime(latest.data.checked_at)}</dd>
+                <dt>Details</dt><dd>{latest.data.message ?? "—"}</dd>
+                {latest.data.source ? <><dt>Source</dt><dd className="mono">{latest.data.source}</dd></> : null}
+              </dl>
+            )}
+          </Card>
+          <Card title="Update history" flush>
+            <DataTable columns={historyColumns} rows={history.data?.items} rowKey={(h) => h.id} loading={history.loading} error={history.error} onRetry={history.reload}
+              caption="Update history" empty={<EmptyState compact icon="history" title="No updates have been applied" />}
+              pagination={history.data && history.data.total > 0 ? <Pagination total={history.data.total} limit={10} offset={histOffset} onChange={setHistOffset} /> : null} />
+          </Card>
         </div>
-        {policies.error ? <Card><ErrorState error={policies.error} onRetry={policies.reload} /></Card> : !policies.data ? <Card><LoadingState /></Card> : (
-          policies.data.items.map((p) => (
-            <PolicyCard key={p.component} policy={p} availableModes={policies.data?.available_modes ?? []} editable={manage}
-              onSaved={(np) => policies.setData(policies.data ? { ...policies.data, items: policies.data.items.map((x) => (x.component === np.component ? { ...np, label: x.label } : x)) } : undefined)} />
-          ))
-        )}
-      </section>
+      </TabPanel>
 
-      <SystemPackagesCard data={packages.data} error={packages.error} onRetry={packages.reload} />
+      <TabPanel idBase="upd" id="settings" active={tab}>
+        <div className="stack">
+          <SourceCard editable={manage} onSaved={() => policies.reload()} />
+          <section aria-labelledby="policies-title" className="stack stack--sm">
+            <div>
+              <h2 className="card__title" id="policies-title">Update policies</h2>
+              <p className="muted">Each component has its own policy. Modules update from the module catalog; operating system packages are on their own tab.</p>
+            </div>
+            {policies.error ? <Card><ErrorState error={policies.error} onRetry={policies.reload} /></Card> : !policies.data ? <Card><LoadingState /></Card> : (
+              policies.data.items.map((p) => (
+                <PolicyCard key={p.component} policy={p} availableModes={policies.data?.available_modes ?? []} editable={manage}
+                  onSaved={(np) => policies.setData(policies.data ? { ...policies.data, items: policies.data.items.map((x) => (x.component === np.component ? { ...np, label: x.label } : x)) } : undefined)} />
+              ))
+            )}
+          </section>
+        </div>
+      </TabPanel>
 
-      <Card title="Update history" flush>
-        <DataTable columns={historyColumns} rows={history.data?.items} rowKey={(h) => h.id} loading={history.loading} error={history.error} onRetry={history.reload}
-          caption="Update history" empty={<EmptyState compact icon="history" title="No updates have been applied" />}
-          pagination={history.data && history.data.total > 0 ? <Pagination total={history.data.total} limit={10} offset={histOffset} onChange={setHistOffset} /> : null} />
-      </Card>
+      <TabPanel idBase="upd" id="packages" active={tab}>
+        <SystemPackagesCard data={packages.data} error={packages.error} onRetry={packages.reload} />
+      </TabPanel>
 
       {review ? (
         <ReviewDialog id={review} editable={manage} progress={progress} onClose={() => setReview(null)}
@@ -441,33 +465,22 @@ function InstallProgressBody({ progress, reloadButton = true, fill = false }: { 
 function SourceCard({ editable, onSaved }: { editable: boolean; onSaved: () => void }) {
   const toast = useToast();
   const source = useApiData<UpdateSource>("/updates/source");
-  const [url, setUrl] = useState("");
-  const [token, setToken] = useState("");
-  const [removeToken, setRemoveToken] = useState(false);
   const [recipients, setRecipients] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useOnChange(source.data, (s) => {
-    if (!s) return;
-    setUrl(s.url);
-    setToken("");
-    setRemoveToken(false);
-    setRecipients(s.recipients.join(", "));
+    if (s) setRecipients(s.recipients.join(", "));
   });
 
   const save = async () => {
     setBusy(true);
     setError(null);
     try {
-      const saved = await api.put<UpdateSource>("/updates/source", {
-        url: url.trim(),
-        token: removeToken ? "" : token.trim() ? token.trim() : null,
-        recipients: recipients.split(/[\s,;]+/).filter(Boolean),
-      });
+      const saved = await api.put<UpdateSource>("/updates/source", { recipients: recipients.split(/[\s,;]+/).filter(Boolean) });
       source.setData(saved);
       onSaved();
-      toast.success("Update source saved");
+      toast.success("Notification recipients saved");
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -475,21 +488,16 @@ function SourceCard({ editable, onSaved }: { editable: boolean; onSaved: () => v
     }
   };
 
-  if (source.error) return <Card title="Update source"><ErrorState compact error={source.error} onRetry={source.reload} /></Card>;
-  if (!source.data) return <Card title="Update source"><LoadingState /></Card>;
+  if (source.error) return <Card title="Notifications"><ErrorState compact error={source.error} onRetry={source.reload} /></Card>;
+  if (!source.data) return <Card title="Notifications"><LoadingState /></Card>;
   const s = source.data;
   return (
-    <Card title="Update source" footer={editable ? <Button variant="primary" size="sm" onClick={save} loading={busy}>Save</Button> : undefined}>
+    <Card title="Notifications" footer={editable ? <Button variant="primary" size="sm" onClick={save} loading={busy}>Save</Button> : undefined}>
       <div className="stack stack--sm">
-        <p className="muted">The address of the signed release information (for example <code>…/stable.json</code>). Only releases signed by an official Veyra key are accepted.</p>
-        <TextField label="Metadata address" value={url} disabled={!editable} placeholder={s.env_url || "https://…/stable.json"}
-          help={s.env_url && !url ? `Empty: the server's setting is used (${s.env_url}).` : undefined}
-          onChange={(e) => setUrl(e.target.value)} />
-        <TextField label="Access token" type="password" autoComplete="off" value={token} disabled={!editable || removeToken}
-          placeholder={s.token_set ? "Saved (enter a new one to replace it)" : "Not needed for a public source"}
-          help="A read-only token for a private source (sent only to the source, never shown again)."
-          onChange={(e) => setToken(e.target.value)} />
-        {s.token_set && editable ? <Checkbox label="Remove the saved token" checked={removeToken} onChange={(e) => setRemoveToken(e.target.checked)} /> : null}
+        <p className="muted">
+          Releases come from the official Veyra feed{s.official ? "" : " (this development server uses another feed)"}:{" "}
+          <span className="mono">{s.effective_url}</span>. Only releases signed by an official Veyra key are accepted.
+        </p>
         <TextArea label="Email notifications to" rows={2} value={recipients} disabled={!editable}
           help="Addresses told when a release is available, downloaded, installed or failed (System → Settings → Email must be on)."
           onChange={(e) => setRecipients(e.target.value)} />
@@ -510,7 +518,7 @@ function ReviewDialog({ id, editable, progress, onClose, onChanged }: {
   // a reload button at the end; closing it leaves the page's callout.
   const [installing, setInstalling] = useState(false);
 
-  const act = async (what: "download" | "now" | "window" | "cancel") => {
+  const act = async (what: "download" | "now" | "window" | "cancel" | "install") => {
     setBusy(what);
     setError(null);
     try {
@@ -521,9 +529,11 @@ function ReviewDialog({ id, editable, progress, onClose, onChanged }: {
         await api.post(`/updates/available/${id}/cancel`);
         toast.info("Approval withdrawn");
       } else {
-        await api.post(`/updates/available/${id}/approve`, { when: what });
+        // "install": download, verify and approve in one request (issue #89).
+        if (what === "install") await api.post(`/updates/available/${id}/install`, { when: "now" });
+        else await api.post(`/updates/available/${id}/approve`, { when: what });
         onChanged();
-        if (what === "now") {
+        if (what === "now" || what === "install") {
           toast.success("Installation started");
           setInstalling(true);
         } else {
@@ -564,7 +574,12 @@ function ReviewDialog({ id, editable, progress, onClose, onChanged }: {
   const footer = d && editable ? (
     <>
       <Button onClick={onClose} disabled={!!busy}>Close</Button>
-      {["available", "failed"].includes(d.state) ? <Button variant="primary" onClick={() => act("download")} loading={busy === "download"}>Download and verify</Button> : null}
+      {["available", "failed"].includes(d.state) ? (
+        <>
+          <Button onClick={() => act("download")} loading={busy === "download"} disabled={!!busy}>Download and verify only</Button>
+          <Button variant="primary" onClick={() => act("install")} loading={busy === "install"} disabled={!!busy}>Download and install now</Button>
+        </>
+      ) : null}
       {d.state === "downloaded" ? (
         <>
           {d.window ? <Button onClick={() => act("window")} loading={busy === "window"} disabled={blocked || !!busy}>Install in maintenance window</Button> : null}

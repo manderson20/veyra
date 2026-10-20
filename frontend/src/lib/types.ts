@@ -822,11 +822,10 @@ export interface UpdateDetail extends AvailableUpdate {
   next_window: string | null;
 }
 
+/** GET /updates/source: the fixed feed (issue #84) and the notification recipients. */
 export interface UpdateSource {
-  url: string;
-  env_url: string;
   effective_url: string;
-  token_set: boolean;
+  official: boolean;
   recipients: string[];
   last_check: UpdateCheck | null;
 }

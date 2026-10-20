@@ -210,10 +210,7 @@ def history(
 
 
 class SourceIn(BaseModel):
-    url: str = Field("", max_length=2000)
-    token: str | None = Field(
-        None, max_length=2000, description="Read-only token; null keeps it, empty removes it"
-    )
+    # The address is fixed (issue #84): only the notification recipients change.
     recipients: list[str] = Field(default_factory=list, max_length=20)
 
     @field_validator("recipients")
@@ -232,16 +229,14 @@ def _source_out(db: Session, settings: Settings) -> dict[str, Any]:
     src = manager.load_source(db)
     last = db.scalar(select(UpdateCheck).order_by(UpdateCheck.checked_at.desc()).limit(1))
     return {
-        "url": src.get("url", ""),
-        "env_url": settings.update_metadata_url,
         "effective_url": manager.source_url(db, settings),
-        "token_set": bool(src.get("token")),
+        "official": manager.source_url(db, settings) == manager.OFFICIAL_FEED_URL,
         "recipients": src.get("recipients", []),
         "last_check": CheckOut.model_validate(last).model_dump(mode="json") if last else None,
     }
 
 
-@router.get("/source", summary="Where updates come from")
+@router.get("/source", summary="Where updates come from (fixed) and who is told")
 def get_source(
     principal: Principal = Depends(require("updates.read")),
     db: Session = Depends(get_db),
@@ -250,7 +245,7 @@ def get_source(
     return _source_out(db, settings)
 
 
-@router.put("/source", summary="Change the update source, token and email recipients")
+@router.put("/source", summary="Change who is emailed about updates")
 def put_source(
     body: SourceIn,
     principal: Principal = Depends(require("updates.manage")),
@@ -258,23 +253,7 @@ def put_source(
     settings: Settings = Depends(get_settings),
     ctx: RequestContext = Depends(request_context),
 ) -> dict[str, Any]:
-    url = body.url.strip()
-    if url:
-        try:
-            manager.check_url(url, settings)
-        except manager.UpdateError as e:
-            raise ProblemError(422, "Validation failed", str(e), code="invalid_url") from e
-    current = manager.load_source(db)
-    value: dict[str, Any] = {"url": url, "recipients": [str(r) for r in body.recipients]}
-    if body.token is None:
-        if current.get("token"):
-            value["token"] = current["token"]
-    elif body.token.strip():
-        from veyra.core.security.crypto import load_installation_key
-
-        value["token"] = load_installation_key(settings).encrypt(
-            body.token.strip(), manager.TOKEN_PURPOSE
-        )
+    value: dict[str, Any] = {"recipients": [str(r) for r in body.recipients]}
     manager.save_source(db, value)
     audit.record(
         db,
@@ -283,11 +262,7 @@ def put_source(
         actor_label=principal.label,
         ip_address=ctx.ip,
         request_id=ctx.request_id,
-        details={
-            "url": url,
-            "token": "changed" if body.token is not None else "unchanged",
-            "recipients": value["recipients"],
-        },
+        details={"recipients": value["recipients"]},
     )
     db.commit()
     return _source_out(db, settings)
@@ -426,6 +401,29 @@ def approve_update(
             run=getattr(request.app.state, "systemctl_run", None),
         )
     return AvailableOut.model_validate(row)
+
+
+@router.post(
+    "/available/{update_id}/install",
+    dependencies=[Depends(recent_auth)],
+    response_model=AvailableOut,
+    summary="Download, verify and approve in one step (issue #89)",
+)
+def install_update(
+    update_id: uuid.UUID,
+    body: ApproveIn,
+    request: Request,
+    principal: Principal = Depends(require("updates.manage")),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> AvailableOut:
+    """What "Download" and then "Install now" (or "in the window") do, as
+    one request: the checks of §3.3 still apply before the approval."""
+    row = _update(db, update_id)
+    if row.state in ("available", "failed"):
+        download_update(update_id, request, principal, db, settings, ctx)
+    return approve_update(update_id, body, request, principal, db, settings, ctx)
 
 
 @router.post(

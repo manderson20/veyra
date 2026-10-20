@@ -76,18 +76,17 @@ def save_source(db: Session, value: dict[str, Any]) -> None:
         row.value = value
 
 
+# One fixed source (issue #84): this repository's signed feed.
+OFFICIAL_FEED_URL = "https://raw.githubusercontent.com/manderson20/veyra/updates/stable.json"
+
+
 def source_url(db: Session, settings: Settings) -> str:
-    """The configured metadata address; the interface's wins over veyra.env."""
-    return str(load_source(db).get("url") or settings.update_metadata_url or "")
-
-
-def source_token(db: Session, settings: Settings) -> str | None:
-    enc = load_source(db).get("token")
-    if not enc:
-        return None
-    from veyra.core.security.crypto import load_installation_key
-
-    return load_installation_key(settings).decrypt(enc, TOKEN_PURPOSE)
+    """Where releases come from: always this repository's feed (issue #84).
+    Outside production ``VEYRA_UPDATE_METADATA_URL`` may point at another
+    feed (tests, a local release under development)."""
+    if not settings.is_production and settings.update_metadata_url:
+        return settings.update_metadata_url
+    return OFFICIAL_FEED_URL
 
 
 def check_url(url: str, settings: Settings) -> None:
@@ -140,9 +139,8 @@ def fetch_metadata(
     url = source_url(db, settings)
     if not url:
         raise UpdateError("No update source is configured.")
-    token = source_token(db, settings)
-    body = fetch(url, settings, token)
-    sig = fetch(url + ".sig", settings, token, 64 * 1024).decode("utf-8", "replace")
+    body = fetch(url, settings)
+    sig = fetch(url + ".sig", settings, None, 64 * 1024).decode("utf-8", "replace")
     meta = verify_metadata(body, sig, keyring, last_sequence=last_sequence)
     return meta, body, sig
 
@@ -181,7 +179,7 @@ def download(db: Session, settings: Settings, keyring: Keyring, update: Availabl
     size = 0
     try:
         with (
-            _open(rel.artifact.url, settings, source_token(db, settings)) as resp,
+            _open(rel.artifact.url, settings, None) as resp,
             (part / ARTIFACT_NAME).open("wb") as out,
         ):
             while chunk := resp.read(1 << 20):

@@ -8,6 +8,18 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.19 — 2026-10-20
+
+No migration.
+
+### Added
+- **Download and install in one step** (#89): the review dialog on System → Updates has **Download and install now**, which downloads, verifies and starts the installation in one click; "Download and verify only" stays for the careful path.
+- **Update available in the top bar** (#89): when a newer Veyra release is found, a "Veyra X is available" pill appears next to the deploy control and links to System → Updates; hide it with its × until the next release. While an installation runs it says so.
+
+### Changed
+- **System → Updates has tabs** (#85): **Updates** (what is available, the last check, the history), **Settings** (email notifications and update policies) and **System packages**.
+- **Updates always come from the official Veyra feed** (#84): the update source address and access token are gone from the page; only the notification recipients remain.
+
 ## 0.27.18 — 2026-10-20
 
 No migration. Deploy the telephony configuration after installing.

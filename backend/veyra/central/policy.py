@@ -126,14 +126,10 @@ def _apply_updates(db: Session, settings: Settings, section: UpdatesSection) -> 
         if getattr(policy, k) != v:
             setattr(policy, k, v)
             changed = True
-    if section.source_url is not None or section.recipients is not None:
+    # The source is fixed (issue #84): a console's source_url is ignored.
+    if section.recipients is not None:
         current = manager.load_source(db)
         value = dict(current)
-        if section.source_url is not None:
-            url = section.source_url.strip()
-            if url:
-                manager.check_url(url, settings)
-            value["url"] = url
         if section.recipients is not None:
             value["recipients"] = section.recipients
         if value != current:

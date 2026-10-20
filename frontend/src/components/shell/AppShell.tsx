@@ -14,6 +14,7 @@ import { EngineStatusProvider } from "@/hooks/useEngineStatus";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
 import { ApplyChanges } from "./ApplyChanges";
+import { UpdateAvailable } from "./UpdateAvailable";
 import { GlobalSearch } from "./GlobalSearch";
 import { CentralNotice } from "./CentralNotice";
 import { StandbyBanner } from "./StandbyBanner";
@@ -96,6 +97,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ) : null}
           <GlobalSearch />
           <div className="topbar__spacer" />
+          <UpdateAvailable />
           <ApplyChanges />
           <ThemeToggle />
           <UserMenu />

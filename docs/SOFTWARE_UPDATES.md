@@ -91,9 +91,13 @@ match the signed size and SHA-256 before they are kept.
 
 ## 2. Download
 
-* **Update source** (System → Updates → Source): the metadata URL and the
-  optional token (§1.2). The worker checks per the core policy (default
-  daily, mode *notify*).
+* **Update source**: fixed — this repository's feed,
+  `veyra.updates.manager.OFFICIAL_FEED_URL` (issue #84, 2026-10-20). The
+  configurable address and token are gone; outside production
+  `VEYRA_UPDATE_METADATA_URL` may point at another feed (tests, a local
+  release). System → Updates → Settings keeps only the notification
+  recipients. The central console's `source_url` is ignored. The worker
+  checks per the core policy (default daily, mode *notify*).
 * **Download** happens when an administrator clicks *Download*, or by
   itself in modes *download_approve* and *auto_install_window*. The
   artifact goes to `<data>/updates/<version>/` (veyra-owned) with the signed
@@ -120,6 +124,15 @@ API runs as the service account the polkit rule allows, like the worker),
 so the installer begins within a second or two; window approvals, and a
 "now" approval the API could not start, are started by the worker's
 housekeeping pass (every 60 s).
+
+**In one step** (issue #89): *Download and install now* in the review
+dialog (`POST /updates/available/{id}/install {when}`) downloads, verifies,
+runs the checks and approves in one request; *Download and verify only*
+stays for the cautious path. The page is split into tabs (issue #85):
+**Updates** (progress, available, last check, history), **Settings**
+(notifications, policies) and **System packages**. A pill in the top bar
+("Veyra X is available", or "Installing Veyra X") links to the page for
+`updates.read` users; hiding it lasts until the next version (per browser).
 
 **From the console** (owner request 2026-10-20): `sudo veyra updates
 install [VERSION] [--no-check] [--no-wait] [--timeout S]` checks the feed,
