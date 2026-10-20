@@ -50,6 +50,8 @@ from veyra.core.models.identity import (
     UserSession,
 )
 from veyra.core.models.integrations import (
+    AutomationRule,
+    AutomationRun,
     IdentityProvider,
     Integration,
     SsoRequest,
@@ -117,6 +119,8 @@ __all__ = [
     "Announcement",
     "ApiToken",
     "AuditEvent",
+    "AutomationRule",
+    "AutomationRun",
     "AvailableUpdate",
     "Backup",
     "Base",

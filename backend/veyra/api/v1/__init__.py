@@ -10,6 +10,7 @@ from veyra.api.v1 import (
     auth,
     auth_companion,
     auth_mfa,
+    automation,
     backups,
     bell_schedules,
     bulk,
@@ -146,8 +147,10 @@ for r in (
     companion,
     integrations,
     webhooks,
+    automation,
     central,
 ):
     api_router.include_router(r.router)
+api_router.include_router(automation.hooks_router)
 api_router.include_router(reports.saved_router)
 api_router.include_router(me_devices.admin_router)

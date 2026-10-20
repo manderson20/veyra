@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.27 — 2026-10-20
+
+Migration `0066`.
+
+### Added
+- **Automation: "when this happens, do that"** (#117): System → **Automation** has rules that listen to what Veyra already reports — a call ended, a voicemail arrived, an alert was raised — and only fire when your conditions hold (for example *outcome is missed* and *did contains 0100*). A rule then emails a group and/or starts a recorded page. A rule can also get its own secret web address, so a door controller or a panel that can call a URL can start a page ("front door held open"). Each rule has a quiet time so a burst fires once, a **Test now** button, and a list of its recent runs.
+
 ## 0.27.26 — 2026-10-20
 
 No migration.

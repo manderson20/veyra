@@ -1105,6 +1105,14 @@ def deliver_webhooks(settings: Any, log: Any) -> None:
             sources.voicemail_notifications(
                 db, settings.mailqueue_dir, store=StoreClient(settings.vmstore_socket)
             )
+        # Automation rules (issue #117): emails and pages of fired rules.
+        from veyra.integrations import automation
+        from veyra.telephony import get_adapter
+
+        with session_scope() as db:
+            ran = automation.process(db, settings, get_adapter(settings))
+            if ran:
+                log.info("Automation: %d rule run(s)", ran)
         key = try_load_installation_key(settings)
         if key is None:
             return

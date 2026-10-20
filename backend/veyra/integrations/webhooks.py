@@ -259,6 +259,11 @@ def emit(
     subscribes to it (or only for webhook ``only``). The caller commits."""
     if organization_id is None:
         return 0
+    if only is None:
+        # Automation rules listen to the same events (issue #117).
+        from veyra.integrations import automation
+
+        automation.enqueue(db, organization_id, event, data)
     stmt = select(Webhook).where(
         Webhook.organization_id == organization_id, Webhook.enabled.is_(True)
     )
@@ -460,9 +465,17 @@ def prune(db: Session, now: datetime | None = None) -> int:
 def emit_all(db: Session, event: str, data: dict[str, Any]) -> int:
     """Installation-wide events (alerts, deployments): every organization whose
     webhooks subscribe gets its own delivery."""
+    from veyra.core.models import AutomationRule
+
     orgs = {
         h.organization_id
         for h in db.scalars(select(Webhook).where(Webhook.enabled.is_(True)))
         if matches(h.events or [], event)
-    }
+    } | set(
+        db.scalars(
+            select(AutomationRule.organization_id).where(
+                AutomationRule.enabled.is_(True), AutomationRule.trigger == event
+            )
+        )
+    )
     return sum(emit(db, org_id, event, data) for org_id in orgs)

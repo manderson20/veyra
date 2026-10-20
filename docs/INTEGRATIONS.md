@@ -320,6 +320,36 @@ itself:
 * the URL (with its query) and the secret are never written to the log
   files.
 
+### 3.8 Automation rules (issue #117, 0.27.27)
+
+"When X happens, do Y", per organization: **System → Automation**.
+
+* **When**: an event of the webhook catalogue (§3.2: `call.ended`,
+  `voicemail.message`, `alert.raised`…), or **a request to the rule's own
+  address** (`hook`): `POST /api/v1/automation/hooks/<token>` with an
+  optional JSON body, for devices that can only call a URL (a door
+  controller, a fire panel, a script). The token (32 random bytes, stored
+  as SHA-256) is shown once and can be replaced ("New address").
+* **Only if**: conditions on the event's fields (dotted paths such as
+  `from.number`; *is* or *contains*, case-insensitive); all must hold.
+* **Then**: email addresses (the event's fields in the body, through the
+  mail queue) and/or start a recorded page (the page's recording or
+  another). A page action needs `paging.send` of the rule's author.
+* **Quiet time** (cooldown, default 60 s): after firing, the rule waits.
+  Events caused by a rule's own actions (its page's `page.sent`) never fire
+  rules, so rules cannot loop.
+* **How it runs**: `webhooks.emit` (and `emit_all` for alerts) queue an
+  `automation_runs` row in the emitter's transaction when a rule matches;
+  the worker runs pending runs on its short tick (`automation.process`) and
+  records each action's result; runs are kept 30 days. Tables
+  `automation_rules`, `automation_runs` (migration `0066`).
+* **API** (`webhooks.read` / `webhooks.write`, audited `automation.*`):
+  `GET /automation/triggers`, `GET/POST /automation/rules`,
+  `PATCH/DELETE /automation/rules/{id}`, `POST …/{id}/rotate-hook`,
+  `POST …/{id}/test` (runs the actions with test data), `GET …/{id}/runs`.
+* Not yet: actions that call a phone or post a webhook, conditions with
+  numbers (greater/less), schedules ("only during school hours").
+
 ## 4. Directory
 
 `GET /directory` (the Companion directory, `directory.read`) also lists
