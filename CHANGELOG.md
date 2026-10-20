@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Confirm it is you** (#137): actions that change who can sign in or what the system runs — granting a role, resetting someone's password or second factor, changing the two-factor or single sign-on policy, installing an update, creating or rotating an integration's token, high-availability switchover and failover — ask for your password again (and your authenticator code, if you have one) when you signed in more than 15 minutes ago. The action continues by itself after you confirm. Migration `0064`.
+
 ## 0.27.14 — 2026-10-20
 
 No migration. Deploy the telephony configuration after installing.

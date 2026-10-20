@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from veyra.core import audit
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, request_context, require, require_in_org
+from veyra.core.deps import RequestContext, recent_auth, request_context, require, require_in_org
 from veyra.core.errors import ProblemError, conflict, not_found
 from veyra.core.models import ApiToken, Integration, Organization
 from veyra.core.models.base import utcnow
@@ -137,7 +137,11 @@ def list_integrations(
 
 
 @router.post(
-    "", response_model=IntegrationTokenOut, status_code=201, summary="Create an integration"
+    "",
+    dependencies=[Depends(recent_auth)],
+    response_model=IntegrationTokenOut,
+    status_code=201,
+    summary="Create an integration",
 )
 def create_integration(
     body: IntegrationCreateIn,
@@ -224,7 +228,11 @@ def update_integration(
     return _out(db, i)
 
 
-@router.post("/{integration_id}/rotate", response_model=IntegrationTokenOut)
+@router.post(
+    "/{integration_id}/rotate",
+    dependencies=[Depends(recent_auth)],
+    response_model=IntegrationTokenOut,
+)
 def rotate_integration(
     integration_id: uuid.UUID,
     db: Session = Depends(get_db),

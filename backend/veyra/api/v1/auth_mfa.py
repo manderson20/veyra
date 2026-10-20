@@ -38,6 +38,7 @@ from veyra.core.deps import (
     SESSION_COOKIE,
     RequestContext,
     current_principal,
+    recent_auth,
     request_context,
     require,
 )
@@ -526,7 +527,12 @@ def get_policy(
     return PolicyOut(policy=mfa.load_policy(db), roles=_roles())
 
 
-@router.put("/policy", response_model=PolicyOut, summary="Change the two-factor policy")
+@router.put(
+    "/policy",
+    dependencies=[Depends(recent_auth)],
+    response_model=PolicyOut,
+    summary="Change the two-factor policy",
+)
 def put_policy(
     body: mfa.MfaPolicy,
     principal: Principal = Depends(require("system.settings.write")),

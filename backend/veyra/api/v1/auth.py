@@ -25,7 +25,7 @@ from veyra.core.deps import (
     current_principal,
     request_context,
 )
-from veyra.core.errors import ProblemError, conflict, not_found
+from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.models import Installation, PasswordResetToken, User, UserSession
 from veyra.core.models.base import utcnow
 from veyra.core.security import mfa, password_reset, passwords, trusted
@@ -596,6 +596,85 @@ def _apply_new_password(user: User, new_password: str) -> None:
 
 
 # ----------------------------------------------------------------- own sessions
+
+
+class ReauthIn(BaseModel):
+    password: str = Field(min_length=1, max_length=1024)
+    # Required when the account has a second factor.
+    code: str | None = Field(None, max_length=64)
+
+
+class ReauthOut(BaseModel):
+    valid_minutes: int
+
+
+@router.post(
+    "/reauth",
+    response_model=ReauthOut,
+    summary="Enter the password again before a sensitive action",
+)
+def reauth(
+    body: ReauthIn,
+    request: Request,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> ReauthOut:
+    """Step-up authentication (issue #137): sensitive actions ask for this
+    when the last sign-in is older than the window."""
+    from veyra.api.v1.auth_mfa import attempt_second_factor
+    from veyra.core.deps import REAUTH_WINDOW_MINUTES
+
+    if principal.session_id is None:
+        raise forbidden("Only a signed-in browser session confirms this way.")
+    if not _limiter(settings).hit(ctx.ip or "unknown"):
+        raise _too_many("Too many attempts. Wait a minute and try again.")
+    session = db.get(UserSession, principal.session_id)
+    user = db.get(User, principal.user_id)
+    assert session is not None and user is not None
+    if not passwords.verify_password(user.password_hash, body.password):
+        audit.record(
+            db,
+            action="auth.reauth",
+            outcome="failure",
+            actor_user_id=user.id,
+            actor_label=user.email,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            details={"reason": "password"},
+        )
+        db.commit()
+        raise ProblemError(
+            401,
+            "Password not accepted",
+            "The password is incorrect.",
+            code="invalid_password",
+            errors=[{"field": "password", "message": "incorrect"}],
+        )
+    now = utcnow()
+    if mfa.confirmed_methods(db, user.id):
+        if not body.code:
+            raise ProblemError(
+                422,
+                "Code needed",
+                "Enter the code from your authenticator app.",
+                code="code_required",
+                errors=[{"field": "code", "message": "required"}],
+            )
+        attempt_second_factor(db, request, user, session, body.code, ctx, now)
+    session.reauth_at = now
+    audit.record(
+        db,
+        action="auth.reauth",
+        actor_user_id=user.id,
+        actor_label=user.email,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={},
+    )
+    db.commit()
+    return ReauthOut(valid_minutes=REAUTH_WINDOW_MINUTES)
 
 
 class TrustedBrowserOut(BaseModel):

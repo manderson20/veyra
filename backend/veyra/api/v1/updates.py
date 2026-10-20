@@ -17,7 +17,7 @@ from veyra.api.v1.schemas import ORM
 from veyra.core import audit
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, request_context, require
+from veyra.core.deps import RequestContext, recent_auth, request_context, require
 from veyra.core.errors import ProblemError, not_found
 from veyra.core.models import AvailableUpdate, UpdateCheck, UpdateHistory, UpdatePolicy
 from veyra.core.pagination import Page, PageParams, page_params, paginate
@@ -378,6 +378,7 @@ class ApproveIn(BaseModel):
 
 @router.post(
     "/available/{update_id}/approve",
+    dependencies=[Depends(recent_auth)],
     response_model=AvailableOut,
     summary="Approve installation now or in the maintenance window",
 )

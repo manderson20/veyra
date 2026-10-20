@@ -25,7 +25,7 @@ from veyra.central import protocol
 from veyra.core import audit
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, request_context, require
+from veyra.core.deps import RequestContext, recent_auth, request_context, require
 from veyra.core.errors import ProblemError, not_found
 from veyra.core.models import ClusterNode
 from veyra.core.security.principal import Principal
@@ -220,7 +220,11 @@ def put_service(
     return service.service_settings(db)
 
 
-@router.post("/enable", summary="Enable high availability: this node becomes the primary")
+@router.post(
+    "/enable",
+    dependencies=[Depends(recent_auth)],
+    summary="Enable high availability: this node becomes the primary",
+)
 def enable(
     body: ServiceIn,
     principal: Principal = Depends(require(MANAGE)),
@@ -345,7 +349,11 @@ def switchover_check(
     return {"target": node.node_name, "ok": not problems, "problems": problems}
 
 
-@router.post("/switchover", summary="Planned switchover to the other node")
+@router.post(
+    "/switchover",
+    dependencies=[Depends(recent_auth)],
+    summary="Planned switchover to the other node",
+)
 def switchover(
     body: SwitchoverIn,
     principal: Principal = Depends(require(MANAGE)),
@@ -395,7 +403,11 @@ class FailoverIn(BaseModel):
     confirm_fenced: bool = False
 
 
-@router.post("/failover", summary="Fail over to this standby (the primary is down)")
+@router.post(
+    "/failover",
+    dependencies=[Depends(recent_auth)],
+    summary="Fail over to this standby (the primary is down)",
+)
 def failover(
     body: FailoverIn,
     principal: Principal = Depends(require(MANAGE)),
@@ -416,7 +428,11 @@ def failover(
     return {"operation": out}
 
 
-@router.post("/resume", summary="Resume primary duties on an isolated primary")
+@router.post(
+    "/resume",
+    dependencies=[Depends(recent_auth)],
+    summary="Resume primary duties on an isolated primary",
+)
 def resume(
     principal: Principal = Depends(require(MANAGE)),
     db: Session = Depends(get_db),
@@ -454,7 +470,11 @@ def rejoin(
     return {"operation": out.get("result")}
 
 
-@router.delete("/nodes/{node_id}", summary="Remove the secondary from the cluster")
+@router.delete(
+    "/nodes/{node_id}",
+    dependencies=[Depends(recent_auth)],
+    summary="Remove the secondary from the cluster",
+)
 def remove_node(
     node_id: uuid.UUID,
     principal: Principal = Depends(require(MANAGE)),

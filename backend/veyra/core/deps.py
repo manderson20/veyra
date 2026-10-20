@@ -210,3 +210,44 @@ def require_in_org(
 ) -> None:
     if not principal.has(permission, organization_id):
         raise forbidden()
+
+
+# --------------------------------------------------------------- step-up auth
+
+# Sensitive actions (granting roles, resetting another user's sign-in,
+# changing the sign-in policies, installing updates, failing over…) need the
+# password entered within this window (issue #137): at sign-in, or again
+# through POST /auth/reauth.
+REAUTH_WINDOW_MINUTES = 15
+
+
+def check_recent_auth(db: Session, principal: Principal) -> None:
+    from datetime import timedelta
+
+    from veyra.core.models import UserSession
+    from veyra.core.models.base import utcnow
+
+    if principal.session_id is None:
+        return  # bearer tokens: their scopes exclude these actions
+    s = db.get(UserSession, principal.session_id)
+    if s is None:
+        return
+    user = db.get(User, s.user_id)
+    if user is not None and not user.password_hash:
+        return  # single sign-on only: no password to ask for
+    times = [t for t in (s.created_at, s.mfa_verified_at, s.reauth_at) if t is not None]
+    if not times or utcnow() - max(times) > timedelta(minutes=REAUTH_WINDOW_MINUTES):
+        raise ProblemError(
+            403,
+            "Confirm it is you",
+            "Enter your password again to continue with this action.",
+            code="reauth_required",
+        )
+
+
+def recent_auth(
+    principal: Principal = Depends(current_principal), db: Session = Depends(get_db)
+) -> Principal:
+    """Dependency for sensitive routes: :func:`check_recent_auth`."""
+    check_recent_auth(db, principal)
+    return principal

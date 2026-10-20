@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import { ReauthDialog } from "@/components/account/ReauthDialog";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ThemeToggle } from "../ThemeToggle";
@@ -102,6 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <MfaNag />
         <StandbyBanner />
         <CentralNotice />
+        <ReauthDialog />
         <main id="main" className="content" tabIndex={-1}>
           {children}
         </main>

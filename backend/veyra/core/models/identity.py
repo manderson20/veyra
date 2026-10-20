@@ -133,6 +133,8 @@ class UserSession(UUIDPrimaryKey, Base):
     # may only complete the second factor (docs/MFA_DESIGN.md §4).
     mfa_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     mfa_failures: Mapped[int] = mapped_column(Integer, default=0)
+    # The password (and code) entered again for a sensitive action (issue #137).
+    reauth_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class MfaMethod(UUIDPrimaryKey, Base):

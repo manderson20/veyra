@@ -26,7 +26,7 @@ from veyra.api.v1.schemas import (
 from veyra.core import audit
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, request_context, require
+from veyra.core.deps import RequestContext, check_recent_auth, recent_auth, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.models import Organization, Role, RoleAssignment, Site, User
 from veyra.core.models.base import utcnow
@@ -209,6 +209,8 @@ def update_user(
         if not body.is_active:
             revoke_user_sessions(db, user.id)
     if body.password is not None:
+        # Setting someone else's password is a sensitive action (issue #137).
+        check_recent_auth(db, principal)
         if user.id == principal.user_id:
             raise ProblemError(
                 409,
@@ -253,6 +255,7 @@ def update_user(
 
 @router.post(
     "/users/{user_id}/mfa/reset",
+    dependencies=[Depends(recent_auth)],
     response_model=MessageOut,
     summary="Remove a user's second factors so they enrol again at the next sign-in",
 )
@@ -331,6 +334,7 @@ def unlock_user(
 
 @router.post(
     "/users/{user_id}/password-reset-link",
+    dependencies=[Depends(recent_auth)],
     response_model=PasswordResetLinkOut,
     status_code=201,
     summary="Issue a one-time password reset link for a user",
@@ -518,6 +522,7 @@ def list_assignments(
 
 @router.post(
     "/users/{user_id}/roles",
+    dependencies=[Depends(recent_auth)],
     response_model=RoleAssignmentOut,
     status_code=201,
     summary="Assign a role to a user",

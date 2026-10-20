@@ -355,3 +355,37 @@ def test_trusted_browser_skips_the_code_until_forgotten(admin, app, monkeypatch)
         from veyra.core.models import TrustedBrowser
 
         assert db.query(TrustedBrowser).count() == 0
+
+
+def test_sensitive_actions_ask_for_the_password_again(admin, app):
+    """Step-up authentication (#137): an older sign-in must confirm the
+    password (and the code, with a second factor) before e.g. the policy."""
+    from datetime import timedelta as td
+
+    with session_scope() as db:
+        for s in db.scalars(select(UserSession)):
+            s.created_at = utcnow() - td(hours=1)
+            if s.mfa_verified_at is not None:
+                s.mfa_verified_at = utcnow() - td(hours=1)
+    r = admin.put(f"{MFA}/policy", json={"grace_days": 3})
+    assert r.status_code == 403 and r.json()["code"] == "reauth_required"
+    bad = admin.post("/api/v1/auth/reauth", json={"password": "wrong"})
+    assert bad.status_code == 401 and bad.json()["code"] == "invalid_password"
+    ok = admin.post("/api/v1/auth/reauth", json={"password": ADMIN_PASSWORD})
+    assert ok.status_code == 200 and ok.json()["valid_minutes"] == 15
+    assert admin.put(f"{MFA}/policy", json={"grace_days": 3}).status_code == 200
+    # With a second factor the code is needed as well.
+    secret, _ = _enrol(admin)
+    with session_scope() as db:
+        for s in db.scalars(select(UserSession)):
+            s.reauth_at = utcnow() - td(hours=1)
+    r = admin.post("/api/v1/auth/reauth", json={"password": ADMIN_PASSWORD})
+    assert r.status_code == 422 and r.json()["code"] == "code_required"
+    with session_scope() as db:
+        for m in db.scalars(select(MfaMethod)):
+            m.last_used_step = None
+    r = admin.post(
+        "/api/v1/auth/reauth",
+        json={"password": ADMIN_PASSWORD, "code": totp.totp(secret, time.time())},
+    )
+    assert r.status_code == 200, r.text

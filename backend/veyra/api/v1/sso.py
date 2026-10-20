@@ -26,7 +26,7 @@ from veyra.api.v1.extensions import installation_key
 from veyra.core import audit
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, request_context, require
+from veyra.core.deps import RequestContext, recent_auth, request_context, require
 from veyra.core.errors import ProblemError, not_found
 from veyra.core.models import IdentityProvider, Organization, User, UserIdentity
 from veyra.core.models.base import utcnow
@@ -456,7 +456,10 @@ def get_policy(
 
 
 @router.put(
-    "/identity-providers/policy", response_model=PolicyIO, summary="Change the sign-in policy"
+    "/identity-providers/policy",
+    dependencies=[Depends(recent_auth)],
+    response_model=PolicyIO,
+    summary="Change the sign-in policy",
 )
 def put_policy(
     body: PolicyIO,

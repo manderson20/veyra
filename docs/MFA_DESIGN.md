@@ -152,9 +152,22 @@ phone (manual, recorded in the milestone report).
 
 ## 10. Out of scope (unchanged)
 
-Hardware OTP tokens (HOTP), push notifications, SMS, email codes, trusted
-devices, and step-up authentication for individual actions. Each can be
-added behind the same `mfa_methods` table.
+Hardware OTP tokens (HOTP), push notifications, SMS and email codes. Each
+can be added behind the same `mfa_methods` table. (Trusted browsers since
+0.27.8, §4; step-up authentication since 0.27.15, below.)
+
+*Step-up authentication, built 0.27.15 (#137, migration `0064`):* the
+`recent_auth` dependency (`core/deps.py`) refuses with `403
+reauth_required` when the session's last password entry (sign-in, code step
+or `sessions.reauth_at`) is older than 15 minutes. `POST /auth/reauth`
+`{password, code?}` sets `reauth_at` (the code is required when the account
+has a second factor; rate limited, audited `auth.reauth`). Guarded: role
+grants, password reset links, setting another user's password, second-factor
+resets, the two-factor and single-sign-on policies, update approval,
+integration create and rotate, HA enable, switchover, failover, resume and
+node removal. Bearer tokens (whose scopes exclude these) and single-sign-on
+accounts without a password are not asked. The web client shows a "Confirm it
+is you" dialog on `reauth_required` and sends the request again.
 
 ## 11. Implementation notes (Milestone 4b)
 

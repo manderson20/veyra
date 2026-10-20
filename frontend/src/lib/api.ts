@@ -128,8 +128,16 @@ export async function parseProblem(res: Response): Promise<Problem> {
   };
 }
 
+/** Step-up authentication (#137): the app registers a prompt that asks for
+ * the password again; a request refused with ``reauth_required`` waits for
+ * it and is sent once more when the user confirmed. */
+let reauthPrompt: (() => Promise<boolean>) | null = null;
+export function setReauthPrompt(prompt: (() => Promise<boolean>) | null): void {
+  reauthPrompt = prompt;
+}
+
 export function createApi(deps: ApiDeps = defaultDeps) {
-  async function request<T>(path: string, opts: ApiOptions = {}): Promise<T> {
+  async function request<T>(path: string, opts: ApiOptions & { reauthed?: boolean } = {}): Promise<T> {
     const method = (opts.method ?? (opts.body !== undefined ? "POST" : "GET")).toUpperCase();
     const headers: Record<string, string> = { Accept: "application/json" };
     if (opts.body !== undefined && !opts.form) headers["Content-Type"] = "application/json";
@@ -162,6 +170,9 @@ export function createApi(deps: ApiDeps = defaultDeps) {
         if (loc && !AUTH_FREE_PATHS.some((p) => loc.pathname.startsWith(p))) {
           loc.assign(`/login/?next=${encodeURIComponent(loc.pathname)}`);
         }
+      }
+      if (res.status === 403 && problem.code === "reauth_required" && reauthPrompt && !opts.reauthed) {
+        if (await reauthPrompt()) return request<T>(path, { ...opts, reauthed: true });
       }
       throw new ApiError(res.status, problem);
     }

@@ -102,3 +102,22 @@ describe("api client", () => {
     expect(e.code).toBe("network_error");
   });
 });
+
+describe("step-up authentication", () => {
+  it("asks for the password and sends the refused request once more", async () => {
+    const { setReauthPrompt } = await import("./api");
+    const responses = [jsonResponse(403, { status: 403, title: "Confirm", code: "reauth_required" }), jsonResponse(200, { ok: true })];
+    const fetchMock = vi.fn<typeof fetch>(async () => responses.shift()!);
+    const d: ApiDeps = { fetch: fetchMock as unknown as typeof fetch, cookie: () => "", location: () => null };
+    const prompt = vi.fn(async () => true);
+    setReauthPrompt(prompt);
+    await expect(createApi(d).put("/auth/mfa/policy", { grace_days: 3 })).resolves.toEqual({ ok: true });
+    expect(prompt).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Cancelled: the refusal reaches the caller.
+    responses.push(jsonResponse(403, { status: 403, title: "Confirm", code: "reauth_required" }));
+    setReauthPrompt(async () => false);
+    await expect(createApi(d).put("/auth/mfa/policy", {})).rejects.toMatchObject({ status: 403 });
+    setReauthPrompt(null);
+  });
+});
