@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 44,
+  "sequence": 45,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.28",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Presence from the phone (*37) and from your calendar. Deploy the telephony configuration after installing.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "0b975f94d8",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.28/veyra-0.27.28.tar.gz",
+        "sha256": "6322bf2546b99282f83337e61a011daa1d908bd69aedcbcd68eb231379bb584a",
+        "size": 8430243
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -751,6 +768,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T07:37:47+00:00",
-  "expires_at": "2027-01-18T07:37:47+00:00"
+  "generated_at": "2026-10-20T07:51:43+00:00",
+  "expires_at": "2027-01-18T07:51:43+00:00"
 }
