@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.34 — 2026-10-20
+
+No migration.
+
+### Added
+- **Voicemail PINs from FreePBX** (#42): add FreePBX's `voicemail.conf` next to the database dump and users keep their voicemail PIN and the email address their messages go to. The extensions import file gets a `voicemail_pin` column for this (it sets a PIN and is never exported).
+
 ## 0.27.33 — 2026-10-20
 
 No migration.

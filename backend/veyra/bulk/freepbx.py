@@ -249,9 +249,31 @@ def _timegroup(details: list[str], warn: list[str], what: str) -> tuple[str, lis
     return "; ".join(hours), holidays
 
 
-def convert(text: str) -> Conversion:
-    """The CSV files (by bulk kind) for a FreePBX database dump."""
+def parse_voicemail_conf(text: str) -> dict[str, dict[str, str]]:
+    """``voicemail.conf`` of FreePBX: mailbox → {pin, email} from the
+    ``[default]`` context (``1101 => 1234,Name,mail@example.org,,attach=yes``)."""
+    out: dict[str, dict[str, str]] = {}
+    context = ""
+    for raw in text.splitlines():
+        line = raw.split(";", 1)[0].strip()
+        if line.startswith("[") and line.endswith("]"):
+            context = line[1:-1].strip()
+            continue
+        if context != "default" or "=>" not in line:
+            continue
+        box, _, rest = line.partition("=>")
+        fields = [f.strip() for f in rest.split(",")]
+        pin = fields[0] if fields and fields[0].isdigit() else ""
+        email = fields[2] if len(fields) > 2 and "@" in fields[2] else ""
+        out[box.strip()] = {"pin": pin, "email": email}
+    return out
+
+
+def convert(text: str, voicemail_conf: str | None = None) -> Conversion:
+    """The CSV files (by bulk kind) for a FreePBX database dump, with the
+    voicemail PINs and emails of ``voicemail.conf`` when given."""
     t = parse_dump(text)
+    boxes = parse_voicemail_conf(voicemail_conf) if voicemail_conf else {}
     conv = Conversion()
     warn = conv.warnings
     names = {
@@ -296,7 +318,29 @@ def convert(text: str) -> Conversion:
                 "outbound_caller_id_number": outbound[:32],
                 "emergency_caller_id_number": emergency[:32],
                 "voicemail": "no" if str(u.get("voicemail") or "novm") == "novm" else "yes",
+                **(
+                    {
+                        "voicemail_email": boxes[number]["email"],
+                        "voicemail_pin": boxes[number]["pin"]
+                        if 4 <= len(boxes[number]["pin"]) <= 10
+                        else "",
+                    }
+                    if number in boxes and str(u.get("voicemail") or "novm") != "novm"
+                    else {}
+                ),
             }
+        )
+    if boxes:
+        short = [n for n, b in boxes.items() if b["pin"] and not 4 <= len(b["pin"]) <= 10]
+        if short:
+            warn.append(
+                f"voicemail: PINs of {', '.join(sorted(short)[:10])} are not 4 to 10 digits; "
+                "those boxes get a random PIN"
+            )
+    elif any(str(u.get("voicemail") or "novm") != "novm" for u in t["users"]):
+        warn.append(
+            "voicemail: add voicemail.conf (/etc/asterisk/voicemail.conf on the FreePBX "
+            "server) to keep the PINs and email addresses; without it boxes get random PINs"
         )
     if rows:
         conv.csv["extensions"] = service.to_csv(service.KINDS["extensions"], rows)

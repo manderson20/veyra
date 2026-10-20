@@ -21,7 +21,7 @@ template, checks a file (dry run) and imports it.
 
 | Kind | Key | Columns |
 |---|---|---|
-| `extensions` | `number` | display_name, user_email, caller_id_name, caller_id_number, outbound_caller_id_number, outbound_caller_id_name, emergency_caller_id_number, intercom (default/allow/deny), class_of_service, site, building, location, department (by name), max_registrations, enabled, voicemail (yes creates the box with a random PIN; no never deletes one), voicemail_email, voicemail_attach_audio, voicemail_delete_after_email, voicemail_ring_seconds, pickup_groups (the full list: the extension leaves groups not named) |
+| `extensions` | `number` | display_name, user_email, caller_id_name, caller_id_number, outbound_caller_id_number, outbound_caller_id_name, emergency_caller_id_number, intercom (default/allow/deny), class_of_service, site, building, location, department (by name), max_registrations, enabled, voicemail (yes creates the box with a random PIN; no never deletes one), voicemail_email, voicemail_attach_audio, voicemail_delete_after_email, voicemail_ring_seconds, voicemail_pin (write-only: sets the PIN, never exported), pickup_groups (the full list: the extension leaves groups not named) |
 | `ring_groups` | `number` | name, description, strategy (ringall/sequential), ring_seconds, ring_busy_members, members (extension numbers in ringing order — the full list), external_members, caller_id_prefix, failover (`type:target` or `hangup`), enabled |
 | `queues` | `number` | name, description, strategy (ringall, rrmemory, leastrecent, fewestcalls, random, linear), member_timeout, wrapup_seconds, max_wait_seconds, join_when_empty, announce_position, members (static), dynamic_members (log in with the code), failover, enabled |
 | `ivr_menus` | `name` | description, prompt (a recording of the audio library, by name; a missing one is a note, not an error), timeout_seconds, max_retries, allow_direct_dial, keys (`1=extension:1001; 2=ring_group:6000; *=hangup`, the full list), timeout and invalid (`type:target`), enabled |
@@ -104,5 +104,9 @@ then goes through **Check the file** and **Import** in that order.
   dates become holidays (`12-25`, `11-23..11-27`); dates with hours are
   warnings. A route to `timeconditions,N` becomes a route with that time
   condition, the open (`truegoto`) and after-hours (`falsegoto`) destinations.
-* Not yet: voicemail settings from
+* Voicemail (0.27.34): add the server's `/etc/asterisk/voicemail.conf` as the
+  second file and the `[default]` boxes keep their PIN (4 to 10 digits;
+  others get a random one) and email address, through the extensions'
+  write-only `voicemail_pin` column.
+* Not yet: other voicemail settings from
   `voicemail.conf`, recordings and music on hold.

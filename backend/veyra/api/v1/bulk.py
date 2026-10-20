@@ -146,6 +146,7 @@ def import_csv(
 @router.post("/freepbx/convert", summary="Turn a FreePBX database dump into import files")
 async def freepbx_convert(
     file: UploadFile = File(...),
+    voicemail: UploadFile | None = File(None),
     principal: Principal = Depends(require("extensions.write")),
 ) -> dict[str, Any]:
     """Issue #42: ``mysqldump asterisk`` of a FreePBX server (``.sql``,
@@ -155,8 +156,11 @@ async def freepbx_convert(
     from veyra.bulk import freepbx
 
     data = await file.read(freepbx.MAX_DUMP_BYTES + 1)
+    vm_text = None
+    if voicemail is not None:
+        vm_text = (await voicemail.read(1024 * 1024)).decode("utf-8", errors="replace")
     try:
-        conv = freepbx.convert(freepbx.read_upload(data, file.filename))
+        conv = freepbx.convert(freepbx.read_upload(data, file.filename), vm_text)
     except freepbx.FreepbxError as e:
         raise ProblemError(422, "Not a usable FreePBX dump", str(e), code="freepbx_invalid") from e
     return {"csv": conv.csv, "counts": conv.counts, "warnings": conv.warnings[:200]}

@@ -203,6 +203,30 @@ def test_freepbx_dump_becomes_import_files(admin):
     assert _import(admin, "time_conditions", org, exp, dry_run=True)["counts"]["unchanged"] == 1
     routes = _import(admin, "inbound_routes", org, out["csv"]["inbound_routes"], dry_run=True)
     assert routes["counts"]["create"] == 3, routes
+    # With voicemail.conf, boxes keep their PIN and email.
+    vm = (Path(__file__).parent / "data" / "freepbx_voicemail.conf").read_bytes()
+    r = admin.post(
+        "/api/v1/bulk/freepbx/convert",
+        files={
+            "file": ("asterisk.sql", sql, "application/sql"),
+            "voicemail": ("voicemail.conf", vm, "text/plain"),
+        },
+    )
+    assert r.status_code == 200, r.text
+    ext2 = r.json()["csv"]["extensions"]
+    assert "office@example.org" in ext2 and ",4321," in ext2 and "9999" not in ext2
+    assert "1102" in " ".join(r.json()["warnings"])  # its 2-digit PIN is refused
+    pinned = _import(admin, "extensions", org, ext2, dry_run=False)
+    assert "voicemail PIN set" in pinned["rows"][0]["notes"], pinned
+    from veyra.core.models import Extension, VoicemailBox
+    from veyra.core.security.crypto import load_installation_key
+    from veyra.telephony.snapshot import pin_purpose
+
+    with session_scope() as db:
+        e = db.query(Extension).filter_by(number="1101").one()
+        box = db.query(VoicemailBox).filter_by(extension_id=e.id).one()
+        key = load_installation_key(admin.app.state.settings)
+        assert key.decrypt(box.pin_ciphertext, pin_purpose(box.id)) == "4321"
     # A gzipped dump works too; garbage does not.
     import gzip
 

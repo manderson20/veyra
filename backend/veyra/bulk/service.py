@@ -239,6 +239,8 @@ class ExtensionsKind:
         "voicemail_attach_audio",
         "voicemail_delete_after_email",
         "voicemail_ring_seconds",
+        # Write-only (never exported): the box's PIN, e.g. from FreePBX.
+        "voicemail_pin",
         "pickup_groups",
     ]
     _TEXT = (
@@ -389,6 +391,7 @@ class ExtensionsKind:
         ring = _int(row, "voicemail_ring_seconds")
         if ring is not None and ring is not _CLEARED:
             fields["ring_seconds"] = ring
+        pin = _text(row, "voicemail_pin")
         box = db.scalar(select(VoicemailBox).where(VoicemailBox.extension_id == ext.id))
         if box is None:
             if not want:
@@ -396,17 +399,26 @@ class ExtensionsKind:
                     notes.append("voicemail settings ignored: the extension has no box")
                 return False
             vapi.create_box(
-                vapi.VoicemailBoxIn(extension_id=ext.id, **fields),
+                vapi.VoicemailBoxIn(
+                    extension_id=ext.id, **fields, **({"pin": pin} if isinstance(pin, str) else {})
+                ),
                 ctx.request,
                 ctx.principal,
                 db,
                 ctx.rctx,
             )
-            notes.append("voicemail box created with a random PIN")
+            notes.append(
+                "voicemail box created with its PIN"
+                if isinstance(pin, str)
+                else "voicemail box created with a random PIN"
+            )
             return True
         if want is False:
             notes.append("voicemail=no: the existing box is kept (delete it on the Voicemail page)")
         changes = _changes(box, fields)
+        if isinstance(pin, str):
+            changes["pin"] = pin  # stored encrypted; not compared
+            notes.append("voicemail PIN set")
         if not changes:
             return False
         vapi.update_box(

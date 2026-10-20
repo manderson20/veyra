@@ -42,15 +42,17 @@ export default function ImportPage() {
   const [fpbx, setFpbx] = useState<{ csv: Record<string, string>; counts: Record<string, number>; warnings: string[] } | null>(null);
   const [fpbxBusy, setFpbxBusy] = useState(false);
   const [fpbxError, setFpbxError] = useState<string | null>(null);
-  const convert = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  const [dumpFile, setDumpFile] = useState<File | null>(null);
+  const [vmFile, setVmFile] = useState<File | null>(null);
+  const convert = async () => {
+    if (!dumpFile) return;
     setFpbxBusy(true);
     setFpbxError(null);
     setFpbx(null);
     try {
       const form = new FormData();
-      form.append("file", f);
+      form.append("file", dumpFile);
+      if (vmFile) form.append("voicemail", vmFile);
       setFpbx(await api.upload("/bulk/freepbx/convert", form));
     } catch (err) {
       setFpbxError(errorMessage(err));
@@ -130,10 +132,17 @@ export default function ImportPage() {
       <Card title="From FreePBX" subtitle="Moving from FreePBX? Its extensions, ring groups, queues, IVR menus, time conditions and inbound routes become the files to check and import here.">
         <div className="stack stack--sm">
           <p className="subtle" style={{ margin: 0 }}>On the FreePBX server run <span className="mono">mysqldump asterisk &gt; asterisk.sql</span> (or <span className="mono">| gzip</span>), then choose the file. Nothing is saved until you import each file below, in this order: extensions, ring groups, queues, IVR menus, time conditions, inbound routes. Upload the IVR recordings to the audio library first, under the names they had in FreePBX. SIP passwords are not carried over. If FreePBX used 3-digit extensions, widen the numbering plan (Settings) first.</p>
-          <label className="field">
-            <span className="field__label">FreePBX database dump</span>
-            <input type="file" accept=".sql,.gz,.tgz,.tar,application/sql" onChange={convert} disabled={fpbxBusy} />
-          </label>
+          <div className="grid grid--2">
+            <label className="field">
+              <span className="field__label">FreePBX database dump</span>
+              <input type="file" accept=".sql,.gz,.tgz,.tar,application/sql" onChange={(e) => setDumpFile(e.target.files?.[0] ?? null)} disabled={fpbxBusy} />
+            </label>
+            <label className="field">
+              <span className="field__label">voicemail.conf (optional: keeps PINs and emails)</span>
+              <input type="file" accept=".conf,text/plain" onChange={(e) => setVmFile(e.target.files?.[0] ?? null)} disabled={fpbxBusy} />
+            </label>
+          </div>
+          <div><Button size="sm" variant="primary" onClick={() => void convert()} loading={fpbxBusy} disabled={!dumpFile}>Read the FreePBX files</Button></div>
           {fpbxBusy ? <p className="subtle" style={{ margin: 0 }}>Reading the dump…</p> : null}
           {fpbxError ? <Callout tone="danger">{fpbxError}</Callout> : null}
           {fpbx ? (
