@@ -899,6 +899,7 @@ def _hold_music(
             "name": c.name,
             "organization": org_slug.get(c.organization_id, ""),
             "random": c.random,
+            "stream_url": c.stream_url,
             "files": [
                 moh.track_name(i, prompts[t.prompt_id].slug)
                 for i, t in enumerate(tracks.get(c.id, []))

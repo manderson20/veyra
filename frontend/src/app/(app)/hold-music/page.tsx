@@ -29,6 +29,8 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [random, setRandom] = useState(false);
+  const [source, setSource] = useState<"tracks" | "stream">("tracks");
+  const [stream, setStream] = useState("");
   const [tracks, setTracks] = useState<string[]>([]);
   const [adding, setAdding] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -42,6 +44,8 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
       setName(set?.name ?? "");
       setDescription(set?.description ?? "");
       setRandom(set?.random ?? false);
+      setSource(set?.stream_url ? "stream" : "tracks");
+      setStream(set?.stream_url ?? "");
       setTracks(set?.tracks.map((t) => t.prompt_id) ?? []);
       setAdding("");
       setShowAll(false);
@@ -59,7 +63,7 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
     setBusy(true);
     errors.clear();
     try {
-      const body: HoldMusicInput = { name: name.trim(), description: description.trim() || null, random, tracks };
+      const body: HoldMusicInput = { name: name.trim(), description: description.trim() || null, random, tracks, stream_url: source === "stream" ? stream.trim() || null : null };
       if (set) await api.patch<HoldMusicSet>(`/hold-music/${set.id}`, body);
       else await api.post<HoldMusicSet>("/hold-music", { organization_id: effectiveOrg, ...body });
       toast.success(set ? "Hold music set saved" : "Hold music set created", "Deploy changes to apply it to the phone system.");
@@ -75,7 +79,7 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
   return (
     <Dialog open={open} onClose={onClose} busy={busy} size="lg" title={set ? `Edit "${set.name}"` : "New hold music set"}
       description="Recordings from the audio library, played in order (or shuffled) to callers on hold, waiting in a queue, or ringing a group set to play music."
-      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="hold-music-form" loading={busy} disabled={!effectiveOrg || !name.trim()}>{set ? "Save changes" : "Create set"}</Button></>}>
+      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="hold-music-form" loading={busy} disabled={!effectiveOrg || !name.trim() || (source === "stream" && !stream.trim())}>{set ? "Save changes" : "Create set"}</Button></>}>
       <form id="hold-music-form" className="stack stack--sm" onSubmit={submit}>
         {!set && organizations.length > 1 ? (
           <SelectField label="Organization" required value={effectiveOrg} error={errors.fields.organization_id} placeholder="Choose an organization"
@@ -83,6 +87,13 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
         ) : null}
         <TextField label="Name" required autoFocus value={name} error={errors.fields.name} placeholder="e.g. Main office" onChange={(e) => setName(e.target.value)} />
         <TextArea label="Description" rows={2} value={description} error={errors.fields.description} onChange={(e) => setDescription(e.target.value)} />
+        <SelectField label="Source" value={source} options={[{ value: "tracks", label: "Recordings from the audio library" }, { value: "stream", label: "An internet radio stream" }]}
+          onChange={(e) => setSource(e.target.value as "tracks" | "stream")} />
+        {source === "stream" ? (
+          <TextField label="Stream address" required value={stream} error={errors.fields.stream_url} spellCheck={false} placeholder="https://stream.example.org/live.mp3"
+            help="An MP3, AAC or Ogg station, decoded by ffmpeg on the server and reconnected when it drops. Use a station you are licensed to play to callers." onChange={(e) => setStream(e.target.value)} />
+        ) : null}
+        {source === "tracks" ? (<>
         <div className="field">
           <span className="field__label">Recordings</span>
           {tracks.length === 0 ? <p className="subtle">No recordings yet: callers would hear silence.</p> : (
@@ -117,6 +128,7 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
           <p className="subtle">Upload music under <Link href="/prompts/">Telephony → Audio</Link> with the kind “Hold music”.</p>
         </div>
         <Checkbox label="Shuffle" description="Play the recordings in a random order instead of the listed one." checked={random} onChange={(e) => setRandom(e.target.checked)} />
+        </>) : null}
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>
@@ -156,7 +168,7 @@ export default function HoldMusicPage() {
   const columns: Column<HoldMusicSet>[] = [
     { key: "name", header: "Set", render: (s) => <span><span className="table__primary" style={{ display: "block" }}>{s.name}</span><span className="table__secondary mono">{s.class_name}</span></span> },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (s: HoldMusicSet) => <span>{s.organization_name}</span> }] : []),
-    { key: "tracks", header: "Recordings", render: (s) => <span>{s.tracks.length}<span className="table__secondary" style={{ display: "block" }}>{minutes(s.tracks.reduce((n, t) => n + t.duration_seconds, 0))}{s.random ? " · shuffled" : ""}</span></span> },
+    { key: "tracks", header: "Recordings", render: (s) => s.stream_url ? <span>Stream<span className="table__secondary" style={{ display: "block", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis" }}>{s.stream_url}</span></span> : <span>{s.tracks.length}<span className="table__secondary" style={{ display: "block" }}>{minutes(s.tracks.reduce((n, t) => n + t.duration_seconds, 0))}{s.random ? " · shuffled" : ""}</span></span> },
     { key: "use", header: "Used by", render: (s) => s.in_use_by ? <span>{s.in_use_by}</span> : <span className="subtle">—</span> },
     { key: "status", header: "Status", render: (s) => s.problems.length ? <Badge tone="warn" icon="alert">{s.problems[0]}</Badge> : <Badge tone="ok">Ready</Badge> },
     { key: "actions", header: "", render: (s) => editable ? (

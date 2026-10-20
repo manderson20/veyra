@@ -5,6 +5,7 @@ organization, or the set of a queue or ring group."""
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,7 @@ from veyra.core.models import CallQueue, MohClass, MohClassTrack, Organization, 
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import moh
+from veyra.telephony.asterisk.generator import FFMPEG
 from veyra.telephony.asterisk.names import Names
 
 router = APIRouter(prefix="/hold-music", tags=["hold-music"])
@@ -35,6 +37,20 @@ WRITE = "ivr.write"
 MAX_TRACKS = 50
 
 
+# The address goes on the engine's command line for ffmpeg (split on spaces,
+# no shell): http(s), no spaces, quotes, commas or semicolons.
+_STREAM_RE = re.compile(r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~%/?&=+:@!$*-]*)?$")
+
+
+def check_stream_url(v: str | None) -> str | None:
+    v = (v or "").strip()
+    if not v:
+        return None
+    if not _STREAM_RE.match(v):
+        raise ValueError("an http:// or https:// address without spaces, quotes or commas")
+    return v
+
+
 class MohIn(BaseModel):
     organization_id: uuid.UUID
     name: str = Field(min_length=1, max_length=100)
@@ -42,6 +58,13 @@ class MohIn(BaseModel):
     # Library recordings in playing order (docs/PAGING_RECORDINGS.md §3).
     tracks: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_TRACKS)
     random: bool = False
+    # An internet radio stream instead of the tracks (#138).
+    stream_url: str | None = Field(None, max_length=500)
+
+    @field_validator("stream_url")
+    @classmethod
+    def _stream(cls, v: str | None) -> str | None:
+        return check_stream_url(v)
 
     @field_validator("name")
     @classmethod
@@ -57,6 +80,12 @@ class MohPatch(BaseModel):
     description: str | None = Field(None, max_length=2000)
     tracks: list[uuid.UUID] | None = Field(None, max_length=MAX_TRACKS)
     random: bool | None = None
+    stream_url: str | None = Field(None, max_length=500)
+
+    @field_validator("stream_url")
+    @classmethod
+    def _stream(cls, v: str | None) -> str | None:
+        return check_stream_url(v)
 
 
 class TrackOut(BaseModel):
@@ -78,6 +107,7 @@ class MohOut(BaseModel):
     class_name: str
     description: str | None
     random: bool
+    stream_url: str | None = None
     tracks: list[TrackOut]
     # Organizations (as default), queues and ring groups playing this set.
     in_use_by: int
@@ -155,7 +185,13 @@ def _outs(request: Request, db: Session, rows: list[MohClass]) -> list[MohOut]:
                 )
             )
         problems = []
-        if not track_outs:
+        if r.stream_url:
+            # A stream needs no recordings, but ffmpeg to decode it.
+            if not Path(FFMPEG).exists():
+                problems.append(
+                    "ffmpeg is not installed: the stream cannot play (apt install ffmpeg)."
+                )
+        elif not track_outs:
             problems.append("The set has no recordings: callers would hear silence.")
         elif not all(t.file_present for t in track_outs):
             problems.append("A recording's audio file is missing.")
@@ -169,6 +205,7 @@ def _outs(request: Request, db: Session, rows: list[MohClass]) -> list[MohOut]:
                 class_name=Names(org.engine_namespace if org else "").moh_class(r.slug),
                 description=r.description,
                 random=r.random,
+                stream_url=r.stream_url,
                 tracks=track_outs,
                 in_use_by=uses.get(r.id, 0),
                 problems=problems,
@@ -317,6 +354,7 @@ def create_set(
         slug=helpers.unique_slug(db, MohClass, body.name),
         description=(body.description or "").strip() or None,
         random=body.random,
+        stream_url=body.stream_url,
     )
     db.add(cls)
     try:
@@ -369,6 +407,9 @@ def update_set(
     if "random" in changes and changes["random"] is not None and changes["random"] != cls.random:
         cls.random = changes["random"]
         details["random"] = cls.random
+    if "stream_url" in changes and changes["stream_url"] != cls.stream_url:
+        cls.stream_url = changes["stream_url"]
+        details["stream_url"] = cls.stream_url
     if changes.get("tracks") is not None:
         prompts = _load_tracks(db, cls.organization_id, list(changes["tracks"]))
         current = [t.prompt_id for t in _tracks(db, {cls.id})[cls.id]]

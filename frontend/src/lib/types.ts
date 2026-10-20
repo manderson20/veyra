@@ -2409,6 +2409,8 @@ export interface HoldMusicSet {
   class_name: string;
   description: string | null;
   random: boolean;
+  /** An internet stream instead of the recordings (#138). */
+  stream_url?: string | null;
   tracks: HoldMusicTrack[];
   /** Organizations (as default), queues and ring groups playing the set. */
   in_use_by: number;
@@ -2423,6 +2425,7 @@ export interface HoldMusicInput {
   description?: string | null;
   tracks?: string[];
   random?: boolean;
+  stream_url?: string | null;
 }
 
 // ---------------------------------------------------------------- firewall (docs/FIREWALL_TRUST.md §7)

@@ -300,3 +300,43 @@ def test_hold_music_api_files_assignments_and_deployment(admin, app, tmp_path):
     admin.patch(f"/api/v1/ring-groups/{g.json()['id']}", json={"moh_class_id": None})
     assert admin.delete(f"{HM}/{hm['id']}").status_code == 204
     assert not folder.exists()
+
+
+def test_streamed_hold_music(admin):
+    """An internet station as hold music (#138): a custom class fed by ffmpeg."""
+    snap = _snapshot()
+    snap["hold_music"].append(
+        {
+            "slug": "radio",
+            "name": "Radio",
+            "organization": "example",
+            "random": False,
+            "files": [],
+            "stream_url": "https://stream.example.org:8443/live.mp3?quality=low",
+        }
+    )
+    conf = _file(generator.generate(snap), "musiconhold.conf")
+    radio = conf.split("[veyra-radio]")[1].split("[")[0]
+    assert "mode=custom" in radio and "format=slin" in radio
+    assert (
+        f"application={generator.FFMPEG} -nostdin -loglevel quiet -reconnect 1 "
+        "-reconnect_streamed 1 -reconnect_delay_max 30 "
+        "-i https://stream.example.org:8443/live.mp3?quality=low -f s16le -ar 8000 -ac 1 -"
+    ) in radio
+    snap["hold_music"][-1]["stream_url"] = "https://x.example/a b"
+    with pytest.raises(generator.GenerationError, match="stream"):
+        generator.generate(snap)
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    r = admin.post(
+        HM,
+        json={"organization_id": org, "name": "Radio", "stream_url": "http://radio.example/live"},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["stream_url"] == "http://radio.example/live"
+    assert not any("no recordings" in p for p in r.json()["problems"])
+    for bad in ("ftp://x.example/a", "http://x.example/a,b", 'http://x.example/"a'):
+        r2 = admin.patch(f"{HM}/{r.json()['id']}", json={"stream_url": bad})
+        assert r2.status_code == 422, bad
+    r3 = admin.patch(f"{HM}/{r.json()['id']}", json={"stream_url": ""})
+    assert r3.status_code == 200 and r3.json()["stream_url"] is None

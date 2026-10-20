@@ -43,6 +43,10 @@ FILE_MOH = "musiconhold.conf"
 FILE_CONFBRIDGE = "confbridge.conf"
 FILE_PARKING = "res_parking.conf"
 FILE_FEATURES = "features.conf"
+FFMPEG = "/usr/bin/ffmpeg"
+_STREAM_URL_RE = re.compile(
+    r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~%/?&=+:@!$*-]*)?$"
+)
 # The dial-by-name directory's names (issue #135): read by Directory() through
 # its c() option on every call, so it needs no module reload.
 FILE_DIRECTORY = "directory.conf"
@@ -552,6 +556,23 @@ def _moh_conf(moh: MohSets, moh_dir: str) -> GeneratedFile:
         org = _slug(str(m.get("organization") or ""), f"organization of hold music {slug}")
         files = [str(f) for f in (m.get("files") or [])]
         n = engine_names.for_org(owner)
+        stream = str(m.get("stream_url") or "")
+        if stream:
+            # An internet station (issue #138): ffmpeg decodes it to the raw
+            # 8 kHz signed linear audio a custom class reads.
+            if not _STREAM_URL_RE.match(stream):
+                raise GenerationError(f"hold music {slug}: stream address is not valid")
+            lines += [
+                f"[{n.moh_class(slug)}]",
+                f"; {name} ({org}); stream",
+                "mode=custom",
+                f"application={FFMPEG} -nostdin -loglevel quiet -reconnect 1 "
+                f"-reconnect_streamed 1 -reconnect_delay_max 30 -i {stream} "
+                "-f s16le -ar 8000 -ac 1 -",
+                "format=slin",
+                "",
+            ]
+            continue
         lines += [
             f"[{n.moh_class(slug)}]",
             f"; {name} ({org}); tracks: {', '.join(files) or 'none'}",

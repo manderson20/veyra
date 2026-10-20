@@ -231,6 +231,9 @@ class MohClass(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     description: Mapped[str | None] = mapped_column(Text)
     # Play the tracks in a random order instead of the listed one.
     random: Mapped[bool] = mapped_column(Boolean, default=False)
+    # An internet stream instead of the tracks (issue #138): http(s) address
+    # of an MP3/AAC/Ogg station, decoded by ffmpeg for the engine.
+    stream_url: Mapped[str | None] = mapped_column(String(500))
 
 
 class MohClassTrack(Base):
