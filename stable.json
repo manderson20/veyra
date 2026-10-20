@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 46,
+  "sequence": 47,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.30",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Report builder: three groupings, more rows, chart measure choice; rotate the installation key from Settings.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "bdc46ca3f9",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.30/veyra-0.27.30.tar.gz",
+        "sha256": "2b7eda3013a92b1cbb2e079e8816603f54ac1d43c7394e2455778b94177e1ee0",
+        "size": 8442394
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -785,6 +802,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T08:06:51+00:00",
-  "expires_at": "2027-01-18T08:06:51+00:00"
+  "generated_at": "2026-10-20T08:20:42+00:00",
+  "expires_at": "2027-01-18T08:20:42+00:00"
 }
