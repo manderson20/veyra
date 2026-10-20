@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 50,
+  "sequence": 51,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.34",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Voicemail PINs and emails from FreePBX's voicemail.conf.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "1d72455b89",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.34/veyra-0.27.34.tar.gz",
+        "sha256": "73f05e03e70140b33f64f0542de8f4a958ad85e60af0c352c58b9b37ad6c8bcd",
+        "size": 8451974
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -853,6 +870,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T08:56:31+00:00",
-  "expires_at": "2027-01-18T08:56:31+00:00"
+  "generated_at": "2026-10-20T09:07:09+00:00",
+  "expires_at": "2027-01-18T09:07:09+00:00"
 }
