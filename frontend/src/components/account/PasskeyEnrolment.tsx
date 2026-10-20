@@ -41,7 +41,9 @@ export function PasskeyEnrolment({ onDone, onCancel }: { onDone: (result: TotpCo
   if (unavailable) {
     return (
       <div className="stack stack--sm">
-        <Callout tone="warn" title="Passkeys are not available on this page">{unavailable} Use an authenticator app instead, or open Veyra by its host name.</Callout>
+        <Callout tone="warn" title="Passkeys are not available on this page">
+          {unavailable} Open Veyra by its host name, and if the browser warns about the certificate, install this server&apos;s certificate authority first (<a href="/downloads/veyra-ca.crt" download>download it</a>, then trust it in your system&apos;s certificate settings). Or use an authenticator app.
+        </Callout>
         {onCancel ? <div className="form-actions"><Button onClick={onCancel}>Close</Button></div> : null}
       </div>
     );
@@ -51,6 +53,7 @@ export function PasskeyEnrolment({ onDone, onCancel }: { onDone: (result: TotpCo
       <p style={{ margin: 0 }}>Your browser asks you to confirm with your fingerprint, face, device PIN or security key. Nothing biometric leaves your device.</p>
       <TextField label="Name" value={label} onChange={(e) => setLabel(e.target.value)} help="To tell your passkeys apart, for example “MacBook Touch ID”." />
       {error ? <Callout tone="danger">{error}</Callout> : null}
+      <p className="subtle" style={{ margin: 0 }}>Passkeys need a certificate your computer trusts. If the browser refuses, install this server&apos;s <a href="/downloads/veyra-ca.crt" download>certificate authority</a> and open Veyra by its host name.</p>
       <div className="form-actions">
         {onCancel ? <Button onClick={onCancel} disabled={busy}>Cancel</Button> : null}
         <Button variant="primary" type="submit" icon="key" loading={busy}>Create passkey</Button>
