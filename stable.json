@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 42,
+  "sequence": 43,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.26",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "16 kHz copies of uploaded recordings for HD (G.722) phones.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "b951d06fac",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.26/veyra-0.27.26.tar.gz",
+        "sha256": "b771129350dffab9e3ce4ecdd72fbaea8cf8ff707c111d59bbdc936bc51b455c",
+        "size": 8401001
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -717,6 +734,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T07:09:09+00:00",
-  "expires_at": "2027-01-18T07:09:09+00:00"
+  "generated_at": "2026-10-20T07:21:09+00:00",
+  "expires_at": "2027-01-18T07:21:09+00:00"
 }
