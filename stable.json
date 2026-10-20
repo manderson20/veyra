@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 53,
+  "sequence": 54,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.37",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Module tools: more server commands, per-organization module settings, search on module pages, and a read-only data API for module authors.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "f00f7ea4cf",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.37/veyra-0.27.37.tar.gz",
+        "sha256": "00cc0d9f864b1a7c7af7b37a7b63383e12b722d203e8d4d0de21084fe16a8086",
+        "size": 8466964
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -904,6 +921,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T09:33:02+00:00",
-  "expires_at": "2027-01-18T09:33:02+00:00"
+  "generated_at": "2026-10-20T18:07:52+00:00",
+  "expires_at": "2027-01-18T18:07:52+00:00"
 }
