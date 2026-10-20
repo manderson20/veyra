@@ -470,3 +470,14 @@ def test_parking_lot_validation():
                 parking_lots=[_lot(park_exten="2500")], conference_rooms=[_room(number="2500")]
             )
         )
+
+
+def test_park_pickup_code():
+    """*85<slot> (issue #135): goes to the slot, with the slot's lamp."""
+    files = _files(_snapshot(parking_lots=[_lot()], feature_codes={"park_pickup": "*85"}))
+    internal = _context(files["extensions.conf"], "veyra-internal")
+    assert "exten => *8571,hint,park:71@veyra-park-main" in internal
+    assert "exten => *8579,1,Goto(veyra-park-main,79,1)" in internal
+    assert "*8570" not in internal  # the park extension is not a slot
+    off = _files(_snapshot(parking_lots=[_lot()], feature_codes={}))
+    assert "*8571" not in off["extensions.conf"]

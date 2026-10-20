@@ -132,9 +132,9 @@ def test_queue_and_ring_group_use_their_set():
     assert "musicclass=default" in queues.split("[veyra-billing]")[1]
     dp = _file(files, "extensions.conf")
     front = dp.split("[veyra-rg-front]")[1].split("[veyra-rg-back]")[0]
-    assert "Dial(${VEYRA_DIAL:1},20,${VEYRA_XFER}m(veyra-jazz))" in front
+    assert "Dial(${VEYRA_DIAL:1},20,${VEYRA_XFER}U(veyra-lastcid)m(veyra-jazz))" in front
     back = dp.split("[veyra-rg-back]")[1]
-    assert "Dial(${VEYRA_DIAL:1},20,${VEYRA_XFER})" in back
+    assert "Dial(${VEYRA_DIAL:1},20,${VEYRA_XFER}U(veyra-lastcid))" in back
 
 
 def test_unknown_or_bad_sets_are_rejected():

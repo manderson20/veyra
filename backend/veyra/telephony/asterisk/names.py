@@ -164,7 +164,9 @@ class Names:
 
 
 # Contexts every organization may reach (docs/MULTI_TENANCY.md §5).
-SHARED_CONTEXTS = frozenset({"veyra-invalid", "veyra-record", "veyra-from-trunk"})
+# veyra-lastcid writes only the organization the calling group context set
+# (issue #135).
+SHARED_CONTEXTS = frozenset({"veyra-invalid", "veyra-record", "veyra-from-trunk", "veyra-lastcid"})
 SHARED_CONTEXT_PREFIXES = ("veyra-out-", "veyra-from-trunk-")
 
 _current: ContextVar[Names | None] = ContextVar("veyra_engine_names", default=None)

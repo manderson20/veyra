@@ -169,6 +169,9 @@ _SITE_RE = re.compile(r"^[0-9a-f-]{36}$")
 EMERGENCY_EVENT = "VeyraEmergency"
 EXTSTATE_EVENT = "VeyraExtState"  # a phone changed its own state (CALL_FEATURES.md §3.2)
 CONTEXT_EMERGENCY_NOTIFY = "veyra-emergency-notify"
+# Runs on the phone that answers a ring group or queue call (Dial U(), the
+# Queue gosub): remembers the outside caller for *32 (issue #135).
+CONTEXT_LASTCID = "veyra-lastcid"
 ASTDB_CALLBACK = "veyra_ecb"
 DEFAULT_RING_SECONDS = 30
 # Where the prompts live and the script Asterisk hands notifications to;
@@ -1269,6 +1272,7 @@ def _dialplan(
                 + _agent_hints(codes, mine(queues, ns)),
                 mine(lots, ns),
                 codes.get("presence_watch"),
+                codes.get("park_pickup"),
             )
     lines += _follow_me_contexts(spaces)
     if "intercom" in codes:
@@ -1291,6 +1295,7 @@ def _dialplan(
                 "pages": mine(list(paging.get("pages") or []), ns),
             }
             lines += _paging_contexts(part, prompts_dir)
+    lines += _lastcid_context()
     lines += [
         f"[{CONTEXT_EMERGENCY_NOTIFY}]",
         "; A responder's phone rung by the on-site notification hears the",
@@ -2045,6 +2050,7 @@ def _internal(
     extra_hints: list[str] | None = None,
     parking: list[dict[str, Any]] | None = None,
     presence_code: str | None = None,
+    park_code: str | None = None,
 ) -> list[str]:
     """The phone context of one namespace."""
     n = engine_names.current()
@@ -2065,6 +2071,16 @@ def _internal(
         f"include => {CONTEXT_INVALID}",
         *(extra_hints or []),
     ]
+    if park_code:
+        # *85<slot> (issue #135): the slot's own extension, with its lamp.
+        for lot in parking or []:
+            slug = _slug(lot["slug"], "parking lot slug")
+            ctx = n.parking(slug)
+            for slot in _parking_numbers(lot)[1:]:
+                lines += [
+                    f"exten => {park_code}{slot},hint,park:{slot}@{ctx}",
+                    f"exten => {park_code}{slot},1,Goto({ctx},{slot},1)",
+                ]
     for ext in extensions:
         number = str(ext["number"])
         endpoint = str(ext["endpoint_name"])
@@ -3663,6 +3679,24 @@ def _group_prologue(ctx: str, what: str, name: str, org: str) -> list[str]:
         f"exten => s,1,NoOp(Veyra {what} {name} ({org}))",
         " same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])",
         f" same => n,GotoIf($[${{VEYRA_GROUP_DEPTH}} > {MAX_GROUP_DEPTH}]?toodeep)",
+        # For the answering phone's last-caller record (CONTEXT_LASTCID): its
+        # endpoint is "<org>-<number>", so the number starts after the prefix.
+        f" same => n,Set(__VEYRA_LASTCID_ORG={org})",
+        f" same => n,Set(__VEYRA_LASTCID_OFF={len(org) + 1})",
+    ]
+
+
+def _lastcid_context() -> list[str]:
+    """The answering phone of a group or queue call records the outside
+    caller, as a direct call does in the extension's dialplan (*32)."""
+    return [
+        f"[{CONTEXT_LASTCID}]",
+        'exten => s,1,GotoIf($["${CHANNEL(channeltype)}"!="PJSIP" | "${VEYRA_DID}"=""'
+        ' | "${CALLERID(num)}"="" | "${VEYRA_LASTCID_ORG}"=""]?done)',
+        f" same => n,Set(DB({LASTCID_FAMILY}/${{VEYRA_LASTCID_ORG}}/"
+        "${CHANNEL(endpoint):${VEYRA_LASTCID_OFF}})=${CALLERID(num)})",
+        " same => n(done),Return()",
+        "",
     ]
 
 
@@ -3717,10 +3751,10 @@ def _ring_group_contexts(
         if music not in QUEUE_MUSIC:
             raise GenerationError(f"ring group {slug}: unknown hold music {music!r}")
         # Callers hear ringing, or the group's (or built-in) hold music set.
-        dial_opts = ",${VEYRA_XFER}"
+        dial_opts = f",${{VEYRA_XFER}}U({CONTEXT_LASTCID})"
         if music == "default":
             moh_class = _moh_class(g.get("hold_music"), moh or {}, f"ring group {slug}", org)
-            dial_opts = f",${{VEYRA_XFER}}m({moh_class})"
+            dial_opts = f",${{VEYRA_XFER}}U({CONTEXT_LASTCID})m({moh_class})"
         ctx = engine_names.current().ring_group(slug)
         lines += _group_prologue(ctx, "ring group", name, org)
         lines += _record_for_group(recording or [], org, "ring_groups", slug, prompts_dir)
@@ -3814,7 +3848,8 @@ def _queue_contexts(
         options = "tr" if music == "ring" else "t"
         timeout = str(wait) if wait else ""
         lines += [
-            f" same => n,Queue({engine_names.current().queue(slug)},{options},,,{timeout})",
+            f" same => n,Queue({engine_names.current().queue(slug)},{options},,,{timeout},,"
+            f"{CONTEXT_LASTCID})",
             f" same => n,NoOp(Veyra queue {name} left with ${{QUEUESTATUS}})",
             " same => n,Goto(failover)",
         ]

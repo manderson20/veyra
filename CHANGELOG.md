@@ -10,12 +10,16 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## 0.27.23 — 2026-10-21
 
-No migration.
+No migration. Deploy the telephony configuration after installing.
 
 ### Changed
 - **Safer upgrades** (#88): before an upgrade switches to the new release it now tests the new web server configuration. If it is rejected the upgrade stops with nothing changed, and the current version keeps running — no more half-upgraded server.
 - When an upgrade fails after the switch, System → Updates says that the new version is installed and running and that a later step failed, instead of only "failed".
 - The passkey screens link the server's certificate authority (needed when the browser does not trust the certificate yet).
+- **Block the last caller (`*32`) after group calls** (#135): an outside call a phone answered through a ring group or a queue now counts as its last caller too, not only calls that rang the phone directly.
+
+### Added
+- **`*85` + slot picks up a parked call** (#135), the FreePBX habit; dialling the slot alone still works. A phone key on `*85<slot>` lights while a call waits there. The code can be changed or turned off on the Feature Codes page.
 
 ## 0.27.22 — 2026-10-21
 

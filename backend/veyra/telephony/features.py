@@ -172,6 +172,15 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         True,
     ),
     FeatureCodeDef(
+        "park_pickup",
+        "*85",
+        "Pick up a parked call",
+        "Followed by the slot number (FreePBX habit); dialling the slot alone does the same. "
+        "Also a BLF key: lit while a call waits in the slot.",
+        22,
+        True,
+    ),
+    FeatureCodeDef(
         "vm_direct",
         "*",
         "Direct to voicemail",

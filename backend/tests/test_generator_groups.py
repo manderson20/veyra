@@ -133,6 +133,8 @@ def test_ring_group_ringall_skips_busy_members_and_fails_over():
         "exten => s,1,NoOp(Veyra ring group Sales (example))\n"
         " same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])\n"
         " same => n,GotoIf($[${VEYRA_GROUP_DEPTH} > 6]?toodeep)\n"
+        " same => n,Set(__VEYRA_LASTCID_ORG=example)\n"
+        " same => n,Set(__VEYRA_LASTCID_OFF=8)\n"
         " same => n,Set(VEYRA_DIAL=)\n"
         ' same => n,GotoIf($["${DEVICE_STATE(PJSIP/example-1001)}" : '
         '"(INUSE|BUSY|RINGINUSE)"]?m2)\n'
@@ -141,7 +143,7 @@ def test_ring_group_ringall_skips_busy_members_and_fails_over():
         '"(INUSE|BUSY|RINGINUSE)"]?dial)\n'
         " same => n,Set(VEYRA_DIAL=${VEYRA_DIAL}&PJSIP/example-1002)\n"
         ' same => n(dial),GotoIf($["${VEYRA_DIAL}"=""]?failover)\n'
-        " same => n,Dial(${VEYRA_DIAL:1},20,${VEYRA_XFER})\n"
+        " same => n,Dial(${VEYRA_DIAL:1},20,${VEYRA_XFER}U(veyra-lastcid))\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
         " same => n,Goto(failover)\n"
         " same => n(done),Hangup()\n"
@@ -163,9 +165,9 @@ def test_ring_group_sequential_ring_busy_prefix_and_empty():
     dp = _files(_snapshot(ring_groups=[group]))["extensions.conf"].content
     assert (
         " same => n,Set(CALLERID(name)=Sales: ${CALLERID(name)})\n"
-        " same => n,Dial(PJSIP/example-1001,12,${VEYRA_XFER})\n"
+        " same => n,Dial(PJSIP/example-1001,12,${VEYRA_XFER}U(veyra-lastcid))\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
-        " same => n(m2),Dial(PJSIP/example-1002,12,${VEYRA_XFER})\n"
+        " same => n(m2),Dial(PJSIP/example-1002,12,${VEYRA_XFER}U(veyra-lastcid))\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
         " same => n,Goto(failover)\n" in dp
     )
@@ -176,7 +178,7 @@ def test_ring_group_sequential_ring_busy_prefix_and_empty():
     )
     # sequential with the busy check uses the next member as the skip target
     seq = _files(_snapshot(ring_groups=[_group(strategy="sequential")]))["extensions.conf"].content
-    xfer = "${VEYRA_XFER}"
+    xfer = "${VEYRA_XFER}U(veyra-lastcid)"
     assert f'"(INUSE|BUSY|RINGINUSE)"]?m2)\n same => n,Dial(PJSIP/example-1001,20,{xfer})' in seq
     assert (
         f'"(INUSE|BUSY|RINGINUSE)"]?failover)\n same => n,Dial(PJSIP/example-1002,20,{xfer})' in seq
@@ -199,9 +201,11 @@ def test_queue_context_and_queues_conf():
         "exten => s,1,NoOp(Veyra queue Support (example))\n"
         " same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])\n"
         " same => n,GotoIf($[${VEYRA_GROUP_DEPTH} > 6]?toodeep)\n"
+        " same => n,Set(__VEYRA_LASTCID_ORG=example)\n"
+        " same => n,Set(__VEYRA_LASTCID_OFF=8)\n"
         " same => n,Answer()\n"
         " same => n,Playback(/var/lib/veyra/prompts/example/lines-busy)\n"
-        " same => n,Queue(veyra-support,t,,,300)\n"
+        " same => n,Queue(veyra-support,t,,,300,,veyra-lastcid)\n"
         " same => n,NoOp(Veyra queue Support left with ${QUEUESTATUS})\n"
         " same => n,Goto(failover)\n"
         " same => n(failover),NoOp(Veyra queue Support: not answered)\n"
@@ -251,7 +255,9 @@ def test_queue_context_and_queues_conf():
         members=[],
     )
     files = _files(_snapshot(queues=[q]))
-    assert " same => n,Queue(veyra-support,tr,,,)\n" in files["extensions.conf"].content
+    assert (
+        " same => n,Queue(veyra-support,tr,,,,,veyra-lastcid)\n" in files["extensions.conf"].content
+    )
     assert "Playback(/var" not in files["extensions.conf"].content.split("[veyra-queue-support]")[1]
     qc = files["queues.conf"].content
     assert "joinempty=yes\nleavewhenempty=no\n" in qc
@@ -347,3 +353,15 @@ def test_directed_pickup_limited_to_pickup_groups():
     assert '"1002"' in three and '"1001"' not in three
     # The default is the whole organization: no peer check.
     assert "VEYRA_PEER" not in _files(_snapshot())["extensions.conf"].content
+
+
+def test_group_answer_records_the_last_outside_caller():
+    """*32 after a ring group or queue call (issue #135): the answering
+    phone's channel records the caller under its own number."""
+    dp = _files(_snapshot(ring_groups=[_group()]))["extensions.conf"].content
+    ctx = dp[dp.index("[veyra-lastcid]") :].split("\n\n")[0]
+    assert '"${CHANNEL(channeltype)}"!="PJSIP"' in ctx and '"${VEYRA_DID}"=""' in ctx
+    assert (
+        "Set(DB(veyra/lastcid/${VEYRA_LASTCID_ORG}/${CHANNEL(endpoint):${VEYRA_LASTCID_OFF}})"
+        "=${CALLERID(num)})" in ctx
+    )

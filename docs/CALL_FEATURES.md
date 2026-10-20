@@ -656,7 +656,10 @@ API `GET/POST /parking-lots`, `GET/PATCH/DELETE /parking-lots/{id}`
 
 *Built 2026-10-18.* Not in this slice: a dedicated *park* line-key type in
 the provisioning templates (#40) and FreePBX's `*85<slot>` pickup code
-(dialling the slot does the same).
+(dialling the slot does the same). *`*85<slot>` built 2026-10-21 (0.27.23,
+issue #135):* feature code `park_pickup` (default `*85`); the phone context
+gets `*85<slot>` → the slot's extension in the lot's context, with the
+`park:<slot>@<lot>` hint so a key on it lights.
 
 ### 4.8 Caller block list
 

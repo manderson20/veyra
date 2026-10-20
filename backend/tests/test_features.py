@@ -950,7 +950,7 @@ def test_ring_group_outside_members_generate_local_legs():
     seq = _section(d, "veyra-rg-seq")
     assert (
         "Set(__VEYRA_FM_OPTS=)" in seq
-        and "Dial(Local/5735550102@veyra-fm-out/n,20,${VEYRA_XFER})" in seq
+        and "Dial(Local/5735550102@veyra-fm-out/n,20,${VEYRA_XFER}U(veyra-lastcid))" in seq
     )
     only = _section(d, "veyra-rg-only")
     assert "Goto(failover)" in only and "Local/5735550103@veyra-fm-out/n" in only
