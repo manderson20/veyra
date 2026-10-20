@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 51,
+  "sequence": 52,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.35",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "The live call list updates as calls happen.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "9e32cc9c6f",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.35/veyra-0.27.35.tar.gz",
+        "sha256": "22869dbbf92a4dcd2421805375bec32fcd8f7b20376559eea32cdc5679cca281",
+        "size": 8453535
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -870,6 +887,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T09:07:09+00:00",
-  "expires_at": "2027-01-18T09:07:09+00:00"
+  "generated_at": "2026-10-20T09:18:10+00:00",
+  "expires_at": "2027-01-18T09:18:10+00:00"
 }
