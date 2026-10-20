@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 40,
+  "sequence": 41,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.24",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Voicemail in the Companion; caller in the voicemail webhook; provisioning variables for the Companion.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "c21f15732a",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.24/veyra-0.27.24.tar.gz",
+        "sha256": "696ca656569b58eab79496a267063e0447839aa7ba885c3f3e093933b17157e3",
+        "size": 8398445
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -683,6 +700,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T06:38:51+00:00",
-  "expires_at": "2027-01-18T06:38:51+00:00"
+  "generated_at": "2026-10-20T06:54:31+00:00",
+  "expires_at": "2027-01-18T06:54:31+00:00"
 }
