@@ -10,8 +10,9 @@ carried over (Veyra makes new ones), and what has no equivalent yet is
 listed as a warning.
 
 Tables read: ``users`` and ``devices`` (extensions), ``sip`` (caller ID),
-``ringgroups``, ``incoming``, ``ivr_details`` / ``announcement`` /
-``queues_config`` (names of destinations).
+``ringgroups``, ``queues_config`` / ``queues_details`` (queues and their
+static members), ``incoming``, ``ivr_details`` / ``announcement`` (names of
+destinations).
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ TABLES = (
     "ivr_details",
     "announcement",
     "queues_config",
+    "queues_details",
 )
 
 
@@ -303,6 +305,70 @@ def convert(text: str) -> Conversion:
     if groups:
         conv.csv["ring_groups"] = service.to_csv(service.KINDS["ring_groups"], groups)
         conv.counts["ring_groups"] = len(groups)
+
+    details: dict[str, list[tuple[str, str]]] = {}
+    for r in t["queues_details"]:
+        details.setdefault(str(r.get("id")), []).append(
+            (str(r.get("keyword") or ""), str(r.get("data") or ""))
+        )
+    strategies = {"rrordered": "rrmemory", "wrandom": "random"}
+    queues: list[dict[str, str]] = []
+    for q in t["queues_config"]:
+        number = str(q.get("extension") or "")
+        opts = details.get(number, [])
+        get = {k: v for k, v in opts}
+        members = []
+        for k, v in opts:
+            if k != "member":
+                continue
+            m = re.match(r"^(?:Local|PJSIP|SIP)/(\d+)", v)
+            if m:
+                members.append(m.group(1))
+            else:
+                warn.append(f"queue {number}: member {v!r} is not an extension; skipped")
+        strategy = get.get("strategy", "ringall")
+        strategy = strategies.get(strategy, strategy)
+        if strategy not in (
+            "ringall",
+            "rrmemory",
+            "leastrecent",
+            "fewestcalls",
+            "random",
+            "linear",
+        ):
+            warn.append(f"queue {number}: strategy {strategy!r} imported as ring all")
+            strategy = "ringall"
+
+        def clamp(value: str, lo: int, hi: int, default: int) -> str:
+            try:
+                return str(max(lo, min(hi, int(value))))
+            except ValueError:
+                return str(default)
+
+        queues.append(
+            {
+                "number": number,
+                "name": str(q.get("descr") or f"Queue {number}")[:100],
+                "strategy": strategy,
+                "member_timeout": clamp(get.get("timeout", "15"), 5, 60, 15),
+                "wrapup_seconds": clamp(get.get("wrapuptime", "0"), 0, 600, 0),
+                "max_wait_seconds": clamp(str(q.get("maxwait") or "300"), 0, 3600, 300),
+                "join_when_empty": "yes"
+                if get.get("joinempty", "yes") not in ("no", "strict")
+                else "no",
+                "announce_position": "yes" if get.get("announce-position") == "yes" else "no",
+                "members": "; ".join(members),
+                "failover": _dest(str(q.get("dest") or ""), names, warn, f"queue {number}")
+                or "hangup",
+            }
+        )
+    if queues:
+        conv.csv["queues"] = service.to_csv(service.KINDS["queues"], queues)
+        conv.counts["queues"] = len(queues)
+        warn.append(
+            "queues: dynamic agents (who log in with a code) live in FreePBX's AstDB, not in "
+            "the database dump; add them on each queue's page"
+        )
 
     routes: list[dict[str, str]] = []
     for r in t["incoming"]:

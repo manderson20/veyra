@@ -982,12 +982,142 @@ class RingGroupsKind:
         return "update", []
 
 
+class QueuesKind:
+    name = "queues"
+    label = "Queues"
+    permission = "groups.write"
+    key = "number"
+    columns = [
+        "number",
+        "name",
+        "description",
+        "strategy",
+        "member_timeout",
+        "wrapup_seconds",
+        "max_wait_seconds",
+        "join_when_empty",
+        "announce_position",
+        "members",
+        "dynamic_members",
+        "failover",
+        "enabled",
+    ]
+    _INTS = ("member_timeout", "wrapup_seconds", "max_wait_seconds")
+    _BOOLS = (("join_when_empty", "join_when_empty"), ("announce_position", "announce_position"))
+
+    def export(self, db: Session, org: Organization) -> list[dict[str, str]]:
+        from veyra.core.models import QueueMember
+
+        out = []
+        for q in db.scalars(
+            select(CallQueue).where(CallQueue.organization_id == org.id).order_by(CallQueue.number)
+        ):
+            rows = db.execute(
+                select(Extension.number, QueueMember.dynamic)
+                .join(QueueMember, QueueMember.extension_id == Extension.id)
+                .where(QueueMember.queue_id == q.id)
+                .order_by(Extension.number)
+            ).all()
+            out.append(
+                {
+                    "number": q.number,
+                    "name": q.name,
+                    "description": q.description or "",
+                    "strategy": q.strategy,
+                    **{c: str(getattr(q, c)) for c in self._INTS},
+                    "join_when_empty": _yn(q.join_when_empty),
+                    "announce_position": _yn(q.announce_position),
+                    "members": "; ".join(n for n, dyn in rows if not dyn),
+                    "dynamic_members": "; ".join(n for n, dyn in rows if dyn),
+                    "failover": _destination_of(db, q, "failover"),
+                    "enabled": _yn(q.is_enabled),
+                }
+            )
+        return out
+
+    def apply(self, ctx: Ctx, row: dict[str, str]) -> tuple[str, list[str]]:
+        from veyra.api.v1 import queues as api
+        from veyra.api.v1.destinations import DestinationIn
+        from veyra.core.models import QueueMember
+
+        db, org = ctx.db, ctx.org
+        number = (row.get("number") or "").strip()
+        wanted: dict[str, Any] = {}
+        for col in ("name", "description", "strategy"):
+            v = _text(row, col)
+            if v is not None:
+                wanted[col] = None if v is _CLEARED else v
+        for col in self._INTS:
+            v = _int(row, col)
+            if v is not None and v is not _CLEARED:
+                wanted[col] = v
+        for col, fld in (*self._BOOLS, ("enabled", "is_enabled")):
+            b = _bool(row, col)
+            if b is not None:
+                wanted[fld] = b
+        static, dynamic = _list(row, "members"), _list(row, "dynamic_members")
+        members = None
+        if static is not None or dynamic is not None:
+            members = [
+                {"extension_id": _find(db, Extension, org.id, n, "extension").id, "dynamic": dyn}
+                for names, dyn in ((static or [], False), (dynamic or [], True))
+                for n in names
+            ]
+        failover = _text(row, "failover")
+        failover_in = (
+            DestinationIn(**_destination_in(db, org.id, failover))
+            if isinstance(failover, str)
+            else None
+        )
+        queue = db.scalar(
+            select(CallQueue).where(CallQueue.organization_id == org.id, CallQueue.number == number)
+        )
+        if queue is None:
+            if not wanted.get("name"):
+                raise RowError("name: required for a new queue")
+            api.create_queue(
+                api.QueueIn(
+                    organization_id=org.id,
+                    number=number,
+                    members=[api.AgentIn(**m) for m in members or []],
+                    **({"failover": failover_in} if failover_in else {}),
+                    **{k: v for k, v in wanted.items() if v is not None},
+                ),
+                ctx.principal,
+                db,
+                ctx.rctx,
+            )
+            return "create", []
+        changes = _changes(queue, wanted)
+        if members is not None:
+            current = sorted(
+                (str(e), d)
+                for e, d in db.execute(
+                    select(QueueMember.extension_id, QueueMember.dynamic).where(
+                        QueueMember.queue_id == queue.id
+                    )
+                )
+            )
+            if current != sorted((str(m["extension_id"]), m["dynamic"]) for m in members):
+                changes["members"] = [api.AgentIn(**m) for m in members]
+        if (
+            failover_in is not None
+            and _destination_of(db, queue, "failover").lower() != str(failover).lower()
+        ):
+            changes["failover"] = failover_in
+        if not changes:
+            return "unchanged", []
+        api.update_queue(queue.id, api.QueuePatch(**changes), ctx.principal, db, ctx.rctx)
+        return "update", []
+
+
 KINDS: dict[str, Any] = {
     k.name: k
     for k in (
         ExtensionsKind(),
         UsersKind(),
         RingGroupsKind(),
+        QueuesKind(),
         InboundRoutesKind(),
         SharedInboxesKind(),
     )

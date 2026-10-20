@@ -13,6 +13,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 No migration.
 
 ### Added
+- **Queues in the bulk import and from FreePBX** (#41, #42): export, edit and import queues with their members; the FreePBX import now brings the queues too.
 - **Agent time in the queue report** (#135): Reports → Queues shows, for each agent, how long they were logged in to the queue and how long paused in the period, and how many callers left through the queue's break-out menu. Counted from this release on.
 
 ## 0.27.30 — 2026-10-20

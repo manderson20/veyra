@@ -157,7 +157,9 @@ def test_freepbx_dump_becomes_import_files(admin):
     )
     assert r.status_code == 200, r.text
     out = r.json()
-    assert out["counts"] == {"extensions": 2, "ring_groups": 2, "inbound_routes": 2}
+    assert out["counts"] == {"extensions": 2, "ring_groups": 2, "queues": 1, "inbound_routes": 2}
+    qs = out["csv"]["queues"]
+    assert "7700,Attendance,,rrmemory,20,0,600,yes,no,1101; 1102,,voicemail:1101" in qs, qs
     ext = out["csv"]["extensions"]
     assert "1101,Front Office,,Front Desk,,5735550100,,5735550199" in ext.replace('"', "")
     assert "Nurse O'Brien" in ext and "s3cr3t" not in ext
@@ -172,6 +174,10 @@ def test_freepbx_dump_becomes_import_files(admin):
     assert _import(admin, "extensions", org, ext, dry_run=False)["counts"]["create"] == 2
     groups = _import(admin, "ring_groups", org, rg, dry_run=True)
     assert groups["counts"]["create"] == 2, groups
+    qrun = _import(admin, "queues", org, qs, dry_run=False)
+    assert qrun["counts"]["create"] == 1, qrun
+    exp = admin.get("/api/v1/bulk/queues/export.csv", params={"organization_id": org}).text
+    assert _import(admin, "queues", org, exp, dry_run=True)["counts"]["unchanged"] == 1
     # A gzipped dump works too; garbage does not.
     import gzip
 

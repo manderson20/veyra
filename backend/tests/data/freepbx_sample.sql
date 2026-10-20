@@ -54,3 +54,18 @@ CREATE TABLE `incoming` (
 INSERT INTO `incoming` VALUES ('','5735550100','ext-group,6600,1','Main line'),('','5735550101','ivr-2,s,1','Attendant'),('','','from-did-direct,1101,1','Catch all'),('5551234','5735550102','app-blackhole,hangup,1','Blocked');
 CREATE TABLE `ivr_details` (`id` int(11) NOT NULL, `name` varchar(50) DEFAULT NULL);
 INSERT INTO `ivr_details` VALUES (2,'Main menu');
+CREATE TABLE `queues_config` (
+  `extension` varchar(20) NOT NULL DEFAULT '',
+  `descr` varchar(35) NOT NULL DEFAULT '',
+  `grppre` varchar(100) NOT NULL DEFAULT '',
+  `maxwait` varchar(8) NOT NULL DEFAULT '',
+  `dest` varchar(50) NOT NULL DEFAULT ''
+);
+INSERT INTO `queues_config` VALUES ('7700','Attendance','','600','ext-local,vmu1101,1');
+CREATE TABLE `queues_details` (
+  `id` varchar(45) NOT NULL DEFAULT '-1',
+  `keyword` varchar(30) NOT NULL DEFAULT '',
+  `data` varchar(150) NOT NULL DEFAULT '',
+  `flags` int(1) NOT NULL DEFAULT 0
+);
+INSERT INTO `queues_details` VALUES ('7700','strategy','rrordered',0),('7700','timeout','20',0),('7700','member','Local/1101@from-queue/n,0',1),('7700','member','Local/1102@from-queue/n,0',2),('7700','joinempty','yes',0);

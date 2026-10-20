@@ -23,6 +23,7 @@ template, checks a file (dry run) and imports it.
 |---|---|---|
 | `extensions` | `number` | display_name, user_email, caller_id_name, caller_id_number, outbound_caller_id_number, outbound_caller_id_name, emergency_caller_id_number, intercom (default/allow/deny), class_of_service, site, building, location, department (by name), max_registrations, enabled, voicemail (yes creates the box with a random PIN; no never deletes one), voicemail_email, voicemail_attach_audio, voicemail_delete_after_email, voicemail_ring_seconds, pickup_groups (the full list: the extension leaves groups not named) |
 | `ring_groups` | `number` | name, description, strategy (ringall/sequential), ring_seconds, ring_busy_members, members (extension numbers in ringing order — the full list), external_members, caller_id_prefix, failover (`type:target` or `hangup`), enabled |
+| `queues` | `number` | name, description, strategy (ringall, rrmemory, leastrecent, fewestcalls, random, linear), member_timeout, wrapup_seconds, max_wait_seconds, join_when_empty, announce_position, members (static), dynamic_members (log in with the code), failover, enabled |
 | `users` | `email` | display_name, enabled, roles (organization-scope role keys, added, never removed), password (temporary; empty for a new user: they set one with "Forgot password") |
 | `inbound_routes` | `did` (with `trunk` when given) | trunk (by name), description, destination and after_hours as `type:target` — `extension:1001`, `voicemail:1001`, `voicemail_box:1900`, `ivr:<name>`, `ring_group:<number or name>`, `queue:…`, `announcement:…`, `conference:…`, `call_flow:…`, `fax:…`, `directory` — time_condition (by name), caller_id_prefix, enabled |
 | `shared_inboxes` | `number` | name, members (extension numbers), email, attach_audio, delete_after_email, ring_seconds, enabled |
@@ -59,7 +60,7 @@ importing users (role grants) asks for a recent sign-in (§ step-up, #137).
 
 ## 4. Not yet
 
-Queues, IVR menus, devices and contacts; a module hook so modules add
+IVR menus, devices and contacts; a module hook so modules add
 kinds; editing rows in the page before importing.
 
 ## 5. From FreePBX (issue #42, 0.27.29)
@@ -87,5 +88,10 @@ then goes through **Check the file** and **Import** in that order.
   and caller-ID matches.
 * FreePBX sites often use 3-digit extensions: widen the numbering plan
   before checking the extensions, or the check reports every row.
-* Not yet: queues, IVR menus, time conditions, voicemail settings from
+* Queues (0.27.31): `queues_config` and `queues_details` — strategy
+  (`rrordered` → round robin with memory, `wrandom` → random), ring time,
+  wrap-up, maximum wait, join when empty, announce position, static members
+  (`Local/<ext>@from-queue` or `PJSIP/<ext>`), failover. Dynamic agents live
+  in FreePBX's AstDB, not in the dump: add them on the queue's page.
+* Not yet: IVR menus, time conditions, voicemail settings from
   `voicemail.conf`, recordings and music on hold.
