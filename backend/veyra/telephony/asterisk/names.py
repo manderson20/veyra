@@ -122,6 +122,11 @@ class Names:
         return self._p(f"agent-login-{queue_slug}") if queue_slug else self._p("agent-login")
 
     @property
+    def voicemail_play(self) -> str:
+        """Call-me-to-play: plays one message to the user's phone (issue #136)."""
+        return self._p("vmplay")
+
+    @property
     def directory(self) -> str:
         """Dial-by-name directory of the namespace (docs/CALL_FEATURES.md §4.2)."""
         return self._p("directory")

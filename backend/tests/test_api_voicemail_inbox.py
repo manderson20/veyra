@@ -379,3 +379,33 @@ def test_email_a_message_and_delete_it_only_once_sent(admin, app, helper, smtp_o
     with session_scope() as db:
         ev = db.query(AuditEvent).filter_by(action="voicemail.deleted_after_email").one()
         assert ev.details["msg_id"] == target
+
+
+def test_call_me_to_play(admin, app, helper):
+    """Issue #136: the user's phone rings into the play context with the box
+    and the message id; a stale id is refused; the dialplan has the context."""
+    from fake_adapter import FakeAdapter
+
+    adapter = FakeAdapter()
+    app.state.telephony = adapter
+    uid = _user(admin, "pat@example.org")
+    mine = _ext(admin, "1001", uid)
+    box = admin.post("/api/v1/voicemail", json={"extension_id": mine["id"]}).json()
+    ctx = _context(admin)
+    _msg(helper / ctx / "1001" / "INBOX", 0, ctx, "1001")
+    user = login(TestClient(app, base_url="http://veyra.test"), "pat@example.org", ADMIN_PASSWORD)
+    base = f"/api/v1/me/voicemail/{box['id']}/messages"
+    r = user.post(f"{base}/0/call", json={"msg_id": "1760800000-00000000"})
+    assert r.status_code == 202 and r.json()["extension"] == "1001", r.text
+    endpoint, exten, context, variables = adapter.originated_channels[-1]
+    assert endpoint == f"PJSIP/{mine['endpoint_name']}" and exten == "s"
+    assert context.endswith("vmplay")
+    assert variables == {"VEYRA_VM_BOX": "1001", "VEYRA_VM_MSG": "1760800000-00000000"}
+    assert user.post(f"{base}/0/call", json={"msg_id": "other"}).status_code == 409
+    assert user.post(f"{base}/5/call", json={}).status_code == 404
+    other = _ext(admin, "1002")
+    r = user.post(f"{base}/0/call", json={"extension_id": other["id"]})
+    assert r.status_code == 404
+    # The administrator rings the box's own phone.
+    r = admin.post(f"/api/v1/voicemail/{box['id']}/messages/0/call", json={})
+    assert r.status_code == 202, r.text

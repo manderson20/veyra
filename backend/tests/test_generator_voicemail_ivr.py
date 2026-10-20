@@ -283,3 +283,11 @@ def test_inbound_routes_accept_typed_destinations():
     assert (
         "Goto(veyra-internal,1001,1)" in dp.split("exten => 5735550103,1,")[1].split("exten =>")[0]
     )
+
+
+def test_voicemail_play_context():
+    """Call-me-to-play (issue #136): checked variables, then VoiceMailPlayMsg."""
+    dp = _files(_snapshot(voicemail_boxes=[_box("1002")]))["extensions.conf"].content
+    assert "[veyra-vmplay]" in dp
+    assert " same => n,VoiceMailPlayMsg(${VEYRA_VM_BOX}@veyra,${VEYRA_VM_MSG})" in dp
+    assert "${FILTER(0-9,${VEYRA_VM_BOX})}" in dp

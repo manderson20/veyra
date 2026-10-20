@@ -88,6 +88,15 @@ class EmailOut(BaseModel):
     delete_error: str | None = None
 
 
+class CallIn(BaseModel):
+    """Call-me-to-play (issue #136): ring ``extension_id`` (default: the box's
+    own extension) and play the message when it answers."""
+
+    folder: str = "INBOX"
+    msg_id: str | None = None
+    extension_id: uuid.UUID | None = None
+
+
 class ForwardIn(BaseModel):
     folder: str = "INBOX"
     box_id: uuid.UUID
@@ -468,3 +477,54 @@ def email_message(
             if not out.deleted:
                 out.delete_error = "the message was no longer in the folder"
     return out
+
+
+def call_to_play(
+    db: Session,
+    settings: Settings,
+    adapter: Any,
+    box: VoicemailBox,
+    number: int,
+    body: CallIn,
+    ext: Extension,
+) -> str:
+    """Ring ``ext`` and play the message to it (issue #136). Returns the
+    engine's channel id."""
+    from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
+
+    check_folder(body.folder)
+    context, mailbox = location(db, box)
+    try:
+        listed = client(settings).list(context, mailbox, body.folder).get("messages", [])
+    except StoreClientError as e:
+        raise problem(e) from e
+    current = next((m for m in listed if int(m["number"]) == number), None)
+    if current is None:
+        raise problem(StoreClientError("not_found", "no such message"))
+    msg_id = str(current.get("msg_id") or "")
+    if body.msg_id and msg_id != body.msg_id:
+        raise problem(StoreClientError("message_moved", "the message list changed; reload it"))
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", msg_id):
+        raise ProblemError(409, "Cannot play", "The message has no id.", code="no_msg_id")
+    if Capability.CLICK_TO_DIAL not in adapter.capabilities():
+        raise ProblemError(
+            409, "Not available", "The engine cannot place calls.", code="not_available"
+        )
+    if not ext.is_enabled:
+        raise ProblemError(
+            409, "Extension disabled", "This extension is disabled.", code="extension_disabled"
+        )
+    names = tenancy.names_of(db, box.organization_id)
+    try:
+        return adapter.originate_channel(
+            f"PJSIP/{ext.endpoint_name}",
+            "s",
+            context=names.voicemail_play,
+            caller_id=f"Voicemail <{mailbox}>",
+            timeout=30,
+            variables={"VEYRA_VM_BOX": mailbox, "VEYRA_VM_MSG": msg_id},
+        )
+    except (EngineUnavailable, NotSupported) as e:
+        raise ProblemError(
+            409, "Call not placed", f"The engine refused the call: {e}", code="originate_failed"
+        ) from e

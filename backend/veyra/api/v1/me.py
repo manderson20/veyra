@@ -671,6 +671,49 @@ def my_message_audio(
 
 
 @router.post(
+    "/voicemail/{box_id}/messages/{number}/call",
+    status_code=202,
+    summary="Call me to play: ring your phone and play the message (issue #136)",
+)
+def my_message_call(
+    box_id: uuid.UUID,
+    number: int,
+    body: vmsvc.CallIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, str]:
+    box = _own_box(db, principal, box_id)
+    mine = list(
+        db.scalars(
+            select(Extension)
+            .where(Extension.user_id == principal.user_id)
+            .order_by(Extension.number)
+        )
+    )
+    if body.extension_id is not None:
+        ext = next((e for e in mine if e.id == body.extension_id), None)
+    else:
+        ext = next((e for e in mine if e.id == box.extension_id), mine[0] if mine else None)
+    if ext is None:
+        raise not_found("Extension")
+    channel = vmsvc.call_to_play(
+        db, request.app.state.settings, request.app.state.telephony, box, number, body, ext
+    )
+    _box_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_call",
+        box,
+        {"folder": body.folder, "number": number, "extension": ext.number},
+    )
+    db.commit()
+    return {"channel_id": channel, "extension": ext.number}
+
+
+@router.post(
     "/voicemail/{box_id}/messages/{number}/email",
     response_model=vmsvc.EmailOut,
     summary="Email one of your messages to yourself, optionally deleting it once sent",

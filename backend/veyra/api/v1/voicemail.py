@@ -802,6 +802,40 @@ def box_message_forward(
 
 
 @router.post(
+    "/{box_id}/messages/{number}/call",
+    status_code=202,
+    summary="Ring a phone and play the message to it (issue #136)",
+)
+def box_message_call(
+    box_id: uuid.UUID,
+    number: int,
+    body: vmsvc.CallIn,
+    request: Request,
+    principal: Principal = Depends(require("voicemail.read")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, str]:
+    box = _get(db, principal, box_id, "voicemail.read")
+    ext_id = body.extension_id or box.extension_id
+    ext = db.get(Extension, ext_id) if ext_id else None
+    if ext is None or ext.organization_id != box.organization_id:
+        raise _validation("extension_id", "choose a phone of the box's organization")
+    channel = vmsvc.call_to_play(
+        db, request.app.state.settings, request.app.state.telephony, box, number, body, ext
+    )
+    _message_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_call",
+        box,
+        {"folder": body.folder, "number": number, "extension": ext.number},
+    )
+    db.commit()
+    return {"channel_id": channel, "extension": ext.number}
+
+
+@router.post(
     "/{box_id}/messages/{number}/email",
     response_model=vmsvc.EmailOut,
     summary="Email a message, optionally deleting it once sent",

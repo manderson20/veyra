@@ -64,6 +64,17 @@ export function VoicemailInbox({ base, targets, email, editable = true, refreshS
     }
   };
 
+  // Call me to play (issue #136): the user's phone rings and plays the message.
+  const callMe = async (m: VoicemailMessage) => {
+    setError(null);
+    try {
+      const r = await api.post<{ extension: string }>(`${base}/messages/${m.number}/call`, { folder: m.folder, msg_id: m.msg_id });
+      toast.success(`Calling ${r.extension}`, "Answer your phone to hear the message.");
+    } catch (err) {
+      toast.error("Could not call your phone", errorMessage(err));
+    }
+  };
+
   // Issue #148: the message is deleted only after the server accepted the email.
   const sendEmail = async (m: VoicemailMessage, del: boolean, to: string) => {
     setBusy(true);
@@ -126,6 +137,7 @@ export function VoicemailInbox({ base, targets, email, editable = true, refreshS
                 <Button size="sm" icon={playing?.msg_id === m.msg_id ? "stop" : "play"} onClick={() => setPlaying(playing?.msg_id === m.msg_id ? null : m)}>
                   {playing?.msg_id === m.msg_id ? "Close" : "Play"}
                 </Button>
+                {base.startsWith("/me/") ? <Button size="sm" icon="phone" onClick={() => void callMe(m)}>Call me</Button> : null}
                 <a className={buttonClass("secondary", "sm")} href={`${API_BASE}${base}/messages/${m.number}/audio?folder=${encodeURIComponent(m.folder)}&download=true`} download>
                   <Icon name="download" size={14} /> Download
                 </a>

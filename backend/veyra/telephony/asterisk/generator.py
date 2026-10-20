@@ -1250,6 +1250,7 @@ def _dialplan(
                 },
             )
             lines += _voicemail_exit_contexts(my_boxes(ns))
+            lines += _voicemail_play_context()
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _internal(
@@ -1844,6 +1845,26 @@ def _voicemail_exit_contexts(boxes: list[tuple[str, dict[str, Any]]]) -> list[st
             "",
         ]
     return lines
+
+
+def _voicemail_play_context() -> list[str]:
+    """Call-me-to-play (issue #136): the API rings the user's phone into this
+    context with the box and the message id as channel variables (checked by
+    the API; the dialplan only accepts digits and id characters)."""
+    n = engine_names.current()
+    return [
+        f"[{n.voicemail_play}]",
+        "exten => s,1,NoOp(Veyra: play voicemail ${VEYRA_VM_BOX} ${VEYRA_VM_MSG})",
+        ' same => n,GotoIf($["${FILTER(0-9,${VEYRA_VM_BOX})}" != "${VEYRA_VM_BOX}"]?bad)',
+        ' same => n,GotoIf($["${FILTER(0-9A-Za-z_.-,${VEYRA_VM_MSG})}" != "${VEYRA_VM_MSG}"]?bad)',
+        " same => n,Answer()",
+        " same => n,Wait(1)",
+        f" same => n,VoiceMailPlayMsg(${{VEYRA_VM_BOX}}@{n.voicemail},${{VEYRA_VM_MSG}})",
+        " same => n,Playback(vm-goodbye)",
+        " same => n,Hangup()",
+        " same => n(bad),Hangup()",
+        "",
+    ]
 
 
 def _forward_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:

@@ -62,7 +62,11 @@ the recording (to the box's address, else the account's; administrators
 choose the address), optionally deleting it once the SMTP server accepted
 the email — a failed send keeps it (issue #148). Counts refresh
 every 15 s while the widget is visible and on the `voicemail.message`
-webhook event. "Call me to play" and voicemail reports stay P2.
+webhook event. **Call me** rings the user's phone (the box's own extension, or
+another of theirs) into the namespace's `veyra-vmplay` context, which plays
+the message with `VoiceMailPlayMsg(<box>@<voicemail context>,<msg_id>)`
+(`POST …/messages/{n}/call {folder, msg_id, extension_id?}`, audited
+`voicemail.message_call`; issue #136). Voicemail reports stay P2.
 
 ### 2.2 The voicemail store helper
 
