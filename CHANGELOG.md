@@ -8,6 +8,15 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.23 — 2026-10-21
+
+No migration.
+
+### Changed
+- **Safer upgrades** (#88): before an upgrade switches to the new release it now tests the new web server configuration. If it is rejected the upgrade stops with nothing changed, and the current version keeps running — no more half-upgraded server.
+- When an upgrade fails after the switch, System → Updates says that the new version is installed and running and that a later step failed, instead of only "failed".
+- The passkey screens link the server's certificate authority (needed when the browser does not trust the certificate yet).
+
 ## 0.27.22 — 2026-10-21
 
 Migration `0065`.

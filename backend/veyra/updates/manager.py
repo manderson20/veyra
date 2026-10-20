@@ -571,7 +571,16 @@ def reconcile(
             notify("installed", row)
         elif status["state"] == "failed":
             row.state = "failed"
-            row.error = str(status.get("error") or "The upgrade failed.")[:2000]
+            error = str(status.get("error") or "The upgrade failed.")
+            if __version__ == row.version:
+                # Failed after the switch (issue #88): the server already
+                # runs the new release; a step after it did not finish.
+                error = (
+                    f"Veyra {row.version} is installed and running, but a later step "
+                    f"failed: {error} Fix the cause and run the upgrade again "
+                    "(sudo veyra updates install, or installer/upgrade.sh)."
+                )
+            row.error = error[:2000]
             notify("failed", row)
         return
     if (

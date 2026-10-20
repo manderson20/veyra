@@ -104,6 +104,7 @@ do_versions
 # Credentials introduced after the original installation (kept when present).
 do_secrets
 do_release
+do_nginx_check
 
 begin switch "Switching to the new release"
 run systemctl stop veyra-worker veyra-api

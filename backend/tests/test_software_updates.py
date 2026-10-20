@@ -559,3 +559,40 @@ def test_download_and_install_in_one_request(admin, app, tmp_path, served, monke
     # Already installing: the request is refused, nothing starts twice.
     r = admin.post(f"/api/v1/updates/available/{uid}/install", json={"when": "now"})
     assert r.status_code == 409 and len(calls) == 1
+
+
+def test_failure_after_the_switch_says_the_new_version_runs(admin, settings, monkeypatch):
+    """Issue #88: a step after the release switch failed; the record says
+    the server is on the new version, not just "failed"."""
+    from veyra.core.models.base import utcnow
+
+    row = AvailableUpdate(
+        component="veyra_core",
+        target="veyra",
+        version=NEW,
+        current_version="0.0.0",
+        channel="stable",
+        category="bugfix",
+        state="installing",
+        install_started_at=utcnow() - timedelta(minutes=2),
+        metadata_={},
+    )
+    settings.upgrade_dir.mkdir(parents=True, exist_ok=True)
+    (settings.upgrade_dir / "status.json").write_text(
+        json.dumps(
+            {
+                "version": NEW,
+                "state": "failed",
+                "error": "Configuring NGINX failed.",
+                "finished_at": utcnow().isoformat(),
+            }
+        )
+    )
+    monkeypatch.setattr(manager, "__version__", NEW)
+    with session_scope() as db:
+        db.add(row)
+        db.flush()
+        manager.reconcile(db, settings, lambda what, r: None)
+        assert row.state == "failed"
+        assert f"Veyra {NEW} is installed and running" in (row.error or "")
+        db.delete(row)

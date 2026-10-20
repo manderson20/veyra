@@ -809,14 +809,62 @@ csp_script_sets() {
     printf '%s' "$out"
 }
 
+# render_nginx_files HEADERS_DEST SITE_DEST CSP_HASHES_FILE: the security
+# headers and the site, as do_nginx installs them (shared with the check
+# before an upgrade switches releases, issue #88).
+render_nginx_files() {
+    local hdr_dest="$1" site_dest="$2" csp_file="$3" http_prov=""
+    if [[ "$(provisioning_http)" == "1" ]]; then
+        http_prov="$(sed -e "s|@VEYRA_DATA@|$VEYRA_DATA|g" -e "s|@VEYRA_ETC@|$VEYRA_ETC|g" \
+            "$SCRIPT_DIR/templates/nginx/provisioning-http.conf.in")"
+    fi
+    render_template "$SCRIPT_DIR/templates/nginx/security-headers.conf.in" "$hdr_dest" \
+        "CSP_SCRIPT_SETS=$(csp_script_sets "$csp_file")"
+    render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$site_dest" \
+        "LISTEN_HTTP=$(listen_directives 80 '')" "LISTEN_HTTPS=$(listen_directives 443 ' ssl')" \
+        "API_PORT=$VEYRA_API_PORT" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_PREFIX=$VEYRA_PREFIX" \
+        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov"
+}
+
+# Before an upgrade switches releases (issue #88): the new release's NGINX
+# files, tested with `nginx -t` in a copy of /etc/nginx, so a rejected
+# configuration stops the upgrade while the old release still runs.
+do_nginx_check() {
+    begin nginx_check "Testing the new release's NGINX configuration"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        info "Dry run: not tested"
+        return 0
+    fi
+    local stage site inc
+    stage="$(mktemp -d)"
+    cp -a /etc/nginx "$stage/nginx"
+    sed -i "s|/etc/nginx/|$stage/nginx/|g" "$stage/nginx/nginx.conf"
+    site="$stage/nginx/sites-available/veyra.conf"
+    render_nginx_files "$stage/headers.conf" "$site" "$RELEASE_DIR/frontend/out/csp-hashes.txt"
+    cp "$SCRIPT_DIR/templates/nginx/proxy.conf" "$stage/proxy.conf"
+    : >"$stage/empty.conf"
+    sed -i -e "s|$VEYRA_ETC/nginx-security-headers.conf|$stage/headers.conf|g" \
+        -e "s|$VEYRA_ETC/nginx-proxy.conf|$stage/proxy.conf|g" "$site"
+    for inc in nginx-ha-listen-http.conf nginx-ha-listen-https.conf; do
+        [[ -f "$VEYRA_ETC/$inc" ]] || sed -i "s|$VEYRA_ETC/$inc|$stage/empty.conf|g" "$site"
+    done
+    rm -f "$stage/nginx/sites-enabled/default"
+    ln -sfn "$site" "$stage/nginx/sites-enabled/veyra.conf"
+    local out
+    if ! out="$(nginx -t -c "$stage/nginx/nginx.conf" 2>&1)"; then
+        rm -rf "$stage"
+        printf '%s\n' "$out" >&2
+        die "NGINX rejects the new release's configuration; nothing has been changed and $OLD_VERSION keeps running."
+    fi
+    rm -rf "$stage"
+    ok "NGINX accepts the new configuration"
+}
+
 do_nginx() {
     begin nginx "Configuring NGINX"
     local tmp
     tmp="$(mktemp)"
-    local http_prov=""
     if [[ "$(provisioning_http)" == "1" ]]; then
-        http_prov="$(sed -e "s|@VEYRA_DATA@|$VEYRA_DATA|g" -e "s|@VEYRA_ETC@|$VEYRA_ETC|g" \
-            "$SCRIPT_DIR/templates/nginx/provisioning-http.conf.in")"
         if [[ "$(provisioning_http_mode)" == "full" ]]; then
             warn "Phone provisioning is also served over plain HTTP in full (VEYRA_PROVISIONING_HTTP_MODE=full): SIP secrets cross the network unencrypted"
         else
@@ -825,14 +873,9 @@ do_nginx() {
     fi
     local hdr
     hdr="$(mktemp)"
-    render_template "$SCRIPT_DIR/templates/nginx/security-headers.conf.in" "$hdr" \
-        "CSP_SCRIPT_SETS=$(csp_script_sets "$VEYRA_PREFIX/current/frontend/out/csp-hashes.txt")"
+    render_nginx_files "$hdr" "$tmp" "$VEYRA_PREFIX/current/frontend/out/csp-hashes.txt"
     install_managed_file "$hdr" "$VEYRA_ETC/nginx-security-headers.conf" 0644 root:root
     rm -f "$hdr"
-    render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$tmp" \
-        "LISTEN_HTTP=$(listen_directives 80 '')" "LISTEN_HTTPS=$(listen_directives 443 ' ssl')" \
-        "API_PORT=$VEYRA_API_PORT" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_PREFIX=$VEYRA_PREFIX" \
-        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov"
     # Veyra listens on specific addresses. A reload cannot bind them while
     # NGINX still holds wildcard sockets (the package default site) on the same
     # ports: it binds 443, fails on 80, retries for ~2 s, then drops the whole
