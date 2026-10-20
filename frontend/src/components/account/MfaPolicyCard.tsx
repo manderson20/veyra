@@ -39,13 +39,23 @@ export function MfaPolicyCard({ editable }: { editable: boolean }) {
   };
 
   return (
-    <Card title="Two-factor policy" subtitle="Which roles must use an authenticator app, and how long they have to set it up." id="mfa-policy">
+    <Card title="Two-factor policy" subtitle="Which roles must use a second factor (a passkey or an authenticator app), and how long they have to set it up." id="mfa-policy">
       <form className="stack stack--sm" onSubmit={submit}>
         <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="field__label" style={{ marginBottom: 8 }}>Required for</legend>
           <div className="stack stack--sm">
             {data.data.roles.map((r) => (
               <Checkbox key={r.key} label={r.name} disabled={!editable} checked={f.required_for.includes(r.key)} onChange={(e) => toggle(r.key, e.target.checked)} />
+            ))}
+          </div>
+        </fieldset>
+        <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend className="field__label" style={{ marginBottom: 8 }}>Allowed second factors</legend>
+          <div className="stack stack--sm">
+            {([["webauthn", "Passkeys", "Touch ID, Windows Hello, a security key or a phone. Needs the server's name and a trusted certificate."], ["totp", "Authenticator apps", "Six-digit codes from an app such as Google Authenticator or Microsoft Authenticator."]] as const).map(([key, label, help]) => (
+              <Checkbox key={key} label={label} description={help} disabled={!editable || (f.allowed_methods.length === 1 && f.allowed_methods.includes(key))}
+                checked={f.allowed_methods.includes(key)}
+                onChange={(e) => setForm({ ...f, allowed_methods: e.target.checked ? [...f.allowed_methods, key] : f.allowed_methods.filter((m) => m !== key) })} />
             ))}
           </div>
         </fieldset>

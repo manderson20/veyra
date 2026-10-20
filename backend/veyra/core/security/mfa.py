@@ -30,7 +30,8 @@ from veyra.core.security.permissions import SYSTEM_ROLE_DEFS
 
 MFA_POLICY_KEY = "security.mfa"
 METHOD_TOTP = "totp"
-ALLOWED_METHODS = (METHOD_TOTP,)  # "webauthn" arrives with passkeys (Milestone 17)
+METHOD_WEBAUTHN = "webauthn"  # passkeys (issue #107)
+ALLOWED_METHODS = (METHOD_TOTP, METHOD_WEBAUTHN)
 RECOVERY_CODE_COUNT = 10
 RECOVERY_CODE_LENGTH = 10
 # 32 symbols: no I, O, 0 or 1, which are easy to confuse when typed.
@@ -56,7 +57,7 @@ class MfaPolicy(BaseModel):
     # Days a browser may skip the second factor after "Trust this browser"
     # (issue #137); 0: never.
     trusted_browser_days: int = Field(0, ge=0, le=90)
-    allowed_methods: list[str] = Field(default_factory=lambda: [METHOD_TOTP])
+    allowed_methods: list[str] = Field(default_factory=lambda: [METHOD_TOTP, METHOD_WEBAUTHN])
 
     @field_validator("required_for")
     @classmethod

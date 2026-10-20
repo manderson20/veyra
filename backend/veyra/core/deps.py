@@ -34,6 +34,10 @@ PRE_AUTH_ALLOWED_PATHS = frozenset(
         "/api/v1/auth/mfa/verify",
         "/api/v1/auth/mfa/totp/begin",
         "/api/v1/auth/mfa/totp/confirm",
+        "/api/v1/auth/mfa/webauthn/register/begin",
+        "/api/v1/auth/mfa/webauthn/register/finish",
+        "/api/v1/auth/mfa/webauthn/authenticate/begin",
+        "/api/v1/auth/mfa/webauthn/authenticate/finish",
         "/api/v1/auth/logout",
     }
 )

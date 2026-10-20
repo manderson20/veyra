@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button, Callout, Dialog, TextField } from "@/components/ui";
 import { api, errorMessage, setReauthPrompt } from "@/lib/api";
 import { useSession } from "@/hooks/useSession";
+import { getPasskey, passkeyErrorText, passkeyUnavailableReason } from "@/lib/webauthn";
 
 /** Asks for the password again before a sensitive action (#137): granting a
  * role, resetting someone's sign-in, changing a sign-in policy, installing an
@@ -35,6 +36,23 @@ export function ReauthDialog() {
     settle.current?.(ok);
     settle.current = null;
   };
+  // A passkey alone confirms it is you (issue #107): it is phishing-resistant
+  // and asks for the fingerprint, face or device PIN.
+  const passkeyOk = needsCode && passkeyUnavailableReason() === null;
+  const signWithPasskey = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const begin = await api.post<{ options: Record<string, unknown> }>("/auth/mfa/webauthn/authenticate/begin");
+      const credential = await getPasskey(begin.options);
+      await api.post("/auth/mfa/webauthn/authenticate/finish", { credential });
+      finish(true);
+    } catch (err) {
+      setError(passkeyErrorText(err) ?? errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -59,6 +77,9 @@ export function ReauthDialog() {
           <TextField label="Authenticator code" required inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9 ]/g, ""))} />
         ) : null}
         {error ? <Callout tone="danger">{error}</Callout> : null}
+        {passkeyOk ? (
+          <p className="subtle" style={{ margin: 0 }}>Or <button type="button" className="link" onClick={() => void signWithPasskey()} disabled={busy}>confirm with your passkey</button> instead of the password and code.</p>
+        ) : null}
       </form>
     </Dialog>
   );

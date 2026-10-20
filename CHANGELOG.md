@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.22 — 2026-10-21
+
+Migration `0065`.
+
+### Added
+- **Passkeys** (#107): sign in with your fingerprint, face, device PIN or a security key — Touch ID on a Mac, Windows Hello, a phone — instead of typing an authenticator code. Account → Two-factor authentication → **Add a passkey**; name, rename and remove them like authenticator devices. At sign-in the passkey is offered first, with the authenticator code and recovery codes still available. "Confirm it is you" also accepts a passkey. Administrators choose the allowed second factors in Settings → Two-factor policy (passkeys are allowed by default). Passkeys need Veyra opened by its host name with a trusted certificate: browsers refuse them on an IP address or a page with a certificate warning.
+
 ## 0.27.21 — 2026-10-20
 
 No migration.

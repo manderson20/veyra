@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { PasskeyEnrolment } from "@/components/account/PasskeyEnrolment";
 import { RecoveryCodes, TotpEnrolment } from "@/components/account/TotpEnrolment";
 import { Badge, Button, Callout, Card, Dialog, ErrorState, IconButton, LoadingState, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -18,6 +19,8 @@ export function TwoFactorCard() {
   const toast = useToast();
   const data = useApiData<MfaMethods>("/auth/mfa/methods");
   const [adding, setAdding] = useState(false);
+  const [addingPasskey, setAddingPasskey] = useState(false);
+  const [renaming, setRenaming] = useState<MfaMethod | null>(null);
   const [removing, setRemoving] = useState<MfaMethod | null>(null);
   const [regenerate, setRegenerate] = useState(false);
   const [newCodes, setNewCodes] = useState<string[] | null>(null);
@@ -31,13 +34,20 @@ export function TwoFactorCard() {
   if (data.error) return <Card title="Two-factor authentication"><ErrorState compact error={data.error} onRetry={data.reload} /></Card>;
   if (!data.data) return <Card title="Two-factor authentication"><LoadingState /></Card>;
   const { status, methods } = data.data;
+  const passkeysAllowed = data.data.allowed_methods.includes("webauthn");
+  const totpAllowed = data.data.allowed_methods.includes("totp");
 
   return (
     <Card
       title="Two-factor authentication"
-      subtitle="A code from an authenticator app on your phone is asked for at every sign-in, in addition to your password."
+      subtitle="After your password, every sign-in asks for a passkey (fingerprint, face or security key) or a code from an authenticator app."
       id="mfa"
-      actions={<Button icon="plus" variant={status.enabled ? "secondary" : "primary"} onClick={() => setAdding(true)}>{status.enabled ? "Add a device" : "Set up"}</Button>}
+      actions={(
+        <span className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+          {passkeysAllowed ? <Button icon="key" variant={status.enabled ? "secondary" : "primary"} onClick={() => setAddingPasskey(true)}>Add a passkey</Button> : null}
+          {totpAllowed ? <Button icon="plus" onClick={() => setAdding(true)}>{status.enabled ? "Add an authenticator app" : "Use an authenticator app"}</Button> : null}
+        </span>
+      )}
     >
       <div className="stack stack--sm">
         <div className="row">
@@ -57,9 +67,12 @@ export function TwoFactorCard() {
               <li key={m.id} className="row row--between" style={{ padding: "8px 0", borderTop: "1px solid var(--border)" }}>
                 <span>
                   <span className="table__primary" style={{ display: "block" }}>{m.label}</span>
-                  <span className="table__secondary">Authenticator app · added {formatRelative(m.created_at)}{m.last_used_at ? ` · last used ${formatRelative(m.last_used_at)}` : ""}</span>
+                  <span className="table__secondary">{m.type === "webauthn" ? "Passkey" : "Authenticator app"} · added {formatRelative(m.created_at)}{m.last_used_at ? ` · last used ${formatRelative(m.last_used_at)}` : ""}</span>
                 </span>
-                <IconButton icon="trash" size="sm" label={`Remove ${m.label}`} onClick={() => setRemoving(m)} />
+                <span className="row" style={{ gap: 4 }}>
+                  <IconButton icon="note" size="sm" label={`Rename ${m.label}`} onClick={() => setRenaming(m)} />
+                  <IconButton icon="trash" size="sm" label={`Remove ${m.label}`} onClick={() => setRemoving(m)} />
+                </span>
               </li>
             ))}
           </ul>
@@ -87,6 +100,21 @@ export function TwoFactorCard() {
           />
         ) : null}
       </Dialog>
+
+      <Dialog open={addingPasskey} onClose={() => setAddingPasskey(false)} title="Add a passkey">
+        {addingPasskey ? (
+          <PasskeyEnrolment
+            onCancel={() => setAddingPasskey(false)}
+            onDone={(r) => {
+              setAddingPasskey(false);
+              toast.success("Passkey added", r.recovery_codes.length ? "Two-factor authentication is on." : "Use it at your next sign-in.");
+              void reload();
+            }}
+          />
+        ) : null}
+      </Dialog>
+
+      {renaming ? <RenameDialog method={renaming} onClose={() => setRenaming(null)} onSaved={() => { setRenaming(null); void reload(); }} /> : null}
 
       <PasswordDialog
         open={removing !== null}
@@ -154,6 +182,34 @@ function PasswordDialog({ open, title, description, confirmLabel, tone = "primar
       <form id="mfa-password" className="stack stack--sm" onSubmit={submit}>
         <TextField label="Your password" type="password" autoComplete="current-password" required autoFocus value={password} onChange={(e) => setPassword(e.target.value)} help="Confirm it is you." />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
+      </form>
+    </Dialog>
+  );
+}
+
+function RenameDialog({ method, onClose, onSaved }: { method: MfaMethod; onClose: () => void; onSaved: () => void }) {
+  const [label, setLabel] = useState(method.label);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api.patch(`/auth/mfa/methods/${method.id}`, { label: label.trim() });
+      onSaved();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onClose={onClose} busy={busy} title={`Rename ${method.label}`}
+      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="mfa-rename" loading={busy} disabled={!label.trim()}>Save</Button></>}>
+      <form id="mfa-rename" className="stack stack--sm" onSubmit={submit}>
+        <TextField label="Name" required autoFocus value={label} onChange={(e) => setLabel(e.target.value)} />
+        {error ? <Callout tone="danger">{error}</Callout> : null}
       </form>
     </Dialog>
   );

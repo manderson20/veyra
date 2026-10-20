@@ -26,3 +26,11 @@ tzdata==2026.5
 # BSD-3-Clause. It was a development-only dependency until 0.17.0, which broke
 # installing the module in production.
 httpx==0.28.1
+# Passkeys (WebAuthn) as a sign-in factor (issue #107): registration and
+# assertion verification; BSD-3-Clause. cbor2 (MIT), pyasn1/pyasn1-modules
+# (BSD-2-Clause) and pyOpenSSL (Apache-2.0) are its dependencies.
+webauthn==3.0.1
+cbor2==6.1.5
+pyasn1==0.6.4
+pyasn1-modules==0.4.2
+pyOpenSSL==26.4.0

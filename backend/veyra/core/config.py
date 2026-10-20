@@ -129,6 +129,9 @@ class Settings(BaseSettings):
 
     # --- Updates --------------------------------------------------------------
     update_metadata_url: str = ""
+    # Passkeys (issue #107): the WebAuthn relying-party ID, a domain the
+    # address of the web interface is under; empty: the host name in use.
+    webauthn_rp_id: str = ""
 
     @field_validator("module_paths", "template_paths", mode="before")
     @classmethod

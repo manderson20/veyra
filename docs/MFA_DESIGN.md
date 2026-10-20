@@ -201,3 +201,38 @@ is you" dialog on `reauth_required` and sends the request again.
   carries `mfa: none|grace|pending|enrol`.
 * NGINX rate-limits `/api/v1/auth/mfa/verify` like sign-in; the API's
   per-address limiter is shared with sign-in.
+
+## 12. Passkeys (issue #107, built 2026-10-21, 0.27.22)
+
+* **Factor** `webauthn` in `mfa_methods` (`credential` = `{id, public_key,
+  sign_count, transports, aaguid, backed_up, rp_id}`, base64url; while
+  pending `{challenge, rp_id}`). Library: `py_webauthn` 3.0.1
+  (`veyra.core.security.passkeys`); "none" attestation, user verification
+  preferred, resident key preferred; ES256, EdDSA and RS256 keys. A sign
+  count that does not grow (a cloned key) is refused.
+* **Relying party**: the host name in the address bar (`VEYRA_WEBAUTHN_RP_ID`
+  sets a parent domain); the expected origin is the browser's `Origin` header
+  when it names that host (keeps a non-default port), else `https://<host>`.
+  IP addresses are refused with an explanation; browsers also refuse pages
+  with a certificate error, so passkeys need a trusted certificate (Let's
+  Encrypt, #43, or an internal CA the computers trust).
+* **API** (`/auth/mfa`): `webauthn/register/begin|finish` (also from the
+  pre-authentication session when no factor exists, like TOTP enrolment;
+  the first factor returns recovery codes), `webauthn/authenticate/begin|finish`
+  (the challenge is kept on the session, `sessions.webauthn_challenge`,
+  migration `0065`, used once; failures count towards the lock-out like
+  codes; signed in already, a passkey sets `reauth_at` — the step-up of #137),
+  `PATCH methods/{id}` renames any factor. Audited `auth.passkey_register`,
+  `auth.passkey_verify`, `auth.mfa_method_rename`.
+* **Policy**: `allowed_methods` now `totp` and `webauthn` (default both);
+  migration `0065` adds `webauthn` to a stored policy that listed only
+  `totp` (the only method before). Settings → Two-factor policy has the
+  checkboxes.
+* **Interface**: Account → Two-factor authentication "Add a passkey"
+  (named, renamed, removed like a device); sign-in offers the passkey first
+  when the account has one, with links to the authenticator code and a
+  recovery code; the role-required enrolment offers "Use a passkey instead";
+  "Confirm it is you" accepts a passkey instead of password and code.
+  Browser side: `frontend/src/lib/webauthn.ts` (no extra package).
+* **Not yet**: passwordless sign-in with a discoverable passkey; passkeys in
+  the Companion's sign-in (it accepts a recovery code).

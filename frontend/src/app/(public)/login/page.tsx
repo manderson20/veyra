@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { PasskeyEnrolment } from "@/components/account/PasskeyEnrolment";
 import { TotpEnrolment } from "@/components/account/TotpEnrolment";
 import { AuthLayout } from "@/components/AuthLayout";
 import { BrandLogo } from "@/components/Brand";
@@ -11,6 +12,7 @@ import { Button, buttonClass, Callout, Checkbox, LoadingState, TextField } from 
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { MfaChallenge, SessionInfo, SetupStatus, SsoProviderPublic } from "@/lib/types";
 import { useSession } from "@/hooks/useSession";
+import { getPasskey, passkeyErrorText, passkeyUnavailableReason } from "@/lib/webauthn";
 
 function safeNext(value: string | null): string {
   // Only allow same-site relative paths (prevents open redirects).
@@ -36,6 +38,7 @@ function LoginForm() {
   const [stage, setStage] = useState<Stage>({ kind: "password" });
   const [providers, setProviders] = useState<SsoProviderPublic[]>([]);
   const [selfReset, setSelfReset] = useState(false);
+  const [enrolPasskey, setEnrolPasskey] = useState(false);
   const next = safeNext(params.get("next"));
   const ssoError = params.get("sso_error");
 
@@ -120,8 +123,11 @@ function LoginForm() {
           <h1 className="auth__title">Set up two-factor authentication</h1>
           <p className="muted">Hello {stage.challenge.display_name}. Your role requires a second factor, and none is set up yet. This takes about a minute.</p>
         </div>
-        <TotpEnrolment compact onDone={(r) => void finish(r.session)} />
-        <p className="subtle"><button type="button" className="link" onClick={startOver}>Not you? Sign in as someone else</button></p>
+        {enrolPasskey ? <PasskeyEnrolment onDone={(r) => void finish(r.session)} /> : <TotpEnrolment compact onDone={(r) => void finish(r.session)} />}
+        <div className="row row--between">
+          <button type="button" className="link" onClick={() => setEnrolPasskey((v) => !v)}>{enrolPasskey ? "Use an authenticator app instead" : "Use a passkey instead (fingerprint, face or security key)"}</button>
+          <button type="button" className="link subtle" onClick={startOver}>Not you? Sign in as someone else</button>
+        </div>
       </div>
     );
   }
@@ -167,12 +173,27 @@ function LoginForm() {
 }
 
 function MfaStep({ challenge, onDone, onStartOver }: { challenge: MfaChallenge; onDone: (s: SessionInfo) => Promise<void>; onStartOver: () => Promise<void> }) {
+  const hasPasskey = challenge.methods.some((m) => m.type === "webauthn");
+  const hasTotp = challenge.methods.some((m) => m.type === "totp");
+  const passkeyBlocked = passkeyUnavailableReason();
+  // Issue #107: the passkey prompt first when the account has one.
+  const [mode, setMode] = useState<"passkey" | "code" | "recovery">(hasPasskey && !passkeyBlocked ? "passkey" : hasTotp ? "code" : "recovery");
   const [code, setCode] = useState("");
-  const [recovery, setRecovery] = useState(false);
   const [trust, setTrust] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const failed = async (err: unknown) => {
+    // Locked after repeated failures, or the pre-auth session expired: back to the password.
+    if (err instanceof ApiError && (err.code === "mfa_locked" || err.code === "unauthorized")) {
+      setError(err.detail || err.title);
+      await onStartOver();
+      return;
+    }
+    setError(passkeyErrorText(err) ?? errorMessage(err));
+    setCode("");
+    setBusy(false);
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -181,44 +202,60 @@ function MfaStep({ challenge, onDone, onStartOver }: { challenge: MfaChallenge; 
       const s = await api.post<SessionInfo>("/auth/mfa/verify", { code: code.trim(), trust_browser: trust }, { noRedirect: true });
       await onDone(s);
     } catch (err) {
-      // Locked after repeated failures, or the pre-auth session expired: back to the password.
-      if (err instanceof ApiError && (err.code === "mfa_locked" || err.code === "unauthorized")) {
-        setError(err.detail || err.title);
-        await onStartOver();
-        return;
-      }
-      setError(errorMessage(err));
-      setCode("");
-      setBusy(false);
+      await failed(err);
     }
   };
+  const signWithPasskey = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const begin = await api.post<{ options: Record<string, unknown> }>("/auth/mfa/webauthn/authenticate/begin", undefined, { noRedirect: true });
+      const credential = await getPasskey(begin.options);
+      const s = await api.post<SessionInfo>("/auth/mfa/webauthn/authenticate/finish", { credential, trust_browser: trust }, { noRedirect: true });
+      await onDone(s);
+    } catch (err) {
+      await failed(err);
+    }
+  };
+  const trustBox = challenge.trust_days ? (
+    <Checkbox label={`Trust this browser for ${challenge.trust_days} days`} checked={trust} onChange={(e) => setTrust(e.target.checked)}
+      description="Signing in here then needs only your password. Not on a shared computer." />
+  ) : null;
+  const prompt = mode === "passkey" ? "Confirm with your passkey: fingerprint, face, device PIN or security key."
+    : mode === "recovery" ? "Enter one of your recovery codes." : "Enter the code from your authenticator app.";
 
   return (
     <div className="stack">
       <div className="row" style={{ marginBottom: 8 }}><BrandLogo height={30} /></div>
       <div>
         <h1 className="auth__title">Second step</h1>
-        <p className="muted">Hello {challenge.display_name}. {recovery ? "Enter one of your recovery codes." : "Enter the code from your authenticator app."}</p>
+        <p className="muted">Hello {challenge.display_name}. {prompt}</p>
       </div>
-      <form className="stack stack--sm" onSubmit={submit}>
-        {recovery ? (
-          <TextField label="Recovery code" required autoFocus autoComplete="off" spellCheck={false} placeholder="ABCDE-FGHJK" value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())} help="Each recovery code works once." />
-        ) : (
-          <TextField label="Authenticator code" required autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code}
-            onChange={(e) => setCode(e.target.value.replace(/[^0-9 ]/g, ""))} help={challenge.methods.length > 1 ? `Any of your ${challenge.methods.length} devices.` : challenge.methods[0]?.label} />
-        )}
-        {challenge.trust_days ? (
-          <Checkbox label={`Trust this browser for ${challenge.trust_days} days`} checked={trust} onChange={(e) => setTrust(e.target.checked)}
-            description="Signing in here then needs only your password. Not on a shared computer." />
-        ) : null}
-        {error ? <Callout tone="danger">{error}</Callout> : null}
-        <Button variant="primary" type="submit" loading={busy} block disabled={!code.trim()}>Verify</Button>
-      </form>
-      <div className="row row--between">
-        <button type="button" className="link" onClick={() => { setRecovery((r) => !r); setCode(""); setError(null); }}>
-          {recovery ? "Use the authenticator app instead" : "Lost your phone? Use a recovery code"}
-        </button>
+      {mode === "passkey" ? (
+        <div className="stack stack--sm">
+          {trustBox}
+          {error ? <Callout tone="danger">{error}</Callout> : null}
+          <Button variant="primary" icon="key" loading={busy} block onClick={() => void signWithPasskey()}>Use your passkey</Button>
+        </div>
+      ) : (
+        <form className="stack stack--sm" onSubmit={submit}>
+          {mode === "recovery" ? (
+            <TextField label="Recovery code" required autoFocus autoComplete="off" spellCheck={false} placeholder="ABCDE-FGHJK" value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())} help="Each recovery code works once." />
+          ) : (
+            <TextField label="Authenticator code" required autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code}
+              onChange={(e) => setCode(e.target.value.replace(/[^0-9 ]/g, ""))} />
+          )}
+          {trustBox}
+          {error ? <Callout tone="danger">{error}</Callout> : null}
+          <Button variant="primary" type="submit" loading={busy} block disabled={!code.trim()}>Verify</Button>
+        </form>
+      )}
+      {hasPasskey && passkeyBlocked && mode !== "passkey" ? <p className="subtle" style={{ margin: 0 }}>Your passkey cannot be used on this page: {passkeyBlocked}</p> : null}
+      <div className="stack stack--sm">
+        {hasPasskey && !passkeyBlocked && mode !== "passkey" ? <button type="button" className="link" onClick={() => { setMode("passkey"); setError(null); }}>Use your passkey instead</button> : null}
+        {hasTotp && mode !== "code" ? <button type="button" className="link" onClick={() => { setMode("code"); setCode(""); setError(null); }}>Use an authenticator code instead</button> : null}
+        {mode !== "recovery" ? <button type="button" className="link" onClick={() => { setMode("recovery"); setCode(""); setError(null); }}>Lost your device? Use a recovery code</button> : null}
         <button type="button" className="link subtle" onClick={() => void onStartOver()}>Start over</button>
       </div>
     </div>

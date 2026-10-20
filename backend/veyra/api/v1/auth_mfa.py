@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
@@ -45,7 +46,7 @@ from veyra.core.deps import (
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.models import MfaMethod, User, UserSession
 from veyra.core.models.base import utcnow
-from veyra.core.security import mfa, passwords, totp
+from veyra.core.security import mfa, passkeys, passwords, totp
 from veyra.core.security.crypto import (
     DecryptionError,
     InstallationKey,
@@ -432,6 +433,266 @@ def totp_confirm(
         recovery_codes=codes,
         session=_session_out(db, user, load_principal(db, user, session.id), csrf),
     )
+
+
+# ----------------------------------------------------------------- passkeys (#107)
+
+
+class PasskeyBeginIn(BaseModel):
+    label: str = Field("Passkey", min_length=1, max_length=100)
+
+
+class PasskeyBeginOut(BaseModel):
+    method_id: uuid.UUID
+    # PublicKeyCredentialCreationOptions as JSON (base64url fields).
+    options: dict[str, Any]
+
+
+class PasskeyFinishIn(BaseModel):
+    method_id: uuid.UUID
+    # The PublicKeyCredential from navigator.credentials.create, as JSON.
+    credential: dict[str, Any]
+    label: str | None = Field(None, max_length=100)
+
+
+class PasskeyAuthOut(BaseModel):
+    options: dict[str, Any]
+
+
+class PasskeyAuthIn(BaseModel):
+    credential: dict[str, Any]
+    trust_browser: bool = False
+
+
+class LabelIn(BaseModel):
+    label: str = Field(min_length=1, max_length=100)
+
+
+def _rp(request: Request, settings: Settings) -> tuple[str, str]:
+    try:
+        return passkeys.relying_party(request, settings)
+    except passkeys.PasskeyError as e:
+        raise ProblemError(409, "Passkeys unavailable here", str(e), code="passkey_origin") from e
+
+
+def _passkeys_allowed(db: Session) -> None:
+    if mfa.METHOD_WEBAUTHN not in mfa.load_policy(db).allowed_methods:
+        raise conflict("Passkeys are not allowed by the two-factor policy.", "method_not_allowed")
+
+
+@router.post(
+    "/webauthn/register/begin",
+    response_model=PasskeyBeginOut,
+    summary="Start adding a passkey (Touch ID, Windows Hello, a security key or a phone)",
+)
+def passkey_register_begin(
+    body: PasskeyBeginIn,
+    request: Request,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> PasskeyBeginOut:
+    session, user = _session_and_user(db, principal)
+    existing = mfa.confirmed_methods(db, user.id)
+    _enrolment_allowed(session, existing)
+    _passkeys_allowed(db)
+    rp_id, _origin = _rp(request, settings)
+    for stale in db.scalars(
+        select(MfaMethod).where(MfaMethod.user_id == user.id, MfaMethod.confirmed_at.is_(None))
+    ):
+        db.delete(stale)
+    from veyra.core.models import Installation
+
+    inst = db.scalar(select(Installation))
+    options, challenge = passkeys.registration_options(
+        user, rp_id, inst.name if inst else "Veyra", existing
+    )
+    method = MfaMethod(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        type=mfa.METHOD_WEBAUTHN,
+        label=body.label.strip() or "Passkey",
+        credential={"challenge": challenge, "rp_id": rp_id},
+        created_at=utcnow(),
+    )
+    db.add(method)
+    _record(db, ctx, user, "auth.passkey_register_begin", method_id=str(method.id))
+    db.commit()
+    return PasskeyBeginOut(method_id=method.id, options=passkeys.options_dict(options))
+
+
+@router.post(
+    "/webauthn/register/finish",
+    response_model=TotpConfirmOut,
+    summary="Save the passkey the browser created; returns recovery codes once",
+)
+def passkey_register_finish(
+    body: PasskeyFinishIn,
+    request: Request,
+    response: Response,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> TotpConfirmOut:
+    session, user = _session_and_user(db, principal)
+    existing = mfa.confirmed_methods(db, user.id)
+    _enrolment_allowed(session, existing)
+    method = db.get(MfaMethod, body.method_id)
+    if (
+        method is None
+        or method.user_id != user.id
+        or method.confirmed_at is not None
+        or method.type != mfa.METHOD_WEBAUTHN
+    ):
+        raise not_found("Pending passkey")
+    pending = method.credential or {}
+    rp_id, origin = _rp(request, settings)
+    if pending.get("rp_id") != rp_id:
+        raise conflict("Start again from this address.", "passkey_origin")
+    try:
+        stored = passkeys.verify_registration(
+            body.credential, str(pending.get("challenge") or ""), rp_id, origin
+        )
+    except passkeys.PasskeyError as e:
+        _record(db, ctx, user, "auth.passkey_register", outcome="failure", error=str(e))
+        db.commit()
+        raise ProblemError(400, "Passkey not added", str(e), code="passkey_invalid") from e
+    if any((m.credential or {}).get("id") == stored["id"] for m in existing):
+        raise conflict("This passkey is already registered.", "passkey_exists")
+    now = utcnow()
+    method.credential = {**stored, "rp_id": rp_id}
+    method.confirmed_at = now
+    method.last_used_at = now
+    if body.label and body.label.strip():
+        method.label = body.label.strip()
+    codes = mfa.replace_recovery_codes(db, user.id) if not existing else []
+    csrf: str | None = None
+    completed = session.mfa_verified_at is None
+    if completed:
+        csrf = complete_mfa(session, settings)
+        user.last_login_at = now
+    _record(
+        db,
+        ctx,
+        user,
+        "auth.passkey_register",
+        method_id=str(method.id),
+        first_method=not existing,
+        completed_sign_in=completed,
+        aaguid=stored.get("aaguid"),
+    )
+    db.commit()
+    if csrf is not None:
+        _set_cookies(response, settings, request.cookies.get(SESSION_COOKIE, ""), csrf)
+    return TotpConfirmOut(
+        method=_method_out(method),
+        recovery_codes=codes,
+        session=_session_out(db, user, load_principal(db, user, session.id), csrf),
+    )
+
+
+@router.post(
+    "/webauthn/authenticate/begin",
+    response_model=PasskeyAuthOut,
+    summary="Ask the browser to sign in with one of your passkeys",
+)
+def passkey_auth_begin(
+    request: Request,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> PasskeyAuthOut:
+    session, user = _session_and_user(db, principal)
+    methods = [m for m in mfa.confirmed_methods(db, user.id) if m.type == mfa.METHOD_WEBAUTHN]
+    if not methods:
+        raise conflict("No passkey is registered for this account.", "passkey_none")
+    rp_id, _origin = _rp(request, settings)
+    options, challenge = passkeys.authentication_options(rp_id, methods)
+    session.webauthn_challenge = challenge
+    db.commit()
+    return PasskeyAuthOut(options=passkeys.options_dict(options))
+
+
+@router.post(
+    "/webauthn/authenticate/finish",
+    response_model=SessionOut,
+    summary="Complete sign-in (or confirm it is you) with a passkey",
+)
+def passkey_auth_finish(
+    body: PasskeyAuthIn,
+    request: Request,
+    response: Response,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> SessionOut:
+    session, user = _session_and_user(db, principal)
+    challenge = session.webauthn_challenge
+    if not challenge:
+        raise conflict("Start the passkey sign-in first.", "passkey_no_challenge")
+    if not auth_api._limiter(settings).hit(ctx.ip or "unknown"):
+        raise _too_many("Too many attempts. Wait a minute and try again.")
+    session.webauthn_challenge = None  # one use
+    rp_id, origin = _rp(request, settings)
+    methods = [m for m in mfa.confirmed_methods(db, user.id) if m.type == mfa.METHOD_WEBAUTHN]
+    now = utcnow()
+    try:
+        method = passkeys.verify_authentication(body.credential, challenge, rp_id, origin, methods)
+    except passkeys.PasskeyError as e:
+        session.mfa_failures += 1
+        locked = session.mfa_verified_at is None and session.mfa_failures >= mfa.MAX_VERIFY_FAILURES
+        if locked:
+            session.revoked_at = now
+        _record(
+            db, ctx, user, "auth.passkey_verify", outcome="failure", error=str(e), locked=locked
+        )
+        db.commit()
+        raise ProblemError(401, "Passkey not accepted", str(e), code="invalid_code") from e
+    method.last_used_at = now
+    csrf: str | None = None
+    if session.mfa_verified_at is None:
+        csrf = complete_mfa(session, settings)
+        user.last_login_at = now
+        days = mfa.load_policy(db).trusted_browser_days
+        if body.trust_browser and days > 0:
+            from veyra.core.security import trusted
+
+            token, _row = trusted.issue(db, user, days, label=ctx.user_agent, ip=ctx.ip)
+            trusted.set_cookie(response, settings, token, days)
+            _record(db, ctx, user, "auth.trusted_browser_add", days=days)
+    else:
+        # Already signed in: the passkey confirms it is you (step-up, #137).
+        session.reauth_at = now
+    _record(db, ctx, user, "auth.passkey_verify", method_id=str(method.id))
+    db.commit()
+    if csrf is not None:
+        _set_cookies(response, settings, request.cookies.get(SESSION_COOKIE, ""), csrf)
+    return _session_out(db, user, load_principal(db, user, session.id), csrf)
+
+
+@router.patch(
+    "/methods/{method_id}",
+    response_model=MfaMethodOut,
+    summary="Rename one of your second factors",
+)
+def rename_method(
+    method_id: uuid.UUID,
+    body: LabelIn,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MfaMethodOut:
+    _, user = _session_and_user(db, principal)
+    method = db.get(MfaMethod, method_id)
+    if method is None or method.user_id != user.id or method.confirmed_at is None:
+        raise not_found("Second factor")
+    method.label = body.label.strip()
+    _record(db, ctx, user, "auth.mfa_method_rename", method_id=str(method.id))
+    db.commit()
+    return _method_out(method)
 
 
 # ----------------------------------------------------------------- management

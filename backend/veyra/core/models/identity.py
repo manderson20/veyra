@@ -135,10 +135,12 @@ class UserSession(UUIDPrimaryKey, Base):
     mfa_failures: Mapped[int] = mapped_column(Integer, default=0)
     # The password (and code) entered again for a sensitive action (issue #137).
     reauth_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The pending passkey sign-in challenge (base64url; issue #107).
+    webauthn_challenge: Mapped[str | None] = mapped_column(Text)
 
 
 class MfaMethod(UUIDPrimaryKey, Base):
-    """A second factor. ``totp`` today; ``webauthn`` with passkeys later."""
+    """A second factor: ``totp`` (authenticator app) or ``webauthn`` (passkey)."""
 
     __tablename__ = "mfa_methods"
 
@@ -150,7 +152,8 @@ class MfaMethod(UUIDPrimaryKey, Base):
     # TOTP shared secret encrypted with the installation key
     # (purpose ``user.totp_secret:<user id>``); never stored in clear.
     secret_ciphertext: Mapped[str | None] = mapped_column(Text)
-    # WebAuthn credential (id, public key, sign count, transports); unused until passkeys.
+    # Passkey (issue #107): {id, public_key (base64url), sign_count, transports,
+    # aaguid}; while pending, {challenge, rp_id}.
     credential: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     # The last TOTP time step that produced an accepted code (replay protection).
     last_used_step: Mapped[int | None] = mapped_column(BigInteger)
