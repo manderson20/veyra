@@ -43,6 +43,9 @@ FILE_MOH = "musiconhold.conf"
 FILE_CONFBRIDGE = "confbridge.conf"
 FILE_PARKING = "res_parking.conf"
 FILE_FEATURES = "features.conf"
+# The dial-by-name directory's names (issue #135): read by Directory() through
+# its c() option on every call, so it needs no module reload.
+FILE_DIRECTORY = "directory.conf"
 MANAGED_FILES = [
     FILE_TRANSPORTS,
     FILE_ENDPOINTS,
@@ -57,6 +60,7 @@ MANAGED_FILES = [
     FILE_CONFBRIDGE,
     FILE_PARKING,
     FILE_FEATURES,
+    FILE_DIRECTORY,
 ]
 
 # Module reload per file. Order matters: transports before endpoints is the
@@ -500,6 +504,7 @@ def _generate(
         _confbridge(rooms, moh, _path(recordings_dir, "recordings directory")),
         _parking_conf(lots),
         _features_conf(_feature_codes(snapshot)),
+        _directory_conf(snapshot, boxes),
     ]
 
 
@@ -1278,7 +1283,7 @@ def _dialplan(
             lines += _fax_contexts(mine(fax_inboxes, ns), fax_dir)
             lines += _agent_contexts(codes, mine(queues, ns))
             lines += _parking_contexts(mine(lots, ns))
-            lines += _directory_context()
+            lines += _directory_context(_directory_operator(snapshot, ns))
     moh = _check_moh(list(snapshot.get("hold_music") or []))
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -3172,23 +3177,68 @@ def _announcement_contexts(announcements: list[dict[str, Any]], prompts_dir: str
     return lines
 
 
-def _directory_context() -> list[str]:
+def _directory_operator(snapshot: dict[str, Any], ns: str) -> str | None:
+    """The operator number of the namespace's organization (issue #135)."""
+    for o in snapshot.get("organizations") or []:
+        if engine_names.for_org(str(o.get("slug") or "")).ns != ns:
+            continue
+        op = o.get("directory_operator")
+        if op:
+            if not _NUMBER_RE.match(str(op)):
+                raise GenerationError(f"directory operator {op!r} is not valid")
+            return str(op)
+    return None
+
+
+def _directory_context(operator: str | None = None) -> list[str]:
     """``veyra-directory``: dial by name over the organization's voicemail
-    boxes (docs/CALL_FEATURES.md §4.2); 0 or * leave with a goodbye."""
+    boxes and its own directory names (docs/CALL_FEATURES.md §4.2; the names
+    are in ``directory.conf``); 0 reaches the operator when there is one, *
+    leaves with a goodbye."""
     n = engine_names.current()
+    zero = (
+        [f"exten => o,1,Goto({n.internal},{operator},1)"]
+        if operator
+        else ["exten => o,1,Playback(vm-goodbye)", " same => n,Hangup()"]
+    )
     return [
         f"[{n.directory}]",
         "exten => s,1,NoOp(Veyra dial-by-name directory)",
         " same => n,Answer()",
-        f" same => n,Directory({n.voicemail},{n.internal},eb)",
+        f" same => n,Directory({n.voicemail},{n.internal},ebc(veyra/{FILE_DIRECTORY}))",
         " same => n,Playback(vm-goodbye)",
         " same => n,Hangup()",
-        "exten => o,1,Playback(vm-goodbye)",
-        " same => n,Hangup()",
+        *zero,
         "exten => a,1,Playback(vm-goodbye)",
         " same => n,Hangup()",
         "",
     ]
+
+
+def _directory_conf(snapshot: dict[str, Any], boxes: Boxes) -> GeneratedFile:
+    """Directory()'s own file (voicemail.conf layout, no PINs): per voicemail
+    context the people with a box and the organization's directory names."""
+    sections: dict[str, list[str]] = {}
+    for (org, number), b in sorted(
+        boxes.items(), key=lambda kv: (kv[0][0], len(kv[0][1]), kv[0][1])
+    ):
+        name = _display(b.get("name"))
+        if not name or not _NUMBER_RE.match(number):
+            continue
+        sections.setdefault(engine_names.for_org(org).voicemail, []).append(f"{number} => ,{name}")
+    for o in snapshot.get("organizations") or []:
+        ctx = engine_names.for_org(str(o.get("slug") or "")).voicemail
+        for e in o.get("directory_entries") or []:
+            number, name = str(e.get("number") or ""), _display(e.get("name"))
+            if not _NUMBER_RE.match(number) or not name:
+                raise GenerationError(f"directory name {e.get('name')!r} is not valid")
+            sections.setdefault(ctx, []).append(f"{number} => ,{name}")
+    lines = [HEADER]
+    for ctx in sorted(sections):
+        lines += [f"[{ctx}]", *sections[ctx], ""]
+    if len(lines) == 1:
+        lines += ["[veyra-empty]", ""]
+    return GeneratedFile(FILE_DIRECTORY, "\n".join(lines).rstrip("\n") + "\n")
 
 
 def _conference_profiles(slug: str) -> tuple[str, str, str, str, str]:

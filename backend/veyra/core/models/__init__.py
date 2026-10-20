@@ -10,6 +10,8 @@ from veyra.core.models.callflow import (
     CallerBlockPolicy,
     CallFlow,
     ConferenceRoom,
+    DirectoryEntry,
+    DirectorySettings,
     ParkingLot,
 )
 from veyra.core.models.calls import CallLeg, CallRecord, QueueEvent
@@ -148,6 +150,8 @@ __all__ = [
     "Device",
     "DeviceProfile",
     "DeviceProfilePaging",
+    "DirectoryEntry",
+    "DirectorySettings",
     "EmergencyCall",
     "Extension",
     "ExtensionState",

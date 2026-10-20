@@ -31,6 +31,8 @@ from veyra.core.models import (
     ClassOfService,
     ConferenceRoom,
     Device,
+    DirectoryEntry,
+    DirectorySettings,
     Extension,
     ExtensionState,
     FaxInbox,
@@ -272,6 +274,14 @@ def _callflow(
 def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     inst = db.scalar(select(Installation))
     orgs = db.scalars(select(Organization).order_by(Organization.slug)).all()
+    directory_operator = {
+        d.organization_id: d.operator_number for d in db.scalars(select(DirectorySettings))
+    }
+    directory_entries: dict[Any, list[dict[str, str]]] = {}
+    for d in db.scalars(select(DirectoryEntry).order_by(DirectoryEntry.name)):
+        directory_entries.setdefault(d.organization_id, []).append(
+            {"name": d.name, "number": d.number}
+        )
     active = {o.id for o in orgs if o.is_active}
     extensions = [
         e
@@ -449,6 +459,9 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "hold_music": moh_slug(o.moh_class_id, o.id),
                 "fax_header": o.fax_header,
                 "fax_station_id": o.fax_station_id,
+                # The dial-by-name directory's operator and own names (#135).
+                "directory_operator": directory_operator.get(o.id),
+                "directory_entries": directory_entries.get(o.id, []),
             }
             for o in orgs
         ],

@@ -68,6 +68,7 @@ export const NAV: NavSection[] = [
     { label: "Fax", href: "/fax/", icon: "file", permissions: ["fax.read"], group: "Call handling" },
     { label: "IVR Menus", href: "/ivr/", icon: "ivr", permissions: ["ivr.read"], group: "Call handling" },
     { label: "Announcements", href: "/announcements/", icon: "play", permissions: ["ivr.read"], group: "Call handling" },
+    { label: "Dial by Name", href: "/name-directory/", icon: "search", permissions: ["ivr.read"], group: "Call handling" },
     { label: "Conference Rooms", href: "/conferences/", icon: "users", permissions: ["groups.read"], group: "Call handling" },
     { label: "Parking", href: "/parking/", icon: "pause", permissions: ["groups.read"], group: "Call handling" },
     { label: "Audio", href: "/prompts/", icon: "audio", permissions: ["ivr.read"], group: "Audio" },

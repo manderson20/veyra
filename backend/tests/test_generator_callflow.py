@@ -135,8 +135,41 @@ def test_announcement_rejects_bad_repeat_key_and_duplicate_slug():
 def test_directory_context_uses_the_voicemail_context_of_the_namespace():
     dp = _files(_snapshot())["extensions.conf"]
     directory = _context(dp, "veyra-directory")
-    assert "Directory(veyra,veyra-internal,eb)" in directory
+    assert "Directory(veyra,veyra-internal,ebc(veyra/directory.conf))" in directory
     assert "exten => o,1,Playback(vm-goodbye)" in directory
+
+
+def test_directory_names_and_operator():
+    """Custom directory names and the operator on 0 (#135)."""
+    snap = _snapshot()
+    snap["organizations"][0]["directory_operator"] = "1000"
+    snap["organizations"][0]["directory_entries"] = [
+        {"name": "Front office", "number": "2000"},
+        {"name": "Nurse", "number": "1003"},
+    ]
+    snap["voicemail_boxes"] = [
+        {
+            "number": "1001",
+            "name": "Pat Example",
+            "organization": snap["organizations"][0]["slug"],
+            "timezone": "UTC",
+            "pin": "1234",
+            "email": None,
+            "attach_audio": True,
+            "delete_after_email": False,
+            "ring_seconds": 20,
+        }
+    ]
+    files = _files(snap)
+    conf = files["directory.conf"]
+    assert "[veyra]" in conf and "1001 => ,Pat Example" in conf
+    assert "2000 => ,Front office" in conf and "1003 => ,Nurse" in conf
+    assert "1234" not in conf  # no PINs in the directory file
+    directory = _context(files["extensions.conf"], "veyra-directory")
+    assert "exten => o,1,Goto(veyra-internal,1000,1)" in directory
+    snap["organizations"][0]["directory_entries"] = [{"name": "", "number": "2000"}]
+    with pytest.raises(generator.GenerationError, match="directory name"):
+        _files(snap)
 
 
 def test_conference_pin_variants_and_confbridge_file():

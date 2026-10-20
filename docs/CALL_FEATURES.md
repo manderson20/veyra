@@ -496,8 +496,15 @@ boxes (an extension needs a box to be listed), hear the extension number,
 and are connected; `0` and `*` leave with a goodbye. Available wherever a
 destination is chosen.
 
-*Built 2026-10-18.* Custom entries and a configurable operator are not in
-this slice.
+*Built 2026-10-18.* *Custom names and the operator, built 0.27.10 (#135,
+migration `0061`):* `directory_entries` (organization, name, number of the
+organization) and `directory_settings.operator_number`; Telephony → Dial by
+Name. The generator writes `directory.conf` (voicemail.conf layout without
+PINs: each voicemail context lists the boxes and the organization's names)
+and `Directory()` reads it with `c(veyra/directory.conf)`; `o` goes to the
+operator in the phone context, or says goodbye. API `GET /name-directory`,
+`PUT /name-directory/operator`, `POST/PATCH/DELETE /name-directory/entries`
+(`ivr.read` / `ivr.write`).
 
 ### 4.3 Conference rooms
 

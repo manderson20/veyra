@@ -15,6 +15,33 @@ from sqlalchemy.orm import Mapped, mapped_column
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
 
 
+class DirectoryEntry(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """A name the dial-by-name directory offers besides the people with a
+    voicemail box (docs/CALL_FEATURES.md §4.2; issue #135): "Front office"
+    on a ring group, "Nurse" on an extension. The number is one of the
+    organization's own; the directory connects to it in the phone context."""
+
+    __tablename__ = "directory_entries"
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    number: Mapped[str] = mapped_column(String(32))
+
+
+class DirectorySettings(Base):
+    """Per organization: where 0 goes in the dial-by-name directory."""
+
+    __tablename__ = "directory_settings"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    )
+    operator_number: Mapped[str | None] = mapped_column(String(32))
+
+
 class Announcement(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     """Plays a prompt, then sends the call on (docs/CALL_FEATURES.md §4.1).
     Context ``veyra-ann-<slug>`` in the engine."""
