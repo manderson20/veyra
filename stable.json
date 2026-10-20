@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 31,
+  "sequence": 32,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.15",
+      "channel": "stable",
+      "category": "security",
+      "release_notes": "Sensitive actions (granting roles, resetting sign-ins, sign-in policies, installing updates, failover) ask for your password again when you signed in more than 15 minutes ago.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "96731aa5b1",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.15/veyra-0.27.15.tar.gz",
+        "sha256": "3d8fc4ac60bdf715ca9c5640b94df4cf5a322343bac9c2bdb1b926e93cd4a644",
+        "size": 8318987
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -530,6 +547,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T03:09:57+00:00",
-  "expires_at": "2027-01-18T03:09:57+00:00"
+  "generated_at": "2026-10-20T03:50:22+00:00",
+  "expires_at": "2027-01-18T03:50:22+00:00"
 }
