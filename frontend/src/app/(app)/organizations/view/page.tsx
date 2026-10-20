@@ -42,6 +42,7 @@ function OrganizationView() {
   const [moh, setMoh] = useState("");
   const [allowList, setAllowList] = useState("");
   const [intercom, setIntercom] = useState("allow");
+  const [pickup, setPickup] = useState("organization");
   const [ownRecordings, setOwnRecordings] = useState(false);
   const [faxHeader, setFaxHeader] = useState("");
   const [faxStation, setFaxStation] = useState("");
@@ -55,6 +56,7 @@ function OrganizationView() {
       setMoh(o.moh_class_id ?? "");
       setAllowList((o.caller_id_allow_list ?? []).join("\n"));
       setIntercom(o.intercom_default ?? "allow");
+      setPickup(o.directed_pickup ?? "organization");
       setOwnRecordings(!!o.users_play_own_recordings);
       setFaxHeader(o.fax_header ?? "");
       setFaxStation(o.fax_station_id ?? "");
@@ -69,14 +71,14 @@ function OrganizationView() {
   const routingEditable = editable && can("routing.write");
   const allowListNow = allowList.split("\n").map((n) => n.trim()).filter(Boolean);
   const allowListChanged = allowListNow.join("\n") !== (o.caller_id_allow_list ?? []).join("\n");
-  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || ownRecordings !== !!o.users_play_own_recordings || faxHeader !== (o.fax_header ?? "") || faxStation !== (o.fax_station_id ?? "");
+  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || pickup !== (o.directed_pickup ?? "organization") || ownRecordings !== !!o.users_play_own_recordings || faxHeader !== (o.fax_header ?? "") || faxStation !== (o.fax_station_id ?? "");
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}), ...(faxHeader !== (o.fax_header ?? "") ? { fax_header: faxHeader.trim() || null } : {}), ...(faxStation !== (o.fax_station_id ?? "") ? { fax_station_id: faxStation.trim() || null } : {}) });
+      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(pickup !== (o.directed_pickup ?? "organization") ? { directed_pickup: pickup } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}), ...(faxHeader !== (o.fax_header ?? "") ? { fax_header: faxHeader.trim() || null } : {}), ...(faxStation !== (o.fax_station_id ?? "") ? { fax_station_id: faxStation.trim() || null } : {}) });
       org.setData(updated);
       toast.success("Organization saved", moh !== (o.moh_class_id ?? "") ? "Deploy changes to apply the hold music." : undefined);
     } catch (err) {
@@ -100,6 +102,9 @@ function OrganizationView() {
             <TextField label="Short name" value={o.slug} disabled help="The short name cannot be changed." />
             <SelectField label="Time zone" value={tz} disabled={!editable} options={zones.map((z) => ({ value: z, label: z.replace(/_/g, " ") }))} onChange={(e) => setTz(e.target.value)} />
             <SelectField label="Intercom" value={intercom} disabled={!editable} options={[{ value: "allow", label: "Allowed: phones answer intercom calls on speaker" }, { value: "deny", label: "Denied" }]} onChange={(e) => setIntercom(e.target.value)} help="The default for this organization's extensions; each extension can override it. Needs a deployment." />
+            <SelectField label="Answer another phone's call (**extension)" value={pickup} disabled={!editable}
+              options={[{ value: "organization", label: "Any phone of the organization" }, { value: "group", label: "Only phones in the same pickup group" }]}
+              onChange={(e) => setPickup(e.target.value)} help="Who may dial ** and an extension to answer the call ringing there. *8 always stays within the pickup groups. Needs a deployment." />
             <TextArea label="Outbound caller ID allow list" rows={3} value={allowList} disabled={!routingEditable} error={errors.fields.caller_id_allow_list} spellCheck={false} placeholder="5735550100"
               help="Numbers an extension may send as outbound caller ID besides the organization's own numbers (inbound routes), one per line. Changing it needs the routing permission." onChange={(e) => setAllowList(e.target.value)} />
             <HoldMusicSelect organizationId={o.id} label="Hold music" value={moh} disabled={!editable} error={errors.fields.moh_class_id}

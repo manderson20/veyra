@@ -210,10 +210,17 @@ def test_socket_protocol_and_client(spool, tmp_path):
     sock = tmp_path / "vmstore.sock"
     t = threading.Thread(target=st.serve, args=(sock,), kwargs={"once": False}, daemon=True)
     t.start()
-    for _ in range(50):
-        if sock.exists():
+    # The file appears at bind(), a moment before listen(): wait until a
+    # connection is accepted, not only for the file.
+    import socket as socketlib
+
+    for _ in range(100):
+        try:
+            with socketlib.socket(socketlib.AF_UNIX, socketlib.SOCK_STREAM) as probe:
+                probe.connect(str(sock))
             break
-        time.sleep(0.05)
+        except OSError:
+            time.sleep(0.05)
     c = vmclient.StoreClient(sock, timeout=5)
     assert c.ping()["readable"]
     out = c.list("veyra", "1001")

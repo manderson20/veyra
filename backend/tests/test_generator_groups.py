@@ -324,3 +324,26 @@ def test_group_values_are_validated():
         _files(_snapshot(extensions=[_ext("1001", pickup_groups=["Front Desk"])]))
     with pytest.raises(generator.GenerationError, match="not valid"):
         _files(_snapshot(ring_groups=[_group(number="23a0")]))
+
+
+def test_directed_pickup_limited_to_pickup_groups():
+    """An organization can limit **<extension> to phones sharing a pickup
+    group (#138); 1003 is in no group with 1001."""
+    snap = _snapshot(
+        organizations=[
+            {"slug": "example", "name": "Example", "timezone": "UTC", "directed_pickup": "group"}
+        ],
+        extensions=[
+            _ext("1001", pickup_groups=["front"]),
+            _ext("1002", pickup_groups=["front", "back"]),
+            _ext("1003", pickup_groups=["back"]),
+        ],
+    )
+    dp = _files(snap)["extensions.conf"].content
+    one = dp.split("exten => **1001,1,")[1].split("exten => ")[0]
+    assert 'ExecIf($["${VEYRA_EXT}"="1002"]?Set(VEYRA_PEER=1))' in one
+    assert '"1003"' not in one and 'GotoIf($["${VEYRA_PEER}"!="1"]?denied)' in one
+    three = dp.split("exten => **1003,1,")[1].split("exten => ")[0]
+    assert '"1002"' in three and '"1001"' not in three
+    # The default is the whole organization: no peer check.
+    assert "VEYRA_PEER" not in _files(_snapshot())["extensions.conf"].content

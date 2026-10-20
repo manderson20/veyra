@@ -74,6 +74,11 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     intercom_default: Mapped[str] = mapped_column(
         String(8), default="allow", server_default="allow"
     )
+    # Who may answer a phone's ringing call with **<extension> (issue #138):
+    # "organization" (anyone of it) or "group" (phones sharing a pickup group).
+    directed_pickup: Mapped[str] = mapped_column(
+        String(16), default="organization", server_default="organization"
+    )
     # Users may play recordings of calls they took part in from My Phone
     # (docs/USER_PORTAL.md §5); off by default, recordings are sensitive.
     users_play_own_recordings: Mapped[bool] = mapped_column(

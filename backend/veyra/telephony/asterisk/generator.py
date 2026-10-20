@@ -1206,6 +1206,11 @@ def _dialplan(
                 mine(flows, ns),
                 mine(tcs, ns),
                 mine(queues, ns),
+                {
+                    str(o.get("slug") or "")
+                    for o in snapshot.get("organizations") or []
+                    if o.get("directed_pickup") == "group"
+                },
             )
             lines += _voicemail_exit_contexts(my_boxes(ns))
     for ns in spaces:
@@ -1866,6 +1871,7 @@ def _features(
     flows: list[dict[str, Any]] | None = None,
     conditions: list[dict[str, Any]] | None = None,
     queues: list[dict[str, Any]] | None = None,
+    group_pickup_orgs: set[str] | None = None,
 ) -> list[str]:
     """Feature codes of one namespace; ``**<ext>`` reaches only its phones."""
     n = engine_names.current()
@@ -1926,13 +1932,37 @@ def _features(
         " same => n,Pickup()",
         " same => n,Hangup()",
     ]
+    # Pickup-group peers: who may answer a phone when the organization limits
+    # **<extension> to its pickup groups (issue #138).
+    groups_of = {str(e["number"]): set(e.get("pickup_groups") or []) for e in extensions}
     for ext in extensions:
         number = str(ext["number"])
         endpoint = str(ext["endpoint_name"])
         org = _check_value(str(ext.get("organization") or ""), "organization")
+        peers: list[str] = []
+        if org in (group_pickup_orgs or set()):
+            mine = groups_of.get(number, set())
+            peers = sorted(
+                (
+                    str(e["number"])
+                    for e in extensions
+                    if e.get("organization") == org
+                    and str(e["number"]) != number
+                    and mine & groups_of.get(str(e["number"]), set())
+                ),
+                key=lambda x: (len(x), x),
+            )
+            guard = [
+                " same => n,Set(VEYRA_PEER=0)",
+                *(f' same => n,ExecIf($["${{VEYRA_EXT}}"="{p}"]?Set(VEYRA_PEER=1))' for p in peers),
+                ' same => n,GotoIf($["${VEYRA_PEER}"!="1"]?denied)',
+            ]
+        else:
+            guard = []
         lines += [
             f"exten => **{number},1,NoOp(Veyra directed pickup of {number} by ${{CALLERID(num)}})",
             f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?denied)',
+            *guard,
             f" same => n,PickupChan(PJSIP/{endpoint},,p)",
             " same => n,Hangup()",
             " same => n(denied),Playback(pbx-invalid)",

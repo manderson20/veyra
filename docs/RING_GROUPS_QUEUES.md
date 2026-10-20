@@ -348,9 +348,11 @@ answer and dialling `*8` and `**<ext>` from another.
   mobile) are later.
 * `*8` answers the longest-ringing call in the caller's groups; there is
   no choice between several ringing calls.
-* Directed pickup is restricted to the caller's organization but not to a
-  pickup group; an organization that wants pickup limited to groups should
-  not publish `**` on its phones.
+* Directed pickup is restricted to the caller's organization; since 0.27.11
+  (#138, migration `0062`) an organization can limit it to phones sharing a
+  pickup group with the ringing phone (Organizations → "Answer another
+  phone's call"; `organizations.directed_pickup` = `group`: the `**<ext>`
+  entry checks `VEYRA_EXT` against the peers before `PickupChan`).
 * Paging and intercom are not part of this milestone.
 * Since Milestone 14 group and queue numbers are unique per organization,
   like extension numbers, and each organization has its own contexts

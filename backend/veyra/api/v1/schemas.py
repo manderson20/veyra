@@ -72,6 +72,8 @@ class OrganizationPatch(BaseModel):
     caller_id_allow_list: list[str] | None = Field(None, max_length=100)
     # Intercom default for the organization's phones (docs/CALL_FEATURES.md §3.6).
     intercom_default: str | None = Field(None, pattern=r"^(allow|deny)$")
+    # Who may answer with **<extension>: the whole organization or pickup groups.
+    directed_pickup: str | None = Field(None, pattern=r"^(organization|group)$")
     # Users may play recordings of their own calls from My Phone (docs/USER_PORTAL.md §5).
     users_play_own_recordings: bool | None = None
     fax_header: str | None = Field(None, max_length=64)
@@ -109,6 +111,7 @@ class OrganizationOut(ORM):
     bootstrap_includes_credential: bool = False
     caller_id_allow_list: list[str] = []
     intercom_default: str = "allow"
+    directed_pickup: str = "organization"
     users_play_own_recordings: bool = False
     fax_header: str | None = None
     fax_station_id: str | None = None

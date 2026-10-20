@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Directed pickup within pickup groups** (#138): an organization can let only phones in the same pickup group answer another phone's ringing call with `**` and the extension (Organizations → organization → "Answer another phone's call"). The default stays: any phone of the organization. Migration `0062`; deploy the telephony configuration after installing.
+
 ## 0.27.10 — 2026-10-20
 
 Migration `0061`. Deploy the telephony configuration after installing.

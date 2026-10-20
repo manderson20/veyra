@@ -461,6 +461,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "fax_station_id": o.fax_station_id,
                 # The dial-by-name directory's operator and own names (#135).
                 "directory_operator": directory_operator.get(o.id),
+                "directed_pickup": o.directed_pickup,
                 "directory_entries": directory_entries.get(o.id, []),
             }
             for o in orgs

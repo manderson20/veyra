@@ -159,6 +159,8 @@ export interface Organization {
   caller_id_allow_list?: string[];
   /** Intercom default for the organization's phones: allow or deny. */
   intercom_default?: "allow" | "deny" | string;
+  /** Who may answer with **<extension> (#138). */
+  directed_pickup?: "organization" | "group" | string;
   /** Users may play recordings of their own calls from My Phone (docs/USER_PORTAL.md §5). */
   users_play_own_recordings?: boolean;
   fax_header?: string | null;
