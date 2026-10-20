@@ -15,7 +15,7 @@ a schedule:
 
 | Part | Choices |
 |---|---|
-| **Group by** (0-2) | `day`, `week`, `month`, `hour` (0-23), `weekday`, `direction`, `outcome`, `answered_by` (extension that answered), `called_extension`, `calling_extension`, `did`, `trunk`, `queue`, `ring_group`, `caller` (calling number) |
+| **Group by** (0-3) | `day`, `week`, `month`, `hour` (0-23), `weekday`, `direction`, `outcome`, `answered_by` (extension that answered), `called_extension`, `calling_extension`, `did`, `trunk`, `queue`, `ring_group`, `caller` (calling number) |
 | **Measures** (1+) | `calls`, `answered`, `missed` (missed + abandoned), `voicemail`, `answer_rate` (%), `avg_ring`, `total_ring`, `avg_talk`, `total_talk`, `within_sl` (% of answered calls answered within `sl_seconds`, default 20) |
 | **Filters** | period, organization, directions, outcomes, extensions (any side), DIDs, trunks, queues, ring groups, caller number contains, minimum talk seconds, **business hours** (inside or outside a time condition's ranges and holidays) |
 | **Period** | relative: `today`, `yesterday`, `last_7_days`, `last_30_days`, `this_week`, `last_week`, `this_month`, `last_month`, `this_year`; or `custom` from/to dates. Relative periods are resolved in the organization's time zone when the report runs, so a scheduled "yesterday" is always the previous day there |
