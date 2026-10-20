@@ -172,6 +172,15 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         True,
     ),
     FeatureCodeDef(
+        "presence_set",
+        "*37",
+        "Set your presence",
+        "Followed by 1 available, 2 away, 3 busy, 4 in a meeting, 5 at lunch, 6 out; "
+        "alone, back to available. Your automatic actions for that state apply.",
+        22,
+        True,
+    ),
+    FeatureCodeDef(
         "park_pickup",
         "*85",
         "Pick up a parked call",

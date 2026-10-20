@@ -1042,6 +1042,106 @@ def put_my_presence(
     return _presence_out(extension_state.get(db, ext.id), applied)
 
 
+# ------------------------------------------------- presence from the calendar (#136)
+
+
+class PresenceCalendarIn(BaseModel):
+    url: str = Field(min_length=1, max_length=2000)
+    timezone: str | None = Field(None, max_length=64)
+
+
+def _calendar_out(cfg: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "configured": bool(cfg.get("url_enc")),
+        "address": cfg.get("display"),
+        "checked_at": cfg.get("checked_at"),
+        "in_meeting": bool(cfg.get("in_meeting")),
+        "error": cfg.get("error"),
+    }
+
+
+@router.get("/presence-calendar", summary="Presence from your calendar: the settings")
+def get_presence_calendar(
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    from veyra.portal import presence_calendar as pc
+
+    return _calendar_out(pc.load(db, principal.user_id))
+
+
+@router.put("/presence-calendar", summary="Show 'in a meeting' while your calendar has an event")
+def put_presence_calendar(
+    body: PresenceCalendarIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """The secret iCal address of your calendar; it is read now once, to
+    check it, and then every few minutes by the server."""
+    from veyra.bells import calendars
+    from veyra.core.models.base import utcnow
+    from veyra.core.security.crypto import load_installation_key
+    from veyra.portal import presence_calendar as pc
+
+    try:
+        url = pc.check_public_url(body.url)
+        pc.current_event(calendars.fetch(url), utcnow(), body.timezone)
+    except (pc.CalendarAddressError, calendars.CalendarError) as e:
+        raise ProblemError(
+            422,
+            "Calendar not usable",
+            str(e),
+            code="validation_failed",
+            errors=[{"field": "url", "message": str(e)}],
+        ) from e
+    key = load_installation_key(request.app.state.settings)
+    pc.save(
+        db,
+        principal.user_id,
+        {
+            "url_enc": key.encrypt(url, pc.purpose(principal.user_id)),
+            "display": calendars.display_url(url),
+            "timezone": body.timezone,
+        },
+    )
+    audit.record(
+        db,
+        action="presence.calendar_set",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"address": calendars.display_url(url)},
+    )
+    db.commit()
+    return _calendar_out(pc.load(db, principal.user_id))
+
+
+@router.delete("/presence-calendar", status_code=204, summary="Stop using your calendar")
+def delete_presence_calendar(
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    from veyra.portal import presence_calendar as pc
+
+    if pc.load(db, principal.user_id).get("set_meeting"):
+        pc.apply(db, principal.user_id, False)
+    pc.save(db, principal.user_id, None)
+    audit.record(
+        db,
+        action="presence.calendar_remove",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+    )
+    db.commit()
+    return Response(status_code=204)
+
+
 # ------------------------------------------------- portal layout (§10)
 
 

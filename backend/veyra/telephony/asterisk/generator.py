@@ -1596,6 +1596,31 @@ def _dnd_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     return lines
 
 
+PRESENCE_EVENT = "VeyraPresence"
+
+
+def _presence_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
+    """``*37<1-6>`` (issue #136): the phone sets its user's presence; the API
+    applies it (and the user's automatic actions) from the UserEvent."""
+    code = codes.get("presence_set")
+    if not code:
+        return []
+    body = [
+        f" same => n,UserEvent({PRESENCE_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},"
+        "State: ${VEYRA_PRESENCE})",
+        " same => n,Playback(beep)",
+        " same => n,Hangup()",
+    ]
+    lines = _code_block(f"exten => {code},1,Set(VEYRA_PRESENCE=1)", body, cos, "presence_set")
+    lines += _code_block(
+        f"exten => _{code}[1-6],1,Set(VEYRA_PRESENCE=${{EXTEN:{len(code)}}})",
+        body,
+        cos,
+        "presence_set",
+    )
+    return lines
+
+
 FM_DEVICE = "Custom:veyra-fm-${VEYRA_ORG}-${VEYRA_EXT}"
 FM_STRATEGIES = ("ringall", "sequential")
 FM_CALLER_ID_MODES = ("caller", "extension")
@@ -1987,6 +2012,7 @@ def _features(
     lines = [
         f"[{n.features}]",
         *_dnd_codes(codes, cos),
+        *_presence_codes(codes, cos),
         *_forward_codes(codes, cos),
         *_follow_me_codes(codes, cos),
         *_intercom_code(codes, cos),

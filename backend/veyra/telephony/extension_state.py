@@ -284,6 +284,56 @@ def handle_userevent(db: Session, userevent: dict[str, Any]) -> ExtensionState |
     return row
 
 
+# *37<n> (issue #136): the digit dialled after the code.
+PRESENCE_DIGITS = dict(enumerate(PRESENCE_STATES, start=1))
+
+
+def handle_presence_userevent(db: Session, userevent: dict[str, Any]) -> dict[str, Any] | None:
+    """The phone set its user's presence: the same as the portal does, with
+    the user's automatic actions for that state."""
+    org_slug = str(userevent.get("org") or userevent.get("Org") or "")
+    number = str(userevent.get("extension") or userevent.get("Extension") or "")
+    try:
+        state = PRESENCE_DIGITS[int(str(userevent.get("state") or userevent.get("State") or "1"))]
+    except (KeyError, ValueError):
+        return None
+    org = db.scalar(select(Organization).where(Organization.slug == org_slug))
+    if org is None:
+        return None
+    ext = db.scalar(
+        select(Extension).where(Extension.organization_id == org.id, Extension.number == number)
+    )
+    if ext is None:
+        return None
+    rules: dict[str, Any] = {}
+    if ext.user_id is not None:
+        from veyra.core.models import UserPreference
+
+        prefs = db.get(UserPreference, ext.user_id)
+        portal = ((prefs.data or {}) if prefs else {}).get("portal") or {}
+        rules = dict(portal.get("presence_rules") or {})
+    rule = dict(rules.get(state) or {})
+    if rule.get("cf_always"):
+        # The same class-of-service check as the portal: a forward the class
+        # does not allow is left out, the presence still changes.
+        from veyra.api.v1.me import _check_forward_limits
+
+        try:
+            _check_forward_limits(db, ext, {"cf_always": rule["cf_always"]})
+        except Exception:
+            rules[state] = {**rule, "cf_always": None}
+    from veyra.core.config import get_settings
+    from veyra.telephony import get_adapter
+
+    try:
+        adapter = get_adapter(get_settings())
+    except Exception:
+        adapter = None
+    changed = set_presence(db, ext, state, None, by="phone", rules=rules, adapter=adapter)
+    db.commit()
+    return changed
+
+
 def sync(db: Session, adapter: Any) -> int:
     """Make the engine's copies match the rows (worker, every pass). Returns
     how many fields were corrected."""

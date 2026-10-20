@@ -272,7 +272,19 @@ dial line to the colleague for every extension; `set_presence` sets the
 device state through `adapter.set_presence_lamp`; key type `presence`
 (profiles, devices, and the user's own keys) renders as a BLF on
 `*36<ext>`. Not in this slice: phone-side
-presence menus, calendar integration.
+presence menus, calendar integration. *Built 2026-10-20 (0.27.28, issue
+#136):* **from the phone**, feature code `presence_set` (`*37`): `*37<1-6>`
+sets available, away, busy, meeting, lunch or out (`*37` alone: available)
+through `UserEvent(VeyraPresence)` → `extension_state.handle_presence_userevent`
+(the user's automatic actions apply; a forward the class of service does
+not allow is left out). **From the calendar**, `veyra.portal.presence_calendar`:
+the user's secret iCal address (`PUT/GET/DELETE /me/presence-calendar`;
+https to public hosts only, stored encrypted in the system setting
+`presence.calendar:<user id>`); every 5 minutes the worker sets *meeting*
+("In a meeting", never the title) on the user's extensions while a timed
+event is on and they were available, and *available* again when it ends
+if the calendar set it; all-day events are ignored. Not yet: Microsoft
+Teams / Graph presence.
 
 *Built 2026-10-19 (slice E):* `extension_states.presence` /
 `presence_message` (migration `0049`), `extension_state.set_presence`

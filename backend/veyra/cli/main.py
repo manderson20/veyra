@@ -1105,6 +1105,11 @@ def deliver_webhooks(settings: Any, log: Any) -> None:
             sources.voicemail_notifications(
                 db, settings.mailqueue_dir, store=StoreClient(settings.vmstore_socket)
             )
+        # Presence from users' calendars (issue #136), every few minutes.
+        from veyra.portal import presence_calendar
+
+        with session_scope() as db:
+            presence_calendar.process(db, try_load_installation_key(settings))
         # Automation rules (issue #117): emails and pages of fired rules.
         from veyra.integrations import automation
         from veyra.telephony import get_adapter

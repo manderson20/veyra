@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.28 — 2026-10-20
+
+No migration. Deploy the telephony configuration after installing (for `*37`).
+
+### Added
+- **Set your presence from the phone** (#136): dial `*37` followed by 1 (available), 2 (away), 3 (busy), 4 (in a meeting), 5 (at lunch) or 6 (out); `*37` alone puts you back to available. Your automatic actions for that state (Do Not Disturb, a forward) apply, as on My Phone.
+- **Presence from your calendar** (#136): on My Phone → Presence → **From your calendar**, paste your calendar's secret iCal address (Google or Outlook). While a meeting is on, colleagues see "In a meeting" — never the meeting's title — and afterwards you are available again. A state you picked by hand is left alone.
+
 ## 0.27.27 — 2026-10-20
 
 Migration `0066`.

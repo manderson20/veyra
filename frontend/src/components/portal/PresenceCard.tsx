@@ -102,9 +102,73 @@ export function PresenceCard({ base, editable = true }: { base: string; editable
               <div className="form-actions"><Button variant="primary" loading={busy} onClick={saveRules}>Save actions</Button></div>
             </div>
           ) : null}
+          {editable ? <CalendarPresence /> : null}
           {error ? <Callout tone="danger">{error}</Callout> : null}
         </div>
       ) : <p className="subtle">Loading…</p>}
     </Card>
+  );
+}
+
+interface CalendarState { configured: boolean; address: string | null; checked_at: string | null; in_meeting: boolean; error: string | null }
+
+/** "In a meeting" while the user's calendar has an event (issue #136). */
+function CalendarPresence() {
+  const toast = useToast();
+  const cal = useApiData<CalendarState>("/me/presence-calendar");
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const c = cal.data;
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      cal.setData(await api.put<CalendarState>("/me/presence-calendar", { url: url.trim(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }));
+      setUrl("");
+      setOpen(false);
+      toast.success("Calendar connected", "Your presence follows your meetings within a few minutes.");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.del("/me/presence-calendar");
+      cal.reload();
+      toast.success("Calendar disconnected");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="stack stack--sm" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+      <div className="row row--between" style={{ flexWrap: "wrap", gap: 8 }}>
+        <span>
+          <span className="table__primary" style={{ display: "block" }}>From your calendar</span>
+          <span className="table__secondary">
+            {c?.configured ? `${c.address ?? "Connected"}${c.in_meeting ? " · in a meeting now" : ""}${c.error ? ` · last check failed: ${c.error}` : ""}` : "Show “in a meeting” while your calendar has an event."}
+          </span>
+        </span>
+        <span className="row" style={{ gap: 8 }}>
+          <Button size="sm" onClick={() => setOpen((o) => !o)}>{c?.configured ? "Change" : "Connect…"}</Button>
+          {c?.configured ? <Button size="sm" onClick={() => void remove()} disabled={busy}>Disconnect</Button> : null}
+        </span>
+      </div>
+      {open ? (
+        <div className="stack stack--sm">
+          <TextField label="Your calendar's secret iCal address" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
+            help="Google Calendar: Settings → your calendar → “Secret address in iCal format”. Outlook: Settings → Calendar → Shared calendars → Publish, the ICS link. Only the times are used; titles are not shown to colleagues." />
+          <div className="form-actions"><Button onClick={() => setOpen(false)} disabled={busy}>Cancel</Button><Button variant="primary" loading={busy} disabled={!url.trim()} onClick={() => void save()}>Connect</Button></div>
+        </div>
+      ) : null}
+      {error ? <Callout tone="danger">{error}</Callout> : null}
+    </div>
   );
 }

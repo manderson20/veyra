@@ -1171,3 +1171,58 @@ def test_record_toggle_class_guard():
     od = _section(d, "veyra-ondemand")
     assert 'GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})}]?denied)' in od
     assert " same => n(denied),Playback(beeperr)" in od
+
+
+def test_presence_code_dialplan():
+    """*37<n> (issue #136): the phone tells the API which state."""
+    snap = _snapshot(feature_codes={"presence_set": "*37"})
+    d = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    feat = _section(d, "veyra-features")
+    assert "exten => *37,1,Set(VEYRA_PRESENCE=1)" in feat
+    assert "exten => _*37[1-6],1,Set(VEYRA_PRESENCE=${EXTEN:3})" in feat
+    assert (
+        "UserEvent(VeyraPresence,Org: ${VEYRA_ORG},Extension: ${VEYRA_EXT},"
+        "State: ${VEYRA_PRESENCE})" in feat
+    )
+
+
+def test_presence_from_the_phone_applies_the_rules(admin, app):
+    from conftest import ADMIN_PASSWORD, login
+    from fastapi.testclient import TestClient
+    from test_api_mfa import _make_user
+
+    from veyra.core.db import session_scope
+    from veyra.telephony import extension_state
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    uid = _make_user(admin, "pat@example.org")
+    ext = admin.post(
+        "/api/v1/extensions",
+        json={
+            "organization_id": org["id"],
+            "number": "1001",
+            "display_name": "Pat",
+            "user_id": uid,
+        },
+    ).json()
+    user = login(TestClient(app, base_url="http://veyra.test"), "pat@example.org", ADMIN_PASSWORD)
+    r = user.put(
+        "/api/v1/me/preferences", json={"portal": {"presence_rules": {"meeting": {"dnd": True}}}}
+    )
+    assert r.status_code == 200, r.text
+    with session_scope() as db:
+        out = extension_state.handle_presence_userevent(
+            db, {"Org": org["slug"], "Extension": "1001", "State": "4"}
+        )
+    assert out is not None
+    p = user.get(f"/api/v1/me/extensions/{ext['id']}/presence").json()
+    assert p["state"] == "meeting"
+    st = admin.get(f"/api/v1/extensions/{ext['id']}/state").json()
+    assert st["dnd"] is True
+    with session_scope() as db:
+        assert (
+            extension_state.handle_presence_userevent(
+                db, {"Org": org["slug"], "Extension": "1001", "State": "9"}
+            )
+            is None
+        )

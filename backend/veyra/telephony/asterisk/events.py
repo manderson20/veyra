@@ -209,6 +209,25 @@ def _extstate(event: dict[str, Any]) -> None:
         log.exception("Could not handle the extension state event")
 
 
+PRESENCE_EVENT = "VeyraPresence"
+
+
+def is_presence_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == PRESENCE_EVENT
+
+
+def _presence(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraPresence)`` from ``*37<n>`` (issue #136); never raises."""
+    try:
+        from veyra.core.db import session_scope
+        from veyra.telephony import extension_state
+
+        with session_scope() as db:
+            extension_state.handle_presence_userevent(db, event.get("userevent") or {})
+    except Exception:
+        log.exception("Could not handle the presence event")
+
+
 SWITCH_EVENT = "VeyraSwitch"
 
 
@@ -413,6 +432,8 @@ class AriEventListener:
                             await asyncio.to_thread(_extstate, event)
                         elif is_switch_event(event):
                             _switch(event)
+                        elif is_presence_event(event):
+                            _presence(event)
                         elif is_page_event(event):
                             await asyncio.to_thread(_page, event)
                         elif is_blacklist_event(event):
