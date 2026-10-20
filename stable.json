@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 25,
+  "sequence": 26,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.9",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Calls from blocked callers and calls a class of service refused show as such in the call history and reports. Deploy the telephony configuration after installing.",
+      "service_impact": "The web interface and API restart (under a minute); Asterisk reloads its call-record format; calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "b9a920fce9",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.9/veyra-0.27.9.tar.gz",
+        "sha256": "3b996e51790d94348c8023634dbf3371767352cc6ae701bd37350239f357a10d",
+        "size": 8299752
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -428,6 +445,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-19T23:45:48+00:00",
-  "expires_at": "2027-01-17T23:45:48+00:00"
+  "generated_at": "2026-10-20T00:37:30+00:00",
+  "expires_at": "2027-01-18T00:37:30+00:00"
 }
