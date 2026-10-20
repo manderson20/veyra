@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.37 — 2026-10-20
+
+No migration. Module API 1.3.
 
 ### Added
 - **More module commands on the server** (#149): `sudo veyra modules` can now uninstall, update, upload a `.vmod` package, roll back, and show or change a module's settings, as the Module Manager page does. Each one is audited.
