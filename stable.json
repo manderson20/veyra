@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 36,
+  "sequence": 37,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.20",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Import and export extensions, users, inbound routes and shared inboxes as CSV, with a dry run.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "f7145eada4",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.20/veyra-0.27.20.tar.gz",
+        "sha256": "da8fc9172f1443ab629727628df61a12ee75beec58132572210a494c86522145",
+        "size": 8357315
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -615,6 +632,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T05:29:56+00:00",
-  "expires_at": "2027-01-18T05:29:56+00:00"
+  "generated_at": "2026-10-20T05:46:31+00:00",
+  "expires_at": "2027-01-18T05:46:31+00:00"
 }
