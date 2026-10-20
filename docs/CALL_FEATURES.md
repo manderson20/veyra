@@ -656,7 +656,7 @@ API `GET/POST /parking-lots`, `GET/PATCH/DELETE /parking-lots/{id}`
 
 *Built 2026-10-18.* Not in this slice: a dedicated *park* line-key type in
 the provisioning templates (#40) and FreePBX's `*85<slot>` pickup code
-(dialling the slot does the same). *`*85<slot>` built 2026-10-21 (0.27.23,
+(dialling the slot does the same). *`*85<slot>` built 2026-10-20 (0.27.23,
 issue #135):* feature code `park_pickup` (default `*85`); the phone context
 gets `*85<slot>` → the slot's extension in the lot's context, with the
 `park:<slot>@<lot>` hint so a key on it lights.
@@ -775,7 +775,7 @@ policy), plays a beep, and stops the recording on the next press.
 *Built 2026-10-18.* Not in this slice: class-of-service guards for the
 in-call codes (the allowed-codes list applies to dialled codes), and a
 "record this call" button in the interface. *Record button built
-2026-10-21 (0.27.25, issue #135):* Calls → **Record** / **Stop recording**
+2026-10-20 (0.27.25, issue #135):* Calls → **Record** / **Stop recording**
 (`POST /calls/{channel}/record {action: start|stop}`, permission
 `calls.record`, audited `call.record_start|stop`). The adapter sets
 `VEYRA_CALLREC` and `CDR(veyra_rec)` on the channel through ARI and runs

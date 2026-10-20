@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## 0.27.25 — 2026-10-21
+## 0.27.25 — 2026-10-20
 
 No migration. Deploy the telephony configuration after installing.
 
@@ -16,7 +16,7 @@ No migration. Deploy the telephony configuration after installing.
 - **Record a call from the web** (#135): Calls (the live call list) has **Record** and **Stop recording** next to each call, for administrators with the new permission "Start and stop recording a call in progress" (organization and site administrators by default). The recording is filed with the call under Call Recording, like the phone's record code.
 - **Classes of service cover the in-call codes** (#135): a class that does not allow "Record this call" gets an error tone when its phone presses the record code, and a class that allows neither transfer code cannot transfer calls with the transfer keys. Deploy the telephony configuration after installing.
 
-## 0.27.24 — 2026-10-21
+## 0.27.24 — 2026-10-20
 
 No migration.
 
@@ -29,7 +29,7 @@ No migration.
 ### Fixed
 - Voicemail webhooks no longer mix up two organizations that use the same box number.
 
-## 0.27.23 — 2026-10-21
+## 0.27.23 — 2026-10-20
 
 No migration. Deploy the telephony configuration after installing.
 
@@ -44,7 +44,7 @@ No migration. Deploy the telephony configuration after installing.
 - **Module author guide** (#94): docs/MODULE_AUTHOR_GUIDE.md explains what a module is, the core concepts, what a module can and cannot extend today, a complete worked example with tests, and a prompt to give an AI coding agent that builds a module.
 - **`*85` + slot picks up a parked call** (#135), the FreePBX habit; dialling the slot alone still works. A phone key on `*85<slot>` lights while a call waits there. The code can be changed or turned off on the Feature Codes page.
 
-## 0.27.22 — 2026-10-21
+## 0.27.22 — 2026-10-20
 
 Migration `0065`.
 

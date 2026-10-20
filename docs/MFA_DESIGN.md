@@ -202,7 +202,7 @@ is you" dialog on `reauth_required` and sends the request again.
 * NGINX rate-limits `/api/v1/auth/mfa/verify` like sign-in; the API's
   per-address limiter is shared with sign-in.
 
-## 12. Passkeys (issue #107, built 2026-10-21, 0.27.22)
+## 12. Passkeys (issue #107, built 2026-10-20, 0.27.22)
 
 * **Factor** `webauthn` in `mfa_methods` (`credential` = `{id, public_key,
   sign_count, transports, aaguid, backed_up, rp_id}`, base64url; while
