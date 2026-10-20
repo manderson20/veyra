@@ -40,3 +40,15 @@ def test_bundled_module_imports_are_production_dependencies():
                 if not names & allowed:
                     missing.append(f"{py.relative_to(REPO)} imports {top}")
     assert not missing, missing
+
+
+def test_python_requirements():
+    """#149: [runtime] requires is checked against the core's environment."""
+    from veyra.modules import requirements
+
+    assert requirements.problem("pydantic") is None
+    assert requirements.problem("pydantic>=2.0,<99") is None
+    assert "this Veyra has pydantic" in requirements.problem("pydantic>=99")
+    assert "does not include" in requirements.problem("surely-not-installed-lib")
+    assert not requirements.valid("pydantic>=2; os_name=='nt'")
+    assert requirements.valid("python-multipart>=0.0.20")

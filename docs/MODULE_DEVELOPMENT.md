@@ -47,6 +47,7 @@ engines = ["asterisk"]                  # empty = engine independent
 [runtime]
 type = "in_process"                     # official modules only; others: "service" (planned)
 entrypoint = "backend:module"           # <package>[.<submodule>]:<object>
+requires = ["httpx>=0.27"]              # Python libraries it imports (checked, not installed)
 
 [[dependencies]]
 id = "veyra.extensions"
@@ -146,6 +147,7 @@ module = MyModule()
 | `add_periodic_task(name, seconds, fn)` | *(1.1)* Background work run by the `veyra-worker` service about every `seconds` (≥ 5) while enabled; open `session()` inside; errors are logged |
 | `encrypt(text)` / `decrypt(token)` | *(1.1)* Secrets (device passwords) encrypted with the installation key and bound to the module |
 | `organization_timezone(db, org_id)` | *(1.1)* The organization's IANA time zone, for times administrators type in |
+| `organizations(db)`, `sites(db, org_id)`, `extensions(db, org_id, site_id=, number=)`, `extension(db, id)`, `devices(db, org_id, site_id=)`, `users(db, org_id)` | *(1.3)* Read-only core data as frozen records (`OrganizationInfo`, `SiteInfo`, `ExtensionInfo`, `DeviceInfo`, `UserInfo` in `veyra.sdk`) without secrets. They do not check permissions: filter by what the caller may see. |
 
 **Processes.** The API service loads enabled modules with their routes. The
 worker service *(1.1)* loads them too, without routes, checks every minute
@@ -164,7 +166,7 @@ Core events a module may subscribe to include `organization.created`,
 platform-wide access), and check `principal.has(<permission>, org_id)`
 before writing. The example module shows the pattern.
 
-`MODULE_API_VERSION` follows semantic versioning (currently 1.2.0; a module
+`MODULE_API_VERSION` follows semantic versioning (currently 1.3.0; a module
 using the 1.1 additions declares `core_api = ">=1.1.0 <2.0.0"`). A breaking change to
 `ModuleContext` bumps the major version, and modules declare the range
 they support.

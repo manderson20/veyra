@@ -13,6 +13,8 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 ### Added
 - **More module commands on the server** (#149): `sudo veyra modules` can now uninstall, update, upload a `.vmod` package, roll back, and show or change a module's settings, as the Module Manager page does. Each one is audited.
 - **Module settings per organization** (#149): a module's Settings dialog has a "Settings for" choice, so a module's per-organization settings can be set for each organization from the web interface.
+- **Modules can read phones, extensions, users and sites** (#149, module API 1.3): module authors get read-only lists of them without passwords or PINs, instead of relying on events.
+- **Modules say which Python libraries they need** (#149): a module lists them in its manifest (`[runtime] requires`), and Veyra refuses to install it with a clear message when one is missing, instead of failing when it loads.
 
 ### Fixed
 - Veyra creates a module's private data folder when the module loads; modules no longer have to create it.

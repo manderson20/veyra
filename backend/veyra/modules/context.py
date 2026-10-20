@@ -35,6 +35,7 @@ from veyra.core.security.crypto import (
     load_installation_key,
 )
 from veyra.core.security.principal import Principal
+from veyra.modules import core_data
 
 if TYPE_CHECKING:
     from veyra.core.config import Settings
@@ -198,6 +199,36 @@ class ModuleContext:
 
         org = db.get(Organization, organization_id)
         return org.timezone if org and org.timezone else "UTC"
+
+    # -- core data (module API 1.3) ---------------------------------------------
+    # Read-only records without secrets (veyra/modules/core_data.py). Filter
+    # by what the caller may see before returning them from a route.
+    def organizations(self, db: Session) -> list[core_data.OrganizationInfo]:
+        return core_data.organizations(db)
+
+    def sites(self, db: Session, organization_id: uuid.UUID) -> list[core_data.SiteInfo]:
+        return core_data.sites(db, organization_id)
+
+    def extensions(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        *,
+        site_id: uuid.UUID | None = None,
+        number: str | None = None,
+    ) -> list[core_data.ExtensionInfo]:
+        return core_data.extensions(db, organization_id, site_id=site_id, number=number)
+
+    def extension(self, db: Session, extension_id: uuid.UUID) -> core_data.ExtensionInfo | None:
+        return core_data.extension(db, extension_id)
+
+    def devices(
+        self, db: Session, organization_id: uuid.UUID, *, site_id: uuid.UUID | None = None
+    ) -> list[core_data.DeviceInfo]:
+        return core_data.devices(db, organization_id, site_id=site_id)
+
+    def users(self, db: Session, organization_id: uuid.UUID) -> list[core_data.UserInfo]:
+        return core_data.users(db, organization_id)
 
     # -- audit -----------------------------------------------------------------
     def audit(self, db: Session, principal: Principal | None, action: str, **kwargs: Any) -> None:

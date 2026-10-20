@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from conftest import make_settings
+import uuid
+
+import pytest
+from conftest import REPO, make_settings
 from sqlalchemy import inspect
 
 from veyra.core.db import get_engine
@@ -94,3 +97,47 @@ def test_unsigned_module_refused_in_production(database_url, tmp_path, db_ready)
         r = c.post(f"/api/v1/modules/{MOD}/install")
         assert r.status_code == 409
         assert "verification failed" in r.json()["errors"][0]["message"]
+
+
+def test_core_data_for_modules(app, admin):
+    """#149: module API 1.3 read-only core data, without secrets."""
+    import dataclasses
+
+    from veyra.core.db import session_scope
+    from veyra.core.events import EventBus
+    from veyra.modules.context import ModuleContext
+    from veyra.modules.manifest import load_manifest
+    from veyra.sdk import ExtensionInfo
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    r = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "2101", "display_name": "Front desk"},
+    )
+    assert r.status_code == 201, r.text
+    manifest = load_manifest(REPO / "modules" / "veyra-example-notes")
+    ctx = ModuleContext(manifest, REPO, REPO, EventBus())
+    org_id = uuid.UUID(org["id"])
+    with session_scope() as db:
+        assert org_id in {o.id for o in ctx.organizations(db)}
+        exts = ctx.extensions(db, org_id)
+        assert [e.number for e in exts] == ["2101"] and isinstance(exts[0], ExtensionInfo)
+        assert ctx.extensions(db, org_id, number="9999") == []
+        assert ctx.extension(db, exts[0].id) == exts[0]
+        assert ctx.devices(db, org_id) == []
+        fields = {f.name for f in dataclasses.fields(ExtensionInfo)}
+        assert not any("secret" in f or "pin" in f for f in fields)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            exts[0].number = "1"  # type: ignore[misc]
+
+
+def test_unmet_python_requirement_refuses_install(app):
+    """#149: a module whose [runtime] requires is not met cannot be installed."""
+    from veyra.core.db import session_scope
+    from veyra.modules.manifest import Manifest, load_manifest
+
+    data = load_manifest(REPO / "modules" / "veyra-example-notes").model_dump(mode="json")
+    data["runtime"]["requires"] = ["surely-not-installed-lib>=1.0"]
+    with session_scope() as db:
+        problems = app.state.modules.compatibility_problems(db, Manifest.model_validate(data))
+    assert any("surely-not-installed-lib" in p for p in problems)

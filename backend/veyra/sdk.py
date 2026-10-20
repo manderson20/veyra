@@ -12,17 +12,29 @@ from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.modules.context import HealthResult, ModuleContext
+from veyra.modules.core_data import (
+    DeviceInfo,
+    ExtensionInfo,
+    OrganizationInfo,
+    SiteInfo,
+    UserInfo,
+)
 from veyra.version import MODULE_API_VERSION
 
 __all__ = [
     "MODULE_API_VERSION",
+    "DeviceInfo",
     "Event",
+    "ExtensionInfo",
     "HealthResult",
     "ModuleContext",
+    "OrganizationInfo",
     "Page",
     "PageParams",
     "Principal",
     "ProblemError",
+    "SiteInfo",
+    "UserInfo",
     "conflict",
     "forbidden",
     "get_db",

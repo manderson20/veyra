@@ -16,6 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from veyra.core.semver import Version, VersionError, VersionRange
+from veyra.modules import requirements
 
 MANIFEST_FILENAME = "module.toml"
 MODULE_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+){1,7}$")
@@ -86,12 +87,26 @@ class Compatibility(_Strict):
 class Runtime(_Strict):
     type: RuntimeType = RuntimeType.IN_PROCESS
     entrypoint: str = Field(description="'package.module:object' relative to the module directory")
+    requires: list[str] = Field(
+        default_factory=list,
+        max_length=50,
+        description="Python libraries the module imports, as 'name' or 'name>=1.2,<2'; "
+        "install is refused when the core's environment lacks them",
+    )
 
     @field_validator("entrypoint")
     @classmethod
     def _entry(cls, v: str) -> str:
         if not ENTRYPOINT_RE.match(v):
             raise ValueError("must look like 'backend:module' or 'backend.main:module'")
+        return v
+
+    @field_validator("requires")
+    @classmethod
+    def _requires(cls, v: list[str]) -> list[str]:
+        bad = [r for r in v if not requirements.valid(r)]
+        if bad:
+            raise ValueError(f"not understood: {bad[0]!r} (use 'name' or 'name>=1.2,<2')")
         return v
 
 

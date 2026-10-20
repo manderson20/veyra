@@ -21,7 +21,7 @@ periodic tasks and declarative UI pages without changing the core.
 |---|---|---|
 | Manifest | `module.toml`, validated by `backend/veyra/modules/manifest.py` | Unknown keys are rejected. Check it with `veyra modules validate <dir>`, and print the JSON Schema with `veyra modules schema`. |
 | Module API | `backend/veyra/modules/context.py` (`ModuleContext`), re-exported by `backend/veyra/sdk.py` | Import **only** from `veyra.sdk`. Everything else under `veyra.*` is internal. |
-| API version | `MODULE_API_VERSION` in `backend/veyra/version.py`, currently **1.2.0** | The manifest declares a range in `[compatibility] core_api`. A module that uses `edit_form` declares `">=1.2.0 <2.0.0"`. Install is refused when the range does not contain the running version. |
+| API version | `MODULE_API_VERSION` in `backend/veyra/version.py`, currently **1.3.0** | The manifest declares a range in `[compatibility] core_api`. A module that uses `edit_form` declares `">=1.2.0 <2.0.0"`. Install is refused when the range does not contain the running version. |
 | Loader | `backend/veyra/modules/manager.py` (`ModuleManager`) | Imports the entrypoint package as `veyra_ext_<id>` and calls `register(ctx)`. A failing module is marked `failed` and never stops the core. |
 | Migrations | `backend/veyra/modules/migrations.py`, `migration_env.py` | One Alembic history per module, version table `alembic_version_<id>`. |
 | Signing | `backend/veyra/modules/packages.py` | `SHA256SUMS` lists every file and `SIGNATURE` is an Ed25519 signature over it. Any added, changed or removed file makes the module fail to load. |
@@ -194,7 +194,7 @@ The My Phone portal's widgets are a fixed registry in
 
 ## 3. Extension points
 
-### 3.1 Available today (module API 1.2.0)
+### 3.1 Available today (module API 1.3.0)
 
 | Extension point | How | Notes |
 |---|---|---|
@@ -208,6 +208,7 @@ The My Phone portal's widgets are a fixed registry in
 | Settings | manifest `[[config]]` (`string`, `integer`, `boolean`, `choice`, `secret`); `ctx.get_config(db, org_id)` | The Module Manager's Settings dialog is generated from the manifest; its "Settings for" choice edits a chosen organization's `scope = "organization"` fields. Only platform administrators (`modules.manage`) change settings. `secret` values are stored encrypted and returned decrypted only to the module. |
 | Secrets in your own tables | `ctx.encrypt(text)` / `ctx.decrypt(token)` *(1.1)* | Bound to the module: other modules cannot decrypt them. |
 | Time zone | `ctx.organization_timezone(db, org_id)` *(1.1)* | For times that administrators type in. |
+| Core data | `ctx.organizations(db)`, `ctx.sites(db, org_id)`, `ctx.extensions(db, org_id, site_id=, number=)`, `ctx.extension(db, id)`, `ctx.devices(db, org_id, site_id=)`, `ctx.users(db, org_id)` *(1.3)* | Read-only frozen records from `veyra.sdk` (`ExtensionInfo`, …) with no secrets. Fields may be added within 1.x, never removed. They do not check permissions: filter with `principal.organization_ids_with(...)` before returning them. |
 | Health | `ctx.add_health_check(fn)` returning `HealthResult("ok" \| "degraded" \| "failed" \| "unknown", message, details)` | Shown in `/api/v1/modules/<id>` and `/api/v1/system/health`. With `health_check = true` in the manifest and no check added, the module reports `degraded`. |
 | Audit, logging, files | `ctx.audit(...)`, `ctx.log`, `ctx.data_dir`, `ctx.module_dir` | `data_dir` is `<data>/modules/<id>`, created by the core when the module loads. |
 | Lifecycle hooks | `on_install`, `on_enable`, `on_disable`, `on_uninstall(ctx, purge)` on the entrypoint object | Optional. |
@@ -227,8 +228,7 @@ Do not build on any of these. Ask for the core change instead.
 | Generated dialplan or other engine configuration fragments | **Not available.** `build_snapshot()` and `generate()` have no module input, and `ModuleContext` has no method for it. A module cannot add contexts, feature codes or destination types, and cannot trigger a deploy. |
 | My Phone portal widgets | **Not available**: open issue #134. `frontend/src/portal/widgets.ts` is a fixed list. |
 | Custom JavaScript, custom pages, other view types (detail, chart, settings page) | **Not available.** Only `resource_table` exists, and the page shows "Unsupported view" for any other type. A module page cannot use tabs, filters, search or row actions other than edit and delete. |
-| Reading core data (extensions, devices, users) through the SDK | **No SDK surface.** `veyra.sdk` exports no core models. Use event payloads. Importing `veyra.core.models` works technically but is an internal API that can change without notice. |
-| Python libraries of its own | **No mechanism.** A module can use only what the core's virtual environment already installs (for example `httpx`, `sqlalchemy`, `pydantic`, `fastapi`). |
+| Python libraries of its own | **Not installed.** A module can use only what the core's virtual environment already installs (for example `httpx`, `sqlalchemy`, `pydantic`, `fastapi`). Declare them in `[runtime] requires = ["httpx>=0.27"]` (`name` or `name>=1.2,<2`; release numbers only): install is refused with a clear message when this Veyra lacks one, instead of failing on import. |
 | Community or third-party (sandboxed) modules | The `service` runtime is planned (issue #110). Today only `in_process` modules with official trust load. |
 | Events across processes | Not available. An event reaches handlers only in the process that published it. |
 | Hot code reload | Not available. An update needs a service restart. |
@@ -767,7 +767,7 @@ npx vitest run
 Before you publish, also check:
 
 * `core_api` covers the API features you use (1.1 for periodic tasks,
-  secrets and time zones; 1.2 for `edit_form`).
+  secrets and time zones; 1.2 for `edit_form`; 1.3 for core data).
 * `module.version` is bumped for every published change. A new version with
   new migrations cannot be rolled back.
 * `downgrade()` drops everything that `upgrade()` creates.

@@ -45,7 +45,7 @@ from veyra.core.models import InstalledModule, ModuleConfig
 from veyra.core.security.permissions import PermissionDef, registry
 from veyra.core.semver import Version, VersionRange
 from veyra.core.signing import Keyring, TrustLevel
-from veyra.modules import migrations
+from veyra.modules import migrations, requirements
 from veyra.modules.context import HealthResult, ModuleContext
 from veyra.modules.manifest import (
     MANIFEST_FILENAME,
@@ -187,6 +187,9 @@ class ModuleManager:
                 f"Supports engines {engines}; this installation uses "
                 f"{self.settings.telephony_engine!r}."
             )
+        for req in manifest.runtime.requires:
+            if (why := requirements.problem(req)) is not None:
+                problems.append(why)
         installed = {m.module_id: m for m in db.scalars(select(InstalledModule))}
         for dep in manifest.dependencies:
             row = installed.get(dep.id)
