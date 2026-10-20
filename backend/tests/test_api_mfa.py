@@ -162,7 +162,11 @@ def test_sign_in_with_code_drift_replay_lockout_and_recovery(admin, app, monkeyp
 def test_methods_removal_and_recovery_code_regeneration(admin, app):
     _secret, codes = _enrol(admin)
     m = admin.get(f"{MFA}/methods").json()
-    assert m["status"]["enabled"] and len(m["methods"]) == 1 and m["allowed_methods"] == ["totp", "webauthn"]
+    assert (
+        m["status"]["enabled"]
+        and len(m["methods"]) == 1
+        and m["allowed_methods"] == ["totp", "webauthn"]
+    )
     mid = m["methods"][0]["id"]
     # wrong password
     r = admin.post(f"{MFA}/methods/{mid}/remove", json={"password": "nope nope nope"})
