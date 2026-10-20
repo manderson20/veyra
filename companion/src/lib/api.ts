@@ -164,6 +164,27 @@ export class VeyraClient {
     });
   }
 
+  /** A binary body (a voicemail recording) as a data: URL. */
+  async fetchDataUrl(path: string): Promise<string> {
+    const headers = new Headers();
+    const hadToken = this.token !== null && this.token !== "";
+    if (hadToken) headers.set("Authorization", `Bearer ${this.token}`);
+    const response = await fetch(this.url(path), { method: "GET", headers, credentials: "omit" });
+    if (response.status === 401 && hadToken) {
+      this.token = null;
+      await this.onSignedOut?.();
+      throw new SignedOut();
+    }
+    if (!response.ok) throw await problemFrom(response);
+    const type = response.headers.get("Content-Type") ?? "audio/wav";
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return `data:${type};base64,${btoa(bin)}`;
+  }
+
   put<T>(path: string, payload: unknown): Promise<T> {
     return this.fetchJson<T>(path, { method: "PUT", body: JSON.stringify(payload) });
   }

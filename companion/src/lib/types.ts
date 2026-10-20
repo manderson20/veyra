@@ -115,3 +115,17 @@ export interface RecentCall {
 
 /** What the popup shows next to the user's name. */
 export type ConnectionState = "connected" | "reconnecting" | "disabled";
+
+/** A new voicemail message of one of the user's boxes (issue #136). */
+export interface VoicemailItem {
+  box_id: string;
+  box_label: string;
+  number: number;
+  folder: string;
+  msg_id: string;
+  caller_number: string;
+  caller_name: string;
+  received_at: string | null;
+  duration_seconds: number;
+  urgent: boolean;
+}

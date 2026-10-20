@@ -22,6 +22,9 @@ import type {
   Response,
   SavePreferencesResult,
   StateResult,
+  VoicemailAudioResult,
+  VoicemailCallResult,
+  VoicemailResult,
 } from "./lib/messages";
 import { favouritesFrom, type Favourite, type MyContact } from "./lib/favourites";
 import { looksLikeNumber, normalizeNumber } from "./lib/numbers";
@@ -43,6 +46,7 @@ import {
   type OriginateOut,
   type PreferencesOut,
   type TicketOut,
+  type VoicemailItem,
 } from "./lib/types";
 
 const MENU_ID = "veyra-call-selection";
@@ -376,6 +380,59 @@ async function handleDirectory(q: string): Promise<DirectoryResult> {
       `/api/v1/directory?q=${encodeURIComponent(q.trim().slice(0, 100))}`,
     );
     return { status: "ok", results: out.results };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+// ------------------------------------------------------------------ voicemail (#136)
+
+interface MyBox { id: string; number: string; name: string; extension_number: string }
+interface BoxMessages { messages: Omit<VoicemailItem, "box_id" | "box_label">[] }
+
+async function handleVoicemail(): Promise<VoicemailResult> {
+  const client = await clientFromStorage();
+  if (!client) return { status: "error", code: "not_signed_in", detail: "Sign in first." };
+  try {
+    const boxes = await client.get<MyBox[]>("/api/v1/me/voicemail");
+    const out: VoicemailItem[] = [];
+    for (const box of boxes.slice(0, 5)) {
+      const list = await client.get<BoxMessages>(
+        `/api/v1/me/voicemail/${encodeURIComponent(box.id)}/messages?folder=INBOX`,
+      );
+      for (const m of list.messages) {
+        out.push({ ...m, box_id: box.id, box_label: `${box.number} ${box.name}`.trim() });
+      }
+    }
+    out.sort((a, b) => (b.received_at ?? "").localeCompare(a.received_at ?? ""));
+    return { status: "ok", messages: out.slice(0, 20) };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+async function handleVoicemailAudio(boxId: string, number: number, folder: string): Promise<VoicemailAudioResult> {
+  const client = await clientFromStorage();
+  if (!client) return { status: "error", code: "not_signed_in", detail: "Sign in first." };
+  try {
+    const dataUrl = await client.fetchDataUrl(
+      `/api/v1/me/voicemail/${encodeURIComponent(boxId)}/messages/${number}/audio?folder=${encodeURIComponent(folder)}`,
+    );
+    return { status: "ok", dataUrl };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+async function handleVoicemailCall(boxId: string, number: number, folder: string, msgId: string): Promise<VoicemailCallResult> {
+  const client = await clientFromStorage();
+  if (!client) return { status: "error", code: "not_signed_in", detail: "Sign in first." };
+  try {
+    const out = await client.post<{ extension: string }>(
+      `/api/v1/me/voicemail/${encodeURIComponent(boxId)}/messages/${number}/call`,
+      { folder, msg_id: msgId },
+    );
+    return { status: "ok", message: `Calling ${out.extension}: answer to hear the message.` };
   } catch (error) {
     return errorResult(error);
   }
@@ -915,6 +972,12 @@ async function dispatch(request: Request): Promise<Response> {
       return handleState();
     case "moveSpeedDials":
       return handleMoveSpeedDials();
+    case "voicemail":
+      return handleVoicemail();
+    case "voicemailAudio":
+      return handleVoicemailAudio(request.boxId, request.number, request.folder);
+    case "voicemailCall":
+      return handleVoicemailCall(request.boxId, request.number, request.folder, request.msgId);
   }
 }
 

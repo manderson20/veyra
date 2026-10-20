@@ -392,6 +392,62 @@ function renderSignedIn(s: StateResult): void {
   });
   sections.push(el("section", {}, [el("h2", { text: "Directory" }), search, results]));
 
+  // Voicemail (#136): new messages, played here or on the phone.
+  const vmList = el("ul", { class: "list" }, [el("li", { class: "muted", text: "Loading…" })]);
+  sections.push(el("section", {}, [el("h2", { text: "Voicemail" }), vmList]));
+  void (async () => {
+    const result = await sendRequest({ type: "voicemail" });
+    vmList.replaceChildren();
+    if (result.status !== "ok") {
+      vmList.append(el("li", { class: "muted", text: result.detail }));
+      return;
+    }
+    if (result.messages.length === 0) {
+      vmList.append(el("li", { class: "muted", text: "No new messages." }));
+      return;
+    }
+    for (const m of result.messages.slice(0, 5)) {
+      const who = m.caller_name || m.caller_number || "Unknown caller";
+      const play = el("button", { type: "button", class: "link", text: "Play" });
+      const callMe = el("button", { type: "button", class: "link", text: "Call me" });
+      const player = el("div", {});
+      const item = el("li", { class: "vm" }, [
+        el("div", { class: "main" }, [
+          el("div", { class: "primary-text", text: `${who}${m.urgent ? " · urgent" : ""}` }),
+          el("div", {
+            class: "secondary",
+            text: `${m.received_at ? relativeTime(m.received_at) : ""} · ${m.duration_seconds}s · ${m.box_label}`,
+          }),
+          player,
+        ]),
+        el("div", { class: "actions" }, [play, callMe]),
+      ]);
+      play.addEventListener("click", () => {
+        play.disabled = true;
+        void (async () => {
+          const audio = await sendRequest({ type: "voicemailAudio", boxId: m.box_id, number: m.number, folder: m.folder });
+          play.disabled = false;
+          if (audio.status !== "ok") {
+            setMessage(status, "error", audio.detail);
+            return;
+          }
+          const a = el("audio", { controls: "", src: audio.dataUrl }) as HTMLAudioElement;
+          player.replaceChildren(a);
+          void a.play().catch(() => undefined);
+        })();
+      });
+      callMe.addEventListener("click", () => {
+        callMe.disabled = true;
+        void (async () => {
+          const r = await sendRequest({ type: "voicemailCall", boxId: m.box_id, number: m.number, folder: m.folder, msgId: m.msg_id });
+          callMe.disabled = false;
+          setMessage(status, r.status === "ok" ? "info" : "error", r.status === "ok" ? r.message : r.detail);
+        })();
+      });
+      vmList.append(item);
+    }
+  })();
+
   // Recent
   const recentList = el("ul", { class: "list" });
   for (const callEntry of s.recent.slice(0, 10)) {

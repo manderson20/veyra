@@ -84,3 +84,8 @@ form { display: flex; flex-direction: column; gap: 10px; }
 
 .sso { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .sso p { text-align: center; margin: 2px 0 0; }
+
+/* Voicemail rows (#136): actions beside the caller, the player below. */
+.vm { align-items: flex-start; }
+.vm .actions { display: flex; gap: 8px; flex-shrink: 0; }
+.vm audio { width: 100%; margin-top: 4px; height: 32px; }

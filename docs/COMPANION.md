@@ -205,6 +205,16 @@ pushed by browser policy. Veyra supports the policy route out of the box:
 Publishing to the Chrome Web Store (unlisted) remains an option for a
 later milestone; it would make the button work without policy.
 
+### 5.x Voicemail in the popup (issue #136, 0.27.24)
+
+The popup's **Voicemail** section lists the newest messages of the user's
+inboxes (`GET /me/voicemail`, then `…/messages?folder=INBOX` for up to five
+boxes; the token's `me` scope). **Play** fetches the recording in the
+service worker with the bearer token and hands it to the popup as a
+`data:` URL for an `<audio>` element (an `<audio src>` cannot send the
+token); **Call me** rings the user's phone and plays it there
+(`POST …/messages/{n}/call`).
+
 ## 6. Security notes
 
 * Tokens are hashed at rest like session tokens; the clear value is shown

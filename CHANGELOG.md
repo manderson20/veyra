@@ -15,6 +15,7 @@ No migration.
 ### Added
 - **Your provisioning variables for the Companion** (#130): `GET /me/provisioning/variables` returns the non-sensitive variables of your organization and site together with the feature codes, and phone templates can use the codes as `{{ server.feature_codes.<key> }}`.
 - The Module Manager page links the module author guide.
+- **Voicemail in the Companion** (#136): the browser extension's popup lists your newest voicemail messages; **Play** listens in the browser and **Call me** plays it on your phone. Reinstall or update the Companion from the server to get it.
 - **Who left the voicemail, in the webhook** (#139): the `voicemail.message` webhook now includes the caller's number and name, when the message arrived and how long it is.
 
 ### Fixed

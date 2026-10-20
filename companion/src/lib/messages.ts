@@ -10,6 +10,7 @@ import type {
   DirectoryEntry,
   MyExtension,
   RecentCall,
+  VoicemailItem,
 } from "./types";
 import type { Favourite } from "./favourites";
 import type { SsoProvider } from "./sso";
@@ -41,6 +42,10 @@ export type SavePreferencesRequest = { type: "savePreferences"; companion: Compa
 export type StateRequest = { type: "state" };
 /** Copy the Companion's own speed dials to favourite contacts on My Phone. */
 export type MoveSpeedDialsRequest = { type: "moveSpeedDials" };
+/** New voicemail of the user's boxes; a message's audio; call me to play (#136). */
+export type VoicemailRequest = { type: "voicemail" };
+export type VoicemailAudioRequest = { type: "voicemailAudio"; boxId: string; number: number; folder: string };
+export type VoicemailCallRequest = { type: "voicemailCall"; boxId: string; number: number; folder: string; msgId: string };
 
 export type Request =
   | LoginRequest
@@ -51,7 +56,10 @@ export type Request =
   | DirectoryRequest
   | SavePreferencesRequest
   | StateRequest
-  | MoveSpeedDialsRequest;
+  | MoveSpeedDialsRequest
+  | VoicemailRequest
+  | VoicemailAudioRequest
+  | VoicemailCallRequest;
 
 export type LoginResult =
   | { status: "ok" }
@@ -61,6 +69,9 @@ export type LoginResult =
 export type LogoutResult = { status: "ok" };
 export type DialResult = { status: "ok"; message: string } | ErrorResult;
 export type DirectoryResult = { status: "ok"; results: DirectoryEntry[] } | ErrorResult;
+export type VoicemailResult = { status: "ok"; messages: VoicemailItem[] } | ErrorResult;
+export type VoicemailAudioResult = { status: "ok"; dataUrl: string } | ErrorResult;
+export type VoicemailCallResult = { status: "ok"; message: string } | ErrorResult;
 export type MoveSpeedDialsResult =
   | { status: "ok"; moved: number; preferences: CompanionPreferences }
   | ErrorResult;
@@ -100,7 +111,13 @@ export type ResponseFor<R extends Request> = R extends LoginRequest | VerifyRequ
             ? StateResult
             : R extends MoveSpeedDialsRequest
               ? MoveSpeedDialsResult
-              : never;
+              : R extends VoicemailRequest
+                ? VoicemailResult
+                : R extends VoicemailAudioRequest
+                  ? VoicemailAudioResult
+                  : R extends VoicemailCallRequest
+                    ? VoicemailCallResult
+                    : never;
 
 export type Response =
   | LoginResult
@@ -109,6 +126,9 @@ export type Response =
   | DirectoryResult
   | SavePreferencesResult
   | MoveSpeedDialsResult
+  | VoicemailResult
+  | VoicemailAudioResult
+  | VoicemailCallResult
   | StateResult;
 
 export function isRequest(value: unknown): value is Request {
