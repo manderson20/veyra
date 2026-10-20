@@ -2,7 +2,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Badge,
   Button,
@@ -18,6 +18,7 @@ import {
   LoadingState,
   PageHeader,
   Pagination,
+  SearchInput,
   SelectField,
   TextArea,
   TextField,
@@ -60,7 +61,18 @@ function ResourceTable({ ext, view }: { ext: UiExtension; view: UiView }) {
   const toast = useToast();
   const api = useMemo(() => moduleApi(ext.api_base ?? ""), [ext.api_base]);
   const [offset, setOffset] = useState(0);
-  const list = useApiData<Page<Row>>(api.path(view.endpoint), { limit: LIMIT, offset });
+  const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => { setDebounced(q.trim()); setOffset(0); }, 300);
+    return () => window.clearTimeout(t);
+  }, [q]);
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const query: Record<string, string | number> = { limit: LIMIT, offset };
+  if (view.search && debounced) query.q = debounced;
+  for (const [k, v] of Object.entries(filterValues)) if (v) query[k] = v;
+  const list = useApiData<Page<Row>>(api.path(view.endpoint), query);
+  const filters = view.filters ?? [];
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
@@ -104,6 +116,16 @@ function ResourceTable({ ext, view }: { ext: UiExtension; view: UiView }) {
         actions={view.create_form.length > 0 && canWrite ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>Add</Button> : null}
       />
       <Card flush>
+        {view.search || filters.length ? (
+          <div className="table-toolbar">
+            {view.search ? <SearchInput value={q} onChange={setQ} label={`Search ${view.title}`} /> : null}
+            {filters.map((f) => (
+              <SelectField key={f.key} label={<span className="sr-only">{f.label}</span>} value={filterValues[f.key] ?? ""}
+                options={[{ value: "", label: `${f.label}: all` }, ...f.choices.map((c) => ({ value: c, label: c }))]}
+                onChange={(e) => { setFilterValues((s) => ({ ...s, [f.key]: e.target.value })); setOffset(0); }} />
+            ))}
+          </div>
+        ) : null}
         <DataTable
           columns={columns}
           rows={list.data?.items}
@@ -114,7 +136,7 @@ function ResourceTable({ ext, view }: { ext: UiExtension; view: UiView }) {
           caption={view.title}
           onRowClick={canEdit ? (r) => (r.id ? setEditing(r) : undefined) : undefined}
           rowLabel={() => "Edit"}
-          empty={<EmptyState icon="note" title={view.empty_title}>{view.empty_body}</EmptyState>}
+          empty={debounced || Object.values(filterValues).some(Boolean) ? <EmptyState icon="note" title="Nothing matches">Try another search or filter.</EmptyState> : <EmptyState icon="note" title={view.empty_title}>{view.empty_body}</EmptyState>}
           pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null}
         />
       </Card>

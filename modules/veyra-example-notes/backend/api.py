@@ -45,11 +45,16 @@ def build_router(ctx: ModuleContext) -> APIRouter:
 
     @router.get("/notes", response_model=Page[dict[str, Any]])
     def list_notes(
+        q: str | None = None,
         page: PageParams = Depends(page_params),
         principal: Principal = Depends(can_read),
         db: Session = Depends(get_db),
     ) -> Page[dict[str, Any]]:
         stmt = visible(principal)
+        if q:
+            # The view declares search = true (module API 1.3): the page sends q.
+            like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            stmt = stmt.where(notes.c.title.ilike(like) | notes.c.body.ilike(like))
         total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         rows = db.execute(
             stmt.order_by(notes.c.created_at.desc()).limit(page.limit).offset(page.offset)

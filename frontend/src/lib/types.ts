@@ -719,6 +719,12 @@ export interface UiFormField {
   help: string | null;
 }
 
+export interface UiFilter {
+  key: string;
+  label: string;
+  choices: string[];
+}
+
 export interface UiView {
   id: string;
   title: string;
@@ -732,6 +738,9 @@ export interface UiView {
   /** Module API 1.2: clicking a row opens this form; changes go as PATCH <endpoint>/<id>. */
   edit_form?: UiFormField[];
   delete: boolean;
+  /** Module API 1.3: a search box sends `q`; each filter sends its key. */
+  search?: boolean;
+  filters?: UiFilter[];
   empty_title: string;
   empty_body: string | null;
 }

@@ -217,6 +217,7 @@ The My Phone portal's widgets are a fixed registry in
 | UI page | manifest `[[ui.views]]` of `type = "resource_table"` | A paginated table from `GET <endpoint>?limit=&offset=` that returns `{items, total, limit, offset}`. Each row needs an `id`. Column formats are `text`, `datetime`, `boolean` and `status`. |
 | Create form | `create_form = [...]` (needs `write_permission`) | Sends `POST <endpoint>` with JSON. Field types are `text`, `textarea`, `integer`, `boolean`, `choice` and `password` *(1.1)*. Empty fields are sent as `""`, integers as `null`. |
 | Edit form | `edit_form = [...]` *(1.2, needs `write_permission`)* | Clicking a row opens the form filled from the row. Only changed fields are sent as `PATCH <endpoint>/<id>`, and an empty password is left out. |
+| Search and filters | `search = true`, `filters = [{ key = "status", label = "Status", choices = ["open", "closed"] }]` *(1.3)* | A search box sends `GET <endpoint>?q=…`; each filter (up to 5) sends `?<key>=<choice>`, and "all" leaves it out. The endpoint must accept these parameters. Keys are lower-case names other than `q`, `limit` and `offset`. |
 | Delete | `delete = true` | Calls `DELETE <endpoint>/<id>` after a confirmation. |
 
 ### 3.2 Not possible today
@@ -227,7 +228,7 @@ Do not build on any of these. Ask for the core change instead.
 |---|---|
 | Generated dialplan or other engine configuration fragments | **Not available.** `build_snapshot()` and `generate()` have no module input, and `ModuleContext` has no method for it. A module cannot add contexts, feature codes or destination types, and cannot trigger a deploy. |
 | My Phone portal widgets | **Not available**: open issue #134. `frontend/src/portal/widgets.ts` is a fixed list. |
-| Custom JavaScript, custom pages, other view types (detail, chart, settings page) | **Not available.** Only `resource_table` exists, and the page shows "Unsupported view" for any other type. A module page cannot use tabs, filters, search or row actions other than edit and delete. |
+| Custom JavaScript, custom pages, other view types (detail, chart, settings page) | **Not available.** Only `resource_table` exists, and the page shows "Unsupported view" for any other type. A module page cannot use tabs or row actions other than edit and delete. |
 | Python libraries of its own | **Not installed.** A module can use only what the core's virtual environment already installs (for example `httpx`, `sqlalchemy`, `pydantic`, `fastapi`). Declare them in `[runtime] requires = ["httpx>=0.27"]` (`name` or `name>=1.2,<2`; release numbers only): install is refused with a clear message when this Veyra lacks one, instead of failing on import. |
 | Community or third-party (sandboxed) modules | The `service` runtime is planned (issue #110). Today only `in_process` modules with official trust load. |
 | Events across processes | Not available. An event reaches handlers only in the process that published it. |

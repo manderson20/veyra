@@ -32,8 +32,20 @@ def test_full_lifecycle(admin):
     listing = admin.get(NOTES).json()
     assert listing["total"] == 1 and listing["items"][0]["title"] == "Fire drill"
 
+    # The view declares search (module API 1.3); the page sends q.
+    assert admin.post(NOTES, json={"title": "Lunch menu", "body": "100% pizza"}).status_code == 201
+    assert [n["title"] for n in admin.get(NOTES, params={"q": "drill"}).json()["items"]] == [
+        "Fire drill"
+    ]
+    assert admin.get(NOTES, params={"q": "100%"}).json()["total"] == 1
+    assert admin.get(NOTES, params={"q": "0%z"}).json()["total"] == 0
+    assert admin.delete(
+        f"{NOTES}/{admin.get(NOTES, params={'q': 'Lunch'}).json()['items'][0]['id']}"
+    ).status_code in (200, 204)
+
     ext = admin.get("/api/v1/modules/ui-extensions").json()
     assert ext[0]["module_id"] == MOD and ext[0]["views"][0]["id"] == "notes"
+    assert ext[0]["views"][0]["search"] is True and ext[0]["views"][0]["filters"] == []
     assert ext[0]["api_base"] == "/api/v1/ext/example-notes"
 
     detail = admin.get(f"/api/v1/modules/{MOD}").json()
@@ -141,3 +153,13 @@ def test_unmet_python_requirement_refuses_install(app):
     with session_scope() as db:
         problems = app.state.modules.compatibility_problems(db, Manifest.model_validate(data))
     assert any("surely-not-installed-lib" in p for p in problems)
+
+
+def test_view_filter_keys_are_checked():
+    """#149: filter keys cannot shadow q, limit or offset."""
+    from veyra.modules.manifest import UiFilter
+
+    assert UiFilter(key="status", label="Status", choices=["open"]).key == "status"
+    for bad in ("q", "offset", "Status", "a-b"):
+        with pytest.raises(ValueError):
+            UiFilter(key=bad, label="X", choices=["a"])

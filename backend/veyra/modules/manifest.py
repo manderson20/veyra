@@ -197,6 +197,22 @@ class UiFormField(_Strict):
     help: str | None = None
 
 
+class UiFilter(_Strict):
+    """(module API 1.3) A choice above the table; the chosen value is sent
+    as the query parameter ``key`` (empty: the parameter is left out)."""
+
+    key: str
+    label: str
+    choices: list[str] = Field(min_length=1, max_length=50)
+
+    @field_validator("key")
+    @classmethod
+    def _key(cls, v: str) -> str:
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,39}", v) or v in ("q", "limit", "offset"):
+            raise ValueError("must be a lower-case name other than q, limit and offset")
+        return v
+
+
 class UiView(_Strict):
     """Declarative views rendered by the core UI. Modules do not ship JavaScript
     into the administrative origin; see docs/MODULE_DEVELOPMENT.md §UI."""
@@ -214,6 +230,9 @@ class UiView(_Strict):
     # the changed fields are sent as PATCH <endpoint>/<id> (issue #115).
     edit_form: list[UiFormField] = Field(default_factory=list)
     delete: bool = False
+    # (module API 1.3) A search box sends ``q``; filters send their keys.
+    search: bool = False
+    filters: list[UiFilter] = Field(default_factory=list, max_length=5)
     empty_title: str = "Nothing here yet"
     empty_body: str | None = None
 
