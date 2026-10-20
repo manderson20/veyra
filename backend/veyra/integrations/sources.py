@@ -135,9 +135,68 @@ def _save_setting(db: Session, key: str, value: dict[str, Any]) -> None:
         row.value = value
 
 
-def voicemail_notifications(db: Session, queue_dir: Path, limit: int = 200) -> int:
+def _box_of(db: Session, context: str, number: str) -> tuple[VoicemailBox, str | None] | None:
+    """The box behind a spool (context, mailbox): the context names the
+    organization's engine namespace, so equal numbers in two organizations
+    do not mix."""
+    from veyra.core import tenancy
+    from veyra.core.models import Organization
+
+    for org in db.scalars(select(Organization)):
+        if tenancy.names_of(db, org.id).voicemail != context:
+            continue
+        box = db.scalar(
+            select(VoicemailBox).where(
+                VoicemailBox.organization_id == org.id, VoicemailBox.number == number
+            )
+        )
+        if box is not None:
+            return box, box.name
+        ext = db.scalar(
+            select(Extension).where(Extension.organization_id == org.id, Extension.number == number)
+        )
+        if ext is None:
+            continue
+        box = db.scalar(select(VoicemailBox).where(VoicemailBox.extension_id == ext.id))
+        if box is not None:
+            return box, ext.display_name
+    return None
+
+
+def _newest_message(store: Any, context: str, number: str) -> dict[str, Any] | None:
+    """The newest message of the inbox (issue #139): who called, when, how
+    long; None when the store helper cannot tell."""
+    if store is None:
+        return None
+    try:
+        listed = store.list(context, number, "INBOX").get("messages", [])
+    except Exception:  # the helper is optional for webhooks
+        log.warning("voicemail store unavailable for the webhook of %s@%s", number, context)
+        return None
+    if not listed:
+        return None
+    from veyra.voicemail.service import parse_callerid
+
+    m = max(listed, key=lambda x: int(x.get("origtime") or 0))
+    caller_number, caller_name = parse_callerid(str(m.get("callerid") or ""))
+    origtime = int(m.get("origtime") or 0)
+    return {
+        "msg_id": str(m.get("msg_id") or ""),
+        "caller_number": caller_number or None,
+        "caller_name": caller_name or None,
+        "received_at": datetime.fromtimestamp(origtime, UTC).isoformat() if origtime else None,
+        "duration_seconds": int(m.get("duration") or 0),
+        "urgent": bool(m.get("urgent")),
+    }
+
+
+def voicemail_notifications(
+    db: Session, queue_dir: Path, limit: int = 200, store: Any = None
+) -> int:
     """Read the files ``veyra-vmnotify`` (Asterisk's ``externnotify``) leaves in
-    the mail queue directory; a rising count of new messages is a new message."""
+    the mail queue directory; a rising count of new messages is a new message.
+    With the voicemail ``store`` helper the payload names the newest message
+    and its caller."""
     if not queue_dir.is_dir():
         return 0
     files = sorted(queue_dir.glob(f"*{VM_SUFFIX}"))[:limit]
@@ -156,35 +215,28 @@ def voicemail_notifications(db: Session, queue_dir: Path, limit: int = 200) -> i
         m = _VM_LINE.match(line)
         if m is None:
             continue
-        number, new, old, urgent = m.group(2), int(m.group(3)), int(m.group(4)), int(m.group(5))
-        before = int(counts.get(number, 0))
-        counts[number] = new
+        context, number = m.group(1), m.group(2)
+        new, old, urgent = int(m.group(3)), int(m.group(4)), int(m.group(5))
+        key = f"{context}/{number}"
+        # Counts recorded before 0.27.24 are keyed by the number alone.
+        before = int(counts.pop(number, counts.get(key, 0)))
+        counts[key] = new
         if new <= before:
             continue
-        box = db.scalar(select(VoicemailBox).where(VoicemailBox.number == number))
-        name = box.name if box is not None else None
-        if box is None:
-            # An extension's own box is numbered after the extension.
-            ext = db.scalar(select(Extension).where(Extension.number == number))
-            box = (
-                db.scalar(select(VoicemailBox).where(VoicemailBox.extension_id == ext.id))
-                if ext is not None
-                else None
-            )
-            name = ext.display_name if ext is not None else None
-        if box is None:
+        found = _box_of(db, context, number)
+        if found is None:
             continue
-        emitted += webhooks.emit(
-            db,
-            box.organization_id,
-            "voicemail.message",
-            {
-                "box": {"number": number, "name": name},
-                "new_messages": new,
-                "old_messages": old,
-                "urgent_messages": urgent,
-            },
-        )
+        box, name = found
+        payload: dict[str, Any] = {
+            "box": {"number": number, "name": name},
+            "new_messages": new,
+            "old_messages": old,
+            "urgent_messages": urgent,
+        }
+        message = _newest_message(store, context, number)
+        if message is not None:
+            payload["message"] = message
+        emitted += webhooks.emit(db, box.organization_id, "voicemail.message", payload)
     _save_setting(db, VM_COUNTS_KEY, counts)
     db.commit()
     return emitted

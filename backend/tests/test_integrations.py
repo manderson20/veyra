@@ -750,8 +750,24 @@ def test_live_calls_voicemail_and_registrations(admin, app, tmp_path, receiver):
     (qdir / "a.vmevent").write_text("veyra 1001 1 0 0\n")
     (qdir / "b.vmevent").write_text("veyra 1001 0 1 0\n")
     (qdir / "c.vmevent").write_text("garbage; rm -rf /\n")
+
+    class Store:  # the voicemail store helper: the newest message names the caller
+        def list(self, context, mailbox, folder):
+            assert (context, mailbox, folder) == ("veyra", "1001", "INBOX")
+            return {
+                "messages": [
+                    {"callerid": '"Old" <5550000>', "origtime": 1760000000, "msg_id": "a"},
+                    {
+                        "callerid": '"Parent" <5551234>',
+                        "origtime": 1760800000,
+                        "msg_id": "b",
+                        "duration": 12,
+                    },
+                ]
+            }
+
     with session_scope() as db:
-        sources.voicemail_notifications(db, qdir)
+        sources.voicemail_notifications(db, qdir, store=Store())
     assert not list(qdir.glob("*.vmevent"))
 
     # Registrations: the first pass only learns, the next reports changes.
@@ -779,6 +795,15 @@ def test_live_calls_voicemail_and_registrations(admin, app, tmp_path, receiver):
         assert live.max_attempts == 1
         assert live.payload["data"]["extension"]["number"] == "1001"
     assert events.count("voicemail.message") == 1
+    with session_scope() as db:
+        vm = db.query(WebhookDelivery).filter_by(event="voicemail.message").one()
+        msg = vm.payload["data"]["message"]
+        assert (msg["caller_number"], msg["caller_name"], msg["msg_id"]) == (
+            "5551234",
+            "Parent",
+            "b",
+        )
+        assert msg["duration_seconds"] == 12
     assert "registration.changed" in events and "call.ringing" in events
 
 

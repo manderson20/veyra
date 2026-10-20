@@ -237,7 +237,7 @@ Webhooks belong to an organization and see only that organization's events.
 | `call.ringing` | An extension starts ringing | extension number and name, caller number and name, call id |
 | `call.answered` | An extension answers | as above |
 | `call.ended` | A call record is written (from the call history import) | direction, from, to, extension(s), DID, trunk, queue/ring group, started, answered, ended, ring and talk seconds, outcome |
-| `voicemail.message` | A new voicemail message is left | box number and name, new, old and urgent message counts (from Asterisk's `externnotify`, which carries no caller details; never the audio) |
+| `voicemail.message` | A new voicemail message is left | box number and name, new, old and urgent message counts (from Asterisk's `externnotify`), and since 0.27.24 `message`: the newest message's `msg_id`, `caller_number`, `caller_name`, `received_at`, `duration_seconds`, `urgent` (read through the voicemail store helper; left out when it is not running; never the audio) |
 | `page.sent` | Veyra starts a recorded page | page name and number, zones, recording, how it was started (`ui`, `api`, `bell`) and by whom; pages dialled from a phone are not reported |
 | `bell.rang` | A bell schedule rings | schedule, calendar event title, page |
 | `alert.raised` / `alert.resolved` | A monitoring alert changes state (M10) | rule, title, subject, message, details |

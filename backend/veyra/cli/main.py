@@ -1100,7 +1100,11 @@ def deliver_webhooks(settings: Any, log: Any) -> None:
 
     try:
         with session_scope() as db:
-            sources.voicemail_notifications(db, settings.mailqueue_dir)
+            from veyra.voicemail.client import StoreClient
+
+            sources.voicemail_notifications(
+                db, settings.mailqueue_dir, store=StoreClient(settings.vmstore_socket)
+            )
         key = try_load_installation_key(settings)
         if key is None:
             return

@@ -15,6 +15,10 @@ No migration.
 ### Added
 - **Your provisioning variables for the Companion** (#130): `GET /me/provisioning/variables` returns the non-sensitive variables of your organization and site together with the feature codes, and phone templates can use the codes as `{{ server.feature_codes.<key> }}`.
 - The Module Manager page links the module author guide.
+- **Who left the voicemail, in the webhook** (#139): the `voicemail.message` webhook now includes the caller's number and name, when the message arrived and how long it is.
+
+### Fixed
+- Voicemail webhooks no longer mix up two organizations that use the same box number.
 
 ## 0.27.23 — 2026-10-21
 
