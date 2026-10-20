@@ -329,6 +329,137 @@ def cmd_updates_check(args: argparse.Namespace) -> int:
     return 0 if outcome in ("ok", "not_configured") else 1
 
 
+def cmd_updates_install(args: argparse.Namespace) -> int:
+    """Install a release from the update feed without the web interface
+    (owner request 2026-10-20): check, download, approve and start exactly as
+    System → Updates does, so that page shows the same progress and history.
+    Audited as ``updates.approve`` by ``cli (<user>)``; no password or second
+    factor is asked: running it needs root (``sudo veyra``) already."""
+    import getpass
+    import os
+    import time
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import select
+
+    from veyra.core import audit
+    from veyra.core.config import get_settings
+    from veyra.core.db import session_scope
+    from veyra.core.models import AvailableUpdate
+    from veyra.core.models.base import utcnow
+    from veyra.core.semver import Version
+    from veyra.core.signing import Keyring
+    from veyra.updates import manager
+    from veyra.updates.checker import check_for_updates
+    from veyra.version import __version__
+
+    settings = get_settings()
+    keyring = Keyring.load(settings.trust_dir)
+    who = f"cli ({os.environ.get('SUDO_USER') or getpass.getuser()})"
+    with session_scope() as db:
+        if not args.no_check:
+            check = check_for_updates(db, settings, keyring)
+            print(f"Check: {check.outcome}: {check.message}")
+        rows = [
+            r
+            for r in db.scalars(
+                select(AvailableUpdate).where(
+                    AvailableUpdate.component == "veyra_core",
+                    AvailableUpdate.state.in_(
+                        ("available", "downloaded", "approved", "installing")
+                    ),
+                )
+            )
+            if (not args.version or r.version == args.version)
+        ]
+        newer = [r for r in rows if Version.parse(r.version) > Version.parse(__version__)]
+        if not newer:
+            print(
+                f"Nothing to install: {__version__} is installed"
+                + (
+                    f" and {args.version} is not offered."
+                    if args.version
+                    else " and is the newest."
+                )
+            )
+            return 0 if not args.version else 1
+        row = max(newer, key=lambda r: Version.parse(r.version))
+        print(f"Installing {row.version} (installed {__version__}; state {row.state}).")
+        if row.state == "available":
+            print("Downloading and verifying the signed release…")
+            try:
+                manager.download(db, settings, keyring, row)
+            except manager.UpdateError as e:
+                row.error = str(e)
+                db.commit()
+                print(f"Download failed: {e}", file=sys.stderr)
+                return 1
+            db.commit()
+        if row.state == "downloaded":
+            problems = manager.blocking_problems(db, settings, row)
+            if problems:
+                print("Cannot install: " + "; ".join(problems), file=sys.stderr)
+                return 1
+            row.state, row.install_when = "approved", "now"
+            row.approved_at, row.approved_by, row.error = utcnow(), who, None
+            audit.record(
+                db,
+                action="updates.approve",
+                actor_type="system",
+                actor_label=who,
+                target_type=row.component,
+                target_id=row.target,
+                details={"version": row.version, "when": "now", "via": "cli"},
+            )
+            db.commit()
+        if row.state == "approved" and not manager.start_install(db, settings, keyring, row):
+            print(f"The installation did not start: {row.error}", file=sys.stderr)
+            return 1
+        version, approved_at = row.version, row.approved_at
+    print("Started; System → Updates shows the same progress.")
+    if args.no_wait:
+        return 0
+    step, deadline = None, time.monotonic() + args.timeout
+    while time.monotonic() < deadline:
+        run = manager.read_status(settings) or {}
+        started = run.get("started_at")
+        current = (
+            run.get("version") == version
+            and approved_at is not None
+            and started
+            and datetime.fromisoformat(str(started)) >= approved_at - timedelta(seconds=5)
+        )
+        if current:
+            if run.get("step") != step:
+                step = run.get("step")
+                print(f"  {step}")
+            if run.get("state") in ("succeeded", "failed"):
+                if run["state"] == "failed":
+                    print(f"Failed: {run.get('error')}", file=sys.stderr)
+                    if run.get("log_file"):
+                        print(f"Log: {run['log_file']}", file=sys.stderr)
+                    return 1
+                break
+        time.sleep(2)
+    else:
+        print("Still running; follow it on System → Updates.", file=sys.stderr)
+        return 1
+    # The new worker records the result (reconcile) on its first pass.
+    while time.monotonic() < deadline:
+        with session_scope() as db:
+            state = db.scalar(
+                select(AvailableUpdate.state).where(
+                    AvailableUpdate.component == "veyra_core", AvailableUpdate.version == version
+                )
+            )
+        if state not in ("approved", "installing"):
+            print(f"{version}: {state}.")
+            return 0 if state == "installed" else 1
+        time.sleep(3)
+    print(f"{version} installed; the worker has not recorded it yet.")
+    return 0
+
+
 def cmd_updates_record(args: argparse.Namespace) -> int:
     """Record an update performed outside the API (used by installer/upgrade.sh)."""
     import uuid
@@ -2121,6 +2252,15 @@ def build_parser() -> argparse.ArgumentParser:
     upd.add_parser("check", help="Check for updates now (never installs)").set_defaults(
         func=cmd_updates_check
     )
+    s = upd.add_parser(
+        "install",
+        help="Check, download, approve and install the newest release now (as System → Updates)",
+    )
+    s.add_argument("version", nargs="?", help="A specific offered version (default: newest)")
+    s.add_argument("--no-check", action="store_true", help="Do not check the feed first")
+    s.add_argument("--no-wait", action="store_true", help="Return once the installer started")
+    s.add_argument("--timeout", type=int, default=1800, help="Seconds to follow it (default 1800)")
+    s.set_defaults(func=cmd_updates_install)
     s = upd.add_parser("record", help="Record an update applied by upgrade.sh")
     s.add_argument(
         "--component", required=True, choices=["veyra_core", "modules", "provisioning_templates"]

@@ -487,3 +487,52 @@ def test_superseded_and_newest_first(admin, settings):
             )
         ):
             db.delete(r)
+
+
+def test_cli_install_uses_the_same_states(admin, app, tmp_path, served, monkeypatch, capsys):
+    """`veyra updates install` (owner request 2026-10-20): check, download,
+    approve and start like System → Updates, audited, then follow the run."""
+    import veyra.core.config as config
+    from veyra.core.models import AuditEvent
+
+    root, base = served
+    settings = app.state.settings
+    _publish(tmp_path, root, base, settings.trust_dir)
+    assert (
+        admin.put("/api/v1/updates/source", json={"url": f"{base}/stable.json"}).status_code == 200
+    )
+    monkeypatch.setattr(config, "get_settings", lambda: settings)
+    monkeypatch.setenv("SUDO_USER", "owner")
+    calls = []
+
+    class Done:
+        returncode = 0
+        stderr = ""
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        settings.upgrade_dir.mkdir(parents=True, exist_ok=True)
+        (settings.upgrade_dir / "status.json").write_text(
+            json.dumps(
+                {
+                    "version": NEW,
+                    "state": "succeeded",
+                    "step": "Finished",
+                    "started_at": datetime.now(UTC).isoformat(),
+                }
+            )
+        )
+        return Done()
+
+    monkeypatch.setattr(manager.subprocess, "run", run)
+    assert cli(["updates", "install", "--timeout", "3"]) == 0
+    out = capsys.readouterr().out
+    assert f"Installing {NEW}" in out and "Finished" in out, out
+    assert calls == [["systemctl", "start", "--no-block", f"veyra-upgrade@{NEW}.service"]]
+    upd = admin.get("/api/v1/updates/available").json()[0]
+    assert upd["state"] == "installing" and upd["approved_by"] == "cli (owner)"
+    with session_scope() as db:
+        ev = db.scalars(select(AuditEvent).where(AuditEvent.action == "updates.approve")).one()
+        assert ev.details["via"] == "cli" and ev.actor_label == "cli (owner)"
+    # Nothing newer than an offered version that is not there.
+    assert cli(["updates", "install", "--no-check", "1.2.3"]) == 1

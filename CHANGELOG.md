@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.18 — 2026-10-20
+
+No migration.
+
+### Added
+- **Install updates from the console**: `sudo veyra updates install` checks for a new release, downloads and verifies it, and installs it — the same steps as **Install now** on System → Updates, which shows the progress and records it in the history. It prints each step until the installation is done. Useful while developing; on the web interface the confirmation with password and second factor stays.
+
 ## 0.27.17 — 2026-10-20
 
 No migration. Deploy the telephony configuration after installing.

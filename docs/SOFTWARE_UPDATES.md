@@ -121,6 +121,17 @@ so the installer begins within a second or two; window approvals, and a
 "now" approval the API could not start, are started by the worker's
 housekeeping pass (every 60 s).
 
+**From the console** (owner request 2026-10-20): `sudo veyra updates
+install [VERSION] [--no-check] [--no-wait] [--timeout S]` checks the feed,
+downloads and verifies the newest offered release (or `VERSION`), approves
+it for "now" and starts the same root unit, then prints the installer's
+steps until the new worker has recorded the result. It goes through the
+same rows and checks as the web interface, so System → Updates shows the
+progress and the history; the approval is audited `updates.approve` by
+`cli (<sudo user>)` with `via: cli`. No password or second factor is asked
+(root on the server is already required); the web interface keeps its
+re-authentication.
+
 ### 3.2 The privileged step
 
 The API and worker run without privileges; installing needs root. The
