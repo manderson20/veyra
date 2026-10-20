@@ -138,6 +138,9 @@ def test_queue_log_and_queue_report(admin, app):
         f"{base + 9}|c1|veyra-{slug}|PJSIP/{a}|CONNECT|8|c1.2|2",
         f"{base + 90}|c1|veyra-{slug}|PJSIP/{a}|COMPLETECALLER|8|81|1",
         f"{base + 100}|c2|veyra-{slug}|NONE|ENTERQUEUE||5735559999|1",
+        # c2 leaves through the break-out menu and comes back (#139): one call.
+        f"{base + 110}|c2|veyra-{slug}|NONE|EXITWITHKEY|1|10|1",
+        f"{base + 120}|c2|veyra-{slug}|NONE|ENTERQUEUE||5735559999|1",
         f"{base + 140}|c2|veyra-{slug}|NONE|ABANDON|1|1|40",
         f"{base + 200}|c3|veyra-{slug}|NONE|ENTERQUEUE||5735558888|1",
         f"{base + 230}|c3|veyra-{slug}|PJSIP/{b}|CONNECT|30|c3.2|1",
@@ -145,8 +148,8 @@ def test_queue_log_and_queue_report(admin, app):
         "garbage",
     ]
     with session_scope() as db:
-        assert queues.ingest(db, log) == 7
-        assert db.query(QueueEvent).count() == 7
+        assert queues.ingest(db, log) == 9
+        assert db.query(QueueEvent).count() == 9
     rep = admin.get(f"{REP}/queues", params={"organization_id": org["id"]}).json()["queues"]
     assert len(rep) == 1
     r = rep[0]

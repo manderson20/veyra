@@ -8,6 +8,12 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Fixed
+- **Pages from phones are logged and sent to webhooks** (#139): a page a phone dials (a zone or a page number) now appears in the page log and fires the `page.sent` webhook, like pages started from Veyra. Deploy the telephony configuration after installing.
+- **Queue statistics count calls, not visits** (#139): a caller who leaves a queue through its break-out menu and comes back is counted once as offered, answered or abandoned.
+
 ## 0.27.13 — 2026-10-20
 
 ### Changed

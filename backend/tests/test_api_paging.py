@@ -149,3 +149,39 @@ def test_pages_crud_send_and_log(admin, app, tmp_path):
     assert admin.delete(f"{ZONES}/{b['id']}").status_code == 204
     assert [z["slug"] for z in admin.get(f"{PAGES}/{live['id']}").json()["zones"]] == ["building-a"]
     assert admin.delete(f"{PAGES}/{live['id']}").status_code == 204
+
+
+def test_pages_dialled_from_phones_are_logged_and_sent(admin, app):
+    """A phone dialling a zone or a page (#139): the dialplan's UserEvent
+    writes a page log row and fires page.sent, like a page from Veyra."""
+    from test_integrations import _hook
+
+    from veyra.core.db import session_scope
+    from veyra.core.models import PageLog, WebhookDelivery
+    from veyra.paging import phone_pages
+    from veyra.telephony.asterisk import generator
+
+    org = _org(admin)
+    zone = _zone(admin, org["id"], "Gym", 3, number="7003")
+    _hook(admin)
+    with session_scope() as db:
+        assert phone_pages.handle_userevent(
+            db, {"Org": org["slug"], "Kind": "zone", "Slug": zone["slug"], "By": "1001"}
+        )
+        assert not phone_pages.handle_userevent(
+            db, {"Org": org["slug"], "Kind": "zone", "Slug": "nope", "By": "1001"}
+        )
+    with session_scope() as db:
+        row = db.query(PageLog).one()
+        assert (row.trigger, row.actor, row.page_name, row.zones) == (
+            "dial",
+            "1001",
+            "Gym",
+            [zone["slug"]],
+        )
+        delivery = db.query(WebhookDelivery).one()
+        assert delivery.event == "page.sent"
+        assert delivery.payload["data"]["zone"]["slug"] == zone["slug"]
+    # The dialplan sends the event only for pages a phone starts.
+    line = generator._page_event("example", "zone", "gym")
+    assert '"${VEYRA_PAGE_BY}"!="veyra"' in line and "UserEvent(VeyraPage,Org: example" in line

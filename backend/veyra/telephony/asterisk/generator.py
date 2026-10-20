@@ -266,6 +266,18 @@ def _allowed_lines(entry: dict[str, Any], org: str) -> list[str]:
     return out
 
 
+PAGE_EVENT = "VeyraPage"
+
+
+def _page_event(org: str, kind: str, slug: str) -> str:
+    """Tell Veyra a phone started a page (page log and the ``page.sent``
+    webhook, issue #139); pages Veyra starts itself are logged by the API."""
+    return (
+        f' same => n,ExecIf($["${{VEYRA_PAGE_BY}}"!="veyra"]?UserEvent({PAGE_EVENT},'
+        f"Org: {org},Kind: {kind},Slug: {slug},By: ${{CALLERID(num)}}))"
+    )
+
+
 def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
     """``veyra-paging`` (zone and page numbers dialled from phones) and
     ``veyra-page-play`` (recordings played into a page by Veyra)."""
@@ -289,6 +301,7 @@ def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
         lines += [
             f"exten => {number},1,NoOp(Veyra page zone {slug} by ${{CALLERID(num)}})",
             *_allowed_lines(z, org),
+            _page_event(org, "zone", slug),
             " same => n,Playback(beep)",
             _page_dial(zones, [slug], int(z.get("max_seconds") or 120)),
             " same => n,Hangup()",
@@ -311,6 +324,8 @@ def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
             f"exten => {number},1,NoOp(Veyra page {slug} by ${{CALLERID(num)}})",
             *_allowed_lines(p, org),
         ]
+        if zone_slugs:
+            lines.append(_page_event(org, "page", slug))
         if not zone_slugs:
             lines.append(" same => n,Goto(denied)")
         elif p.get("audio"):

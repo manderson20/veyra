@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Integer, and_, case, cast, func, literal, select, union_all
+from sqlalchemy import Integer, and_, case, cast, distinct, func, literal, select, union_all
 from sqlalchemy.orm import Session
 
 from veyra.core import tenancy
@@ -290,10 +290,14 @@ def queues_report(
     rows = db.execute(
         select(
             QueueEvent.queue,
-            func.count().filter(QueueEvent.event == "ENTERQUEUE"),
-            func.count().filter(QueueEvent.event == "CONNECT"),
-            func.count().filter(QueueEvent.event == "ABANDON"),
-            func.count().filter(QueueEvent.event.in_(("EXITWITHTIMEOUT", "EXITEMPTY"))),
+            # Calls, not events: a caller who leaves through the break-out
+            # menu and comes back is offered once (issue #139).
+            func.count(distinct(QueueEvent.callid)).filter(QueueEvent.event == "ENTERQUEUE"),
+            func.count(distinct(QueueEvent.callid)).filter(QueueEvent.event == "CONNECT"),
+            func.count(distinct(QueueEvent.callid)).filter(QueueEvent.event == "ABANDON"),
+            func.count(distinct(QueueEvent.callid)).filter(
+                QueueEvent.event.in_(("EXITWITHTIMEOUT", "EXITEMPTY"))
+            ),
             func.avg(case((QueueEvent.event == "CONNECT", wait))),
             func.count().filter(and_(QueueEvent.event == "CONNECT", wait <= SERVICE_LEVEL_SECONDS)),
         )

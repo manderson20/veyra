@@ -98,6 +98,7 @@ since Milestone 4 (Call History, Call Recording).
 * The backup alert waits for scheduled backups (M12/M17).
 * Reports cover at most 400 days per request; queue statistics count
   queue log events, so a caller who re-enters a queue counts twice.
+  *(Counted per call since 0.27.14, #139.)*
 
 ## 6. Open items
 

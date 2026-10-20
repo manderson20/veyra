@@ -81,7 +81,7 @@ A small receiver ran on dev1's LAN address. The test webhook and integration tok
 
 * Providers and "Require single sign-on" apply to the whole installation until multi-tenancy (M14).
 * `voicemail.message` carries counts, not the caller: Asterisk's `externnotify` passes nothing else.
-* `page.sent` covers pages Veyra starts (interface, bell, integration), not pages dialled from a phone.
+* `page.sent` covers pages Veyra starts (interface, bell, integration), not pages dialled from a phone. *(Phone pages too since 0.27.14, #139.)*
 * The silent Companion sign-in uses the account the browser is signed in to. It does not read the profile's address, which would need a permission with an install warning.
 * SAML, SCIM and directory sync, group-to-role mapping, and a phone directory for provisioned phones are out of scope (INTEGRATIONS.md §10).
 

@@ -229,6 +229,26 @@ def _switch(event: dict[str, Any]) -> None:
         log.exception("Could not handle the switch event")
 
 
+PAGE_EVENT = "VeyraPage"
+
+
+def is_page_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == PAGE_EVENT
+
+
+def _page(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraPage)``: a phone dialled a paging zone or a page
+    (page log, ``page.sent`` webhook; issue #139); never raises."""
+    try:
+        from veyra.core.db import session_scope
+        from veyra.paging import phone_pages
+
+        with session_scope() as db:
+            phone_pages.handle_userevent(db, event.get("userevent") or {})
+    except Exception:
+        log.exception("Could not handle the page event")
+
+
 BLACKLIST_EVENT = "VeyraBlacklist"
 BLOCKED_EVENT = "VeyraBlocked"
 
@@ -393,6 +413,8 @@ class AriEventListener:
                             await asyncio.to_thread(_extstate, event)
                         elif is_switch_event(event):
                             _switch(event)
+                        elif is_page_event(event):
+                            await asyncio.to_thread(_page, event)
                         elif is_blacklist_event(event):
                             _blacklist(event)
                         elif is_agent_event(event):
