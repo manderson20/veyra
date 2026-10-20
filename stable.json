@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 47,
+  "sequence": 48,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.31",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Agent time in the queue report; queues in the bulk import and from FreePBX.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "c4f6344134",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.31/veyra-0.27.31.tar.gz",
+        "sha256": "0266b92cbf9770b91422cb73437f6cb6fb6ed803398c800e38b0958f5d78f417",
+        "size": 8443894
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -802,6 +819,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T08:20:42+00:00",
-  "expires_at": "2027-01-18T08:20:42+00:00"
+  "generated_at": "2026-10-20T08:34:02+00:00",
+  "expires_at": "2027-01-18T08:34:02+00:00"
 }
