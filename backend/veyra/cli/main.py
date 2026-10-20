@@ -1105,6 +1105,13 @@ def deliver_webhooks(settings: Any, log: Any) -> None:
             sources.voicemail_notifications(
                 db, settings.mailqueue_dir, store=StoreClient(settings.vmstore_socket)
             )
+        # Voicemail pruning (issue #142), once a day.
+        from veyra.voicemail import service as vm_service
+
+        with session_scope() as db:
+            pruned = vm_service.prune_boxes(db, settings)
+            if pruned:
+                log.info("Voicemail: %d old message(s) deleted", pruned)
         # Presence from users' calendars (issue #136), every few minutes.
         from veyra.portal import presence_calendar
 

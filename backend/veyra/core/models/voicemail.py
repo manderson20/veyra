@@ -39,6 +39,9 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     email: Mapped[str | None] = mapped_column(String(254))
     attach_audio: Mapped[bool] = mapped_column(Boolean, default=True)
     delete_after_email: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Messages older than this many days are deleted (saved folders too);
+    # None keeps them (issue #142, voicemail pruning).
+    keep_days: Mapped[int | None] = mapped_column(Integer)
     # How long the phone rings before voicemail answers.
     ring_seconds: Mapped[int] = mapped_column(Integer, default=20)
     # Pressing 0 while the greeting plays reaches this extension

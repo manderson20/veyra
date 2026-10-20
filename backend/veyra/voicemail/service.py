@@ -528,3 +528,38 @@ def call_to_play(
         raise ProblemError(
             409, "Call not placed", f"The engine refused the call: {e}", code="originate_failed"
         ) from e
+
+
+PRUNE_KEY = "voicemail.pruned_at"
+
+
+def prune_boxes(db: Session, settings: Settings, now: datetime | None = None) -> int:
+    """Once a day: delete messages older than each box's ``keep_days``
+    (issue #142). Returns how many messages went; a box whose store call
+    fails is skipped until the next day."""
+    from datetime import timedelta
+
+    from veyra.core.models import SystemSetting
+    from veyra.core.models.base import utcnow
+
+    now = now or utcnow()
+    row = db.get(SystemSetting, PRUNE_KEY)
+    last = (row.value or {}).get("at") if row is not None and isinstance(row.value, dict) else None
+    if last and now - datetime.fromisoformat(last) < timedelta(hours=23):
+        return 0
+    removed = 0
+    c = client(settings)
+    for box in db.query(VoicemailBox).filter(VoicemailBox.keep_days.is_not(None)):
+        try:
+            context, mailbox = location(db, box)
+            removed += c.prune(
+                context, mailbox, int((now - timedelta(days=int(box.keep_days or 0))).timestamp())
+            )
+        except (ProblemError, StoreClientError):
+            continue
+    if row is None:
+        db.add(SystemSetting(key=PRUNE_KEY, value={"at": now.isoformat(), "removed": removed}))
+    else:
+        row.value = {"at": now.isoformat(), "removed": removed}
+    db.commit()
+    return removed

@@ -24,6 +24,7 @@ interface Draft {
   defaultEmail: boolean;
   attach_audio: boolean;
   delete_after_email: boolean;
+  keep_days: string;
   ring_seconds: string;
   operator_extension: string;
   locater_1: string;
@@ -31,10 +32,10 @@ interface Draft {
   is_enabled: boolean;
 }
 
-const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, ring_seconds: "20", operator_extension: "", locater_1: "", locater_2: "", is_enabled: true };
+const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, keep_days: "", ring_seconds: "20", operator_extension: "", locater_1: "", locater_2: "", is_enabled: true };
 
 function fromBox(b: VoicemailBox): Draft {
-  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", is_enabled: b.is_enabled };
+  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, keep_days: b.keep_days ? String(b.keep_days) : "", ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", is_enabled: b.is_enabled };
 }
 
 /** How a box is named in titles and toasts: its extension, or a shared inbox's name. */
@@ -102,12 +103,15 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
   const extOptions = (extensions.data?.items ?? []).filter((x) => !withBox.has(x.id)).map((x) => ({ value: x.id, label: `${x.number} — ${x.display_name}${x.user_display_name ? ` (${x.user_display_name})` : ""}` }));
   const ring = Number(draft.ring_seconds);
   const targetOk = shared ? draft.number.trim() && draft.name.trim() : editing || draft.extension_id;
-  const valid = targetOk && Number.isInteger(ring) && ring >= 5 && ring <= 120 && (!draft.pin || /^[0-9]{4,10}$/.test(draft.pin)) && (!draft.delete_after_email || (draft.defaultEmail && !shared) || draft.email.trim());
+  const keep = draft.keep_days.trim() ? Number(draft.keep_days) : null;
+  const keepOk = keep === null || (Number.isInteger(keep) && keep >= 1 && keep <= 3650);
+  const valid = keepOk && targetOk && Number.isInteger(ring) && ring >= 5 && ring <= 120 && (!draft.pin || /^[0-9]{4,10}$/.test(draft.pin)) && (!draft.delete_after_email || (draft.defaultEmail && !shared) || draft.email.trim());
 
   const body = (): VoicemailBoxInput => {
     const b: VoicemailBoxInput = {
       attach_audio: draft.attach_audio,
       delete_after_email: draft.delete_after_email,
+      keep_days: keep,
       ring_seconds: ring,
       operator_extension: draft.operator_extension.trim() || null,
       locater_1: draft.locater_1 || null,
@@ -250,6 +254,9 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
             description="Saves storage: the message is deleted only after the email server accepted the email; if it cannot be sent, the message stays. The email is then the only copy; needs an address and the recording attached."
             checked={draft.delete_after_email} onChange={(e) => setDraft({ ...draft, delete_after_email: e.target.checked })} />
           {errors.fields.delete_after_email ? <p className="field__error" role="alert">{errors.fields.delete_after_email}</p> : null}
+          <TextField label="Delete messages older than (days)" type="number" min={1} max={3650} value={draft.keep_days} error={errors.fields.keep_days}
+            placeholder="Keep them" help="Saves storage: once a day, messages older than this are deleted from every folder of the box. Empty keeps them."
+            onChange={(e) => setDraft({ ...draft, keep_days: e.target.value })} />
           <Switch label="Enabled" description="A disabled box keeps its settings and messages, but calls no longer land in it." checked={draft.is_enabled} onChange={(e) => setDraft({ ...draft, is_enabled: e.target.checked })} />
           {editing ? (
             <div className="row">

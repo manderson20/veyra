@@ -125,6 +125,9 @@ class StoreClient:
         )
         return bool(r["deleted"])
 
+    def prune(self, context: str, mailbox: str, before: int) -> int:
+        return int(self.call("prune", context=context, mailbox=mailbox, before=before)["removed"])
+
     def copy(
         self,
         context: str,

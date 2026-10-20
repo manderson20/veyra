@@ -16,6 +16,8 @@ set of paths:
   and holding Asterisk's own ``.lock`` while doing so;
 * ``delete_id``: one message found by its ``msg_id`` in the given folders
   (the mail worker removes a message once its email was accepted);
+* ``prune``: the messages older than a date in every folder (a box's
+  ``keep_days``);
 * ``greeting_get``, ``greeting_put``, ``greeting_delete``: the four greetings
   (``unavail``, ``busy``, ``greet``, ``temp``).
 
@@ -344,6 +346,34 @@ class VoicemailStore:
                     return {"deleted": True, "folder": folder_name}
         return {"deleted": False}
 
+    def prune(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Delete the messages received before ``before`` (epoch seconds) in
+        every folder (voicemail pruning, issue #142); returns how many."""
+        try:
+            before = int(args.get("before"))  # type: ignore[arg-type]
+        except (TypeError, ValueError) as e:
+            raise StoreError("bad_argument", "before must be epoch seconds") from e
+        box = self._box_dir(args.get("context"), args.get("mailbox"))
+        removed = 0
+        for folder_name in FOLDERS:
+            folder = box / folder_name
+            if not folder.is_dir():
+                continue
+            with _FolderLock(folder):
+                old = [
+                    n
+                    for n in self._messages(folder)
+                    if 0 < int(self._entry(folder, folder_name, n)["origtime"] or 0) < before
+                ]
+                for n in old:
+                    for f in self._files_of(folder, n):
+                        with contextlib.suppress(FileNotFoundError):
+                            f.unlink()
+                if old:
+                    self._renumber(folder)
+                removed += len(old)
+        return {"removed": removed}
+
     def copy(self, args: dict[str, Any]) -> dict[str, Any]:
         """Forward: copy a message into another mailbox's INBOX (same context
         or another), with a note of who forwarded it in the ``.txt``."""
@@ -452,6 +482,7 @@ class VoicemailStore:
         "move": "move",
         "delete": "delete",
         "delete_id": "delete_id",
+        "prune": "prune",
         "copy": "copy",
         "greetings": "greetings",
         "greeting_get": "greeting_get",

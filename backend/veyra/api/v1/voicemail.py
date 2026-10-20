@@ -144,6 +144,8 @@ class VoicemailBoxIn(BaseModel):
     email: str | None = Field(None, max_length=254)
     attach_audio: bool = True
     delete_after_email: bool = False
+    # Delete messages older than this (issue #142); None keeps them.
+    keep_days: int | None = Field(None, ge=1, le=3650)
     ring_seconds: int = Field(RING_DEFAULT, ge=RING_MIN, le=RING_MAX)
     # Pressing 0 during the greeting reaches this extension (docs/CALL_FEATURES.md §3.7).
     operator_extension: str | None = Field(None, max_length=32)
@@ -171,6 +173,7 @@ class VoicemailBoxPatch(BaseModel):
     email: str | None = Field(None, max_length=254)
     attach_audio: bool | None = None
     delete_after_email: bool | None = None
+    keep_days: int | None = Field(None, ge=1, le=3650)
     ring_seconds: int | None = Field(None, ge=RING_MIN, le=RING_MAX)
     operator_extension: str | None = Field(None, max_length=32)
     locater_1: str | None = Field(None, max_length=32)
@@ -205,6 +208,7 @@ class VoicemailBoxOut(BaseModel):
     email: str | None
     attach_audio: bool
     delete_after_email: bool
+    keep_days: int | None = None
     ring_seconds: int
     operator_extension: str | None = None
     locater_1: str | None = None
@@ -318,6 +322,7 @@ def _outs(db: Session, rows: list[VoicemailBox]) -> list[VoicemailBoxOut]:
                 email=r.email,
                 attach_audio=r.attach_audio,
                 delete_after_email=r.delete_after_email,
+                keep_days=r.keep_days,
                 ring_seconds=r.ring_seconds,
                 operator_extension=r.operator_extension,
                 locater_1=r.locater_1,
@@ -448,6 +453,7 @@ def create_box(
             email=body.email,
             attach_audio=body.attach_audio,
             delete_after_email=body.delete_after_email,
+            keep_days=body.keep_days,
             ring_seconds=body.ring_seconds,
             operator_extension=_operator(db, org.id, body.operator_extension),
             locater_1=check_locater(
@@ -510,6 +516,7 @@ def create_box(
         email=email,
         attach_audio=body.attach_audio,
         delete_after_email=body.delete_after_email,
+        keep_days=body.keep_days,
         ring_seconds=body.ring_seconds,
         operator_extension=_operator(db, ext.organization_id, body.operator_extension),
         locater_1=check_locater(
@@ -594,6 +601,9 @@ def update_box(
         if value is not None and value != getattr(box, field):
             setattr(box, field, value)
             details[field] = value
+    if "keep_days" in changes and changes["keep_days"] != box.keep_days:
+        box.keep_days = changes["keep_days"]  # None: keep messages
+        details["keep_days"] = box.keep_days
     if "operator_extension" in changes:
         operator = _operator(db, box.organization_id, changes["operator_extension"])
         if operator != box.operator_extension:

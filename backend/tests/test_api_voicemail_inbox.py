@@ -409,3 +409,27 @@ def test_call_me_to_play(admin, app, helper):
     # The administrator rings the box's own phone.
     r = admin.post(f"/api/v1/voicemail/{box['id']}/messages/0/call", json={})
     assert r.status_code == 202, r.text
+
+
+def test_keep_days_prunes_once_a_day(admin, app, helper):
+    from datetime import UTC, datetime, timedelta
+
+    from veyra.voicemail import service as vmsvc
+
+    mine = _ext(admin, "1001")
+    box = admin.post("/api/v1/voicemail", json={"extension_id": mine["id"], "keep_days": 30})
+    assert box.status_code == 201 and box.json()["keep_days"] == 30, box.text
+    ctx = _context(admin)
+    now = datetime(2026, 10, 20, tzinfo=UTC)
+    old = int((now - timedelta(days=40)).timestamp())
+    new = int((now - timedelta(days=2)).timestamp())
+    inbox = helper / ctx / "1001" / "INBOX"
+    _msg(inbox, 0, ctx, "1001", origtime=old)
+    _msg(inbox, 1, ctx, "1001", origtime=new - 1)
+    with session_scope() as db:
+        assert vmsvc.prune_boxes(db, app.state.settings, now=now) == 1
+        assert vmsvc.prune_boxes(db, app.state.settings, now=now + timedelta(hours=1)) == 0
+    left = admin.get(f"/api/v1/voicemail/{box.json()['id']}/messages").json()["messages"]
+    assert len(left) == 1
+    r = admin.patch(f"/api/v1/voicemail/{box.json()['id']}", json={"keep_days": None})
+    assert r.status_code == 200 and r.json()["keep_days"] is None

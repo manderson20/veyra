@@ -266,3 +266,16 @@ def test_delete_by_message_id_in_any_listed_folder(spool):
     for bad in ({"msg_id": "../x"}, {"msg_id": "x", "folders": ["Trash"]}):
         with pytest.raises(vmstore.StoreError):
             st.delete_id(_a(**bad))
+
+
+def test_prune_old_messages(spool):
+    """Issue #142: messages received before the date go, in every folder."""
+    st = vmstore.VoicemailStore(spool)
+    # INBOX: origtime 1760800000+0..2; Old: 1760800000.
+    assert st.prune(_a(before=1760800002)) == {"removed": 3}
+    left = st.list_messages(_a(folder="INBOX"))
+    assert [m["msg_id"] for m in left["messages"]] == ["1760800002-00000002"]
+    assert left["messages"][0]["number"] == 0  # renumbered
+    assert left["counts"]["Old"] == 0
+    with pytest.raises(vmstore.StoreError):
+        st.prune(_a(before="soon"))

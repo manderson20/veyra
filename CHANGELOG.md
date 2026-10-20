@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.36 — 2026-10-20
+
+Migration `0067`.
+
+### Added
+- **Delete old voicemail automatically** (#142): a voicemail box can delete messages older than a number of days (Voicemail → the box → "Delete messages older than"), once a day, from every folder, to save storage on the phone server. Empty keeps them, as before.
+
 ## 0.27.35 — 2026-10-20
 
 No migration.

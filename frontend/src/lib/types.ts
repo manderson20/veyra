@@ -1261,6 +1261,7 @@ export interface VoicemailBox {
   email: string | null;
   attach_audio: boolean;
   delete_after_email: boolean;
+  keep_days?: number | null;
   ring_seconds: number;
   /** Pressing 0 while the greeting plays reaches this extension (CALL_FEATURES.md §3.7). */
   operator_extension?: string | null;
@@ -1294,6 +1295,7 @@ export interface VoicemailBoxInput {
   email?: string | null;
   attach_audio?: boolean;
   delete_after_email?: boolean;
+  keep_days?: number | null;
   ring_seconds?: number;
   is_enabled?: boolean;
   operator_extension?: string | null;

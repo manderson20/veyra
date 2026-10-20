@@ -63,6 +63,7 @@ where Asterisk hands over voicemail notifications (§3).
 | `email` | Where messages are delivered; defaults to the extension user's email at creation; empty = no email |
 | `attach_audio` | Attach the recording (default on) |
 | `delete_after_email` | Remove the message from the box once emailed (default off); only with an email address and the recording attached. Deleted only after the SMTP server accepted the email (issue #148): Asterisk keeps it (`delete=no`), `emailbody` ends with `[veyra-vm:${VM_MESSAGEFILE}]`, `veyra-mailqueue` turns that into an `X-Veyra-Voicemail` header with the message's `msg_id`, and the worker strips both, sends, then deletes the message by `msg_id` (audited `voicemail.deleted_after_email`). A failed or given-up email keeps it |
+| `keep_days` | Messages older than this many days are deleted from every folder, once a day by the worker (store verb `prune`; issue #142, 0.27.36); empty keeps them |
 | `ring_seconds` | How long the phone rings before voicemail answers (default 20, 5–120) |
 | `greeting` | Recorded by the owner from the phone (`*97`, mailbox options); Asterisk stores it in its spool; the API does not report whether one exists |
 | `is_enabled` | A disabled box keeps its settings and messages but calls no longer land in it, and it leaves the engine configuration |
