@@ -247,3 +247,7 @@ actions: `trunk.create/update/delete`, `inbound_route.create/update/delete`,
   organization; no per-trunk inbound caller-ID manipulation beyond the name
   prefix; no least-cost or time-based outbound selection.
 * Emergency calling remains **not certified** ([EMERGENCY_CALLING.md](EMERGENCY_CALLING.md)).
+
+## Bulk import and export
+
+Many at once as CSV, with a dry run before anything is saved: System → Import and Export ([BULK_IMPORT.md](BULK_IMPORT.md), issue #41).

@@ -205,3 +205,7 @@ fields; a renumbering records the old number and endpoint name),
 
 Console: `veyra installation-key generate [--force] [--path]`,
 `veyra installation-key check [--json]`.
+
+## Bulk import and export
+
+Many at once as CSV, with a dry run before anything is saved: System → Import and Export ([BULK_IMPORT.md](BULK_IMPORT.md), issue #41).

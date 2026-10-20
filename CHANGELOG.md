@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.20 — 2026-10-20
+
+No migration.
+
+### Added
+- **Import and export as CSV** (#41): System → **Import and Export** exports extensions (with their voicemail settings and pickup groups), users (with roles), inbound routes and shared voicemail inboxes as a spreadsheet file, or gives a blank template. Edit the file, **Check the file** to see what would be created, updated or refused — nothing is saved — then **Import**. Rows are matched on their first column and updated in place; an empty cell keeps a value and a dash (-) clears it. Every row goes through the same checks as the web pages; rows with errors are left out and listed. See docs/BULK_IMPORT.md.
+
 ## 0.27.19 — 2026-10-20
 
 No migration.

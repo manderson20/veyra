@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import fnmatch
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -52,7 +54,27 @@ class EventBus:
     def unsubscribe_owner(self, owner: str) -> None:
         self._subs = [s for s in self._subs if s.owner != owner]
 
+    @contextmanager
+    def hold(self) -> Iterator[list[Event]]:
+        """Collect this context's events instead of delivering them (a bulk
+        import's dry run discards them; a real one delivers them after the
+        commit with :meth:`deliver`)."""
+        held: list[Event] = []
+        token = _held.set(held)
+        try:
+            yield held
+        finally:
+            _held.reset(token)
+
+    def deliver(self, events: list[Event]) -> None:
+        for event in events:
+            self.publish(event)
+
     def publish(self, event: Event) -> int:
+        held = _held.get()
+        if held is not None:
+            held.append(event)
+            return 0
         delivered = 0
         for sub in list(self._subs):
             if not fnmatch.fnmatchcase(event.name, sub.pattern):
@@ -65,4 +87,5 @@ class EventBus:
         return delivered
 
 
+_held: ContextVar[list[Event] | None] = ContextVar("veyra_events_held", default=None)
 bus = EventBus()

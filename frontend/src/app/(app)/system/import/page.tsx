@@ -1,0 +1,134 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+"use client";
+
+import { useState, type ChangeEvent } from "react";
+import { Badge, Button, Callout, Card, DataTable, EmptyState, PageHeader, SelectField, useToast, type Column } from "@/components/ui";
+import { buttonClass } from "@/components/ui/Button";
+import { API_BASE, api, errorMessage } from "@/lib/api";
+import { useApiData } from "@/hooks/useApiData";
+import { useOrganizationOptions } from "@/hooks/useOrganizations";
+import { useSession } from "@/hooks/useSession";
+
+interface BulkKind { name: string; label: string; key: string; columns: string[]; permission: string }
+interface BulkRow { row: number; key: string; action: "create" | "update" | "unchanged" | "error"; message: string | null; notes: string[] }
+interface BulkResult { dry_run: boolean; counts: Record<string, number>; rows: BulkRow[] }
+
+const ACTION: Record<BulkRow["action"], { tone: "ok" | "info" | "neutral" | "danger"; label: string }> = {
+  create: { tone: "ok", label: "Create" },
+  update: { tone: "info", label: "Update" },
+  unchanged: { tone: "neutral", label: "No change" },
+  error: { tone: "danger", label: "Error" },
+};
+
+/** Bulk CSV import and export (issue #41; docs/BULK_IMPORT.md): export or
+ * download a template, check a file (dry run), then import it. */
+export default function ImportPage() {
+  const toast = useToast();
+  const { can, session } = useSession();
+  const { organizations } = useOrganizationOptions(true);
+  const kinds = useApiData<BulkKind[]>("/bulk/kinds");
+  const [kindName, setKindName] = useState("extensions");
+  const [org, setOrg] = useState("");
+  const [text, setText] = useState<string | null>(null);
+  const [fileName, setFileName] = useState("");
+  const [result, setResult] = useState<BulkResult | null>(null);
+  const [busy, setBusy] = useState<"check" | "import" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const kind = kinds.data?.find((k) => k.name === kindName);
+  const orgId = org || session?.user.home_organization_id || organizations[0]?.id || "";
+  const allowed = kind ? can(kind.permission) : false;
+
+  const pick = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    setResult(null);
+    setError(null);
+    if (!f) { setText(null); setFileName(""); return; }
+    setFileName(f.name);
+    setText(await f.text());
+  };
+  const run = async (dryRun: boolean) => {
+    if (text === null || !kind) return;
+    setBusy(dryRun ? "check" : "import");
+    setError(null);
+    try {
+      const r = await api.post<BulkResult>(`/bulk/${kind.name}/import?organization_id=${encodeURIComponent(orgId)}&dry_run=${dryRun}`, { csv: text });
+      setResult(r);
+      if (!dryRun) {
+        const done = (r.counts.create ?? 0) + (r.counts.update ?? 0);
+        if (r.counts.error) toast.error(`${done} row${done === 1 ? "" : "s"} imported, ${r.counts.error} with errors`, "The rows with errors were not changed.");
+        else toast.success(`${done} row${done === 1 ? "" : "s"} imported`, "Deploy the changes when you are ready.");
+      }
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const columns: Column<BulkRow>[] = [
+    { key: "row", header: "Line", render: (r) => <span className="mono">{r.row}</span> },
+    { key: "key", header: kind?.key ?? "Key", render: (r) => <span className="mono">{r.key || "—"}</span> },
+    { key: "action", header: result?.dry_run ? "Would" : "Result", render: (r) => <Badge tone={ACTION[r.action].tone}>{ACTION[r.action].label}</Badge> },
+    { key: "message", header: "Details", render: (r) => <span>{r.message ?? r.notes.join("; ")}{r.message && r.notes.length ? ` (${r.notes.join("; ")})` : ""}</span> },
+  ];
+  const q = `organization_id=${encodeURIComponent(orgId)}`;
+  const errors = result?.counts.error ?? 0;
+  const changes = (result?.counts.create ?? 0) + (result?.counts.update ?? 0);
+
+  return (
+    <div className="stack">
+      <PageHeader title="Import and export"
+        description="Many extensions, users, inbound routes or shared inboxes at once, as a CSV file. Export what exists (or a blank template), edit it in a spreadsheet, check it, then import it. Rows are matched on their first column: a match is updated, otherwise it is created. An empty cell keeps the value; a dash (-) clears it." />
+      <Card title="1. Choose what">
+        <div className="grid grid--2">
+          <SelectField label="Kind" value={kindName} options={(kinds.data ?? []).map((k) => ({ value: k.name, label: k.label }))}
+            onChange={(e) => { setKindName(e.target.value); setResult(null); }} />
+          {organizations.length > 1 ? (
+            <SelectField label="Organization" value={orgId} options={organizations.map((o) => ({ value: o.id, label: o.name }))}
+              onChange={(e) => { setOrg(e.target.value); setResult(null); }} />
+          ) : null}
+        </div>
+        {kind ? (
+          <div className="stack stack--sm" style={{ marginTop: 12 }}>
+            <p className="subtle" style={{ margin: 0 }}>Columns: <span className="mono">{kind.columns.join(", ")}</span></p>
+            <div className="row" style={{ flexWrap: "wrap" }}>
+              <a className={buttonClass("secondary", "sm")} href={`${API_BASE}/bulk/${kind.name}/export.csv?${q}`} download>Export {kind.label.toLowerCase()}</a>
+              <a className={buttonClass("secondary", "sm")} href={`${API_BASE}/bulk/${kind.name}/export.csv?${q}&template=true`} download>Blank template</a>
+            </div>
+          </div>
+        ) : null}
+      </Card>
+      <Card title="2. Check and import" footer={allowed ? (
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <Button onClick={() => run(true)} loading={busy === "check"} disabled={text === null || !!busy}>Check the file</Button>
+          <Button variant="primary" onClick={() => run(false)} loading={busy === "import"} disabled={!result?.dry_run || changes === 0 || !!busy}>
+            Import {changes ? `${changes} row${changes === 1 ? "" : "s"}` : ""}
+          </Button>
+        </div>
+      ) : undefined}>
+        <div className="stack stack--sm">
+          {!allowed && kind ? <Callout tone="warn">You cannot change {kind.label.toLowerCase()}; you can still export them.</Callout> : null}
+          <label className="field">
+            <span className="field__label">CSV file</span>
+            <input type="file" accept=".csv,text/csv" onChange={pick} disabled={!allowed} />
+          </label>
+          {fileName ? <p className="subtle" style={{ margin: 0 }}>{fileName}</p> : null}
+          <p className="subtle" style={{ margin: 0 }}>Checking runs every row through the same checks as the web pages and changes nothing. Importing applies the rows without errors; rows with errors are left out and listed.</p>
+          {error ? <Callout tone="danger">{error}</Callout> : null}
+          {result ? (
+            <Callout tone={errors ? "warn" : "ok"} title={result.dry_run ? "Check finished" : "Import finished"}>
+              {result.counts.create ?? 0} to create, {result.counts.update ?? 0} to update, {result.counts.unchanged ?? 0} unchanged, {errors} with errors.
+              {result.dry_run && errors ? " Fix them in the file and check again, or import the others." : ""}
+            </Callout>
+          ) : null}
+        </div>
+      </Card>
+      {result ? (
+        <Card title="Rows" flush>
+          <DataTable columns={columns} rows={result.rows} rowKey={(r) => String(r.row)} caption="Rows of the file"
+            empty={<EmptyState compact icon="file" title="No rows" />} />
+        </Card>
+      ) : null}
+    </div>
+  );
+}
