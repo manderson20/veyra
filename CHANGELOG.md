@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.13 — 2026-10-20
+
+### Changed
+- **Licence warning for streamed hold music**: choosing "An internet radio stream" for a hold music set shows that a station's permission and a music performance licence may be needed, and stream sets carry a "Licence may be needed" badge in the list. No migration.
+
 ## 0.27.12 — 2026-10-20
 
 No migration. Deploy the telephony configuration after installing for the stream fallback.

@@ -89,10 +89,13 @@ function SetDialog({ open, onClose, set, onSaved }: { open: boolean; onClose: ()
         <TextArea label="Description" rows={2} value={description} error={errors.fields.description} onChange={(e) => setDescription(e.target.value)} />
         <SelectField label="Source" value={source} options={[{ value: "tracks", label: "Recordings from the audio library" }, { value: "stream", label: "An internet radio stream" }]}
           onChange={(e) => setSource(e.target.value as "tracks" | "stream")} />
-        {source === "stream" ? (
+        {source === "stream" ? (<>
           <TextField label="Stream address" required value={stream} error={errors.fields.stream_url} spellCheck={false} placeholder="https://stream.example.org/live.mp3"
-            help="An MP3, AAC or Ogg station, decoded by ffmpeg on the server and reconnected when it drops. Use a station you are licensed to play to callers." onChange={(e) => setStream(e.target.value)} />
-        ) : null}
+            help="An MP3, AAC or Ogg station, decoded by ffmpeg on the server and reconnected when it drops." onChange={(e) => setStream(e.target.value)} />
+          <Callout tone="warn" title="A licence may be needed">
+            Playing a radio station to callers on hold is a public performance and a retransmission of the station. You may need the station&apos;s written permission and a music performance licence (in the United States from ASCAP, BMI, SESAC and GMR). Check before you use a station; Veyra&apos;s built-in hold music needs none.
+          </Callout>
+        </>) : null}
         <div className="field">
           <span className="field__label">{source === "stream" ? "Fallback recordings" : "Recordings"}</span>
           {source === "stream" ? <p className="subtle" style={{ margin: 0 }}>Played while the station cannot be reached, then the station is tried again.</p> : null}
@@ -167,7 +170,7 @@ export default function HoldMusicPage() {
   const columns: Column<HoldMusicSet>[] = [
     { key: "name", header: "Set", render: (s) => <span><span className="table__primary" style={{ display: "block" }}>{s.name}</span><span className="table__secondary mono">{s.class_name}</span></span> },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (s: HoldMusicSet) => <span>{s.organization_name}</span> }] : []),
-    { key: "tracks", header: "Recordings", render: (s) => s.stream_url ? <span>Stream<span className="table__secondary" style={{ display: "block", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis" }}>{s.stream_url}</span></span> : <span>{s.tracks.length}<span className="table__secondary" style={{ display: "block" }}>{minutes(s.tracks.reduce((n, t) => n + t.duration_seconds, 0))}{s.random ? " · shuffled" : ""}</span></span> },
+    { key: "tracks", header: "Recordings", render: (s) => s.stream_url ? <span>Stream <Badge tone="warn" icon="alert">Licence may be needed</Badge><span className="table__secondary" style={{ display: "block", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis" }}>{s.stream_url}</span></span> : <span>{s.tracks.length}<span className="table__secondary" style={{ display: "block" }}>{minutes(s.tracks.reduce((n, t) => n + t.duration_seconds, 0))}{s.random ? " · shuffled" : ""}</span></span> },
     { key: "use", header: "Used by", render: (s) => s.in_use_by ? <span>{s.in_use_by}</span> : <span className="subtle">—</span> },
     { key: "status", header: "Status", render: (s) => s.problems.length ? <Badge tone="warn" icon="alert">{s.problems[0]}</Badge> : <Badge tone="ok">Ready</Badge> },
     { key: "actions", header: "", render: (s) => editable ? (
@@ -183,7 +186,7 @@ export default function HoldMusicPage() {
         description="Sets of recordings played to callers on hold and in queues. Choose an organization's default set on its page, and a set per call queue or ring group; anything without a set plays the built-in music."
         actions={editable ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New hold music set</Button> : null} />
       <PendingChanges refreshKey={changed + (list.data?.total ?? 0)} />
-      <Callout tone="neutral" title="Music licensing">Commercial music played to callers usually needs a public performance licence. The built-in music and Creative Commons or public-domain recordings do not; the licence recorded with each upload is shown in the set.</Callout>
+      <Callout tone="neutral" title="Music licensing">Commercial music played to callers usually needs a public performance licence, and a radio stream may also need the station&apos;s permission. The built-in music and Creative Commons or public-domain recordings do not; the licence recorded with each upload is shown in the set.</Callout>
       <Card flush>
         {manyOrgs ? <div className="table-toolbar"><SelectField label={<span className="sr-only">Organization</span>} value={org} placeholder="All organizations" options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => setOrg(e.target.value)} /></div> : null}
         <DataTable columns={columns} rows={list.data?.items} rowKey={(s) => s.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Hold music sets"
