@@ -782,7 +782,13 @@ in-call codes (the allowed-codes list applies to dialled codes), and a
 `mixmonitor start <channel> <recordings>/incoming/<ref>--<on-demand policy>.wav,b`
 on the console, so the worker files it like the phone's `*1`; a call
 already recorded is refused, and only a web-started recording can be
-stopped from the web.
+stopped from the web. *Class-of-service guards (same release):* the
+`veyra-ondemand` toggle checks the pressing phone's `VEYRA_COS` against the
+classes without `record_toggle` (error tone); a class allowing neither
+`attended_transfer` nor `blind_transfer` loses Dial's `T` when its phone
+calls (`REPLACE(VEYRA_XFER,T)`) and `t` when its phone is called (Dial's
+options switch both transfer codes together, so allowing one of the two
+allows both).
 *Live check 2026-10-19 (dev1, 0.25.4):* `features.conf` was written on
 deployment but `features show` kept the engine defaults: Asterisk 22 has no
 `features reload` console command, and `asterisk -rx` exits 0 on "No such

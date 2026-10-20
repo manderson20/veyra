@@ -810,6 +810,13 @@ def test_generator_class_of_service_guards():
         "Dial(PJSIP/example-1002,20)" in internal
         and "veyra-fm-out" not in internal.split("n(fm)")[1].split("n(fmdone)")[0]
     )
+    # In-call codes (issue #135): the classroom class may not transfer, so
+    # its phone loses Dial T when calling and t when called.
+    assert (
+        'ExecIf(${REGEX("^(classroom)$" ${VEYRA_COS})}?Set(VEYRA_XFER=${REPLACE(VEYRA_XFER,T)}))'
+        in internal
+    )
+    assert "Dial(PJSIP/example-1001,20,${REPLACE(VEYRA_XFER,t)})" in internal
     # The office class and a phone without a class are never denied.
     snap["extensions"][0]["class_of_service"] = None
     d2 = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
@@ -1146,3 +1153,21 @@ def test_presence_hint_and_lamp(admin, app):
     assert adapter.presence_lamps[(org["slug"], "1001")] == PRESENCE_LAMP["meeting"] == "INUSE"
     admin.put(f"/api/v1/me/extensions/{ext['id']}/presence", json={"state": "out"})
     assert adapter.presence_lamps[(org["slug"], "1001")] == "UNAVAILABLE"
+
+
+def test_record_toggle_class_guard():
+    """Issue #135: a class without the record code hears an error tone."""
+    snap = _snapshot(feature_codes={"record_toggle": "*1"})
+    snap["classes_of_service"] = [
+        {
+            "slug": "classroom",
+            "name": "Classroom",
+            "organization": "example",
+            "allowed_routes": [],
+            "allowed_feature_codes": ["dnd_on"],
+        },
+    ]
+    d = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    od = _section(d, "veyra-ondemand")
+    assert 'GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})}]?denied)' in od
+    assert " same => n(denied),Playback(beeperr)" in od

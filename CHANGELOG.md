@@ -10,10 +10,11 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## 0.27.25 — 2026-10-21
 
-No migration.
+No migration. Deploy the telephony configuration after installing.
 
 ### Added
 - **Record a call from the web** (#135): Calls (the live call list) has **Record** and **Stop recording** next to each call, for administrators with the new permission "Start and stop recording a call in progress" (organization and site administrators by default). The recording is filed with the call under Call Recording, like the phone's record code.
+- **Classes of service cover the in-call codes** (#135): a class that does not allow "Record this call" gets an error tone when its phone presses the record code, and a class that allows neither transfer code cannot transfer calls with the transfer keys. Deploy the telephony configuration after installing.
 
 ## 0.27.24 — 2026-10-21
 

@@ -1127,7 +1127,7 @@ def _features_conf(codes: dict[str, str]) -> GeneratedFile:
     return GeneratedFile(FILE_FEATURES, "\n".join(lines).rstrip("\n") + "\n")
 
 
-def _ondemand_context(recordings_dir: str) -> list[str]:
+def _ondemand_context(recordings_dir: str, cos: Cos | None = None) -> list[str]:
     """On-demand recording toggle (docs/CALL_FEATURES.md §4.11): the first
     press starts a MixMonitor into the incoming folder under the pseudo policy
     id, the next stops it; the worker files it like any other recording."""
@@ -1135,6 +1135,20 @@ def _ondemand_context(recordings_dir: str) -> list[str]:
         "",
         f"[{CONTEXT_ONDEMAND}]",
         "exten => s,1,NoOp(Veyra on-demand recording toggle)",
+        # The pressing phone's class may not record (issue #135).
+        *(
+            cos.guard(
+                cos._denied(
+                    lambda c: (
+                        c.get("allowed_feature_codes") is not None
+                        and "record_toggle" not in c["allowed_feature_codes"]
+                    )
+                ),
+                label="denied",
+            )
+            if cos
+            else []
+        ),
         ' same => n,GotoIf($["${VEYRA_CALLREC}"!=""]?stop)',
         " same => n,Set(__VEYRA_CALLREC=${UNIQUEID})",
         " same => n,Set(CDR(veyra_rec)=${VEYRA_CALLREC})",
@@ -1144,6 +1158,8 @@ def _ondemand_context(recordings_dir: str) -> list[str]:
         " same => n,Return()",
         " same => n(stop),StopMixMonitor()",
         " same => n,Playback(beep)",
+        " same => n,Return()",
+        " same => n(denied),Playback(beeperr)",
         " same => n,Return()",
         "",
     ]
@@ -1342,7 +1358,13 @@ def _dialplan(
     if recording:
         lines += _record_context(recordings_dir, prompts_dir)
     if "record_toggle" in codes:
-        lines += _ondemand_context(recordings_dir)
+        lines += _ondemand_context(
+            recordings_dir,
+            Cos(
+                list(snapshot.get("classes_of_service") or []),
+                int((snapshot.get("numbering") or {}).get("extension_length") or 4),
+            ),
+        )
     return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
 
 
@@ -1481,6 +1503,29 @@ class Cos:
             self._denied(lambda c: not c.get("allow_external_forwards", True)),
             extra=f"${{LEN(${{VEYRA_CF}})}} > {self.extension_length}",
         )
+
+    def _no_transfers(self, c: dict[str, Any]) -> bool:
+        # Dial's t/T switch both transfer codes on together, so a class is
+        # held to "no transfers" only when it allows neither (issue #135).
+        allowed = c.get("allowed_feature_codes")
+        return allowed is not None and not ({"attended_transfer", "blind_transfer"} & set(allowed))
+
+    def transfer_guard(self) -> list[str]:
+        """The calling phone's class may not transfer: drop Dial's T."""
+        denied = self._denied(self._no_transfers)
+        if not denied:
+            return []
+        alternatives = "|".join(re.escape(d) for d in denied)
+        return [
+            f' same => n,ExecIf(${{REGEX("^({alternatives})$" ${{VEYRA_COS}})}}'
+            "?Set(VEYRA_XFER=${REPLACE(VEYRA_XFER,T)}))"
+        ]
+
+    def callee_may_transfer(self, class_slug: Any) -> bool:
+        for c in self.classes:
+            if c.get("slug") == class_slug:
+                return not self._no_transfers(c)
+        return True
 
     def intercom_guard(self) -> list[str]:
         return self.guard(self._denied(lambda c: not c.get("allow_intercom", True)))
@@ -2131,6 +2176,12 @@ def _internal(
         if not 5 <= ring <= 120:
             raise GenerationError(f"extension {number}: ring time {ring} is out of range")
         rec = _record_for_extension(recording, ext, prompts_dir)
+        # A called phone whose class may not transfer gets no Dial t (#135).
+        xfer = (
+            "${VEYRA_XFER}"
+            if cos is None or cos.callee_may_transfer(ext.get("class_of_service"))
+            else "${REPLACE(VEYRA_XFER,t)}"
+        )
         ocid = ext.get("outbound_caller_id_number")
         # A forwarded leg leaves as this extension's call: its outbound caller
         # ID when it has one, else the route's and the trunk's (§3.5).
@@ -2161,7 +2212,8 @@ def _internal(
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
             *rec,
             *([f' same => n,GotoIf($["${{DB({state}/fmfm)}}"="1"]?fm)'] if fm_branch else []),
-            f" same => n,Dial(PJSIP/{endpoint},{ring},${{VEYRA_XFER}})",
+            *(cos.transfer_guard() if cos else []),
+            f" same => n,Dial(PJSIP/{endpoint},{ring},{xfer})",
             ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
             f" same => n(noanswer),Set(VEYRA_CF=${{DB({state}/cf_no_answer)}})",
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
