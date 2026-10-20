@@ -245,6 +245,17 @@ class TelephonyAdapter(ABC):
         docs/USER_PORTAL.md §9). Returns the engine's channel id."""
         raise NotSupported(f"{self.name}: originating channels not implemented")
 
+    def conference_live(self, room: str) -> dict[str, Any] | None:
+        """A running conference (issue #96): ``{locked, participants: [{channel,
+        caller_id, admin, muted, marked}]}``, or None when nobody is in it."""
+        raise NotSupported(f"{self.name}: live conference control not implemented")
+
+    def conference_action(self, room: str, action: str, channel: str | None = None) -> None:
+        """``mute``/``unmute``/``kick`` one channel, ``mute_all``/``unmute_all``
+        (the participants who are not administrators), ``lock``/``unlock``,
+        ``end`` (everybody leaves)."""
+        raise NotSupported(f"{self.name}: live conference control not implemented")
+
     # --- configuration -------------------------------------------------------
 
     def managed_files(self) -> list[str]:

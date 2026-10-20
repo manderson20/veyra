@@ -210,6 +210,37 @@ class FakeAdapter(TelephonyAdapter):
         self.originated_channels.append((endpoint, extension, context, dict(variables or {})))
         return f"chan-{len(self.originated_channels)}"
 
+    # Live conferences (issue #96): room → {"locked", "participants"}.
+    conferences: dict[str, dict[str, Any]]
+
+    def conference_live(self, room: str) -> dict[str, Any] | None:
+        live = getattr(self, "conferences", {}).get(room)
+        return (
+            None
+            if live is None
+            else {"locked": live["locked"], "participants": [dict(p) for p in live["participants"]]}
+        )
+
+    def conference_action(self, room: str, action: str, channel: str | None = None) -> None:
+        live = getattr(self, "conferences", {}).get(room)
+        if live is None:
+            raise EngineUnavailable(f"No conference bridge named '{room}' found!")
+        people = live["participants"]
+        if action in ("mute", "unmute"):
+            for p in people:
+                if p["channel"] == channel:
+                    p["muted"] = action == "mute"
+        elif action in ("mute_all", "unmute_all"):
+            for p in people:
+                if not p["admin"]:
+                    p["muted"] = action == "mute_all"
+        elif action == "kick":
+            live["participants"] = [p for p in people if p["channel"] != channel]
+        elif action in ("lock", "unlock"):
+            live["locked"] = action == "lock"
+        elif action == "end":
+            self.conferences.pop(room)
+
     def managed_files(self) -> list[str]:
         return list(generator.MANAGED_FILES)
 

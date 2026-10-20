@@ -101,6 +101,44 @@ def _check_interface(value: str) -> str:
 
 
 SWITCH_FAMILY = "veyra/switch"
+_CONF_NAME_RE = re.compile(r"^veyra[A-Za-z0-9_-]{0,80}$")
+_CONF_CHANNEL_RE = re.compile(r"^[A-Za-z]+/[A-Za-z0-9_.@;+-]{1,120}$")
+
+
+def _check_conference(room: str) -> str:
+    if not _CONF_NAME_RE.match(room):
+        raise ValueError(f"{room!r} is not a Veyra conference")
+    return room
+
+
+# ``confbridge list`` ("%-32s %6u %6u %-6s %s") and ``confbridge list <room>``
+# ("%-30s %-6s %-16s %-16s %-16s %s"): names may be wider than the columns,
+# so the rows are read by pattern; Flags (A admin, M marked, m muted, W, E, w)
+# may be empty.
+_CONF_LIST_RE = re.compile(
+    r"^(?P<name>\S+)\s+(?P<users>\d+)\s+(?P<marked>\d+)\s+(?P<locked>\S+)\s+(?P<muted>\S+)\s*$"
+)
+_CONF_USER_RE = re.compile(
+    r"^(?P<channel>[A-Za-z]+/\S+)\s+(?P<flags>[AMWEmw]*)\s+(?P<user>\S+)\s+(?P<bridge>\S+)"
+    r"\s+(?P<menu>\S+)\s*(?P<callerid>.*)$"
+)
+
+
+def parse_confbridge_list(out: str) -> dict[str, dict[str, str]]:
+    """``confbridge list`` → {room: {users, marked, locked, muted}}."""
+    rows = {}
+    for line in out.splitlines():
+        m = _CONF_LIST_RE.match(line.strip())
+        if m and not line.startswith(("=", "Conference Bridge Name")):
+            rows[m.group("name")] = m.groupdict()
+    return rows
+
+
+def parse_confbridge_users(out: str) -> list[dict[str, str]]:
+    """``confbridge list <room>`` → participants."""
+    return [m.groupdict() for line in out.splitlines() if (m := _CONF_USER_RE.match(line.strip()))]
+
+
 SWITCH_KINDS = ("flow", "tc", "agent", "agentpause", "agentq")
 _SWITCH_VALUE_RE = re.compile(r"^[a-z0-9]{1,16}$")
 # "/veyra/switch/flow/example/night                   : 1"
@@ -491,6 +529,48 @@ class AsteriskAdapter(TelephonyAdapter):
             endpoint, extension, context, caller_id, timeout, variables=variables
         )
         return str(ch.get("id") or "")
+
+    def conference_live(self, room: str) -> dict[str, Any] | None:
+        name = _check_conference(room)
+        ok, out = cli.run("confbridge list")
+        if not ok:
+            raise EngineUnavailable(f"could not list the conferences: {out[:200]}")
+        summary = parse_confbridge_list(out).get(name)
+        if summary is None:
+            return None
+        ok, out = cli.run(f"confbridge list {name}")
+        if not ok:
+            raise EngineUnavailable(f"could not list the conference {name}: {out[:200]}")
+        participants = [
+            {
+                "channel": r["channel"],
+                "caller_id": r["callerid"].strip(),
+                "admin": "A" in r["flags"],
+                "marked": "M" in r["flags"],
+                "muted": "m" in r["flags"],
+            }
+            for r in parse_confbridge_users(out)
+        ]
+        return {"locked": summary["locked"].lower().startswith("y"), "participants": participants}
+
+    def conference_action(self, room: str, action: str, channel: str | None = None) -> None:
+        name = _check_conference(room)
+        if action in ("mute", "unmute", "kick"):
+            if not channel or not _CONF_CHANNEL_RE.match(channel):
+                raise ValueError("a participant's channel is required")
+            command = f"confbridge {action} {name} {channel}"
+        elif action in ("mute_all", "unmute_all"):
+            # "participants": everyone who is not an administrator.
+            command = f"confbridge {action.split('_')[0]} {name} participants"
+        elif action in ("lock", "unlock"):
+            command = f"confbridge {action} {name}"
+        elif action == "end":
+            command = f"confbridge kick {name} all"
+        else:
+            raise ValueError(f"unknown conference action {action!r}")
+        ok, out = cli.run(command)
+        if not ok or "No conference bridge named" in out or "No participant named" in out:
+            raise EngineUnavailable(out[:200] or "the engine refused the command")
 
     # --- configuration ------------------------------------------------------
 

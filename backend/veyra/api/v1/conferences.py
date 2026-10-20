@@ -425,3 +425,94 @@ def delete_room(
     db.commit()
     bus.publish(Event("conference.deleted", {"id": str(room_id)}))
     return Response(status_code=204)
+
+
+# ------------------------------------------------- live control (issue #96)
+
+
+class LiveParticipantOut(BaseModel):
+    channel: str
+    caller_id: str
+    admin: bool
+    marked: bool
+    muted: bool
+
+
+class LiveOut(BaseModel):
+    running: bool
+    locked: bool = False
+    participants: list[LiveParticipantOut] = Field(default_factory=list)
+
+
+class LiveActionIn(BaseModel):
+    action: str = Field(pattern="^(mute|unmute|kick|mute_all|unmute_all|lock|unlock|end)$")
+    channel: str | None = Field(None, max_length=160)
+
+
+def _engine_room(db: Session, room: ConferenceRoom) -> str:
+    from veyra.core import tenancy
+
+    return tenancy.names_of(db, room.organization_id).conference(room.slug)
+
+
+def _live(request: Request, db: Session, room: ConferenceRoom) -> LiveOut:
+    from veyra.core.errors import ProblemError
+    from veyra.telephony.adapter import EngineUnavailable, NotSupported
+
+    try:
+        live = request.app.state.telephony.conference_live(_engine_room(db, room))
+    except NotSupported as e:
+        raise ProblemError(409, "Not available", str(e), code="not_available") from e
+    except EngineUnavailable as e:
+        raise ProblemError(503, "Engine unavailable", str(e), code="engine_unavailable") from e
+    if live is None:
+        return LiveOut(running=False)
+    return LiveOut(running=True, **live)
+
+
+@router.get("/{room_id}/live", response_model=LiveOut, summary="Who is in the room now")
+def live_room(
+    room_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> LiveOut:
+    return _live(request, db, _get(db, principal, room_id, READ))
+
+
+@router.post("/{room_id}/live", response_model=LiveOut, summary="Mute, kick, lock or end")
+def live_action(
+    room_id: uuid.UUID,
+    body: LiveActionIn,
+    request: Request,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> LiveOut:
+    from veyra.core.errors import ProblemError
+    from veyra.telephony.adapter import EngineUnavailable, NotSupported
+
+    room = _get(db, principal, room_id, WRITE)
+    if body.action in ("mute", "unmute", "kick"):
+        current = _live(request, db, room)
+        if body.channel not in {p.channel for p in current.participants}:
+            raise not_found("Participant")
+    try:
+        request.app.state.telephony.conference_action(
+            _engine_room(db, room), body.action, body.channel
+        )
+    except NotSupported as e:
+        raise ProblemError(409, "Not available", str(e), code="not_available") from e
+    except (EngineUnavailable, ValueError) as e:
+        raise ProblemError(409, "Not done", str(e), code="conference_action_failed") from e
+    helpers.record(
+        db,
+        ctx,
+        principal,
+        f"conference.live_{body.action}",
+        target_type="conference_room",
+        target=room,
+        details={"channel": body.channel} if body.channel else {},
+    )
+    db.commit()
+    return _live(request, db, room)

@@ -541,6 +541,18 @@ conference_in_use`). Interface: Telephony → Conference Rooms.
 generated `extensions.conf` (0640 veyra:asterisk), as voicemail PINs do in
 `voicemail.conf`.
 
+
+**Live control** (issue #96, 0.27.21): the room page shows who is in the
+room (refreshed every 5 s) with **Mute/Unmute**, **Remove**, **Mute
+everyone else** (non-administrators), **Unmute all**, **Lock/Unlock** and
+**End**. `GET /conferences/{id}/live` → `{running, locked, participants
+[{channel, caller_id, admin, marked, muted}]}`; `POST …/live {action,
+channel?}` (`groups.write`, audited `conference.live_<action>`). The
+Asterisk adapter reads `confbridge list` / `confbridge list <room>` and sends
+`confbridge mute|unmute|kick|lock|unlock` through the console (rows parsed
+by pattern; channel names validated). Not yet: a My Phone conference widget
+for room owners, start/stop recording from the page, inviting a number.
+
 ### 4.4 Destination kinds
 
 `DestinationType` gains `announcement`, `conference`, `call_flow` and
