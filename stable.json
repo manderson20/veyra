@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 38,
+  "sequence": 39,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.22",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Passkeys (Touch ID, Windows Hello, security keys) as a second factor. Migration 0065.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "dcd1a769a9",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.22/veyra-0.27.22.tar.gz",
+        "sha256": "47d452f365fb638a5e0a500b52b592bc0e0a8a96d387bebf3eb41fc5cbfaa267",
+        "size": 8376298
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -649,6 +666,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T06:01:32+00:00",
-  "expires_at": "2027-01-18T06:01:32+00:00"
+  "generated_at": "2026-10-20T06:18:10+00:00",
+  "expires_at": "2027-01-18T06:18:10+00:00"
 }
