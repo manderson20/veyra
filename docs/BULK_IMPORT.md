@@ -1,6 +1,6 @@
 # Bulk import and export (CSV)
 
-Issue #41 (FreePBX gap analysis §3.1, 3.3, 3.11). Built 2026-10-20 (0.27.20).
+Issue #41 (FreePBX gap analysis §3.1, 3.3, 3.11). Built 2026-10-20 (0.27.20; ring groups and FreePBX in 0.27.29).
 
 **System → Import and Export** exports extensions, users, inbound routes or
 shared voicemail inboxes of one organization as CSV, gives a blank
@@ -22,6 +22,7 @@ template, checks a file (dry run) and imports it.
 | Kind | Key | Columns |
 |---|---|---|
 | `extensions` | `number` | display_name, user_email, caller_id_name, caller_id_number, outbound_caller_id_number, outbound_caller_id_name, emergency_caller_id_number, intercom (default/allow/deny), class_of_service, site, building, location, department (by name), max_registrations, enabled, voicemail (yes creates the box with a random PIN; no never deletes one), voicemail_email, voicemail_attach_audio, voicemail_delete_after_email, voicemail_ring_seconds, pickup_groups (the full list: the extension leaves groups not named) |
+| `ring_groups` | `number` | name, description, strategy (ringall/sequential), ring_seconds, ring_busy_members, members (extension numbers in ringing order — the full list), external_members, caller_id_prefix, failover (`type:target` or `hangup`), enabled |
 | `users` | `email` | display_name, enabled, roles (organization-scope role keys, added, never removed), password (temporary; empty for a new user: they set one with "Forgot password") |
 | `inbound_routes` | `did` (with `trunk` when given) | trunk (by name), description, destination and after_hours as `type:target` — `extension:1001`, `voicemail:1001`, `voicemail_box:1900`, `ivr:<name>`, `ring_group:<number or name>`, `queue:…`, `announcement:…`, `conference:…`, `call_flow:…`, `fax:…`, `directory` — time_condition (by name), caller_id_prefix, enabled |
 | `shared_inboxes` | `number` | name, members (extension numbers), email, attach_audio, delete_after_email, ring_seconds, enabled |
@@ -58,5 +59,33 @@ importing users (role grants) asks for a recent sign-in (§ step-up, #137).
 
 ## 4. Not yet
 
-Ring groups, queues, IVR menus, devices and contacts; a module hook so
-modules add kinds; editing rows in the page before importing.
+Queues, IVR menus, devices and contacts; a module hook so modules add
+kinds; editing rows in the page before importing.
+
+## 5. From FreePBX (issue #42, 0.27.29)
+
+**System → Import and Export → From FreePBX** reads a database dump of the
+FreePBX server (`mysqldump asterisk > asterisk.sql`; `.sql`, `.sql.gz`, or
+a FreePBX 14 backup tarball that holds one — FreePBX 15+ backups keep the
+modules as JSON and are refused with the command to run) and makes the
+files of the extensions, ring groups and inbound routes
+(`POST /bulk/freepbx/convert`, `extensions.write`; nothing is saved). Each
+then goes through **Check the file** and **Import** in that order.
+
+* Tables read: `users`, `devices`, `sip` (caller ID name), `ringgroups`,
+  `incoming`, `ivr_details` and `announcement` (names of destinations).
+* Extensions: number, name, caller ID name, outbound and emergency caller
+  ID, voicemail yes/no. SIP passwords are **not** carried over.
+* Ring groups: `hunt` strategies become *sequential*, the others *ring
+  all*; members ending in `#` are outside numbers; `grppre` is the caller
+  ID prefix; the failover destination is mapped.
+* Destinations: `from-did-direct`/`ext-local` → extension, `vmu`/`vmb` →
+  voicemail, `ext-group` → ring group, `ext-queues` → queue, `ivr-N` and
+  `app-announcement-N` → by name, `ext-meetme` → conference,
+  `app-blackhole` → hang up. Anything else (time conditions, day/night,
+  misc applications) is a warning to set by hand, as are catch-all routes
+  and caller-ID matches.
+* FreePBX sites often use 3-digit extensions: widen the numbering plan
+  before checking the extensions, or the check reports every row.
+* Not yet: queues, IVR menus, time conditions, voicemail settings from
+  `voicemail.conf`, recordings and music on hold.

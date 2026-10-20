@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.29 — 2026-10-20
+
+No migration.
+
+### Added
+- **Move from FreePBX** (#42): System → Import and Export → **From FreePBX** reads a database dump of your FreePBX server (`mysqldump asterisk > asterisk.sql`) and turns its extensions, ring groups and inbound routes into import files. Check and import each one; what has no equivalent yet (time conditions, catch-all routes…) is listed for you to set up by hand. SIP passwords are not carried over.
+- **Ring groups in the bulk import** (#41): export, edit and import ring groups with their members, outside numbers and failover.
+
 ## 0.27.28 — 2026-10-20
 
 No migration. Deploy the telephony configuration after installing (for `*37`).

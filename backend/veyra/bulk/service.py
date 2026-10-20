@@ -825,8 +825,172 @@ class SharedInboxesKind:
         return "update", []
 
 
+# ------------------------------------------------------------- ring groups
+
+
+def _destination_in(db: Session, org_id: uuid.UUID, value: str) -> dict[str, Any]:
+    """``type:target`` → a DestinationIn body (``hangup`` and ``directory``
+    need no target)."""
+    kind, _, target = value.partition(":")
+    kind, target = kind.strip().lower(), target.strip()
+    if kind in ("hangup", "directory"):
+        return {"type": kind}
+    if kind not in _DEST_MODELS:
+        raise RowError(f"unknown destination type {kind!r}")
+    if not target:
+        raise RowError(f"write it as {kind}:<number or name>")
+    model, label = _DEST_MODELS[kind]
+    return {"type": kind, _DEST_FIELDS[kind]: _find(db, model, org_id, target, label).id}
+
+
+def _destination_of(db: Session, obj: Any, prefix: str) -> str:
+    kind = getattr(obj, f"{prefix}_type", None)
+    if not kind:
+        return ""
+    if kind in ("hangup", "directory"):
+        return kind
+    fld = _DEST_FIELDS.get(kind)
+    target = getattr(obj, f"{prefix}_{fld}", None) if fld else None
+    model = _DEST_MODELS[kind][0] if kind in _DEST_MODELS else None
+    return f"{kind}:{_name_of(db, model, target)}" if model else kind
+
+
+class RingGroupsKind:
+    name = "ring_groups"
+    label = "Ring groups"
+    permission = "groups.write"
+    key = "number"
+    columns = [
+        "number",
+        "name",
+        "description",
+        "strategy",
+        "ring_seconds",
+        "ring_busy_members",
+        "members",
+        "external_members",
+        "caller_id_prefix",
+        "failover",
+        "enabled",
+    ]
+
+    def export(self, db: Session, org: Organization) -> list[dict[str, str]]:
+        from veyra.core.models import RingGroupMember
+
+        out = []
+        for g in db.scalars(
+            select(RingGroup).where(RingGroup.organization_id == org.id).order_by(RingGroup.number)
+        ):
+            members = db.scalars(
+                select(Extension.number)
+                .join(RingGroupMember, RingGroupMember.extension_id == Extension.id)
+                .where(RingGroupMember.group_id == g.id)
+                .order_by(RingGroupMember.position)
+            )
+            out.append(
+                {
+                    "number": g.number,
+                    "name": g.name,
+                    "description": g.description or "",
+                    "strategy": g.strategy,
+                    "ring_seconds": str(g.ring_seconds),
+                    "ring_busy_members": _yn(g.ring_busy_members),
+                    "members": "; ".join(members),
+                    "external_members": "; ".join(g.external_members or []),
+                    "caller_id_prefix": g.caller_id_prefix or "",
+                    "failover": _destination_of(db, g, "failover"),
+                    "enabled": _yn(g.is_enabled),
+                }
+            )
+        return out
+
+    def apply(self, ctx: Ctx, row: dict[str, str]) -> tuple[str, list[str]]:
+        from veyra.api.v1 import ring_groups as api
+        from veyra.api.v1.destinations import DestinationIn
+        from veyra.core.models import RingGroupMember
+
+        db, org = ctx.db, ctx.org
+        number = (row.get("number") or "").strip()
+        wanted: dict[str, Any] = {}
+        for col in ("name", "description", "strategy", "caller_id_prefix"):
+            v = _text(row, col)
+            if v is not None:
+                wanted[col] = None if v is _CLEARED else v
+        ring = _int(row, "ring_seconds")
+        if ring is not None and ring is not _CLEARED:
+            wanted["ring_seconds"] = ring
+        for col, fld in (("ring_busy_members", "ring_busy_members"), ("enabled", "is_enabled")):
+            b = _bool(row, col)
+            if b is not None:
+                wanted[fld] = b
+        ext_numbers = _list(row, "external_members")
+        if ext_numbers is not None:
+            wanted["external_members"] = ext_numbers
+        members = _list(row, "members")
+        member_ids = (
+            [_find(db, Extension, org.id, m, "extension").id for m in members]
+            if members is not None
+            else None
+        )
+        failover = _text(row, "failover")
+        failover_in = None
+        if isinstance(failover, str):
+            failover_in = DestinationIn(**_destination_in(db, org.id, failover))
+        group = db.scalar(
+            select(RingGroup).where(RingGroup.organization_id == org.id, RingGroup.number == number)
+        )
+        if group is None:
+            if not wanted.get("name"):
+                raise RowError("name: required for a new ring group")
+            api.create_group(
+                api.RingGroupIn(
+                    organization_id=org.id,
+                    number=number,
+                    members=member_ids or [],
+                    **({"failover": failover_in} if failover_in else {}),
+                    **{k: v for k, v in wanted.items() if v is not None},
+                ),
+                ctx.principal,
+                db,
+                ctx.rctx,
+            )
+            return "create", []
+        changes = _changes(group, {k: v for k, v in wanted.items() if k != "external_members"})
+        if (
+            "external_members" in wanted
+            and list(group.external_members or []) != wanted["external_members"]
+        ):
+            changes["external_members"] = wanted["external_members"]
+        if member_ids is not None:
+            current = list(
+                db.scalars(
+                    select(RingGroupMember.extension_id)
+                    .where(RingGroupMember.group_id == group.id)
+                    .order_by(RingGroupMember.position)
+                )
+            )
+            if current != member_ids:
+                changes["members"] = member_ids
+        if (
+            failover_in is not None
+            and _destination_of(db, group, "failover") != str(failover).lower()
+        ):
+            changes["failover"] = failover_in
+        if not changes:
+            return "unchanged", []
+        api.update_group(group.id, api.RingGroupPatch(**changes), ctx.principal, db, ctx.rctx)
+        return "update", []
+
+
 KINDS: dict[str, Any] = {
-    k.name: k for k in (ExtensionsKind(), UsersKind(), InboundRoutesKind(), SharedInboxesKind())
+    k.name: k
+    for k in (
+        ExtensionsKind(),
+        UsersKind(),
+        RingGroupsKind(),
+        InboundRoutesKind(),
+        SharedInboxesKind(),
+    )
 }
 
 

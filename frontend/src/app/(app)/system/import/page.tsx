@@ -38,6 +38,35 @@ export default function ImportPage() {
   const orgId = org || session?.user.home_organization_id || organizations[0]?.id || "";
   const allowed = kind ? can(kind.permission) : false;
 
+  // From FreePBX (issue #42): a database dump becomes the files below.
+  const [fpbx, setFpbx] = useState<{ csv: Record<string, string>; counts: Record<string, number>; warnings: string[] } | null>(null);
+  const [fpbxBusy, setFpbxBusy] = useState(false);
+  const [fpbxError, setFpbxError] = useState<string | null>(null);
+  const convert = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFpbxBusy(true);
+    setFpbxError(null);
+    setFpbx(null);
+    try {
+      const form = new FormData();
+      form.append("file", f);
+      setFpbx(await api.upload("/bulk/freepbx/convert", form));
+    } catch (err) {
+      setFpbxError(errorMessage(err));
+    } finally {
+      setFpbxBusy(false);
+    }
+  };
+  const loadConverted = (kindKey: string) => {
+    if (!fpbx) return;
+    setKindName(kindKey);
+    setText(fpbx.csv[kindKey] ?? null);
+    setFileName(`From FreePBX: ${kindKey.replace("_", " ")}`);
+    setResult(null);
+    setError(null);
+  };
+
   const pick = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     setResult(null);
@@ -97,6 +126,31 @@ export default function ImportPage() {
             </div>
           </div>
         ) : null}
+      </Card>
+      <Card title="From FreePBX" subtitle="Moving from FreePBX? Its extensions, ring groups and inbound routes become the files to check and import here.">
+        <div className="stack stack--sm">
+          <p className="subtle" style={{ margin: 0 }}>On the FreePBX server run <span className="mono">mysqldump asterisk &gt; asterisk.sql</span> (or <span className="mono">| gzip</span>), then choose the file. Nothing is saved until you import each file below, in this order: extensions, ring groups, inbound routes. SIP passwords are not carried over. If FreePBX used 3-digit extensions, widen the numbering plan (Settings) first.</p>
+          <label className="field">
+            <span className="field__label">FreePBX database dump</span>
+            <input type="file" accept=".sql,.gz,.tgz,.tar,application/sql" onChange={convert} disabled={fpbxBusy} />
+          </label>
+          {fpbxBusy ? <p className="subtle" style={{ margin: 0 }}>Reading the dump…</p> : null}
+          {fpbxError ? <Callout tone="danger">{fpbxError}</Callout> : null}
+          {fpbx ? (
+            <>
+              <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+                {["extensions", "ring_groups", "inbound_routes"].filter((k) => fpbx.csv[k]).map((k) => (
+                  <Button key={k} size="sm" onClick={() => loadConverted(k)}>Check {fpbx.counts[k]} {k.replace("_", " ")}</Button>
+                ))}
+              </div>
+              {fpbx.warnings.length ? (
+                <Callout tone="warn" title={`${fpbx.warnings.length} thing${fpbx.warnings.length === 1 ? "" : "s"} to do by hand`}>
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>{fpbx.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                </Callout>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </Card>
       <Card title="2. Check and import" footer={allowed ? (
         <div className="row" style={{ justifyContent: "flex-end" }}>

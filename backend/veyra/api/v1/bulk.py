@@ -7,14 +7,20 @@ import uuid
 from dataclasses import asdict
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from veyra.bulk import service
 from veyra.core import audit
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, check_recent_auth, current_principal, request_context
+from veyra.core.deps import (
+    RequestContext,
+    check_recent_auth,
+    current_principal,
+    request_context,
+    require,
+)
 from veyra.core.errors import ProblemError, forbidden, not_found
 from veyra.core.models import Organization
 from veyra.core.security.principal import Principal
@@ -135,3 +141,22 @@ def import_csv(
         )
         db.commit()
     return ImportOut(dry_run=dry_run, counts=counts, rows=[RowOut(**asdict(r)) for r in results])
+
+
+@router.post("/freepbx/convert", summary="Turn a FreePBX database dump into import files")
+async def freepbx_convert(
+    file: UploadFile = File(...),
+    principal: Principal = Depends(require("extensions.write")),
+) -> dict[str, Any]:
+    """Issue #42: ``mysqldump asterisk`` of a FreePBX server (``.sql``,
+    ``.sql.gz``, or a FreePBX 14 backup) → the CSV files of the extensions,
+    ring groups and inbound routes, to check and import here. Nothing is
+    saved by this call."""
+    from veyra.bulk import freepbx
+
+    data = await file.read(freepbx.MAX_DUMP_BYTES + 1)
+    try:
+        conv = freepbx.convert(freepbx.read_upload(data, file.filename))
+    except freepbx.FreepbxError as e:
+        raise ProblemError(422, "Not a usable FreePBX dump", str(e), code="freepbx_invalid") from e
+    return {"csv": conv.csv, "counts": conv.counts, "warnings": conv.warnings[:200]}

@@ -118,3 +118,66 @@ def test_inbound_routes_and_shared_inboxes(admin):
     assert _import(admin, "inbound_routes", org, exp.text, dry_run=True)["counts"]["unchanged"] == 2
     exp = admin.get("/api/v1/bulk/shared_inboxes/export.csv", params={"organization_id": org})
     assert "3900,Attendance,3001,att@example.org" in exp.text
+
+
+def test_ring_groups(admin):
+    org = _org(admin)["id"]
+    for n in ("4001", "4002"):
+        r = admin.post(
+            "/api/v1/extensions", json={"organization_id": org, "number": n, "display_name": n}
+        )
+        assert r.status_code == 201, r.text
+    text = (
+        "number,name,strategy,ring_seconds,members,failover\n"
+        "6000,Front office,ringall,25,4001; 4002,extension:4001\n"
+        "6001,Empty,sequential,,,hangup\n"
+        "6002,Bad,ringall,,4999,\n"
+    )
+    out = _import(admin, "ring_groups", org, text, dry_run=False)
+    assert [r["action"] for r in out["rows"]] == ["create", "create", "error"], out
+    exp = admin.get("/api/v1/bulk/ring_groups/export.csv", params={"organization_id": org}).text
+    assert "6000,Front office,,ringall,25,no,4001; 4002,,,extension:4001,yes" in exp, exp
+    again = _import(admin, "ring_groups", org, exp, dry_run=True)
+    assert again["counts"]["unchanged"] == 2, again
+    upd = _import(
+        admin, "ring_groups", org, "number,members,failover\n6000,4002,hangup\n", dry_run=False
+    )
+    assert upd["rows"][0]["action"] == "update", upd
+    exp = admin.get("/api/v1/bulk/ring_groups/export.csv", params={"organization_id": org}).text
+    assert "6000,Front office,,ringall,25,no,4002,,,hangup,yes" in exp, exp
+
+
+def test_freepbx_dump_becomes_import_files(admin):
+    """Issue #42: a FreePBX database dump → CSV files that check and import."""
+    from pathlib import Path
+
+    sql = (Path(__file__).parent / "data" / "freepbx_sample.sql").read_bytes()
+    r = admin.post(
+        "/api/v1/bulk/freepbx/convert", files={"file": ("asterisk.sql", sql, "application/sql")}
+    )
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["counts"] == {"extensions": 2, "ring_groups": 2, "inbound_routes": 2}
+    ext = out["csv"]["extensions"]
+    assert "1101,Front Office,,Front Desk,,5735550100,,5735550199" in ext.replace('"', "")
+    assert "Nurse O'Brien" in ext and "s3cr3t" not in ext
+    rg = out["csv"]["ring_groups"]
+    assert "6600,Office,,sequential,25,,1101; 1102,5735550123,OFC:,voicemail:1101" in rg
+    assert "ring_group:6600" in out["csv"]["inbound_routes"]
+    assert "ivr:Main menu" in out["csv"]["inbound_routes"]
+    warnings = " ".join(out["warnings"])
+    assert "timeconditions,3,1" in warnings and "catch-all" in warnings and "'abc'" in warnings
+    # The files import: extensions first, then the groups.
+    org = _org(admin)["id"]
+    assert _import(admin, "extensions", org, ext, dry_run=False)["counts"]["create"] == 2
+    groups = _import(admin, "ring_groups", org, rg, dry_run=True)
+    assert groups["counts"]["create"] == 2, groups
+    # A gzipped dump works too; garbage does not.
+    import gzip
+
+    r = admin.post(
+        "/api/v1/bulk/freepbx/convert", files={"file": ("a.sql.gz", gzip.compress(sql), "x")}
+    )
+    assert r.status_code == 200
+    r = admin.post("/api/v1/bulk/freepbx/convert", files={"file": ("a.sql", b"hello", "x")})
+    assert r.status_code == 422 and r.json()["code"] == "freepbx_invalid"
