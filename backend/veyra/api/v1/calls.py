@@ -279,3 +279,67 @@ def hangup(
 
 def calls_for(calls: list[ActiveCall], endpoint: str) -> list[ActiveCall]:
     return [c for c in calls if c.endpoint == endpoint]
+
+
+class RecordIn(BaseModel):
+    action: str = Field(pattern="^(start|stop)$")
+
+
+@router.post(
+    "/{channel_id}/record",
+    response_model=MessageOut,
+    summary="Start or stop recording a call in progress",
+)
+def record(
+    channel_id: str,
+    body: RecordIn,
+    request: Request,
+    principal: Principal = Depends(require("calls.record")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    """The web's "record this call" (issue #135): like the phone's on-demand
+    code, the recording is filed with the call record. Platform
+    administrators may record any call, others the calls of extensions in
+    organizations where they hold ``calls.record``."""
+    adapter = _adapter(request)
+    if Capability.ACTIVE_CALLS not in adapter.capabilities() or not _CHANNEL_RE.match(channel_id):
+        raise not_found("Call")
+    try:
+        calls = adapter.active_calls()
+    except (EngineUnavailable, NotSupported) as e:
+        raise conflict(f"The engine cannot report calls: {e}", "not_available") from e
+    call = next((c for c in calls if c.channel_id == channel_id), None)
+    if call is None:
+        raise not_found("Call")
+    rows = db.scalars(visible_extensions(principal, "calls.record")).all()
+    ext = next(
+        (e for e in rows if e.endpoint_name == call.endpoint),
+        next((e for e in rows if e.number == call.caller), None),
+    )
+    if ext is None and not principal.is_platform_admin:
+        raise not_found("Call")
+    try:
+        adapter.record_call(channel_id, body.action == "start")
+    except ValueError as e:
+        raise conflict(str(e), "record_refused") from e
+    except (EngineUnavailable, NotSupported) as e:
+        raise conflict(
+            f"The engine did not {body.action} the recording: {e}", "record_failed"
+        ) from e
+    audit.record(
+        db,
+        action=f"call.record_{body.action}",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=ext.organization_id if ext else None,
+        target_type="extension" if ext else None,
+        target_id=ext.id if ext else None,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"channel": channel_id, "from": call.caller, "to": call.callee},
+    )
+    db.commit()
+    return MessageOut(
+        message="Recording started." if body.action == "start" else "Recording stopped."
+    )

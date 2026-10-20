@@ -774,7 +774,15 @@ policy), plays a beep, and stops the recording on the next press.
 
 *Built 2026-10-18.* Not in this slice: class-of-service guards for the
 in-call codes (the allowed-codes list applies to dialled codes), and a
-"record this call" button in the interface.
+"record this call" button in the interface. *Record button built
+2026-10-21 (0.27.25, issue #135):* Calls → **Record** / **Stop recording**
+(`POST /calls/{channel}/record {action: start|stop}`, permission
+`calls.record`, audited `call.record_start|stop`). The adapter sets
+`VEYRA_CALLREC` and `CDR(veyra_rec)` on the channel through ARI and runs
+`mixmonitor start <channel> <recordings>/incoming/<ref>--<on-demand policy>.wav,b`
+on the console, so the worker files it like the phone's `*1`; a call
+already recorded is refused, and only a web-started recording can be
+stopped from the web.
 *Live check 2026-10-19 (dev1, 0.25.4):* `features.conf` was written on
 deployment but `features show` kept the engine defaults: Asterisk 22 has no
 `features reload` console command, and `asterisk -rx` exits 0 on "No such

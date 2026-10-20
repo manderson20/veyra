@@ -530,6 +530,30 @@ class AsteriskAdapter(TelephonyAdapter):
         )
         return str(ch.get("id") or "")
 
+    def record_call(self, channel_id: str, start: bool) -> None:
+        ch = self.ari.channel(channel_id)
+        name = str(ch.get("name") or "")
+        if not _CONF_CHANNEL_RE.match(name):
+            raise EngineUnavailable("the call's channel is not known")
+        ours = self.ari.get_variable(channel_id, "VEYRA_ONDEMAND_WEB") == "1"
+        if start:
+            if self.ari.get_variable(channel_id, "VEYRA_CALLREC"):
+                raise ValueError("this call is already being recorded")
+            rec = re.sub(r"[^0-9A-Za-z.-]", "", channel_id)[:64]
+            self.ari.set_variable(channel_id, "VEYRA_CALLREC", rec)
+            self.ari.set_variable(channel_id, "CDR(veyra_rec)", rec)
+            self.ari.set_variable(channel_id, "VEYRA_ONDEMAND_WEB", "1")
+            path = f"{self.recordings_dir}/incoming/{rec}--{generator.ONDEMAND_POLICY}.wav"
+            ok, out = cli.run(f"mixmonitor start {name} {path},b")
+        else:
+            if not ours:
+                raise ValueError("only a recording started from the web can be stopped here")
+            ok, out = cli.run(f"mixmonitor stop {name}")
+            if ok:
+                self.ari.set_variable(channel_id, "VEYRA_ONDEMAND_WEB", "")
+        if not ok or "No such channel" in out or "Cannot" in out:
+            raise EngineUnavailable(out[:200] or "the engine refused the command")
+
     def conference_live(self, room: str) -> dict[str, Any] | None:
         name = _check_conference(room)
         ok, out = cli.run("confbridge list")

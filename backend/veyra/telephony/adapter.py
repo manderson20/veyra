@@ -245,6 +245,11 @@ class TelephonyAdapter(ABC):
         docs/USER_PORTAL.md §9). Returns the engine's channel id."""
         raise NotSupported(f"{self.name}: originating channels not implemented")
 
+    def record_call(self, channel_id: str, start: bool) -> None:
+        """Start or stop recording a call in progress from the web (issue
+        #135); the file is filed like the phone's on-demand recording."""
+        raise NotSupported(f"{self.name}: recording from the web not implemented")
+
     def conference_live(self, room: str) -> dict[str, Any] | None:
         """A running conference (issue #96): ``{locked, participants: [{channel,
         caller_id, admin, muted, marked}]}``, or None when nobody is in it."""

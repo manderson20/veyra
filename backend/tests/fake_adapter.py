@@ -113,6 +113,15 @@ class FakeAdapter(TelephonyAdapter):
         self.hung_up.append(channel_id)
         self.calls = [c for c in self.calls if c.channel_id != channel_id]
 
+    def record_call(self, channel_id: str, start: bool) -> None:
+        recording = getattr(self, "recording", set())
+        self.recording = recording
+        if start and channel_id in recording:
+            raise ValueError("this call is already being recorded")
+        if not start and channel_id not in recording:
+            raise ValueError("only a recording started from the web can be stopped here")
+        (recording.add if start else recording.discard)(channel_id)
+
     def registrations(self) -> list[Registration]:
         return list(self.contacts)
 

@@ -33,6 +33,7 @@ SCOPES: dict[str, str] = {
     "calls.read": "See active calls",
     "calls.originate": "Place click-to-dial calls",
     "calls.hangup": "Hang up calls in progress",
+    "calls.record": "Start and stop recording calls in progress",
     "calls.history.read": "Read the call history",
     "calls.history.export": "Export the call history as CSV",
     "directory.read": "Read the directory",

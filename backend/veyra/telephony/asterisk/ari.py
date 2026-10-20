@@ -103,6 +103,30 @@ class AriClient:
     def channels(self) -> list[dict[str, Any]]:
         return list(self._request("GET", "channels") or [])
 
+    def channel(self, channel_id: str) -> dict[str, Any]:
+        return self._request("GET", f"channels/{urllib.parse.quote(channel_id, safe='')}") or {}
+
+    def get_variable(self, channel_id: str, name: str) -> str:
+        """A channel variable; empty when unset (ARI answers 404)."""
+        try:
+            out = self._request(
+                "GET",
+                f"channels/{urllib.parse.quote(channel_id, safe='')}/variable",
+                {"variable": name},
+            )
+        except EngineUnavailable as e:
+            if "HTTP 404" in str(e):
+                return ""
+            raise
+        return str((out or {}).get("value") or "")
+
+    def set_variable(self, channel_id: str, name: str, value: str) -> None:
+        self._request(
+            "POST",
+            f"channels/{urllib.parse.quote(channel_id, safe='')}/variable",
+            {"variable": name, "value": value},
+        )
+
     def hangup(self, channel_id: str) -> None:
         """``DELETE /channels/{id}``: hang the channel up (normal clearing)."""
         self._request(

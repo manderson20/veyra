@@ -28,6 +28,27 @@ export default function ActiveCallsPage() {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [ending, setEnding] = useState<string | null>(null);
   const canHangUp = can("calls.hangup");
+  const canRecord = can("calls.record");
+  // Recordings started here (issue #135); the engine refuses a second one.
+  const [recording, setRecording] = useState<Set<string>>(new Set());
+  const [recBusy, setRecBusy] = useState<string | null>(null);
+  const toggleRecord = async (c: ActiveCall) => {
+    const on = recording.has(c.channel_id);
+    setRecBusy(c.channel_id);
+    try {
+      const r = await api.post<{ message: string }>(`/calls/${encodeURIComponent(c.channel_id)}/record`, { action: on ? "stop" : "start" });
+      setRecording((prev) => {
+        const next = new Set(prev);
+        if (on) next.delete(c.channel_id); else next.add(c.channel_id);
+        return next;
+      });
+      toast.success(r.message, on ? undefined : "It is filed with the call record (Call Recording) when the call ends.");
+    } catch (err) {
+      toast.error(on ? "Could not stop the recording" : "Could not record", errorMessage(err));
+    } finally {
+      setRecBusy(null);
+    }
+  };
   const hangUp = async (c: ActiveCall) => {
     setEnding(c.channel_id);
     try {
@@ -57,6 +78,16 @@ export default function ActiveCallsPage() {
     { key: "state", header: "State", render: (c) => <Badge tone={STATE_TONE[c.state] ?? "neutral"}>{c.state}</Badge> },
     { key: "dur", header: "Duration", render: (c) => <span className="nowrap">{formatDuration(c.duration_seconds)}</span> },
     { key: "ch", header: "Channel", render: (c) => <span className="subtle mono">{c.channel_id}</span> },
+    ...(canRecord ? [{
+      key: "record",
+      header: <span className="sr-only">Record</span>,
+      render: (c: ActiveCall) => (
+        <Button size="sm" icon={recording.has(c.channel_id) ? "stop" : "record"} loading={recBusy === c.channel_id} onClick={() => void toggleRecord(c)}
+          aria-label={`${recording.has(c.channel_id) ? "Stop recording" : "Record"} the call on ${c.extension_number ?? c.endpoint ?? c.channel_id}`}>
+          {recording.has(c.channel_id) ? "Stop recording" : "Record"}
+        </Button>
+      ),
+    }] : []),
     ...(canHangUp ? [{
       key: "hangup",
       header: <span className="sr-only">Actions</span>,

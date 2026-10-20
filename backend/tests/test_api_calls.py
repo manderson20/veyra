@@ -252,3 +252,19 @@ def test_hang_up_a_call(admin, app, tmp_path):
     _user(admin, "ro@beta.local", "read_only", b)
     ro = login(TestClient(app, base_url="http://veyra.test"), "ro@beta.local", ADMIN_PASSWORD)
     assert ro.delete("/api/v1/calls/1697.2").status_code == 403
+
+
+def test_record_a_call_from_the_web(admin, app, tmp_path):
+    """Issue #135: start and stop recording a call in progress; audited."""
+    adapter, _, _ = _fake(app, tmp_path)
+    a = _org(admin)["id"]
+    ea = _create(admin, a, "1001", "Alpha desk")
+    adapter.calls = [ActiveCall("1697.1", "1001", "1002", "Up", 30, endpoint=ea["endpoint_name"])]
+    r = admin.post("/api/v1/calls/1697.1/record", json={"action": "start"})
+    assert r.status_code == 200 and r.json()["message"] == "Recording started.", r.text
+    assert admin.post("/api/v1/calls/1697.1/record", json={"action": "start"}).status_code == 409
+    assert admin.post("/api/v1/calls/1697.1/record", json={"action": "stop"}).status_code == 200
+    assert admin.post("/api/v1/calls/9.9/record", json={"action": "start"}).status_code == 404
+    assert admin.post("/api/v1/calls/1697.1/record", json={"action": "pause"}).status_code == 422
+    events = admin.get("/api/v1/audit", params={"q": "call.record"}).json()
+    assert events["total"] == 2

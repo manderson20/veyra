@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.25 — 2026-10-21
+
+No migration.
+
+### Added
+- **Record a call from the web** (#135): Calls (the live call list) has **Record** and **Stop recording** next to each call, for administrators with the new permission "Start and stop recording a call in progress" (organization and site administrators by default). The recording is filed with the call under Call Recording, like the phone's record code.
+
 ## 0.27.24 — 2026-10-21
 
 No migration.
