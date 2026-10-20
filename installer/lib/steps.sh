@@ -681,6 +681,14 @@ do_services() {
         run systemctl disable --now veyra-deployer veyra-pager || true
         run rm -f /etc/systemd/system/veyra-deployer.service /etc/systemd/system/veyra-pager.service
     fi
+    # Installation key rotation from the Settings page (issue #125): the root
+    # unit, started only through polkit, and its status directory.
+    run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-keyrotate
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-key-rotate.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_USER=$VEYRA_USER"
+    install_managed_file "$tmp" "/etc/systemd/system/veyra-key-rotate.service" 0644 root:root
+    rm -f "$tmp"
     # Backups from the page and the worker (docs/PRODUCTION_HARDENING.md §2.2):
     # the root runner's unit, started only through polkit; its status directory.
     run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-backup

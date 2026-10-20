@@ -199,3 +199,106 @@ def set_multi_tenancy(
     )
     db.commit()
     return {**tenancy.status(db), "checks": checks}
+
+
+# ------------------------------------------------- installation key (issue #125)
+
+KEY_ROTATE_UNIT = "veyra-key-rotate.service"
+KEY_ROTATE_DIR = "/var/lib/veyra-keyrotate"
+
+
+def _rotation_status(directory: str = KEY_ROTATE_DIR) -> dict[str, Any] | None:
+    from pathlib import Path
+
+    d = Path(directory)
+
+    def read(name: str) -> str | None:
+        try:
+            return (d / name).read_text(errors="replace").strip()
+        except OSError:
+            return None
+
+    started = read("started")
+    if started is None:
+        return None
+    exit_code = read("exit")
+    log = read("last.log") or ""
+    return {
+        "started_at": started,
+        "finished_at": read("finished") if exit_code is not None else None,
+        "running": exit_code is None,
+        "ok": exit_code == "0",
+        "output": log[-2000:],
+    }
+
+
+@router.get("/installation-key", summary="The installation key's fingerprint and its last rotation")
+def installation_key_info(
+    request: Request,
+    principal: Principal = Depends(require("system.settings.read")),
+) -> dict[str, Any]:
+    from veyra.core.security.crypto import try_load_installation_key
+
+    if not principal.is_platform_admin:
+        raise forbidden("Only platform administrators manage the installation key.")
+    key = try_load_installation_key(request.app.state.settings)
+    return {
+        "fingerprint": key.fingerprint if key else None,
+        "rotation": _rotation_status(getattr(request.app.state, "key_rotate_dir", KEY_ROTATE_DIR)),
+    }
+
+
+@router.post(
+    "/installation-key/rotate",
+    status_code=202,
+    summary="Rotate the installation key (re-encrypts every stored secret; services restart)",
+)
+def rotate_installation_key(
+    request: Request,
+    principal: Principal = Depends(require("system.settings.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """The console's ``sudo veyra installation-key rotate`` through the root
+    unit (polkit allows the service account to start it): a new key, every
+    stored secret re-encrypted, the previous key kept beside it, the
+    services restarted."""
+    import subprocess
+
+    from veyra.core.deps import check_recent_auth
+    from veyra.core.errors import ProblemError
+
+    if not principal.is_platform_admin:
+        raise forbidden("Only platform administrators manage the installation key.")
+    check_recent_auth(db, principal)
+    status = _rotation_status(getattr(request.app.state, "key_rotate_dir", KEY_ROTATE_DIR))
+    if status and status["running"]:
+        raise ProblemError(409, "Already running", "A rotation is running.", code="running")
+    run = getattr(request.app.state, "systemctl_run", None)
+    cmd = ["systemctl", "start", "--no-block", KEY_ROTATE_UNIT]
+    res = (
+        run(cmd)
+        if run
+        else subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)  # noqa: S603
+    )
+    ok = getattr(res, "returncode", 1) == 0
+    audit.record(
+        db,
+        action="system.installation_key_rotate",
+        outcome="success" if ok else "failure",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={} if ok else {"error": (getattr(res, "stderr", "") or "")[:300]},
+    )
+    db.commit()
+    if not ok:
+        raise ProblemError(
+            503,
+            "Not started",
+            "The rotation could not be started: "
+            + ((getattr(res, "stderr", "") or "systemctl failed").strip()[:300]),
+            code="unit_failed",
+        )
+    return {"started": True}

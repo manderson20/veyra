@@ -3,6 +3,7 @@
 
 import { CompanionDeploymentCard } from "@/components/account/CompanionDeploymentCard";
 import { EmailDeliveryCard } from "@/components/account/EmailDeliveryCard";
+import { InstallationKeyCard } from "@/components/account/InstallationKeyCard";
 import { MfaPolicyCard } from "@/components/account/MfaPolicyCard";
 import { MultiTenancyCard } from "@/components/organizations/MultiTenancyCard";
 import { RetentionCard } from "@/components/account/RetentionCard";
@@ -62,6 +63,7 @@ export default function SettingsPage() {
       {can("system.settings.read") ? <CompanionDeploymentCard /> : null}
       {can("system.settings.read") ? <MultiTenancyCard editable={can("system.settings.write")} /> : null}
       {session?.is_platform_admin ? <RetentionCard /> : null}
+      {session?.is_platform_admin ? <InstallationKeyCard editable={can("system.settings.write")} /> : null}
       <Card title="Coming later">
         <p className="muted">
           Network, backup and branding settings are delivered in later milestones. They are not shown here until they

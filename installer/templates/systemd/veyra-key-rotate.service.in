@@ -1,0 +1,17 @@
+# Managed by Veyra installer
+# Installation key rotation from System → Settings (issue #125;
+# docs/PRODUCTION_HARDENING.md §3.1): the same `veyra installation-key rotate`
+# as the console, as root, started only through polkit. The output and the
+# exit status land in /var/lib/veyra-keyrotate (readable by the veyra group).
+[Unit]
+Description=Veyra installation key rotation
+Documentation=file://@VEYRA_PREFIX@/current/docs/PRODUCTION_HARDENING.md
+After=postgresql.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/
+ExecStart=/bin/sh -c 'out=/var/lib/veyra-keyrotate; umask 027; rm -f "$out/exit"; date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ > "$out/started"; /usr/local/bin/veyra installation-key rotate > "$out/last.log" 2>&1; echo $? > "$out/exit"; date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ > "$out/finished"; chgrp @VEYRA_USER@ "$out"/*'
+TimeoutStartSec=30min
+PrivateTmp=yes
+ProtectHome=yes

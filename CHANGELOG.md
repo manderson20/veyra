@@ -12,6 +12,9 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 No migration.
 
+### Added
+- **Rotate the installation key from the web** (#125): System → Settings → **Installation key** shows its fingerprint and offers **Rotate the key…**, which does what `sudo veyra installation-key rotate` does on the console: a new key, every stored secret re-encrypted, the previous key kept, the services restarted. Platform administrators only, after confirming it is you.
+
 ### Changed
 - **Report builder** (#139): group by up to three things (for example who answered, then direction, then outcome); show up to 5000 rows; choose which measure the chart draws; schedule monthly reports on any day — a month without that day sends on its last day.
 

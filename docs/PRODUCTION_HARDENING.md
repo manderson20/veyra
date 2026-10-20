@@ -126,6 +126,17 @@ standby receives the new key through the file sync (the ciphertexts come
 through replication). Audited; `verify.sh` checks that every ciphertext
 decrypts with the current key (`installation-key check` already exists).
 
+
+*From the interface (issue #125, 0.27.30):* System → Settings →
+**Installation key** shows the fingerprint and the last rotation, and
+**Rotate the key…** (platform administrators, after "Confirm it is you")
+starts `veyra-key-rotate.service`, a root oneshot unit (polkit lets the
+service account start it and nothing else) that runs the same
+`veyra installation-key rotate` and leaves `started`, `exit`, `finished` and
+`last.log` in `/var/lib/veyra-keyrotate` (group `veyra`). `GET
+/system/installation-key`, `POST /system/installation-key/rotate` (audited
+`system.installation_key_rotate`). The services restart at the end; the
+page waits for the result.
 ### 3.2 Backup encryption
 
 Backups are encrypted with **age** (X25519, the `age` package) to one or
