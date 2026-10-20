@@ -29,7 +29,7 @@ Schema with `veyra modules schema`. Unknown keys are rejected.
 
 ```toml
 manifest_version = 1
-health_check = true                     # module registers health checks
+health_check = true                     # module registers health checks (none added → degraded)
 
 [module]
 id = "acme.paging-bridge"               # lower-case, dot/dash segments, ≥ 2 segments, globally unique
@@ -201,9 +201,9 @@ uninstall --purge (type the module id to confirm) ──► tables dropped, row 
 * **Update** comes from a catalog or an upload ([MODULE_CATALOG.md](MODULE_CATALOG.md)): the new version is verified into the module store, its migrations run, the version is recorded, and `restart_required` is reported because running code is not hot-swapped; "Restart Veyra services" in the Module Manager restarts the units. The previous version stays in the store for **rollback** (refused when the newer version added migrations).
 
 All operations are available in the API (`/api/v1/modules/...`) and the UI
-(Module Manager), and all are audited. The CLI (`veyra modules ...`) has
-list, install, enable, disable, schema, validate, keygen and sign; uninstall,
-update, rollback, upload and configuration are API and UI only (#149).
+(Module Manager), and all are audited. The CLI (`sudo veyra modules ...`)
+has list, install, enable, disable, uninstall, update, upload, rollback,
+config, schema, validate, keygen and sign.
 
 ## 6. Signing, packaging and trust
 

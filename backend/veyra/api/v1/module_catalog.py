@@ -21,13 +21,13 @@ from veyra.core import audit
 from veyra.core.db import get_db, get_engine
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, not_found
-from veyra.core.models import CatalogSource, InstalledModule, ModuleConfig, SystemSetting
+from veyra.core.models import CatalogSource, InstalledModule, SystemSetting
 from veyra.core.models.base import utcnow
 from veyra.core.security.crypto import load_installation_key
 from veyra.core.security.principal import Principal
 from veyra.core.semver import Version, VersionRange
-from veyra.modules import catalog
-from veyra.modules.manager import ModuleError, ModuleManager
+from veyra.modules import admin, catalog
+from veyra.modules.manager import ModuleManager
 from veyra.version import MODULE_API_VERSION
 
 router = APIRouter(prefix="/modules", tags=["modules"])
@@ -248,58 +248,16 @@ def _activate_and_apply(
     expect_id: str | None,
     enable: bool,
 ) -> tuple[str, str, str]:
-    """Verify into the store, check, activate, then install or update.
-    Returns (module id, version, what happened)."""
-    settings = request.app.state.settings
-    store = _store(request)
-    try:
-        manifest, verification = store.add(
-            package, mgr.keyring, settings.unsigned_modules_permitted
-        )
-    except catalog.CatalogError as e:
-        raise ProblemError(422, "Package refused", str(e), code="package_refused") from e
-    if expect_id is not None and manifest.id != expect_id:
-        raise ProblemError(
-            422,
-            "Package refused",
-            f"The package is {manifest.id}, not {expect_id}.",
-            code="package_refused",
-        )
-    problems = mgr.trust_problems(manifest, verification) + mgr.compatibility_problems(db, manifest)
-    row = db.get(InstalledModule, manifest.id)
-    current = row.version if row is not None and row.state != "removed" else None
-    if current is not None and Version.parse(manifest.module.version) <= Version.parse(current):
-        problems.append(
-            f"Version {manifest.module.version} is not newer than the installed {current}."
-        )
-    if problems:
-        raise ProblemError(
-            409,
-            "Cannot install",
-            " ".join(problems),
-            code="module_not_installable",
-            errors=[{"field": "package", "message": p} for p in problems],
-        )
-    store.activate(manifest.id, manifest.module.version)
-    try:
-        if current is None:
-            mgr.install(db, get_engine(), manifest.id)
-            what = "installed"
-            if enable:
-                mgr.enable(db, manifest.id)
-                what = "installed and enabled"
-        else:
-            mgr.apply_update(db, get_engine(), manifest.id)
-            what = f"updated from {current}"
-    except ModuleError as e:
-        raise ProblemError(
-            e.status,
-            "Module operation failed",
-            e.detail,
-            code="module_error",
-            errors=[{"field": "module", "message": p} for p in e.errors or []],
-        ) from e
-    return manifest.id, manifest.module.version, what
+    return admin.apply_package(
+        db,
+        get_engine(),
+        mgr,
+        _store(request),
+        package,
+        unsigned_permitted=request.app.state.settings.unsigned_modules_permitted,
+        expect_id=expect_id,
+        enable=enable,
+    )
 
 
 @router.post("/catalog/install", summary="Install or update a module from a catalog")
@@ -432,48 +390,13 @@ def rollback(
     mgr: ModuleManager = Depends(manager),
     ctx: RequestContext = Depends(request_context),
 ) -> dict[str, Any]:
-    store = _store(request)
-    row = db.get(InstalledModule, module_id)
-    current = store.active_dir(module_id)
-    previous = store.previous(module_id)
-    if row is None or row.state == "removed" or current is None or previous is None:
-        raise ProblemError(
-            409,
-            "Nothing to roll back to",
-            "No previous version of this module is kept.",
-            code="no_previous_version",
-        )
-    added = catalog.migration_files(current) - catalog.migration_files(previous[0])
-    if added:
-        raise ProblemError(
-            409,
-            "Cannot roll back",
-            "The current version changed the module's database; it cannot go back automatically.",
-            code="rollback_blocked",
-        )
-    old = row.version
-    store.activate(module_id, previous[1].module.version)
-    row.version = previous[1].module.version
-    row.manifest = previous[1].model_dump(mode="json")
-    if module_id in mgr.loaded:
-        mgr.restart_required.add(module_id)
-    _audit(db, principal, ctx, "module.rollback", module_id, {"from": old, "to": row.version})
+    old, new = admin.rollback(db, mgr, _store(request), module_id)
+    _audit(db, principal, ctx, "module.rollback", module_id, {"from": old, "to": new})
     db.commit()
-    return {"module_id": module_id, "version": row.version, "restart_required": True}
+    return {"module_id": module_id, "version": new, "restart_required": True}
 
 
 # ---------------------------------------------------------------- settings
-
-
-def _fields(db: Session, module_id: str) -> list[dict[str, Any]]:
-    row = db.get(InstalledModule, module_id)
-    if row is None or row.state == "removed":
-        raise not_found("Installed module")
-    return list((row.manifest or {}).get("config", []))
-
-
-def _purpose(module_id: str) -> str:
-    return f"module:{module_id}"
 
 
 @router.get("/{module_id}/config", summary="Module settings (secrets are never returned)")
@@ -483,70 +406,12 @@ def get_config(
     principal: Principal = Depends(require(MANAGE)),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    fields = [
-        f
-        for f in _fields(db, module_id)
-        if (f.get("scope") == "organization") == (organization_id is not None)
-    ]
-    row = db.scalar(
-        select(ModuleConfig).where(
-            ModuleConfig.module_id == module_id,
-            ModuleConfig.organization_id == organization_id
-            if organization_id
-            else ModuleConfig.organization_id.is_(None),
-        )
-    )
-    stored = dict(row.config) if row else {}
-    values: dict[str, Any] = {}
-    for f in fields:
-        if f["type"] == "secret":
-            values[f["key"]] = {"has_value": bool(stored.get(f["key"]))}
-        else:
-            values[f["key"]] = stored.get(f["key"], f.get("default"))
-    return {"fields": fields, "values": values}
+    return admin.read_config(db, module_id, organization_id)
 
 
 class ConfigIn(BaseModel):
     values: dict[str, Any]
     organization_id: uuid.UUID | None = None
-
-
-def _validate(f: dict[str, Any], v: Any) -> Any:
-    t, key = f["type"], f["key"]
-
-    def bad(msg: str) -> ProblemError:
-        return ProblemError(
-            422,
-            "Validation failed",
-            f"{f['label']}: {msg}",
-            code="validation_failed",
-            errors=[{"field": key, "message": msg}],
-        )
-
-    if v is None or v == "":
-        if f.get("required") and t != "secret":
-            raise bad("required")
-        return None
-    if t == "integer":
-        try:
-            v = int(v)
-        except (TypeError, ValueError) as e:
-            raise bad("must be a whole number") from e
-        if f.get("min") is not None and v < f["min"]:
-            raise bad(f"at least {f['min']}")
-        if f.get("max") is not None and v > f["max"]:
-            raise bad(f"at most {f['max']}")
-        return v
-    if t == "boolean":
-        if not isinstance(v, bool):
-            raise bad("must be true or false")
-        return v
-    v = str(v)
-    if f.get("max_length") and len(v) > f["max_length"]:
-        raise bad(f"at most {f['max_length']} characters")
-    if t == "choice" and v not in (f.get("choices") or []):
-        raise bad("not one of the choices")
-    return v
 
 
 @router.put("/{module_id}/config", summary="Change module settings")
@@ -558,56 +423,13 @@ def put_config(
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
 ) -> dict[str, Any]:
-    fields = {
-        f["key"]: f
-        for f in _fields(db, module_id)
-        if (f.get("scope") == "organization") == (body.organization_id is not None)
-    }
-    unknown = set(body.values) - set(fields)
-    if unknown:
-        raise ProblemError(
-            422,
-            "Validation failed",
-            f"Unknown setting {sorted(unknown)[0]!r}.",
-            code="validation_failed",
-        )
-    row = db.scalar(
-        select(ModuleConfig).where(
-            ModuleConfig.module_id == module_id,
-            ModuleConfig.organization_id == body.organization_id
-            if body.organization_id
-            else ModuleConfig.organization_id.is_(None),
-        )
+    admin.write_config(
+        db,
+        module_id,
+        body.organization_id,
+        body.values,
+        lambda: load_installation_key(request.app.state.settings),
     )
-    stored = dict(row.config) if row else {}
-    key = None
-    for k, v in body.values.items():
-        f = fields[k]
-        if f["type"] == "secret":
-            if v is None:
-                continue  # unchanged
-            if v == "":
-                stored.pop(k, None)  # removed
-                continue
-            key = key or load_installation_key(request.app.state.settings)
-            stored[k] = key.encrypt(str(v), _purpose(module_id))
-        else:
-            stored[k] = _validate(f, v)
-    for k, f in fields.items():
-        if f.get("required") and f["type"] == "secret" and not stored.get(k):
-            raise ProblemError(
-                422,
-                "Validation failed",
-                f"{f['label']}: required",
-                code="validation_failed",
-                errors=[{"field": k, "message": "required"}],
-            )
-    if row is None:
-        db.add(
-            ModuleConfig(module_id=module_id, organization_id=body.organization_id, config=stored)
-        )
-    else:
-        row.config = stored
     _audit(db, principal, ctx, "module.config", module_id, {"changed": sorted(body.values)})
     db.commit()
     return get_config(module_id, body.organization_id, principal, db)

@@ -15,7 +15,7 @@ from conftest import REPO
 
 from veyra.cli.main import main as cli
 from veyra.core.db import session_scope
-from veyra.core.models import ModuleConfig, SystemSetting
+from veyra.core.models import AuditEvent, ModuleConfig, SystemSetting
 from veyra.core.signing import generate_keypair
 from veyra.modules import catalog
 from veyra.modules.packages import build_package, sign_directory
@@ -279,3 +279,52 @@ def test_module_whose_code_cannot_load_is_refused_clearly(admin, app):
     assert r.status_code == 409, r.text
     detail = r.json()["detail"]
     assert "cannot be loaded" in detail and "library_that_is_not_installed" in detail
+
+
+def test_cli_lifecycle_upload_rollback_and_config(app, settings, tmp_path, monkeypatch, capsys):
+    """#149: the CLI has uninstall, update, upload, rollback and config."""
+    import veyra.core.config as config_mod
+
+    monkeypatch.setattr(config_mod, "get_settings", lambda: settings)
+    priv, pub = generate_keypair()
+    (settings.trust_dir / "official").mkdir(parents=True, exist_ok=True)
+    (settings.trust_dir / "official" / "test-publisher.pub").write_text(pub)
+
+    assert cli(["modules", "upload", str(_package(tmp_path, "0.2.0", priv, "test-publisher"))]) == 0
+    assert "0.2.0: installed" in capsys.readouterr().out
+    assert cli(["modules", "upload", str(_package(tmp_path, "0.3.0", priv, "test-publisher"))]) == 0
+    assert "updated from 0.2.0" in capsys.readouterr().out
+    assert cli(["modules", "rollback", MOD]) == 0
+    assert "from 0.3.0 to 0.2.0" in capsys.readouterr().out
+    assert cli(["modules", "rollback", "acme.missing"]) == 1
+    assert "No previous version" in capsys.readouterr().err
+
+    assert cli(["modules", "config", MOD]) == 0
+    assert "max_notes_per_organization     500" in capsys.readouterr().out
+    assert cli(["modules", "config", MOD, "max_notes_per_organization=20000"]) == 1
+    assert "at most 10000" in capsys.readouterr().err
+    assert cli(["modules", "config", MOD, "max_notes_per_organization=42"]) == 0
+    assert "42" in capsys.readouterr().out
+    with session_scope() as db:
+        assert db.query(ModuleConfig).one().config == {"max_notes_per_organization": 42}
+
+    assert cli(["modules", "uninstall", MOD, "--purge"]) == 2
+    assert cli(["modules", "uninstall", MOD, "--purge", "--confirm", MOD]) == 0
+    assert "data deleted" in capsys.readouterr().out
+    assert catalog.Store(settings.module_store_dir).active_dir(MOD) is None
+    with session_scope() as db:
+        actions = [r.action for r in db.query(AuditEvent).filter(AuditEvent.target_id == MOD)]
+    assert {"module.upload", "module.rollback", "module.config", "module.uninstall"} <= set(actions)
+
+
+def test_data_dir_created_and_declared_health_check(admin, app):
+    """#149: the core creates ctx.data_dir; a manifest with health_check = true
+    whose module adds no check reports degraded."""
+    assert admin.post(f"/api/v1/modules/{MOD}/install").status_code == 200
+    assert admin.post(f"/api/v1/modules/{MOD}/enable").status_code == 200
+    mgr = app.state.modules
+    loaded = mgr.loaded[MOD]
+    assert loaded.ctx.data_dir.is_dir()
+    assert mgr.health(MOD).status == "ok"
+    loaded.ctx.health_checks.clear()
+    assert mgr.health(MOD).status == "degraded"

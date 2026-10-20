@@ -208,11 +208,22 @@ def cmd_modules_list(args: argparse.Namespace) -> int:
 
 
 def _module_action(args: argparse.Namespace, action: str) -> int:
+    import getpass
+    import uuid
+
     from veyra.core import audit
+    from veyra.core.config import get_settings
     from veyra.core.db import get_engine, session_scope
-    from veyra.modules.manager import ModuleError
+    from veyra.core.errors import ProblemError
+    from veyra.core.security.crypto import load_installation_key
+    from veyra.modules import admin
+    from veyra.modules.catalog import Store
 
     mgr = _manager()
+    settings = get_settings()
+    target = getattr(args, "module_id", None)
+    details: dict[str, Any] = {}
+    message = f"Module {target}: {action} complete. Restart veyra-api to apply."
     try:
         with session_scope() as db:
             if action == "install":
@@ -221,21 +232,99 @@ def _module_action(args: argparse.Namespace, action: str) -> int:
                 mgr.enable(db, args.module_id)
             elif action == "disable":
                 mgr.disable(db, args.module_id)
+            elif action == "update":
+                row = mgr.apply_update(db, get_engine(), args.module_id)
+                details = {"version": row.version}
+                message = f"Module {target} updated to {row.version}. Restart Veyra's services."
+            elif action == "uninstall":
+                if args.purge and args.confirm != args.module_id:
+                    print(
+                        "error: --purge deletes the module's data; confirm with "
+                        f"--confirm {args.module_id}",
+                        file=sys.stderr,
+                    )
+                    return 2
+                mgr.uninstall(db, get_engine(), args.module_id, purge=args.purge)
+                if args.purge:
+                    Store(settings.module_store_dir).remove(args.module_id)
+                details = {"purge_data": args.purge}
+                message = f"Module {target} uninstalled" + (
+                    " and its data deleted." if args.purge else " (data kept)."
+                )
+            elif action == "upload":
+                try:
+                    package = Path(args.package).read_bytes()
+                except OSError as e:
+                    print(
+                        f"error: cannot read {args.package} as the veyra account: {e.strerror}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                target, version, what = admin.apply_package(
+                    db,
+                    get_engine(),
+                    mgr,
+                    Store(settings.module_store_dir),
+                    package,
+                    unsigned_permitted=settings.unsigned_modules_permitted,
+                    enable=args.enable,
+                )
+                details = {"version": version, "result": what, "filename": Path(args.package).name}
+                message = f"Module {target} {version}: {what}. Restart Veyra's services."
+            elif action == "rollback":
+                old, new = admin.rollback(db, mgr, Store(settings.module_store_dir), args.module_id)
+                details = {"from": old, "to": new}
+                message = (
+                    f"Module {target} rolled back from {old} to {new}. Restart Veyra's services."
+                )
+            elif action == "config":
+                org = uuid.UUID(args.organization) if args.organization else None
+                values = dict(_config_pair(p) for p in args.values)
+                for key in args.secret or []:
+                    values[key] = getpass.getpass(f"{key}: ")
+                if values:
+                    admin.write_config(
+                        db, args.module_id, org, values, lambda: load_installation_key(settings)
+                    )
+                    details = {"changed": sorted(values)}
+                    message = ""
+                current = admin.read_config(db, args.module_id, org)
+                for f in current["fields"]:
+                    v = current["values"][f["key"]]
+                    if f["type"] == "secret":
+                        v = "(set)" if v["has_value"] else "(not set)"
+                    print(f"{f['key']:30} {json.dumps(v) if not isinstance(v, str) else v}")
+                if not values:
+                    return 0
             audit.record(
                 db,
                 action=f"module.{action}",
                 actor_type="system",
                 actor_label="cli",
                 target_type="module",
-                target_id=args.module_id,
+                target_id=target,
+                details=details or None,
             )
-    except ModuleError as e:
+    except ProblemError as e:
         print(f"error: {e.detail}", file=sys.stderr)
         for err in e.errors or []:
             print(f"  - {err['message']}", file=sys.stderr)
         return 1
-    print(f"Module {args.module_id}: {action} complete. Restart veyra-api to apply.")
+    if message:
+        print(message)
     return 0
+
+
+def _config_pair(text: str) -> tuple[str, Any]:
+    """``key=value``; the value is read as JSON when it is (numbers, true,
+    false, null), otherwise as text. An empty value clears the setting."""
+    key, sep, raw = text.partition("=")
+    if not sep or not key:
+        raise SystemExit(f"error: expected key=value, got {text!r}")
+    try:
+        return key, json.loads(raw)
+    except ValueError:
+        return key, raw
 
 
 def cmd_modules_schema(args: argparse.Namespace) -> int:
@@ -2190,6 +2279,29 @@ def build_parser() -> argparse.ArgumentParser:
         s = mod.add_parser(action, help=f"{action.capitalize()} a module")
         s.add_argument("module_id")
         s.set_defaults(func=lambda a, act=action: _module_action(a, act))
+    s = mod.add_parser("uninstall", help="Uninstall a disabled module (keeps its data)")
+    s.add_argument("module_id")
+    s.add_argument("--purge", action="store_true", help="Also drop its tables and settings")
+    s.add_argument("--confirm", metavar="MODULE_ID", help="Required with --purge")
+    s.set_defaults(func=lambda a: _module_action(a, "uninstall"))
+    s = mod.add_parser("update", help="Apply a newer version found in the module paths")
+    s.add_argument("module_id")
+    s.set_defaults(func=lambda a: _module_action(a, "update"))
+    s = mod.add_parser("upload", help="Install or update from a signed .vmod package")
+    s.add_argument("package")
+    s.add_argument("--enable", action="store_true", help="Enable it after a new install")
+    s.set_defaults(func=lambda a: _module_action(a, "upload"))
+    s = mod.add_parser("rollback", help="Go back to the previous version in the module store")
+    s.add_argument("module_id")
+    s.set_defaults(func=lambda a: _module_action(a, "rollback"))
+    s = mod.add_parser("config", help="Show or change module settings")
+    s.add_argument("module_id")
+    s.add_argument("values", nargs="*", metavar="KEY=VALUE")
+    s.add_argument("--secret", action="append", metavar="KEY", help="Prompt for a secret value")
+    s.add_argument(
+        "--organization", metavar="ID", help="Organization-scoped settings of this organization"
+    )
+    s.set_defaults(func=lambda a: _module_action(a, "config"))
     mod.add_parser("schema", help="Print the manifest JSON Schema").set_defaults(
         func=cmd_modules_schema
     )

@@ -8,6 +8,15 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **More module commands on the server** (#149): `sudo veyra modules` can now uninstall, update, upload a `.vmod` package, roll back, and show or change a module's settings, as the Module Manager page does. Each one is audited.
+
+### Fixed
+- Veyra creates a module's private data folder when the module loads; modules no longer have to create it.
+- A module that says it has a health check but never adds one now shows as "degraded" instead of healthy.
+
 ## 0.27.36 — 2026-10-20
 
 Migration `0067`.

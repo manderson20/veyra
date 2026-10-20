@@ -54,10 +54,10 @@ Where to run each operation:
 |---|---|---|
 | List | `GET /modules` | `list` |
 | Install / enable / disable | `POST /{id}/install`, `/enable`, `/disable` | `install`, `enable`, `disable` (then restart `veyra-api`) |
-| Uninstall, purge | `POST /{id}/uninstall` `{"purge_data": true, "confirm_module_id": "<id>"}` | not available |
-| Update, rollback | `POST /{id}/update`, `POST /{id}/rollback` | not available |
-| Upload a `.vmod` | `POST /upload` | not available |
-| Settings | `GET/PUT /{id}/config` (`?organization_id=`) | not available |
+| Uninstall, purge | `POST /{id}/uninstall` `{"purge_data": true, "confirm_module_id": "<id>"}` | `uninstall <id>`, `uninstall <id> --purge --confirm <id>` |
+| Update, rollback | `POST /{id}/update`, `POST /{id}/rollback` | `update <id>`, `rollback <id>` |
+| Upload a `.vmod` | `POST /upload` | `upload <file.vmod> [--enable]` (the file must be readable by the `veyra` account) |
+| Settings | `GET/PUT /{id}/config` (`?organization_id=`) | `config <id>` shows them; `config <id> key=value … [--secret key] [--organization <org id>]` changes them |
 | Validate, schema, keygen, sign, package | — | `validate`, `schema`, `keygen`, `sign --package` |
 
 The Module Manager page in the web interface uses the same API. Every
@@ -208,8 +208,8 @@ The My Phone portal's widgets are a fixed registry in
 | Settings | manifest `[[config]]` (`string`, `integer`, `boolean`, `choice`, `secret`); `ctx.get_config(db, org_id)` | The Module Manager's Settings tab is generated from the manifest. `secret` values are stored encrypted and returned decrypted only to the module. |
 | Secrets in your own tables | `ctx.encrypt(text)` / `ctx.decrypt(token)` *(1.1)* | Bound to the module: other modules cannot decrypt them. |
 | Time zone | `ctx.organization_timezone(db, org_id)` *(1.1)* | For times that administrators type in. |
-| Health | `ctx.add_health_check(fn)` returning `HealthResult("ok" \| "degraded" \| "failed" \| "unknown", message, details)` | Shown in `/api/v1/modules/<id>` and `/api/v1/system/health`. |
-| Audit, logging, files | `ctx.audit(...)`, `ctx.log`, `ctx.data_dir`, `ctx.module_dir` | `data_dir` is `<data>/modules/<id>`. The core does not create it, so create it before use. |
+| Health | `ctx.add_health_check(fn)` returning `HealthResult("ok" \| "degraded" \| "failed" \| "unknown", message, details)` | Shown in `/api/v1/modules/<id>` and `/api/v1/system/health`. With `health_check = true` in the manifest and no check added, the module reports `degraded`. |
+| Audit, logging, files | `ctx.audit(...)`, `ctx.log`, `ctx.data_dir`, `ctx.module_dir` | `data_dir` is `<data>/modules/<id>`, created by the core when the module loads. |
 | Lifecycle hooks | `on_install`, `on_enable`, `on_disable`, `on_uninstall(ctx, purge)` on the entrypoint object | Optional. |
 | Dependencies on other modules | manifest `[[dependencies]] id, version, optional` | Enable requires enabled dependencies. Disable is refused while dependents are enabled. |
 | UI navigation | manifest `[[ui.nav]] label, view, icon, permission` | Shown in the navigation for users with the permission. `icon` is a name from `frontend/src/components/ui/Icon.tsx` (unknown names show `puzzle`). |

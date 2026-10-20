@@ -427,6 +427,10 @@ class ModuleManager:
         if loaded is None or module_id not in self.enabled:
             return HealthResult("unknown", "Module is not running.")
         if not loaded.ctx.health_checks:
+            if loaded.manifest.health_check:
+                return HealthResult(
+                    "degraded", "The manifest declares a health check but the module added none."
+                )
             return HealthResult("ok", "Module is running (no health checks declared).")
         worst: HealthResult = HealthResult("ok")
         order = {"ok": 0, "unknown": 1, "degraded": 2, "failed": 3}
@@ -510,6 +514,10 @@ class ModuleManager:
                 f"The code of module {manifest.id} cannot be loaded: {type(e).__name__}: {e}"
             ) from e
         data_dir = self.settings.data_dir / "modules" / manifest.id
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            log.warning("Module %s: cannot create %s: %s", manifest.id, data_dir, e)
         ctx = ModuleContext(manifest, path, data_dir, self.bus, self.settings)
         entry.register(ctx)
         loaded = LoadedModule(manifest, path, ctx, entry, pkg_name)
