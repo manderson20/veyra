@@ -56,6 +56,10 @@ def sync_class(base: Path, slug: str, sources: list[tuple[str, Path]]) -> list[s
         if not _SLUG_RE.match(prompt_slug):
             raise MohError(f"recording slug {prompt_slug!r} is not valid")
         wanted[track_name(i, prompt_slug)] = src
+        # The 16 kHz copy plays to G.722 channels (issue #138).
+        wide = src.with_suffix(".wav16")
+        if wide.is_file():
+            wanted[track_name(i, prompt_slug)[: -len(".wav")] + ".wav16"] = wide
     for existing in target.iterdir():
         if existing.name not in wanted and not existing.name.startswith("."):
             try:
@@ -81,7 +85,8 @@ def sync_class(base: Path, slug: str, sources: list[tuple[str, Path]]) -> list[s
                     tmp.replace(dest)
         except OSError as e:
             raise MohError(f"the recording could not be copied to {dest}: {e}") from e
-        names.append(name)
+        if not name.endswith(".wav16"):
+            names.append(name)
     return names
 
 

@@ -58,6 +58,9 @@ def test_prompt_upload_conversion_playback_replace_and_delete(admin, app):
     assert path.is_file() and p["size_bytes"] == path.stat().st_size
     # stored as 8 kHz mono 16-bit: 1 s = 16000 bytes + 44-byte header
     assert path.stat().st_size == 16044
+    # and, from a 16 kHz upload, a 16 kHz copy for G.722 channels (#138)
+    wide = path.with_suffix(".wav16")
+    assert wide.is_file() and wide.stat().st_size == 32044
     # playback streams the stored file
     r = admin.get(f"{PROMPTS}/{p['id']}/audio")
     assert r.status_code == 200 and r.headers["content-type"].startswith("audio/wav")
@@ -86,9 +89,15 @@ def test_prompt_upload_conversion_playback_replace_and_delete(admin, app):
     )
     assert r.status_code == 200 and r.json()["duration_seconds"] == 2.0
     assert path.stat().st_size == 32044
+    assert not wide.exists()  # an 8 kHz upload has no wideband copy; the old one goes
+    r = admin.put(
+        f"{PROMPTS}/{p['id']}/audio",
+        files={"file": ("new.wav", make_wav(1.0, 48000, 1), "audio/wav")},
+    )
+    assert r.status_code == 200 and wide.is_file()
     assert admin.get(PROMPTS, params={"q": "welc"}).json()["total"] == 2
     assert admin.delete(f"{PROMPTS}/{p['id']}").status_code == 204
-    assert not path.exists()
+    assert not path.exists() and not wide.exists()
     actions = [e["action"] for e in admin.get("/api/v1/audit").json()["items"]]
     assert {"prompt.create", "prompt.update", "prompt.replace_audio", "prompt.delete"} <= set(
         actions

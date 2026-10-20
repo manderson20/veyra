@@ -339,3 +339,17 @@ def test_streamed_hold_music(admin):
         assert r2.status_code == 422, bad
     r3 = admin.patch(f"{HM}/{r.json()['id']}", json={"stream_url": ""})
     assert r3.status_code == 200 and r3.json()["stream_url"] is None
+
+
+def test_sync_class_copies_the_wideband_copy(tmp_path):
+    """Issue #138: a recording's .wav16 goes into the set beside its .wav."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.wav").write_bytes(b"AAAA")
+    (src / "a.wav16").write_bytes(b"WIDE")
+    base = tmp_path / "moh"
+    assert moh.sync_class(base, "set", [("bach", src / "a.wav")]) == ["01-bach.wav"]
+    assert (base / "set" / "01-bach.wav16").read_bytes() == b"WIDE"
+    (src / "a.wav16").unlink()
+    moh.sync_class(base, "set", [("bach", src / "a.wav")])
+    assert sorted(p.name for p in (base / "set").iterdir()) == ["01-bach.wav"]

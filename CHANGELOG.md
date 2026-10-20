@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.26 — 2026-10-20
+
+No migration.
+
+### Added
+- **Wideband audio for HD phones** (#138): a recording uploaded to the audio library at 16 kHz or better (most WAV and MP3 files) now also keeps a 16 kHz copy, which phones talking G.722 (HD voice) hear on pages, prompts and hold music instead of the 8 kHz version. Recordings uploaded before this release stay 8 kHz until you upload them again.
+
 ## 0.27.25 — 2026-10-20
 
 No migration. Deploy the telephony configuration after installing.

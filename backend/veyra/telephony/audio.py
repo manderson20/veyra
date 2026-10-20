@@ -22,6 +22,10 @@ from pathlib import Path
 log = logging.getLogger("veyra.audio")
 
 TARGET_RATE = 8000
+# A wideband copy beside each upload (issue #138): Asterisk plays
+# ``<name>.wav16`` to G.722 (16 kHz) channels and ``<name>.wav`` to the rest.
+WIDE_RATE = 16000
+WIDE_SUFFIX = ".wav16"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_SECONDS = 300
 MAX_INPUT_RATE = 48000
@@ -74,27 +78,27 @@ def _mono(samples: array, channels: int) -> array:
     return array("h", [(samples[i] + samples[i + 1]) // 2 for i in range(0, len(samples), 2)])
 
 
-def _resample(samples: array, rate: int) -> array:
-    """Linear interpolation to TARGET_RATE."""
-    if rate == TARGET_RATE:
+def _resample(samples: array, rate: int, target: int = TARGET_RATE) -> array:
+    """Linear interpolation to ``target`` Hz."""
+    if rate == target:
         return samples
     n_in = len(samples)
     if n_in < 2:
         return array("h")
-    n_out = (n_in * TARGET_RATE) // rate
+    n_out = (n_in * target) // rate
     out = array("h", bytes(2 * n_out))
     last = n_in - 1
     for i in range(n_out):
-        pos = (i * rate) // TARGET_RATE
-        frac = (i * rate) % TARGET_RATE  # out of TARGET_RATE
+        pos = (i * rate) // target
+        frac = (i * rate) % target  # out of target
         a = samples[pos]
         b = samples[pos + 1] if pos < last else a
-        out[i] = a + ((b - a) * frac) // TARGET_RATE
+        out[i] = a + ((b - a) * frac) // target
     return out
 
 
-def convert_wav(data: bytes) -> tuple[bytes, float]:
-    """The upload as 8 kHz 16-bit mono WAV bytes and its duration in seconds.
+def convert_wav(data: bytes, target: int = TARGET_RATE) -> tuple[bytes, float]:
+    """The upload as 8 kHz (or ``target``) 16-bit mono WAV bytes and its duration in seconds.
     Raises :class:`AudioError` with a message that names the accepted format."""
     if len(data) > MAX_UPLOAD_BYTES:
         raise AudioError(f"the file is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
@@ -121,8 +125,8 @@ def convert_wav(data: bytes) -> tuple[bytes, float]:
         raise
     except (wave.Error, EOFError, ValueError) as e:
         raise AudioError(f"not a WAV file ({e})") from e
-    samples = _resample(_mono(_samples(frames, width), channels), rate)
-    if len(samples) < TARGET_RATE // 10:
+    samples = _resample(_mono(_samples(frames, width), channels), rate, target)
+    if len(samples) < target // 10:
         raise AudioError("the recording is shorter than a tenth of a second")
     if sys.byteorder == "big":
         samples = array("h", samples)
@@ -131,12 +135,12 @@ def convert_wav(data: bytes) -> tuple[bytes, float]:
     with wave.open(buf, "wb") as out:
         out.setnchannels(1)
         out.setsampwidth(2)
-        out.setframerate(TARGET_RATE)
+        out.setframerate(target)
         out.writeframes(samples.tobytes())
-    return buf.getvalue(), len(samples) / TARGET_RATE
+    return buf.getvalue(), len(samples) / target
 
 
-def _decode_with_ffmpeg(data: bytes) -> bytes:
+def _decode_with_ffmpeg(data: bytes, rate: int = TARGET_RATE) -> bytes:
     """Decode a compressed upload to 16-bit PCM WAV at the target rate, mono.
 
     ffmpeg writes to a temporary file rather than a pipe: a WAV written to a
@@ -161,7 +165,7 @@ def _decode_with_ffmpeg(data: bytes) -> bytes:
                     "-ac",
                     "1",
                     "-ar",
-                    str(TARGET_RATE),
+                    str(rate),
                     "-acodec",
                     "pcm_s16le",
                     "-t",
@@ -204,6 +208,23 @@ def convert_any(data: bytes, filename: str | None = None) -> tuple[bytes, float]
             raise AudioError(f"the file is larger than {MAX_COMPRESSED_BYTES // (1024 * 1024)} MB")
         return convert_wav(_decode_with_ffmpeg(data))
     return convert_wav(data)
+
+
+def wideband_copy(data: bytes, filename: str | None = None) -> bytes | None:
+    """The upload at 16 kHz for G.722 channels (issue #138), or None when the
+    source has no more than 8 kHz to give (or cannot be converted)."""
+    suffix = Path(filename or "").suffix.lower()
+    try:
+        if suffix in COMPRESSED_SUFFIXES or (suffix != ".wav" and data[:4] != b"RIFF"):
+            if len(data) > MAX_COMPRESSED_BYTES:
+                return None
+            return convert_wav(_decode_with_ffmpeg(data, WIDE_RATE), WIDE_RATE)[0]
+        with wave.open(io.BytesIO(data), "rb") as w:
+            if w.getframerate() < WIDE_RATE:
+                return None
+        return convert_wav(data, WIDE_RATE)[0]
+    except (AudioError, wave.Error, EOFError, ValueError):
+        return None
 
 
 def wav_duration(path: Path) -> float:

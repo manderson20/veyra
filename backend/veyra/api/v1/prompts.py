@@ -227,20 +227,29 @@ def _unique_slug(db: Session, org_id: uuid.UUID, name: str) -> str:
     return slug
 
 
-async def _read_upload(file: UploadFile) -> tuple[bytes, float]:
+async def _read_upload(file: UploadFile) -> tuple[bytes, float, bytes | None]:
+    """(8 kHz WAV, seconds, 16 kHz WAV or None) of an upload."""
     data = await file.read(audio.MAX_COMPRESSED_BYTES + 1)
     if not data:
         raise _unsupported("the file is empty")
     try:
-        return audio.convert_any(data, file.filename)
+        narrow, duration = audio.convert_any(data, file.filename)
     except audio.AudioError as e:
         raise _unsupported(str(e)) from e
+    return narrow, duration, audio.wideband_copy(data, file.filename)
 
 
-def _store(path: Path, data: bytes) -> None:
+def _store(path: Path, data: bytes, wide: bytes | None = None) -> None:
+    """The recording, and its 16 kHz copy when there is one (a stale copy of
+    an earlier upload is removed, so G.722 channels never play old audio)."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         audio.write_atomic(path, data)
+        wide_path = path.with_suffix(audio.WIDE_SUFFIX)
+        if wide:
+            audio.write_atomic(wide_path, wide)
+        else:
+            wide_path.unlink(missing_ok=True)
     except OSError as e:
         raise ProblemError(
             503,
@@ -577,7 +586,7 @@ async def create_prompt(
     name = name.strip()
     if not name:
         raise _validation("name", "enter a name")
-    data, duration = await _read_upload(file)
+    data, duration, wide = await _read_upload(file)
     prompt = Prompt(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -597,7 +606,7 @@ async def create_prompt(
     except IntegrityError as e:
         db.rollback()
         raise conflict("A prompt with that name exists in this organization.", "name_in_use") from e
-    _store(prompt_path(prompts_dir(request), org.slug, prompt.slug), data)
+    _store(prompt_path(prompts_dir(request), org.slug, prompt.slug), data, wide)
     _audit(
         db,
         ctx,
@@ -659,8 +668,8 @@ async def replace_audio(
 ) -> PromptOut:
     prompt = _get(db, principal, prompt_id, "ivr.write")
     org = db.get(Organization, prompt.organization_id)
-    data, duration = await _read_upload(file)
-    _store(prompt_path(prompts_dir(request), org.slug if org else "", prompt.slug), data)
+    data, duration, wide = await _read_upload(file)
+    _store(prompt_path(prompts_dir(request), org.slug if org else "", prompt.slug), data, wide)
     prompt.duration_seconds = duration
     prompt.size_bytes = len(data)
     prompt.source = "upload"
@@ -792,5 +801,6 @@ def delete_prompt(
     db.delete(prompt)
     db.commit()
     path.unlink(missing_ok=True)
+    path.with_suffix(audio.WIDE_SUFFIX).unlink(missing_ok=True)
     bus.publish(Event("prompt.deleted", {"id": str(prompt_id)}))
     return Response(status_code=204)

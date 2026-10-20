@@ -129,7 +129,13 @@ held open too long plays a sound on the speakers of that area):
   MP3 needs `ffmpeg` (Ubuntu package, added by the installer; the installer
   degrades to WAV-only with a warning when the package is missing). Output
   stays 8 kHz mono WAV for Asterisk; a 16 kHz copy is kept for G.722 pages
-  later.
+  later. *Built 2026-10-20 (0.27.26, issue #138):* an upload of 16 kHz or
+  more (WAV, or any ffmpeg-decoded file) also writes `<slug>.wav16`
+  (`audio.wideband_copy`); Asterisk's `format_wav` plays it to wideband
+  (G.722) channels and the `.wav` to the rest. Replacing the audio with an
+  8 kHz file removes the old copy; deleting removes both; hold music sets
+  copy it next to the track. Recordings uploaded earlier, phone recordings
+  (`*95`) and the built-in sounds stay 8 kHz.
 * Uses are listed on the recording ("Bell: first period, Page: all call").
   In-use recordings cannot be deleted.
 
