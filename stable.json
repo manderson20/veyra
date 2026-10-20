@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 48,
+  "sequence": 49,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.32",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "IVR menus in the bulk import and from FreePBX.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "24b15259fc",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.32/veyra-0.27.32.tar.gz",
+        "sha256": "bb937beb5da7e668ad9aa1b78f259cc7a3fd7a22cef4a45dd68f487b29d94e90",
+        "size": 8446159
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -819,6 +836,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T08:34:02+00:00",
-  "expires_at": "2027-01-18T08:34:02+00:00"
+  "generated_at": "2026-10-20T08:45:09+00:00",
+  "expires_at": "2027-01-18T08:45:09+00:00"
 }
