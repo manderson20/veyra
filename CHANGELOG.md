@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.35 — 2026-10-20
+
+No migration.
+
+### Changed
+- **The live call list updates as calls happen** (#111): Calls refreshes the moment a call starts, is answered or ends on a phone you can see, instead of every few seconds.
+
 ## 0.27.34 — 2026-10-20
 
 No migration.

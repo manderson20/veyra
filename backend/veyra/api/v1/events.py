@@ -154,3 +154,62 @@ async def calls_stream(websocket: WebSocket) -> None:
         read_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await read_task
+
+
+@router.websocket("/staff")
+async def staff_stream(websocket: WebSocket) -> None:
+    """Live views for administrators (issue #111): a ``changed`` message
+    whenever a call event touches an extension the caller may see with
+    ``calls.read``; the Calls page then reloads instead of polling."""
+    from veyra.api.v1.extensions import _visible
+    from veyra.core.security.sessions import load_principal
+
+    hub = hub_of(websocket.app)
+    value = websocket.query_params.get("ticket", "")
+    tkt = hub.redeem_ticket(value) if value else None
+    if tkt is None:
+        await websocket.close(code=4401, reason="ticket invalid or expired")
+        return
+    maker = session_factory()
+    db = maker()
+    try:
+        user = db.get(User, tkt.user_id)
+        if user is None or not _still_valid(db, tkt.user_id, tkt.token_id, tkt.session_id):
+            await websocket.close(code=4401, reason="not signed in")
+            return
+        principal = load_principal(db, user, tkt.session_id)
+        rows = db.scalars(_visible(principal, "calls.read")).all()
+        endpoints = {e.endpoint_name: (e.id, e.number) for e in rows}
+    finally:
+        db.close()
+    if not endpoints:
+        await websocket.close(code=4403, reason="no calls to show")
+        return
+    await websocket.accept()
+    sub = hub.subscribe(tkt.user_id, endpoints)
+    await websocket.send_text(json.dumps({"type": "hello", "listener": hub.state}))
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(sub.queue.get(), timeout=PING_SECONDS)
+            except TimeoutError:
+                event = None
+            if event is None:
+                check_db = maker()
+                try:
+                    ok = _still_valid(check_db, tkt.user_id, tkt.token_id, tkt.session_id)
+                finally:
+                    check_db.close()
+                if not ok:
+                    await websocket.close(code=4401, reason="signed out")
+                    break
+                await websocket.send_text(json.dumps({"type": "ping", "listener": hub.state}))
+                continue
+            # Several events of one call arrive together: one message is enough.
+            while not sub.queue.empty():
+                sub.queue.get_nowait()
+            await websocket.send_text(json.dumps({"type": "changed"}))
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        hub.unsubscribe(sub)

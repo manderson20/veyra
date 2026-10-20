@@ -7,9 +7,13 @@ import { api, errorMessage } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import type { ActiveCall, ActiveCalls } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { useLiveChanges } from "@/hooks/useLiveChanges";
 import { useSession } from "@/hooks/useSession";
 
 const REFRESH_MS = 5_000;
+// While the live stream is connected (issue #111) the list reloads on each
+// call event; polling only catches what the stream cannot see (trunk legs).
+const SLOW_REFRESH_MS = 30_000;
 
 const STATE_TONE: Record<string, "ok" | "accent" | "neutral" | "warn"> = {
   Up: "ok",
@@ -62,10 +66,11 @@ export default function ActiveCallsPage() {
       setConfirming(null);
     }
   };
+  const live = useLiveChanges(reload);
   useEffect(() => {
-    const t = window.setInterval(reload, REFRESH_MS);
+    const t = window.setInterval(reload, live ? SLOW_REFRESH_MS : REFRESH_MS);
     return () => window.clearInterval(t);
-  }, [reload]);
+  }, [reload, live]);
 
   const columns: Column<ActiveCall>[] = [
     {

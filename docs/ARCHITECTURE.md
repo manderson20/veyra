@@ -135,6 +135,13 @@ logged. Publishers publish after their transaction commits. Cross-process
 delivery (worker, deployer, the other HA node) is planned via PostgreSQL
 `LISTEN/NOTIFY` with a durable outbox table (M11/M16).
 
+Live views of the web interface (issue #111, 0.27.35): the Calls page opens
+`/api/v1/events/staff` (WebSocket, a one-time ticket from
+`POST /events/ticket`) and reloads on each `changed` message, which the API
+sends when a call event (from its ARI listener) touches an extension the
+user may see with `calls.read`; it polls every 30 s as a fallback while
+connected (trunk-only legs), every 5 s when not.
+
 ## 9. Telephony adapter
 
 ```

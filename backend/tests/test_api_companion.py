@@ -443,3 +443,32 @@ def test_companion_reads_and_adds_favourite_contacts(admin, app):
     )
     favs = c.get("/api/v1/me/contacts", params={"favourite": "true"}).json()
     assert [f["name"] for f in favs] == ["Nurse"]
+
+
+def test_staff_stream_says_changed(admin, app):
+    """Issue #111: the Calls page's stream for administrators."""
+    hub: CallEventHub = app.state.callevents
+    ext = _ext(admin, "1001", "Front desk")
+    tk = admin.post("/api/v1/events/ticket").json()
+    with admin.websocket_connect(f"/api/v1/events/staff?ticket={tk['ticket']}") as ws:
+        assert ws.receive_json()["type"] == "hello"
+        now = utcnow().isoformat()
+        assert (
+            hub.publish(
+                CallEvent("call.ringing", "ch1", ext["endpoint_name"], "in", "1", None, now)
+            )
+            == 1
+        )
+        assert ws.receive_json() == {"type": "changed"}
+    # A user who may not see calls is turned away.
+    uid = _make_user(admin, "plain@district.local")
+    _ext(admin, "1002", "Plain", uid)
+    token = _companion_login(app, "plain@district.local").json()["token"]
+    c = _bearer(app, token)
+    tk = c.post("/api/v1/events/ticket").json()
+    with (
+        pytest.raises(WebSocketDisconnect) as exc,
+        c.websocket_connect(f"/api/v1/events/staff?ticket={tk['ticket']}"),
+    ):
+        pass
+    assert exc.value.code == 4403
