@@ -12,6 +12,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ### Added
 - **More module commands on the server** (#149): `sudo veyra modules` can now uninstall, update, upload a `.vmod` package, roll back, and show or change a module's settings, as the Module Manager page does. Each one is audited.
+- **Module settings per organization** (#149): a module's Settings dialog has a "Settings for" choice, so a module's per-organization settings can be set for each organization from the web interface.
 
 ### Fixed
 - Veyra creates a module's private data folder when the module loads; modules no longer have to create it.

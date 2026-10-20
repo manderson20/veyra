@@ -8,18 +8,23 @@ import type { ModuleConfigField } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
+import { useOrganizationOptions } from "@/hooks/useOrganizations";
 
 interface ConfigResponse {
   fields: ModuleConfigField[];
   values: Record<string, unknown>;
 }
 
-/** Installation-wide settings of a module, generated from its [[config]]
-    fields (docs/MODULE_CATALOG.md §5). Secrets are write-only. */
+/** Settings of a module, generated from its [[config]] fields
+    (docs/MODULE_CATALOG.md §5): installation-wide ones, or the
+    organization-scoped ones of a chosen organization. Secrets are write-only. */
 export function ModuleSettings({ moduleId, name, onClose }: { moduleId: string | null; name: string; onClose: () => void }) {
   const toast = useToast();
   const errors = useFormErrors();
-  const config = useApiData<ConfigResponse>(moduleId ? `/modules/${encodeURIComponent(moduleId)}/config` : null);
+  const { organizations } = useOrganizationOptions(moduleId !== null);
+  const [org, setOrg] = useState("");
+  useOnChange(moduleId, () => setOrg(""));
+  const config = useApiData<ConfigResponse>(moduleId ? `/modules/${encodeURIComponent(moduleId)}/config` : null, org ? { organization_id: org } : undefined);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
   useOnChange(config.data, () => {
@@ -42,7 +47,7 @@ export function ModuleSettings({ moduleId, name, onClose }: { moduleId: string |
         if (f.type === "secret" && (v === null || v === undefined)) continue;
         body[f.key] = f.type === "integer" && v !== "" && v !== null ? Number(v) : v;
       }
-      await api.put(`/modules/${encodeURIComponent(moduleId)}/config`, { values: body });
+      await api.put(`/modules/${encodeURIComponent(moduleId)}/config`, { values: body, organization_id: org || null });
       toast.success("Settings saved");
       onClose();
     } catch (err) {
@@ -55,7 +60,12 @@ export function ModuleSettings({ moduleId, name, onClose }: { moduleId: string |
     <Dialog open={moduleId !== null} onClose={onClose} busy={busy} title={`Settings: ${name}`}
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="module-settings-form" loading={busy} disabled={!fields.length}>Save</Button></>}>
       <form id="module-settings-form" className="stack stack--sm" onSubmit={submit}>
-        {config.data && fields.length === 0 ? <p className="subtle">This module has no installation-wide settings.</p> : null}
+        {organizations.length ? (
+          <SelectField label="Settings for" value={org} onChange={(e) => setOrg(e.target.value)}
+            help="Some modules have settings that each organization can have its own value for."
+            options={[{ value: "", label: "The whole installation" }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]} />
+        ) : null}
+        {config.data && fields.length === 0 ? <p className="subtle">{org ? "This module has no settings per organization." : "This module has no installation-wide settings."}</p> : null}
         {fields.map((f) => {
           const common = { label: f.label, help: f.help ?? undefined, error: errors.fields[f.key], required: f.required ?? false };
           if (f.type === "boolean") {
