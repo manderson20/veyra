@@ -322,8 +322,11 @@ applied in `build_facts` before `_keys`, `api/v1/me_devices.py`
 organization; audited `device.user_keys`; `check_config` NOTIFY to the
 phone), `DeviceOut.user_keys` (read-only for administrators). Frontend
 `PhoneKeysCard` on My Phone; the key editor offers "User's choice".
-Deviation: the administrator edits the user's keys by clearing the slot
-type on the profile, not through a dedicated field (follow-up).
+Since 0.27.16 (#136) administrators edit them on the device page (Keys →
+"User's keys"; `GET/PUT /devices/{id}/user-keys`, `devices.write`, the same
+slots and locks as the user's own `PUT`, audited with `by_administrator`).
+`PUT` replaces every open slot of the phone; the web card sends them all
+with the one that changed.
 
 ## 9. Fax (#77)
 

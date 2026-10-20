@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { CopyButton } from "@/components/common/CopyButton";
 import { KeyListEditor } from "@/components/devices/KeyListEditor";
+import { PhoneKeysCard } from "@/components/portal/PhoneKeysCard";
 import { DEVICE_STATUS } from "@/app/(app)/devices/page";
 import { Badge, Button, Callout, Card, Checkbox, ConfirmDialog, DataTable, EmptyState, ErrorState, LoadingState, PageHeader, SelectField, Switch, TabPanel, Tabs, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -211,6 +212,7 @@ function DeviceView() {
             {editable ? <div className="form-actions"><Button variant="primary" loading={busy} disabled={!dirty} onClick={(e) => save(e as unknown as FormEvent)}>Save changes</Button></div> : null}
           </div>
         </Card>
+        {d.extension && editable ? <div style={{ marginTop: 16 }}><PhoneKeysCard key={d.updated_at} deviceId={d.id} /></div> : null}
       </TabPanel>
       <TabPanel idBase="dev" id="preview" active={tab}>
         <Card title="Configuration files" subtitle="What the phone downloads, rendered now with secrets masked." actions={<Button icon="eye" loading={previewBusy} onClick={loadPreview}>{preview ? "Refresh" : "Render"}</Button>}>

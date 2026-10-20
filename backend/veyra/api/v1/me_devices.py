@@ -16,9 +16,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from veyra.api.v1.me import _own_audit, require_me
+from veyra.core import audit
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, request_context
-from veyra.core.errors import ProblemError, not_found
+from veyra.core.deps import RequestContext, request_context, require
+from veyra.core.errors import ProblemError, forbidden, not_found
 from veyra.core.models import CallQueue, Device, DeviceProfile, Extension, RingGroup, UserContact
 from veyra.core.security.principal import Principal
 from veyra.provisioning import facts
@@ -160,7 +161,7 @@ def my_devices(
     return [_out(db, d, e) for d, e in _own_devices(db, principal)]
 
 
-def _check_targets(db: Session, principal: Principal, ext: Extension, body: UserKeysIn) -> None:
+def _check_targets(db: Session, owner_id: Any, ext: Extension, body: UserKeysIn) -> None:
     """A BLF watches an extension, ring group or queue of the user's
     organization; a speed dial is any dialable number or a contact."""
     org = ext.organization_id
@@ -211,7 +212,7 @@ def _check_targets(db: Session, principal: Principal, ext: Extension, body: User
     for slot, k in body.keys.items():
         if k and k.contact_id is not None:
             contact = db.get(UserContact, k.contact_id)
-            if contact is None or contact.user_id != principal.user_id:
+            if contact is None or contact.user_id != owner_id:
                 raise ProblemError(
                     422,
                     "Unknown contact",
@@ -221,16 +222,11 @@ def _check_targets(db: Session, principal: Principal, ext: Extension, body: User
                 )
 
 
-@router.put("/{device_id}/keys", response_model=MyDeviceOut, summary="Set your keys on a phone")
-def put_my_keys(
-    device_id: uuid.UUID,
-    body: UserKeysIn,
-    request: Request,
-    principal: Principal = Depends(require_me),
-    db: Session = Depends(get_db),
-    ctx: RequestContext = Depends(request_context),
-) -> MyDeviceOut:
-    device, ext = _own_device(db, principal, device_id)
+def apply_user_keys(
+    db: Session, device: Device, ext: Extension, body: UserKeysIn
+) -> tuple[dict[str, Any], set[str]]:
+    """Validate and store the user's slots of a phone (the user on My Phone,
+    or an administrator for them, issue #136); returns them and the open slots."""
     raw = _raw_keys(db, device)
     user_slots = {str(i) for i, k in enumerate(raw, 1) if str(k.get("type") or "") == "user"}
     for slot in body.keys:
@@ -242,7 +238,7 @@ def put_my_keys(
                 code="slot_locked",
                 errors=[{"field": "keys", "message": f"slot {slot} is locked"}],
             )
-    _check_targets(db, principal, ext, body)
+    _check_targets(db, ext.user_id, ext, body)
     new: dict[str, Any] = {}
     for slot, k in body.keys.items():
         if k is None:
@@ -258,6 +254,20 @@ def put_my_keys(
                 entry["contact_id"] = str(contact.id)
         new[slot] = entry
     device.user_keys = new
+    return new, user_slots
+
+
+@router.put("/{device_id}/keys", response_model=MyDeviceOut, summary="Set your keys on a phone")
+def put_my_keys(
+    device_id: uuid.UUID,
+    body: UserKeysIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MyDeviceOut:
+    device, ext = _own_device(db, principal, device_id)
+    new, user_slots = apply_user_keys(db, device, ext, body)
     _own_audit(
         db,
         ctx,
@@ -270,6 +280,79 @@ def put_my_keys(
     db.refresh(device)
     # The phone fetches its configuration again (best effort; the next
     # reboot or resync applies it otherwise).
+    if getattr(request.app.state, "telephony", None) is not None:
+        with contextlib.suppress(Exception):
+            cli.send_notify("check_config", ext.endpoint_name)
+    return _out(db, device, ext)
+
+
+# ---------------------------------------------------------------- administrators
+
+admin_router = APIRouter(prefix="/devices", tags=["devices"])
+
+
+def _admin_device(
+    db: Session, principal: Principal, device_id: uuid.UUID, perm: str
+) -> tuple[Device, Extension]:
+    device = db.get(Device, device_id)
+    if device is None or not principal.has("devices.read", device.organization_id):
+        raise not_found("Phone")
+    if not principal.has(perm, device.organization_id):
+        raise forbidden()
+    ext = db.get(Extension, device.primary_extension_id) if device.primary_extension_id else None
+    if ext is None:
+        raise ProblemError(
+            409,
+            "No extension",
+            "The phone has no extension, so it has no user keys.",
+            code="no_extension",
+        )
+    return device, ext
+
+
+@admin_router.get(
+    "/{device_id}/user-keys", response_model=MyDeviceOut, summary="The user's own keys on a phone"
+)
+def get_user_keys(
+    device_id: uuid.UUID,
+    principal: Principal = Depends(require("devices.read")),
+    db: Session = Depends(get_db),
+) -> MyDeviceOut:
+    device, ext = _admin_device(db, principal, device_id, "devices.read")
+    return _out(db, device, ext)
+
+
+@admin_router.put(
+    "/{device_id}/user-keys",
+    response_model=MyDeviceOut,
+    summary="Set or clear the user's own keys on a phone (administrators)",
+)
+def put_user_keys(
+    device_id: uuid.UUID,
+    body: UserKeysIn,
+    request: Request,
+    principal: Principal = Depends(require("devices.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MyDeviceOut:
+    """The same slots the user fills on My Phone (issue #136): an administrator
+    fixes a wrong key or clears a slot without changing the profile."""
+    device, ext = _admin_device(db, principal, device_id, "devices.write")
+    new, user_slots = apply_user_keys(db, device, ext, body)
+    audit.record(
+        db,
+        action="device.user_keys",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=device.organization_id,
+        target_type="device",
+        target_id=device.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"slots": sorted(new), "user_slots": len(user_slots), "by_administrator": True},
+    )
+    db.commit()
+    db.refresh(device)
     if getattr(request.app.state, "telephony", None) is not None:
         with contextlib.suppress(Exception):
             cli.send_notify("check_config", ext.endpoint_name)

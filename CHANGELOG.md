@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Edit a user's own phone keys** (#136): a phone's Keys tab now shows "User's keys" — the open slots the user fills on My Phone — and an administrator can change or clear them there, without touching the profile. Locked keys stay locked.
+
+### Fixed
+- **Setting one of your keys no longer clears the others**: on My Phone, setting or clearing one key sent only that key, and the phone lost the user's other keys. All of them are kept now. If you set several keys before this release, check them on My Phone.
+
 ## 0.27.15 — 2026-10-20
 
 Migration `0064`.

@@ -152,3 +152,21 @@ def test_user_keys_in_open_slots_locked_elsewhere(admin, app, monkeypatch):
         if e["action"] == "device.user_keys"
     ]
     assert events and events[0]["details"].get("self_service") is True, events[0]
+    # An administrator edits the user's keys directly (#136): same slots, same locks.
+    base = f"/api/v1/devices/{device['id']}/user-keys"
+    assert admin.get(base).json()["user_slots"] == 2
+    r = admin.put(
+        base, json={"keys": {"4": {"type": "speed_dial", "value": "5735550123", "label": "Bus"}}}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["slots"][3]["label"] == "Bus"
+    assert pat.get("/api/v1/me/devices").json()[0]["slots"][3]["value"] == "5735550123"
+    assert (
+        admin.put(base, json={"keys": {"2": {"type": "speed_dial", "value": "1"}}}).status_code
+        == 422
+    )
+    assert sam.put(base, json={"keys": {}}).status_code in (403, 404)
+    r = admin.put(base, json={"keys": {}})
+    assert r.status_code == 200 and all(
+        s["type"] is None for s in r.json()["slots"] if s["kind"] == "user"
+    )

@@ -6,23 +6,31 @@ import { Badge, Button, Callout, Card, Dialog, Icon, SelectField, TextField, use
 import { api, errorMessage } from "@/lib/api";
 import type { Contact, DirectoryEntry, MyDevice, MyDeviceSlot, UserKeyInput } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { slotsWith } from "@/lib/userKeys";
 
 const TYPE_LABEL: Record<string, string> = { line: "Line", blf: "Busy lamp", speed_dial: "Speed dial", page: "Page", user: "Open", presence: "Presence" };
 type UserKeyType = "speed_dial" | "blf" | "presence";
 
-/** The user's phones: locked keys greyed, open slots editable (docs/USER_PORTAL.md §8). */
-export function PhoneKeysCard() {
+/** The user's phones: locked keys greyed, open slots editable (docs/USER_PORTAL.md §8).
+ * With ``deviceId`` (the device page, #136) an administrator edits that
+ * phone's user keys for its user. */
+export function PhoneKeysCard({ deviceId }: { deviceId?: string } = {}) {
   const toast = useToast();
-  const devices = useApiData<MyDevice[]>("/me/devices");
+  const mine = useApiData<MyDevice[]>(deviceId ? null : "/me/devices");
+  const one = useApiData<MyDevice>(deviceId ? `/devices/${deviceId}/user-keys` : null);
+  const devices = deviceId
+    ? { data: one.data ? [one.data] : undefined, error: one.error, setData: (d: MyDevice[]) => d[0] && one.setData(d[0]) }
+    : mine;
   const [editing, setEditing] = useState<{ device: MyDevice; slot: MyDeviceSlot } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const save = async (device: MyDevice, slot: MyDeviceSlot, key: UserKeyInput | null) => {
     setBusy(true);
     try {
-      const updated = await api.put<MyDevice>(`/me/devices/${device.id}/keys`, { keys: { [String(slot.index)]: key } });
+      const path = deviceId ? `/devices/${device.id}/user-keys` : `/me/devices/${device.id}/keys`;
+      const updated = await api.put<MyDevice>(path, { keys: slotsWith(device, slot.index, key) });
       devices.setData((devices.data ?? []).map((d) => (d.id === updated.id ? updated : d)));
-      toast.success(key ? `Key ${slot.index} set` : `Key ${slot.index} cleared`, "Your phone picks the change up within a minute.");
+      toast.success(key ? `Key ${slot.index} set` : `Key ${slot.index} cleared`, deviceId ? "The phone picks the change up within a minute." : "Your phone picks the change up within a minute.");
       setEditing(null);
     } catch (err) {
       toast.error("Could not save the key", errorMessage(err));
@@ -33,8 +41,12 @@ export function PhoneKeysCard() {
 
   if (devices.error) return <Card title="Phone keys"><Callout tone="danger">{errorMessage(devices.error)}</Callout></Card>;
   if (!devices.data || devices.data.length === 0) return null;
+  // The device page shows the card only when the profile leaves slots open.
+  if (deviceId && devices.data[0]?.user_slots === 0) return null;
   return (
-    <Card title="Phone keys" subtitle="Keys with a lock are set by an administrator and stay. Open slots are yours: a speed dial or a lamp that shows whether a colleague is on the phone.">
+    <Card title={deviceId ? "User's keys" : "Phone keys"} subtitle={deviceId
+      ? "The open slots of the profile, which the phone's user fills on My Phone. Change or clear one here; locked keys come from the profile or the phone's own key list."
+      : "Keys with a lock are set by an administrator and stay. Open slots are yours: a speed dial or a lamp that shows whether a colleague is on the phone."}>
       <div className="stack">
         {devices.data.map((d) => (
           <section key={d.id} className="stack stack--sm" aria-label={`${d.manufacturer} ${d.model} ${d.mac_display}`}>
@@ -44,7 +56,7 @@ export function PhoneKeysCard() {
                 <li key={s.index} className="card" style={{ padding: 10, opacity: s.kind === "locked" ? 0.8 : 1 }}>
                   <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                     <span className="subtle">Key {s.index}</span>
-                    {s.kind === "locked" ? <Icon name="lock" size={14} aria-label="Locked by an administrator" /> : <Badge tone="info">Yours</Badge>}
+                    {s.kind === "locked" ? <Icon name="lock" size={14} aria-label="Locked by an administrator" /> : <Badge tone="info">{deviceId ? "User's" : "Yours"}</Badge>}
                   </div>
                   <div className="table__primary" style={{ marginTop: 4 }}>{s.type ? (s.label || s.value || TYPE_LABEL[s.type]) : <span className="subtle">Empty</span>}</div>
                   <div className="table__secondary">{s.type ? `${TYPE_LABEL[s.type] ?? s.type}${s.value && s.type !== "line" ? ` · ${s.value}` : ""}` : "Nothing on this key yet"}</div>
@@ -60,13 +72,14 @@ export function PhoneKeysCard() {
           </section>
         ))}
       </div>
-      <KeyDialog target={editing} busy={busy} onClose={() => setEditing(null)} onSave={(key) => editing && save(editing.device, editing.slot, key)} />
+      <KeyDialog target={editing} busy={busy} ownContacts={!deviceId} onClose={() => setEditing(null)} onSave={(key) => editing && save(editing.device, editing.slot, key)} />
     </Card>
   );
 }
 
-function KeyDialog({ target, busy, onClose, onSave }: { target: { device: MyDevice; slot: MyDeviceSlot } | null; busy: boolean; onClose: () => void; onSave: (key: UserKeyInput) => void }) {
-  const contacts = useApiData<Contact[]>(target ? "/me/contacts" : null);
+function KeyDialog({ target, busy, ownContacts, onClose, onSave }: { target: { device: MyDevice; slot: MyDeviceSlot } | null; busy: boolean; ownContacts: boolean; onClose: () => void; onSave: (key: UserKeyInput) => void }) {
+  // The signed-in user's contacts: only on their own phone.
+  const contacts = useApiData<Contact[]>(target && ownContacts ? "/me/contacts" : null);
   const dir = useApiData<{ results: DirectoryEntry[] }>(target ? "/directory" : null);
   const [type, setType] = useState<UserKeyType>((target?.slot.type as UserKeyType) || "speed_dial");
   const [value, setValue] = useState(target?.slot.value ?? "");
