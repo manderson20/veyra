@@ -857,8 +857,43 @@ def process_mail_queue(db: Any, settings: Any, log: Any) -> None:
             target_id=name,
             details={"error": error, "host": smtp.host},
         )
+    for name, value in result.voicemail:
+        _delete_emailed_voicemail(db, settings, log, name, mail.parse_voicemail_ref(value))
     if result.sent or result.failed:
         log.info("Mail queue: %d sent, %d failed", len(result.sent), len(result.failed))
+
+
+def _delete_emailed_voicemail(
+    db: Any, settings: Any, log: Any, name: str, ref: dict[str, str]
+) -> None:
+    """Delete-after-email (issue #148): the message goes once its email was
+    accepted; a store error keeps it in the box (logged, not retried)."""
+    from veyra.core import audit
+    from veyra.voicemail import service as vmsvc
+    from veyra.voicemail.client import StoreClientError
+
+    try:
+        box = vmsvc.delete_delivered(db, settings, ref)
+    except StoreClientError as e:
+        log.warning("Mail queue: %s sent, the voicemail stays in the box: %s", name, e)
+        return
+    if box is None:
+        return
+    audit.record(
+        db,
+        action="voicemail.deleted_after_email",
+        actor_type="system",
+        actor_label="worker",
+        organization_id=box.organization_id,
+        target_type="voicemail_box",
+        target_id=str(box.id),
+        details={
+            "mailbox": ref.get("mailbox"),
+            "msg_id": ref.get("msg_id"),
+            "email": box.email,
+            "mail": name,
+        },
+    )
 
 
 def poll_calendars_and_ring_bells(db: Any, settings: Any, log: Any) -> None:

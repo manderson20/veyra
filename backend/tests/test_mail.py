@@ -179,3 +179,31 @@ def test_queue_sends_retries_and_gives_up(fake_smtp, tmp_path):
     assert mail.queue_summary(q) == {"waiting": 0, "failed": 1}
     # a missing queue directory is fine
     assert mail.process_queue(tmp_path / "nope", s, None).sent == []
+
+
+def test_voicemail_reference_is_stripped_and_returned(fake_smtp, tmp_path, monkeypatch):
+    """Issue #148: the body's marker and the queue's header never leave the
+    server; a sent notification returns its message reference."""
+    sent: list[bytes] = []
+    monkeypatch.setattr(FakeSmtp, "send_message", lambda self, m, **kw: sent.append(m.as_bytes()))
+    q = tmp_path / "mailqueue"
+    raw = (
+        b"X-Veyra-Voicemail: context=veyra; mailbox=1001; msg_id=1760800000-00000001\n"
+        + _msg().as_bytes()
+        + b"\n\n[veyra-vm:/var/spool/asterisk/voicemail/veyra/1001/INBOX/msg0000]\n"
+    )
+    mail.enqueue(q, raw)
+    plain = mail.enqueue(q, _msg().as_bytes())
+    r = mail.process_queue(q, _settings(), None)
+    assert len(r.sent) == 2 and len(r.voicemail) == 1 and r.voicemail[0][0] != plain.name
+    assert mail.parse_voicemail_ref(r.voicemail[0][1]) == {
+        "context": "veyra",
+        "mailbox": "1001",
+        "msg_id": "1760800000-00000001",
+    }
+    assert all(b"veyra-vm" not in m and b"X-Veyra-Voicemail" not in m for m in sent)
+    # a failed send returns no reference: the message stays in the box
+    mail.enqueue(q, raw)
+    fake_smtp.fail_connect = True
+    r = mail.process_queue(q, _settings(), None)
+    assert r.voicemail == [] and len(r.retried) == 1

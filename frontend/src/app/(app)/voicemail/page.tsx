@@ -110,7 +110,7 @@ export default function VoicemailPage() {
         title={messagesFor ? (messagesFor.shared ? `Messages of ${messagesFor.name}` : `Messages of ${messagesFor.extension_number} ${messagesFor.extension_name}`) : ""}
         description="What the user hears with *97: messages and greetings. Listening and every change are written to the audit log.">
         {messagesFor ? (
-          <VoicemailBoxPanel base={`/voicemail/${messagesFor.id}`} idBase={`vm-admin-${messagesFor.id}`} editable={editable}
+          <VoicemailBoxPanel base={`/voicemail/${messagesFor.id}`} idBase={`vm-admin-${messagesFor.id}`} email={messagesFor.email} editable={editable}
             targets={(list.data?.items ?? []).filter((b) => b.id !== messagesFor.id && b.organization_id === messagesFor.organization_id).map((b) => ({ id: b.id, label: b.shared ? `${b.number} ${b.name}` : `${b.extension_number} ${b.extension_name}` }))} />
         ) : null}
       </Dialog>

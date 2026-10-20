@@ -52,7 +52,7 @@ export function WidgetRenderer({ placed, extensions, boxes, announcement }: { pl
       if (!b) return <Card title="Voicemail"><p className="subtle">You have no voicemail box.</p></Card>;
       return (
         <Card title={b.shared ? `Voicemail: ${b.name}` : `Voicemail ${b.number}`}>
-          <VoicemailBoxPanel base={`/me/voicemail/${b.id}`} idBase={`vm-${b.id}`} targets={boxes.filter((o) => o.id !== b.id).map((o) => ({ id: o.id, label: `${o.number} ${o.name}` }))} />
+          <VoicemailBoxPanel base={`/me/voicemail/${b.id}`} idBase={`vm-${b.id}`} email={b.email} targets={boxes.filter((o) => o.id !== b.id).map((o) => ({ id: o.id, label: `${o.number} ${o.name}` }))} />
         </Card>
       );
     }

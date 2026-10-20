@@ -244,9 +244,11 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
               placeholder="Empty: messages stay in the box" onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
           ) : null}
           {editing && box && !box.email_delivery_enabled ? <Callout tone="warn">Email delivery is not configured (Settings → Email delivery). Messages stay in the box until it is.</Callout> : null}
-          <Checkbox label="Attach the recording to the email" checked={draft.attach_audio} onChange={(e) => setDraft({ ...draft, attach_audio: e.target.checked })} />
-          <Checkbox label="Delete the message from the box once it has been emailed" description="The email is then the only copy; needs an address." checked={draft.delete_after_email}
-            onChange={(e) => setDraft({ ...draft, delete_after_email: e.target.checked })} />
+          <Checkbox label="Attach the recording to the email" checked={draft.attach_audio}
+            onChange={(e) => setDraft({ ...draft, attach_audio: e.target.checked, delete_after_email: e.target.checked && draft.delete_after_email })} />
+          <Checkbox label="Delete the message from the box once it has been emailed" disabled={!draft.attach_audio}
+            description="Saves storage: the message is deleted only after the email server accepted the email; if it cannot be sent, the message stays. The email is then the only copy; needs an address and the recording attached."
+            checked={draft.delete_after_email} onChange={(e) => setDraft({ ...draft, delete_after_email: e.target.checked })} />
           {errors.fields.delete_after_email ? <p className="field__error" role="alert">{errors.fields.delete_after_email}</p> : null}
           <Switch label="Enabled" description="A disabled box keeps its settings and messages, but calls no longer land in it." checked={draft.is_enabled} onChange={(e) => setDraft({ ...draft, is_enabled: e.target.checked })} />
           {editing ? (

@@ -1414,6 +1414,13 @@ export interface VoicemailGreeting {
   size_bytes: number;
 }
 
+/** POST …/messages/{n}/email (issue #148). */
+export interface VoicemailEmailResult {
+  sent_to: string[];
+  deleted: boolean;
+  delete_error: string | null;
+}
+
 export interface VoicemailMessages {
   folder: string;
   messages: VoicemailMessage[];

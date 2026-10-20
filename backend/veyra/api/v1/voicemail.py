@@ -435,6 +435,8 @@ def create_box(
         key = installation_key(request)
         if body.delete_after_email and not body.email:
             raise _validation("delete_after_email", "needs an email address to deliver to")
+        if body.delete_after_email and not body.attach_audio:
+            raise _validation("delete_after_email", "needs the recording attached to the email")
         pin = body.pin or new_pin()
         box = VoicemailBox(
             id=uuid.uuid4(),
@@ -497,6 +499,8 @@ def create_box(
         email = user.email if user else None
     if body.delete_after_email and not email:
         raise _validation("delete_after_email", "needs an email address to deliver to")
+    if body.delete_after_email and not body.attach_audio:
+        raise _validation("delete_after_email", "needs the recording attached to the email")
     pin = body.pin or new_pin()
     box = VoicemailBox(
         id=uuid.uuid4(),
@@ -613,6 +617,13 @@ def update_box(
                 details[field] = value
     if box.delete_after_email and not box.email:
         raise _validation("delete_after_email", "needs an email address to deliver to")
+    # Otherwise the email is no copy (issue #148); checked when either changes.
+    if (
+        box.delete_after_email
+        and not box.attach_audio
+        and {"delete_after_email", "attach_audio"} & set(details)
+    ):
+        raise _validation("delete_after_email", "needs the recording attached to the email")
     if not details:
         return _outs(db, [box])[0]
     db.flush()
@@ -785,6 +796,37 @@ def box_message_forward(
         "voicemail.message_forward",
         box,
         {"folder": body.folder, "number": number, "to_box_id": str(target.id)},
+    )
+    db.commit()
+    return out
+
+
+@router.post(
+    "/{box_id}/messages/{number}/email",
+    response_model=vmsvc.EmailOut,
+    summary="Email a message, optionally deleting it once sent",
+)
+def box_message_email(
+    box_id: uuid.UUID,
+    number: int,
+    body: vmsvc.AdminEmailIn,
+    request: Request,
+    principal: Principal = Depends(require("voicemail.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> vmsvc.EmailOut:
+    box = _get(db, principal, box_id, "voicemail.write")
+    to = (body.to or "").strip() or box.email
+    if not to:
+        raise _validation("to", "the box has no email address; enter one")
+    out = vmsvc.email_message(db, request.app.state.settings, box, number, body, to)
+    _message_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_email",
+        box,
+        {"folder": body.folder, "number": number, "to": to, "deleted": out.deleted},
     )
     db.commit()
     return out

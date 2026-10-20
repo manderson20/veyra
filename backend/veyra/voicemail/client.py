@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import json
 import socket
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -111,6 +112,18 @@ class StoreClient:
                 msg_id=msg_id,
             )
         )
+
+    def delete_id(
+        self, context: str, mailbox: str, msg_id: str, folders: Sequence[str] | None = None
+    ) -> bool:
+        r = self.call(
+            "delete_id",
+            context=context,
+            mailbox=mailbox,
+            msg_id=msg_id,
+            folders=list(folders) if folders else None,
+        )
+        return bool(r["deleted"])
 
     def copy(
         self,

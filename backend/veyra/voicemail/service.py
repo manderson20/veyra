@@ -67,6 +67,27 @@ class MoveIn(BaseModel):
     msg_id: str | None = None
 
 
+class EmailIn(BaseModel):
+    """Email one message now (issue #148); ``delete`` removes it from the
+    box only once the SMTP server has accepted the email."""
+
+    folder: str = "INBOX"
+    msg_id: str | None = None
+    delete: bool = False
+
+
+class AdminEmailIn(EmailIn):
+    # Default: the box's address.
+    to: str | None = None
+
+
+class EmailOut(BaseModel):
+    sent_to: list[str]
+    deleted: bool
+    # Sent, but the delete failed: the message is still in the box.
+    delete_error: str | None = None
+
+
 class ForwardIn(BaseModel):
     folder: str = "INBOX"
     box_id: uuid.UUID
@@ -344,3 +365,106 @@ def greeting_remove(db: Session, settings: Settings, box: VoicemailBox, kind: st
         return client(settings).greeting_delete(context, mailbox, kind)
     except StoreClientError as e:
         raise problem(e) from e
+
+
+def delete_delivered(db: Session, settings: Settings, ref: dict[str, str]) -> VoicemailBox | None:
+    """After the SMTP server accepted a notification (issue #148): delete
+    the message it is about when its box asks for that and the email
+    carried the recording. Returns the box when a message was deleted."""
+    context, mailbox, msg_id = ref.get("context"), ref.get("mailbox"), ref.get("msg_id")
+    if not (context and mailbox and msg_id):
+        return None
+    boxes = db.query(VoicemailBox).filter(
+        VoicemailBox.delete_after_email.is_(True), VoicemailBox.attach_audio.is_(True)
+    )
+    for box in boxes:
+        if not box.email:
+            continue
+        try:
+            if location(db, box) != (context, mailbox):
+                continue
+        except ProblemError:
+            continue
+        return box if client(settings).delete_id(context, mailbox, msg_id) else None
+    return None
+
+
+def email_message(
+    db: Session,
+    settings: Settings,
+    box: VoicemailBox,
+    number: int,
+    body: EmailIn,
+    to: str,
+) -> EmailOut:
+    """Send one message with its recording to ``to`` through the configured
+    server, then delete it if asked: a failed send keeps it (issue #148)."""
+    from sqlalchemy import select
+
+    from veyra.core import mail
+    from veyra.core.models import Installation
+    from veyra.core.security.crypto import try_load_installation_key
+    from veyra.telephony.routing import check_email
+
+    check_folder(body.folder)
+    try:
+        to = check_email(to)
+    except ValueError as e:
+        raise ProblemError(422, "Invalid address", str(e), code="bad_email") from e
+    smtp = mail.load_smtp_settings(db)
+    if not smtp.enabled:
+        raise ProblemError(
+            409,
+            "Email delivery is off",
+            "Set up Settings → Email delivery first.",
+            code="smtp_disabled",
+        )
+    context, mailbox = location(db, box)
+    c = client(settings)
+    try:
+        listed = c.list(context, mailbox, body.folder).get("messages", [])
+        current = next((m for m in listed if int(m["number"]) == number), None)
+        if current is None:
+            raise StoreClientError("not_found", "no such message")
+        msg_id = str(current.get("msg_id") or "")
+        if body.msg_id and msg_id != body.msg_id:
+            raise StoreClientError("message_moved", "the message list changed; reload it")
+        fmt, data = c.read(context, mailbox, body.folder, number)
+    except StoreClientError as e:
+        raise problem(e) from e
+    m = _message_out(body.folder, current)
+    caller = " ".join(x for x in (m.caller_name, m.caller_number) if x) or "an unknown caller"
+    when = f"{m.received_at:%Y-%m-%d %H:%M} UTC" if m.received_at else "at an unknown time"
+    inst = db.scalar(select(Installation))
+    address, name = mail.sender(smtp, inst.name if inst else "Veyra")
+    stamp = f"{m.received_at:%Y%m%d-%H%M%S}" if m.received_at else f"{number:04d}"
+    message = mail.compose(
+        from_address=address,
+        from_name=name,
+        to=to,
+        subject=f"Voicemail from {caller} (mailbox {mailbox})",
+        text=(
+            f"A voicemail for mailbox {mailbox} ({box.name or mailbox}): from {caller}, "
+            f"received {when}, {m.duration_seconds} seconds long.\n\n"
+            "The recording is attached."
+            + ("\nIt has been deleted from the voicemail box." if body.delete else "")
+            + "\n\nThis message was sent by Veyra.\n"
+        ),
+        attachments=[(f"voicemail-{stamp}.wav", MEDIA_TYPES.get(fmt, "audio/wav"), data)],
+    )
+    try:
+        sent_to = mail.send(smtp, try_load_installation_key(settings), message)
+    except mail.MailError as e:
+        raise ProblemError(
+            502, "Email not sent", f"The message was kept: {e}", code="mail_failed"
+        ) from e
+    out = EmailOut(sent_to=sent_to, deleted=False)
+    if body.delete:
+        try:
+            out.deleted = c.delete_id(context, mailbox, msg_id, [body.folder])
+        except StoreClientError as e:
+            out.delete_error = e.message
+        else:
+            if not out.deleted:
+                out.delete_error = "the message was no longer in the folder"
+    return out

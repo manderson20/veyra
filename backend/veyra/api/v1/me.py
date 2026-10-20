@@ -35,6 +35,7 @@ from veyra.core.models import (
     Extension,
     FollowMe,
     Organization,
+    User,
     UserPreference,
     VoicemailBox,
     VoicemailBoxMember,
@@ -667,6 +668,39 @@ def my_message_audio(
             f'attachment; filename="voicemail-{folder.lower()}-{number:04d}.wav"'
         )
     return Response(content=data, media_type=media, headers=headers)
+
+
+@router.post(
+    "/voicemail/{box_id}/messages/{number}/email",
+    response_model=vmsvc.EmailOut,
+    summary="Email one of your messages to yourself, optionally deleting it once sent",
+)
+def my_message_email(
+    box_id: uuid.UUID,
+    number: int,
+    body: vmsvc.EmailIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> vmsvc.EmailOut:
+    box = _own_box(db, principal, box_id)
+    user = db.get(User, principal.user_id)
+    # The box's address, else the account's: never an address of the caller's choosing.
+    to = box.email or (user.email if user else None)
+    if not to:
+        raise ProblemError(409, "No address", "Your account has no email address.", code="no_email")
+    out = vmsvc.email_message(db, request.app.state.settings, box, number, body, to)
+    _box_audit(
+        db,
+        ctx,
+        principal,
+        "voicemail.message_email",
+        box,
+        {"folder": body.folder, "number": number, "to": to, "deleted": out.deleted},
+    )
+    db.commit()
+    return out
 
 
 @router.post(

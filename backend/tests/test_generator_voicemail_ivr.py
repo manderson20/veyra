@@ -104,9 +104,12 @@ def test_email_is_left_out_when_delivery_is_disabled():
     )
     vm = _files(snap)["voicemail.conf"].content
     assert "1002 => 123456,Phone 1002,,,attach=yes|delete=no|" in vm
-    # with delivery on, delete_after_email reaches the engine
+    # with delivery on the engine still keeps the message: the worker deletes
+    # it once the email was accepted (issue #148); the body names the message
     on = _files(_snapshot(voicemail_boxes=[_box("1002", delete_after_email=True)]))
-    assert "|delete=yes|" in on["voicemail.conf"].content
+    content = on["voicemail.conf"].content
+    assert "|delete=no|" in content and "|delete=yes|" not in content
+    assert "[veyra-vm:${VM_MESSAGEFILE}]" in content
 
 
 def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():

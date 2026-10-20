@@ -57,7 +57,10 @@ Family, Friends, Urgent — Asterisk's `INBOX`, `Old`, `Work`, `Family`,
 directory and the user's contacts), duration and a flag for urgent;
 in-browser playback (`<audio>` with range requests), download (WAV),
 move to a folder, delete, forward to another box the user may see (a copy
-with a "forwarded by" note), mark as heard (move New → Old). Counts refresh
+with a "forwarded by" note), mark as heard (move New → Old), email it with
+the recording (to the box's address, else the account's; administrators
+choose the address), optionally deleting it once the SMTP server accepted
+the email — a failed send keeps it (issue #148). Counts refresh
 every 15 s while the widget is visible and on the `voicemail.message`
 webhook event. "Call me to play" and voicemail reports stay P2.
 
@@ -106,10 +109,11 @@ GET    /me/voicemail/{box_id}/messages?folder=INBOX     index (newest first)
 GET    /me/voicemail/{box_id}/messages/{n}/audio?folder=  WAV, ranges, ?download
 POST   /me/voicemail/{box_id}/messages/{n}/move          {folder}
 POST   /me/voicemail/{box_id}/messages/{n}/forward       {box_id}
+POST   /me/voicemail/{box_id}/messages/{n}/email         {folder, msg_id, delete} → {sent_to, deleted, delete_error}
 DELETE /me/voicemail/{box_id}/messages/{n}?folder=
 ```
 
-The same five under `/voicemail/{box_id}/messages…` for administrators
+The same six (the administrator's `email` also takes `to`) under `/voicemail/{box_id}/messages…` for administrators
 (`voicemail.read` to list and play, `voicemail.write` to move, forward and
 delete), audited with the box and message id. Message identity across a
 renumbering uses the `msg_id` line of the `.txt` file (Asterisk writes one
@@ -117,8 +121,8 @@ since 11): the API accepts `{n}` and checks the `msg_id` the client sends
 as `If-Match`, answering 409 `message_moved` when the index changed.
 
 *Built 2026-10-19 (slice A):* `veyra.voicemail.store` (helper, verbs
-`ping|list|read|move|delete|copy|greetings|greeting_get|greeting_put|
-greeting_delete`), `veyra.voicemail.client`, `veyra.voicemail.service`
+`ping|list|read|move|delete|delete_id|copy|greetings|greeting_get|
+greeting_put|greeting_delete`; `delete_id` added for issue #148), `veyra.voicemail.client`, `veyra.voicemail.service`
 (index, errors → problems), routes under `/me/voicemail/{id}/messages…` and
 `/voicemail/{id}/messages…`, unit `veyra-vmstore.service` (asterisk:veyra,
 `ProtectSystem=strict` with the spool and `/run/veyra` writable), `verify.sh`

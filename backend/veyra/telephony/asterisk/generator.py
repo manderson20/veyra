@@ -3928,8 +3928,9 @@ def _check_boxes(boxes: list[dict[str, Any]], extensions: list[dict[str, Any]]) 
 
 def _voicemail(snapshot: dict[str, Any], boxes: Boxes, mailqueue_command: str) -> GeneratedFile:
     """``voicemail.conf`` (docs/VOICEMAIL_IVR.md §3.2). Sensitive: it carries
-    PINs in clear. Email addresses are only rendered when delivery is enabled,
-    so messages are never deleted after an email that cannot be sent."""
+    PINs in clear. Email addresses are only rendered when delivery is enabled.
+    Asterisk never deletes after emailing (``delete=no``): the worker deletes
+    a message once its email was accepted (issue #148)."""
     smtp = snapshot.get("smtp") or {}
     from_address = _check_value(str(smtp.get("from_address") or "veyra@localhost"), "sender")
     from_name = _display(str(smtp.get("from_name") or "Veyra")) or "Veyra"
@@ -3951,7 +3952,10 @@ def _voicemail(snapshot: dict[str, Any], boxes: Boxes, mailqueue_command: str) -
         "emailsubject=New voicemail ${VM_MSGNUM} in mailbox ${VM_MAILBOX} (${VM_NAME})",
         "emailbody=${VM_NAME},\\n\\nYou have a new voicemail in mailbox ${VM_MAILBOX}: "
         "message ${VM_MSGNUM} from ${VM_CALLERID}, received ${VM_DATE}, "
-        "${VM_DUR} long.\\n\\nThis message was sent by Veyra.",
+        "${VM_DUR} long.\\n\\nThis message was sent by Veyra."
+        # Which message this is, for delete-after-email (issue #148): the
+        # mail queue turns it into a header and the worker strips it.
+        "\\n\\n[veyra-vm:${VM_MESSAGEFILE}]",
         f"mailcmd={mailqueue_command}",
         # New-message counts for the voicemail.message webhook (docs/INTEGRATIONS.md §3.2).
         f"externnotify={posixpath.join(posixpath.dirname(mailqueue_command), 'veyra-vmnotify')}",
@@ -3993,13 +3997,11 @@ def _box_lines(entries: list[tuple[str, dict[str, Any]]], delivery: bool) -> lis
             raise GenerationError(f"voicemail box {number}: the PIN must be 4 to 10 digits")
         name = _display(b.get("name")) or f"Extension {number}"
         email = ""
-        delete = "no"
         if delivery and b.get("email"):
             try:
                 email = routing.check_email(str(b["email"]))
             except ValueError as e:
                 raise GenerationError(f"voicemail box {number}: {e}") from e
-            delete = "yes" if b.get("delete_after_email") else "no"
         attach = "yes" if b.get("attach_audio", True) else "no"
         org = _slug(b.get("organization") or "", "organization")
         # Pressing 0 (operator) or * during the greeting leaves to the box's
@@ -4013,7 +4015,7 @@ def _box_lines(entries: list[tuple[str, dict[str, Any]]], delivery: bool) -> lis
             exit_opts = f"|operator={'yes' if operator else 'no'}|exitcontext={ctx}"
         lines.append(
             f"{number} => {pin},{name},{email},,"
-            f"attach={attach}|delete={delete}|tz={org}|saycid=yes|envelope=yes{exit_opts}"
+            f"attach={attach}|delete=no|tz={org}|saycid=yes|envelope=yes{exit_opts}"
         )
     return lines
 

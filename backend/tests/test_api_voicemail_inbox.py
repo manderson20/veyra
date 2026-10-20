@@ -281,3 +281,101 @@ def test_greetings_upload_play_limit_and_delete(admin, app, helper):
     assert r.status_code == 200 and {x["kind"]: x for x in r.json()}["temp"]["recorded"]
     assert admin.get(f"/api/v1/voicemail/{box['id']}/greetings/temp/audio").status_code == 200
     assert admin.delete(f"/api/v1/voicemail/{box['id']}/greetings/temp").status_code == 200
+
+
+@pytest.fixture
+def smtp_on(app, monkeypatch):
+    from test_mail import FakeSmtp
+
+    from veyra.core import mail
+
+    FakeSmtp.instances, FakeSmtp.fail_connect, FakeSmtp.fail_login = [], False, False
+    monkeypatch.setattr(mail.smtplib, "SMTP", FakeSmtp)
+    monkeypatch.setattr(mail.smtplib, "SMTP_SSL", FakeSmtp)
+    with session_scope() as db:
+        mail.save_smtp_settings(
+            db,
+            mail.SmtpSettings(
+                enabled=True, host="smtp.example.org", from_address="pbx@example.org"
+            ),
+        )
+    return FakeSmtp
+
+
+def test_email_a_message_and_delete_it_only_once_sent(admin, app, helper, smtp_on, tmp_path):
+    """Issue #148: email now from the inbox, deleted only after a successful
+    send; and delete-after-email by the worker once the queue sent it."""
+    import logging
+
+    from veyra.cli.main import process_mail_queue
+    from veyra.core import mail
+    from veyra.core.models import AuditEvent
+
+    uid = _user(admin, "pat@example.org")
+    mine = _ext(admin, "1001", uid)
+    box = admin.post("/api/v1/voicemail", json={"extension_id": mine["id"]}).json()
+    assert box["email"] == "pat@example.org"
+    ctx = _context(admin)
+    inbox = helper / ctx / "1001" / "INBOX"
+    for n in range(3):
+        _msg(inbox, n, ctx, "1001")
+    user = login(TestClient(app, base_url="http://veyra.test"), "pat@example.org", ADMIN_PASSWORD)
+    base = f"/api/v1/me/voicemail/{box['id']}/messages"
+
+    # The send fails: nothing is deleted.
+    smtp_on.fail_connect = True
+    r = user.post(f"{base}/1/email", json={"delete": True, "msg_id": "1760800001-00000001"})
+    assert r.status_code == 502 and r.json()["code"] == "mail_failed", r.text
+    assert len(user.get(base).json()["messages"]) == 3
+    # It works: sent to the box's address, then deleted.
+    smtp_on.fail_connect = False
+    r = user.post(f"{base}/1/email", json={"delete": True, "msg_id": "1760800001-00000001"})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"sent_to": ["pat@example.org"], "deleted": True, "delete_error": None}
+    ids = [m["msg_id"] for m in user.get(base).json()["messages"]]
+    assert "1760800001-00000001" not in ids and len(ids) == 2
+    # Without delete the message stays; a stale id is refused.
+    assert user.post(f"{base}/0/email", json={}).json()["deleted"] is False
+    assert user.post(f"{base}/0/email", json={"msg_id": "x"}).status_code == 409
+    # The administrator may send to another address.
+    r = admin.post(
+        f"/api/v1/voicemail/{box['id']}/messages/0/email", json={"to": "office@example.org"}
+    )
+    assert r.status_code == 200 and r.json()["sent_to"] == ["office@example.org"], r.text
+
+    # Delete-after-email needs the recording attached.
+    r = admin.patch(
+        f"/api/v1/voicemail/{box['id']}", json={"delete_after_email": True, "attach_audio": False}
+    )
+    assert r.status_code == 422, r.text
+    r = admin.patch(f"/api/v1/voicemail/{box['id']}", json={"delete_after_email": True})
+    assert r.status_code == 200, r.text
+    # The worker deletes the message once its email was sent, not before.
+    remaining = user.get(base).json()["messages"]
+    target = remaining[0]["msg_id"]
+    q = app.state.settings.mailqueue_dir
+    raw = (
+        f"X-Veyra-Voicemail: context={ctx}; mailbox=1001; msg_id={target}\n".encode()
+        + mail.compose(
+            from_address="pbx@example.org",
+            from_name="PBX",
+            to="pat@example.org",
+            subject="New voicemail",
+            text="Hello",
+        ).as_bytes()
+    )
+    mail.enqueue(q, raw)
+    log = logging.getLogger("test")
+    smtp_on.fail_connect = True
+    with session_scope() as db:
+        process_mail_queue(db, app.state.settings, log)
+    assert target in [m["msg_id"] for m in user.get(base).json()["messages"]]
+    smtp_on.fail_connect = False
+    for f in q.glob("*.json"):
+        f.unlink()  # due again
+    with session_scope() as db:
+        process_mail_queue(db, app.state.settings, log)
+    assert target not in [m["msg_id"] for m in user.get(base).json()["messages"]]
+    with session_scope() as db:
+        ev = db.query(AuditEvent).filter_by(action="voicemail.deleted_after_email").one()
+        assert ev.details["msg_id"] == target

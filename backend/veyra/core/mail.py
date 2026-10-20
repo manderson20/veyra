@@ -9,6 +9,12 @@ queue directory; ``veyra worker`` takes each one, delivers it with
 otherwise retries with growing delays until it gives up after a day and
 moves the file to ``failed/``. Nothing here runs inside an API request
 except the explicit "send a test message" action.
+
+A voicemail notification carries the message it is about: the body's
+``[veyra-vm:…]`` line (from ``emailbody``) becomes an ``X-Veyra-Voicemail``
+header in ``veyra-mailqueue``; both are removed before sending, and the
+reference of a sent one is returned so the worker can delete the message
+from the box only once the server has accepted the email (issue #148).
 """
 
 from __future__ import annotations
@@ -18,6 +24,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import smtplib
 import socket
 import ssl
@@ -50,6 +57,8 @@ GIVE_UP_AFTER = timedelta(hours=24)
 QUEUE_SUFFIX = ".eml"
 STATE_SUFFIX = ".json"
 FAILED_DIR = "failed"
+VOICEMAIL_HEADER = "X-Veyra-Voicemail"
+_VOICEMAIL_MARKER = re.compile(rb"(?:\r?\n)*\[veyra-vm:[^\]\r\n]*\]")
 
 
 class MailError(RuntimeError):
@@ -299,6 +308,18 @@ class QueueResult:
     sent: list[str] = field(default_factory=list)  # file names
     retried: list[str] = field(default_factory=list)
     failed: list[tuple[str, str]] = field(default_factory=list)  # (file name, error)
+    # (file name, X-Veyra-Voicemail value) of sent voicemail notifications
+    voicemail: list[tuple[str, str]] = field(default_factory=list)
+
+
+def parse_voicemail_ref(value: str) -> dict[str, str]:
+    """``context=veyra; mailbox=1001; msg_id=…`` → dict (unknown keys dropped)."""
+    out: dict[str, str] = {}
+    for part in value.split(";"):
+        key, sep, v = part.strip().partition("=")
+        if sep and key in ("context", "mailbox", "msg_id"):
+            out[key] = v.strip()
+    return out
 
 
 def queue_summary(queue_dir: Path) -> dict[str, Any]:
@@ -332,9 +353,13 @@ def process_queue(
         except OSError as e:
             log.warning("Mail queue: cannot read %s: %s", message.name, e)
             continue
+        voicemail_ref = None
         try:
-            msg = BytesParser(policy=policy.SMTP).parsebytes(raw)
+            msg = BytesParser(policy=policy.SMTP).parsebytes(_VOICEMAIL_MARKER.sub(b"", raw))
             assert isinstance(msg, EmailMessage)
+            if VOICEMAIL_HEADER in msg:
+                voicemail_ref = str(msg[VOICEMAIL_HEADER])
+                del msg[VOICEMAIL_HEADER]
             state.recipients = _recipients(msg)
             send(settings, key, msg)
         except MailError as e:
@@ -345,6 +370,8 @@ def process_queue(
             message.unlink(missing_ok=True)
             _state_path(message).unlink(missing_ok=True)
             result.sent.append(message.name)
+            if voicemail_ref:
+                result.voicemail.append((message.name, voicemail_ref))
             log.info("Mail queue: sent %s to %s", message.name, ", ".join(state.recipients))
             continue
         state.attempts += 1

@@ -245,3 +245,24 @@ def test_socket_protocol_and_client(spool, tmp_path):
         vmclient.StoreClient(tmp_path / "missing.sock").ping()
     # The raw protocol rejects garbage without dying.
     assert b'"ok":false' in st.handle(b"not json")
+
+
+def test_delete_by_message_id_in_any_listed_folder(spool):
+    """Delete-after-email (issue #148): the id stays right when the number
+    changed; only the folders asked for are searched."""
+    st = vmstore.VoicemailStore(spool)
+    inbox = spool / "veyra" / "1001" / "INBOX"
+    second = st.list_messages(_a(folder="INBOX"))["messages"][1]["msg_id"]
+    st.delete(_a(folder="INBOX", number=0))  # the message is now number 0
+    assert st.delete_id(_a(msg_id=second)) == {"deleted": True, "folder": "INBOX"}
+    assert [m["msg_id"] for m in st.list_messages(_a(folder="INBOX"))["messages"]] == [
+        "1760800002-00000002"
+    ]
+    assert (inbox / "msg0000.wav").exists() and not (inbox / "msg0001.txt").exists()
+    old = st.list_messages(_a(folder="Old"))["messages"][0]["msg_id"]
+    assert st.delete_id(_a(msg_id=old, folders=["INBOX"])) == {"deleted": False}
+    assert st.delete_id(_a(msg_id=old))["folder"] == "Old"
+    assert st.delete_id(_a(msg_id="nope")) == {"deleted": False}
+    for bad in ({"msg_id": "../x"}, {"msg_id": "x", "folders": ["Trash"]}):
+        with pytest.raises(vmstore.StoreError):
+            st.delete_id(_a(**bad))

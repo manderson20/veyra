@@ -14,6 +14,8 @@ set of paths:
 * ``move``, ``delete``, ``copy``: between the six folders, renumbering the
   folder afterwards so the sequence stays contiguous (Asterisk expects it)
   and holding Asterisk's own ``.lock`` while doing so;
+* ``delete_id``: one message found by its ``msg_id`` in the given folders
+  (the mail worker removes a message once its email was accepted);
 * ``greeting_get``, ``greeting_put``, ``greeting_delete``: the four greetings
   (``unavail``, ``busy``, ``greet``, ``temp``).
 
@@ -53,6 +55,7 @@ MAX_AUDIO = 64 * 1024 * 1024
 
 _CONTEXT_RE = re.compile(r"^[a-z0-9_][a-z0-9_-]{0,63}$")
 _MAILBOX_RE = re.compile(r"^[0-9]{1,16}$")
+_MSG_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _MSG_RE = re.compile(r"^msg(\d{4})\.(txt|wav|WAV|gsm)$")
 _TXT_KEYS = (
     "origmailbox",
@@ -317,6 +320,30 @@ class VoicemailStore:
             self._renumber(folder)
         return {"deleted": True}
 
+    def delete_id(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Delete the message whose ``msg_id`` matches, wherever it is among
+        ``folders`` (default the inbox, Old and Urgent): its number may have
+        changed since the id was taken. Nothing matching: ``deleted`` false."""
+        msg_id = _check(args.get("msg_id"), _MSG_ID_RE, "message id")
+        names = args.get("folders") or ["INBOX", "Old", "Urgent"]
+        if not isinstance(names, list):
+            raise StoreError("bad_argument", "folders must be a list")
+        box = self._box_dir(args.get("context"), args.get("mailbox"))
+        for folder_name in [_check_folder(f) for f in names]:
+            folder = box / folder_name
+            if not folder.is_dir():
+                continue
+            with _FolderLock(folder):
+                for n in self._messages(folder):
+                    if self._entry(folder, folder_name, n)["msg_id"] != msg_id:
+                        continue
+                    for f in self._files_of(folder, n):
+                        with contextlib.suppress(FileNotFoundError):
+                            f.unlink()
+                    self._renumber(folder)
+                    return {"deleted": True, "folder": folder_name}
+        return {"deleted": False}
+
     def copy(self, args: dict[str, Any]) -> dict[str, Any]:
         """Forward: copy a message into another mailbox's INBOX (same context
         or another), with a note of who forwarded it in the ``.txt``."""
@@ -424,6 +451,7 @@ class VoicemailStore:
         "read": "read",
         "move": "move",
         "delete": "delete",
+        "delete_id": "delete_id",
         "copy": "copy",
         "greetings": "greetings",
         "greeting_get": "greeting_get",

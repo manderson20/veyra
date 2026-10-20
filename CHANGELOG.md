@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.17 — 2026-10-20
+
+No migration. Deploy the telephony configuration after installing.
+
+### Added
+- **Email a voicemail and delete it** (#148): every message in the voicemail inbox (My Phone and the administrator's Voicemail page) has an **Email** button. It sends the message with its recording to the box's address (or your account's; administrators can type another), and with "Delete it from the voicemail box once the email is sent" ticked, removes it to save storage. If the email cannot be sent, the message stays and you see why.
+
+### Fixed
+- **"Delete after email" no longer deletes before the email is sent**: a box set to delete messages once emailed lost the message as soon as the phone system queued the email, even when the email server then refused it. The message is now deleted only after the email server has accepted the email; if the email fails or is given up on, the message stays in the box. The setting now also needs "Attach the recording to the email", so the email is a real copy; a box with the recording off keeps its messages. Deploy the telephony configuration after installing so the phone system stops deleting messages itself.
+
 ## 0.27.16 — 2026-10-20
 
 No migration.
