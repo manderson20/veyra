@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 41,
+  "sequence": 42,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.25",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Record a call from the web; class of service covers the record and transfer codes. Deploy the telephony configuration after installing.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "dac474f546",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.25/veyra-0.27.25.tar.gz",
+        "sha256": "1fb86b9ebc85f949339465794933b0385d5cb8590ec5e986ca9557ed46a7b491",
+        "size": 8400001
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -700,6 +717,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T06:54:31+00:00",
-  "expires_at": "2027-01-18T06:54:31+00:00"
+  "generated_at": "2026-10-20T07:09:09+00:00",
+  "expires_at": "2027-01-18T07:09:09+00:00"
 }
