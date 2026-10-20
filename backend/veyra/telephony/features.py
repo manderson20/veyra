@@ -190,6 +190,8 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
     ),
 )
 BY_KEY = {d.key: d for d in DEFAULTS}
+# key -> default code, for previews without a database (provisioning facts).
+DEFAULT_CODES = {d.key: d.code for d in DEFAULTS}
 
 
 class FeatureCodeError(ValueError):

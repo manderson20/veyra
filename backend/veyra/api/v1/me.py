@@ -831,6 +831,51 @@ def my_message_delete(
     return Response(status_code=204)
 
 
+# ------------------------------------------------- variables and codes (#130)
+
+
+@router.get(
+    "/provisioning/variables",
+    summary="Your phone's provisioning variables and the feature codes",
+)
+def my_provisioning_variables(
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """The non-sensitive variables of the user's organization and site
+    (PROVISIONING_BREADTH.md §2.3) and the enabled feature codes, for the
+    Companion and My Phone."""
+    from veyra.provisioning import variables as pvars
+
+    ext = db.scalar(
+        select(Extension)
+        .where(Extension.user_id == principal.user_id)
+        .order_by(Extension.number)
+        .limit(1)
+    )
+    org_id = ext.organization_id if ext else None
+    if org_id is None:
+        user = db.get(User, principal.user_id)
+        org_id = user.home_organization_id if user else None
+    rows = pvars.resolve_detailed(
+        db, organization_id=org_id, site_id=ext.site_id if ext else None, profile_id=None
+    )
+    return {
+        "variables": {str(v["name"]): v["value"] for v in rows if not v["sensitive"]},
+        "feature_codes": [
+            {
+                "key": c["key"],
+                "code": c["code"],
+                "label": c["label"],
+                "description": c["description"],
+                "takes_number": c["takes_number"],
+            }
+            for c in features.load(db)
+            if c["enabled"]
+        ],
+    }
+
+
 # ------------------------------------------------- voicemail greetings (§3)
 
 

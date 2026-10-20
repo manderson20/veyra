@@ -657,6 +657,9 @@ def build_facts(
             "pickup_prefix": PICKUP_PREFIX,
             "group_pickup_code": GROUP_PICKUP_CODE,
             "voicemail_number": VOICEMAIL_NUMBER,
+            # Enabled feature codes, key → code (issue #130): templates
+            # write {{ server.feature_codes.dnd_toggle }} and the like.
+            "feature_codes": features.active(db),
             "firmware_url": f"{base}/provisioning/firmware/{fw.id}/{fw.filename}" if fw else None,
             "firmware_version": fw.version if fw else None,
         },
@@ -804,6 +807,7 @@ def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]
             "pickup_prefix": PICKUP_PREFIX,
             "group_pickup_code": GROUP_PICKUP_CODE,
             "voicemail_number": VOICEMAIL_NUMBER,
+            "feature_codes": dict(features.DEFAULT_CODES),
             "firmware_url": None,
             "firmware_version": None,
         },
