@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 43,
+  "sequence": 44,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.27",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Automation rules: when an event or a device's request matches, email a group or start a page. Migration 0066.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "e0f0040e1c",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.27/veyra-0.27.27.tar.gz",
+        "sha256": "e03d9caf525123465caa75bcaee40b7b8f3810fcea082eab21ed6f0d21d3a0ed",
+        "size": 8422054
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -734,6 +751,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T07:21:09+00:00",
-  "expires_at": "2027-01-18T07:21:09+00:00"
+  "generated_at": "2026-10-20T07:37:47+00:00",
+  "expires_at": "2027-01-18T07:37:47+00:00"
 }

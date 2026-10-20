@@ -1,5 +1,5 @@
 {
   "algorithm": "ed25519",
   "key_id": "veyra-official",
-  "signature": "vcavkB6XCeaiCMEWQW3CworY3eGQGGrOg4ujDQltwXMWgBHp10zE7bICNti3PASH/bKDIaK3lo0221TUSAJICw=="
+  "signature": "rtd1od9IcVUOHDwy0mHxHgwcVNZ3YqoAy1zHilBb/7oEOpkObSQ2ZyP3ZMZXzIF5yU6U7tio8DJhkLbLUM6lCQ=="
 }
