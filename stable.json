@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 32,
+  "sequence": 33,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.16",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Administrators can edit a user's own phone keys on the device page, and setting one key on My Phone no longer clears the user's other keys.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "2a9ff9a157",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.16/veyra-0.27.16.tar.gz",
+        "sha256": "f9d56799ab10b5f191836a9e2dac0f69c49a28f0878cdf1d583ec90d8a938286",
+        "size": 8325233
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -547,6 +564,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T03:50:22+00:00",
-  "expires_at": "2027-01-18T03:50:22+00:00"
+  "generated_at": "2026-10-20T04:06:46+00:00",
+  "expires_at": "2027-01-18T04:06:46+00:00"
 }
