@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.12 — 2026-10-20
+
+No migration. Deploy the telephony configuration after installing for the stream fallback.
 
 ### Added
 - **Built-in hold music** (#138): Telephony → Audio → Built-in sounds now has three calm pieces made by Veyra — Calm chords, Warm pads and Soft bells — free to play to callers. Add one to the library, then to a hold music set.
