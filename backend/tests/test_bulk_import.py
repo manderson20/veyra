@@ -162,8 +162,13 @@ def test_freepbx_dump_becomes_import_files(admin):
         "ring_groups": 2,
         "queues": 1,
         "ivr_menus": 1,
-        "inbound_routes": 2,
+        "time_conditions": 1,
+        "inbound_routes": 3,
     }
+    tc = out["csv"]["time_conditions"]
+    assert "Office open,,,mon-fri 07:30-16:00,12-25; 11-23..11-27" in tc, tc
+    assert "Office open" in out["csv"]["inbound_routes"]
+    assert "voicemail:1101" in out["csv"]["inbound_routes"].split("5735550103")[1]
     ivr = out["csv"]["ivr_menus"]
     assert "1=extension:1101; 2=ring_group:6600; 9=queue:7700" in ivr, ivr
     assert "'12'" in " ".join(out["warnings"])
@@ -193,8 +198,11 @@ def test_freepbx_dump_becomes_import_files(admin):
     exp = admin.get("/api/v1/bulk/ivr_menus/export.csv", params={"organization_id": org}).text
     assert "Main menu" in exp and "9=queue:7700" in exp
     assert _import(admin, "ivr_menus", org, exp, dry_run=True)["counts"]["unchanged"] == 1
+    assert _import(admin, "time_conditions", org, tc, dry_run=False)["counts"]["create"] == 1
+    exp = admin.get("/api/v1/bulk/time_conditions/export.csv", params={"organization_id": org}).text
+    assert _import(admin, "time_conditions", org, exp, dry_run=True)["counts"]["unchanged"] == 1
     routes = _import(admin, "inbound_routes", org, out["csv"]["inbound_routes"], dry_run=True)
-    assert routes["counts"]["create"] == 2, routes
+    assert routes["counts"]["create"] == 3, routes
     # A gzipped dump works too; garbage does not.
     import gzip
 

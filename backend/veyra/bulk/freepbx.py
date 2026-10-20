@@ -44,6 +44,9 @@ TABLES = (
     "queues_details",
     "ivr_entries",
     "recordings",
+    "timeconditions",
+    "timegroups_groups",
+    "timegroups_details",
 )
 
 
@@ -213,6 +216,37 @@ def _dest(dest: str | None, names: dict[str, dict[str, str]], warn: list[str], w
         return f"conference:{exten}"
     warn.append(f"{what}: the destination {dest!r} has no equivalent yet; set it after the import")
     return ""
+
+
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+
+
+def _timegroup(details: list[str], warn: list[str], what: str) -> tuple[str, list[str]]:
+    """FreePBX time group lines (``08:00-17:00|mon-fri|*|*``) → Veyra hours
+    and holidays (a date with no time is a holiday)."""
+    hours: list[str] = []
+    holidays: list[str] = []
+    for line in details:
+        parts = [*line.split("|"), "*", "*", "*", "*"][:4]
+        time_part, dow, dom, month = (p.strip().lower() for p in parts)
+        if dom != "*" or month != "*":
+            if time_part not in ("*", "00:00-23:59") or dow != "*" or month == "*":
+                warn.append(f"{what}: the rule {line!r} has no equivalent; set it by hand")
+                continue
+            m_from, _, m_to = month.partition("-")
+            d_from, _, d_to = dom.partition("-")
+            try:
+                a = f"{_MONTHS.index(m_from) + 1:02d}-{int(d_from):02d}"
+                b = f"{_MONTHS.index(m_to or m_from) + 1:02d}-{int(d_to or d_from):02d}"
+            except ValueError:
+                warn.append(f"{what}: the date {month} {dom} is not understood; set it by hand")
+                continue
+            holidays.append(a if a == b else f"{a}..{b}")
+            continue
+        days = "mon-sun" if dow == "*" else dow
+        span = "00:00-23:59" if time_part == "*" else time_part
+        hours.append(f"{days} {span}")
+    return "; ".join(hours), holidays
 
 
 def convert(text: str) -> Conversion:
@@ -426,6 +460,35 @@ def convert(text: str) -> Conversion:
             "under the same names before checking the menus, or choose them afterwards"
         )
 
+    groups_by_id: dict[str, list[str]] = {}
+    for r in t["timegroups_details"]:
+        groups_by_id.setdefault(str(r.get("timegroupid")), []).append(str(r.get("time") or ""))
+    group_names = {
+        str(r.get("id")): str(r.get("description") or "") for r in t["timegroups_groups"]
+    }
+    conditions: dict[str, dict[str, str]] = {}
+    tcs: list[dict[str, str]] = []
+    for tc in t["timeconditions"]:
+        tid = str(tc.get("timeconditionid") or "")
+        name = str(tc.get("displayname") or f"Time condition {tid}")[:100]
+        gid = str(tc.get("time") or "")
+        hours, holidays = _timegroup(groups_by_id.get(gid, []), warn, f"time condition {name}")
+        if not hours:
+            warn.append(
+                f"time condition {name}: no weekly hours in group "
+                f"{group_names.get(gid, gid)!r}; skipped"
+            )
+            continue
+        tcs.append({"name": name, "hours": hours, "holidays": "; ".join(holidays)})
+        conditions[tid] = {
+            "name": name,
+            "open": str(tc.get("truegoto") or ""),
+            "closed": str(tc.get("falsegoto") or ""),
+        }
+    if tcs:
+        conv.csv["time_conditions"] = service.to_csv(service.KINDS["time_conditions"], tcs)
+        conv.counts["time_conditions"] = len(tcs)
+
     routes: list[dict[str, str]] = []
     for r in t["incoming"]:
         did = str(r.get("extension") or "")
@@ -435,7 +498,18 @@ def convert(text: str) -> Conversion:
             continue
         if r.get("cidnum"):
             warn.append(f"{what}: the caller ID match {r.get('cidnum')!r} is not imported")
-        dest = _dest(str(r.get("destination") or ""), names, warn, what)
+        raw = str(r.get("destination") or "")
+        extra: dict[str, str] = {}
+        if raw.startswith("timeconditions,"):
+            cond = conditions.get(raw.split(",")[1])
+            if cond is None:
+                warn.append(f"{what}: its time condition was not imported; set it by hand")
+                continue
+            dest = _dest(cond["open"], names, warn, f"{what} (open)")
+            closed = _dest(cond["closed"], names, warn, f"{what} (closed)")
+            extra = {"time_condition": cond["name"], "after_hours": closed or "hangup"}
+        else:
+            dest = _dest(raw, names, warn, what)
         if not dest or dest == "hangup":
             continue
         routes.append(
@@ -443,6 +517,7 @@ def convert(text: str) -> Conversion:
                 "did": did,
                 "description": str(r.get("description") or "")[:2000],
                 "destination": dest,
+                **extra,
             }
         )
     if routes:

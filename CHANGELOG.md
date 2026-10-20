@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.33 — 2026-10-20
+
+No migration.
+
+### Added
+- **Time conditions in the bulk import and from FreePBX** (#41, #42): export, edit and import business hours (`mon-fri 07:30-16:00`) and holidays; from FreePBX, time groups become hours and holidays, and a route that went through a time condition keeps its open and after-hours destinations.
+
 ## 0.27.32 — 2026-10-20
 
 No migration.

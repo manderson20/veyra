@@ -78,3 +78,10 @@ CREATE TABLE `ivr_entries` (
 INSERT INTO `ivr_entries` VALUES (2,'1','from-did-direct,1101,1',0),(2,'2','ext-group,6600,1',0),(2,'9','ext-queues,7700,1',0),(2,'12','from-did-direct,1102,1',0);
 CREATE TABLE `recordings` (`id` int(11) NOT NULL, `displayname` varchar(50) DEFAULT NULL, `filename` blob);
 INSERT INTO `recordings` VALUES (5,'Main greeting','custom/main-greeting');
+CREATE TABLE `timegroups_groups` (`id` int(11) NOT NULL, `description` varchar(50) NOT NULL DEFAULT '');
+INSERT INTO `timegroups_groups` VALUES (1,'School hours');
+CREATE TABLE `timegroups_details` (`id` int(11) NOT NULL, `timegroupid` int(11) NOT NULL DEFAULT 0, `time` varchar(100) NOT NULL DEFAULT '');
+INSERT INTO `timegroups_details` VALUES (1,1,'07:30-16:00|mon-fri|*|*'),(2,1,'*|*|25|dec'),(3,1,'*|*|23-27|nov'),(4,1,'08:00-12:00|*|1|jan');
+CREATE TABLE `timeconditions` (`timeconditionid` int(11) NOT NULL, `displayname` varchar(50) DEFAULT NULL, `time` int(11) DEFAULT NULL, `truegoto` varchar(50) DEFAULT NULL, `falsegoto` varchar(50) DEFAULT NULL);
+INSERT INTO `timeconditions` VALUES (3,'Office open',1,'ext-group,6600,1','ext-local,vmu1101,1');
+INSERT INTO `incoming` VALUES ('','5735550103','timeconditions,3,1','Office line');

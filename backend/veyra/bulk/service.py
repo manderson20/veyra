@@ -1247,6 +1247,110 @@ class IvrMenusKind:
         return "update", notes
 
 
+WEEK = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def parse_hours(text: str) -> list[dict[str, Any]]:
+    """``mon-fri 08:00-16:00; sat 09:00-12:00`` → time ranges."""
+    out = []
+    for item in [p.strip() for p in text.split(";") if p.strip()]:
+        days_part, _, times = item.rpartition(" ")
+        start, sep, end = times.partition("-")
+        if not days_part or not sep:
+            raise RowError(f"hours: write each as <days> <HH:MM-HH:MM>, not {item!r}")
+        days: list[str] = []
+        for token in days_part.replace(" ", "").lower().split(","):
+            a, dash, b = token.partition("-")
+            if a not in WEEK or (dash and b not in WEEK):
+                raise RowError(f"hours: {token!r} is not a day (mon … sun)")
+            seq = WEEK[WEEK.index(a) : WEEK.index(b) + 1] if dash else (a,)
+            days += [d for d in seq if d not in days]
+        out.append({"days": days, "start": start, "end": end})
+    return out
+
+
+def format_hours(ranges: list[dict[str, Any]]) -> str:
+    def days(ds: list[str]) -> str:
+        idx = sorted(WEEK.index(d) for d in ds if d in WEEK)
+        if idx and idx == list(range(idx[0], idx[-1] + 1)) and len(idx) > 2:
+            return f"{WEEK[idx[0]]}-{WEEK[idx[-1]]}"
+        return ",".join(WEEK[i] for i in idx)
+
+    return "; ".join(f"{days(r.get('days') or [])} {r.get('start')}-{r.get('end')}" for r in ranges)
+
+
+class TimeConditionsKind:
+    name = "time_conditions"
+    label = "Time conditions"
+    permission = "routing.write"
+    key = "name"
+    columns = ["name", "description", "timezone", "hours", "holidays"]
+
+    def export(self, db: Session, org: Organization) -> list[dict[str, str]]:
+        return [
+            {
+                "name": tc.name,
+                "description": tc.description or "",
+                "timezone": tc.timezone or "",
+                "hours": format_hours(tc.ranges or []),
+                "holidays": "; ".join(tc.holidays or []),
+            }
+            for tc in db.scalars(
+                select(TimeCondition)
+                .where(TimeCondition.organization_id == org.id)
+                .order_by(TimeCondition.name)
+            )
+        ]
+
+    def apply(self, ctx: Ctx, row: dict[str, str]) -> tuple[str, list[str]]:
+        from veyra.api.v1 import routing as api
+
+        db, org = ctx.db, ctx.org
+        name = (row.get("name") or "").strip()
+        wanted: dict[str, Any] = {}
+        for col in ("description", "timezone"):
+            v = _text(row, col)
+            if v is not None:
+                wanted[col] = None if v is _CLEARED else v
+        hours = _text(row, "hours")
+        if isinstance(hours, str):
+            wanted["ranges"] = parse_hours(hours)
+        holidays = _list(row, "holidays")
+        if holidays is not None:
+            wanted["holidays"] = holidays
+        tc = db.scalar(
+            select(TimeCondition).where(
+                TimeCondition.organization_id == org.id,
+                func.lower(TimeCondition.name) == name.lower(),
+            )
+        )
+        if tc is None:
+            if "ranges" not in wanted:
+                raise RowError("hours: required for a new time condition")
+            api.create_time_condition(
+                api.TimeConditionIn(
+                    organization_id=org.id,
+                    name=name,
+                    ranges=[api.TimeRangeIn(**r) for r in wanted.pop("ranges")],
+                    **{k: v for k, v in wanted.items() if v is not None},
+                ),
+                ctx.request,
+                ctx.principal,
+                db,
+                ctx.rctx,
+            )
+            return "create", []
+        changes = _changes(tc, wanted)
+        if "ranges" in changes:
+            changes["ranges"] = [api.TimeRangeIn(**r) for r in changes["ranges"]]
+        if not changes:
+            return "unchanged", []
+        api.update_time_condition(
+            tc.id, api.TimeConditionPatch(**changes), ctx.request, ctx.principal, db, ctx.rctx
+        )
+        return "update", []
+
+
 KINDS: dict[str, Any] = {
     k.name: k
     for k in (
@@ -1255,6 +1359,7 @@ KINDS: dict[str, Any] = {
         RingGroupsKind(),
         QueuesKind(),
         IvrMenusKind(),
+        TimeConditionsKind(),
         InboundRoutesKind(),
         SharedInboxesKind(),
     )

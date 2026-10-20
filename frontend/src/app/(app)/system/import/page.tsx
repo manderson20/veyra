@@ -127,9 +127,9 @@ export default function ImportPage() {
           </div>
         ) : null}
       </Card>
-      <Card title="From FreePBX" subtitle="Moving from FreePBX? Its extensions, ring groups, queues, IVR menus and inbound routes become the files to check and import here.">
+      <Card title="From FreePBX" subtitle="Moving from FreePBX? Its extensions, ring groups, queues, IVR menus, time conditions and inbound routes become the files to check and import here.">
         <div className="stack stack--sm">
-          <p className="subtle" style={{ margin: 0 }}>On the FreePBX server run <span className="mono">mysqldump asterisk &gt; asterisk.sql</span> (or <span className="mono">| gzip</span>), then choose the file. Nothing is saved until you import each file below, in this order: extensions, ring groups, queues, IVR menus, inbound routes. Upload the IVR recordings to the audio library first, under the names they had in FreePBX. SIP passwords are not carried over. If FreePBX used 3-digit extensions, widen the numbering plan (Settings) first.</p>
+          <p className="subtle" style={{ margin: 0 }}>On the FreePBX server run <span className="mono">mysqldump asterisk &gt; asterisk.sql</span> (or <span className="mono">| gzip</span>), then choose the file. Nothing is saved until you import each file below, in this order: extensions, ring groups, queues, IVR menus, time conditions, inbound routes. Upload the IVR recordings to the audio library first, under the names they had in FreePBX. SIP passwords are not carried over. If FreePBX used 3-digit extensions, widen the numbering plan (Settings) first.</p>
           <label className="field">
             <span className="field__label">FreePBX database dump</span>
             <input type="file" accept=".sql,.gz,.tgz,.tar,application/sql" onChange={convert} disabled={fpbxBusy} />
@@ -139,8 +139,8 @@ export default function ImportPage() {
           {fpbx ? (
             <>
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-                {["extensions", "ring_groups", "queues", "ivr_menus", "inbound_routes"].filter((k) => fpbx.csv[k]).map((k) => (
-                  <Button key={k} size="sm" onClick={() => loadConverted(k)}>Check {fpbx.counts[k]} {k.replace("_", " ")}</Button>
+                {["extensions", "ring_groups", "queues", "ivr_menus", "time_conditions", "inbound_routes"].filter((k) => fpbx.csv[k]).map((k) => (
+                  <Button key={k} size="sm" onClick={() => loadConverted(k)}>Check {fpbx.counts[k]} {k.replace(/_/g, " ")}</Button>
                 ))}
               </div>
               {fpbx.warnings.length ? (
