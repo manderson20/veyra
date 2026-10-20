@@ -8,7 +8,9 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.11 — 2026-10-20
+
+Migrations `0062` and `0063`. Deploy the telephony configuration after installing.
 
 ### Added
 - **Hold music from an internet radio stream** (#138): a hold music set can play a station (an http or https MP3, AAC or Ogg stream) instead of recordings (Telephony → Hold Music → Source). The server decodes it with ffmpeg and reconnects when it drops. Use a station you are licensed to play to callers. Migration `0063`; deploy the telephony configuration after installing.
