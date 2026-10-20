@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 30,
+  "sequence": 31,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.14",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Pages dialled from phones appear in the page log and fire the page.sent webhook; queue statistics count a returning caller once. Deploy the telephony configuration after installing.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "4c811c500d",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.14/veyra-0.27.14.tar.gz",
+        "sha256": "e51affe725f8935a2e4da5328fbdef13fe65cadc9e54f256f95d940ea56e6002",
+        "size": 8315507
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -513,6 +530,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T02:53:35+00:00",
-  "expires_at": "2027-01-18T02:53:35+00:00"
+  "generated_at": "2026-10-20T03:09:57+00:00",
+  "expires_at": "2027-01-18T03:09:57+00:00"
 }
