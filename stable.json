@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 29,
+  "sequence": 30,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.13",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "A licence warning when hold music plays an internet radio stream.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "9d084faa3b",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.13/veyra-0.27.13.tar.gz",
+        "sha256": "f1f7174482ba3fff014b7f6e478c649e1eca5a614c8a99a27f8c9b672becaff2",
+        "size": 8314429
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -496,6 +513,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T02:03:08+00:00",
-  "expires_at": "2027-01-18T02:03:08+00:00"
+  "generated_at": "2026-10-20T02:53:35+00:00",
+  "expires_at": "2027-01-18T02:53:35+00:00"
 }
