@@ -1441,6 +1441,8 @@ class Cos:
 
 COS_DENIED = [
     " same => n(cosdenied),NoOp(Veyra: not allowed by the class of service)",
+    # Call history shows the refusal (issue #135).
+    " same => n,Set(CDR(veyra_flag)=denied)",
     " same => n,Answer()",
     " same => n,Playback(pbx-invalid)",
     " same => n,Hangup(21)",
@@ -2615,6 +2617,7 @@ def _blocked_tail(r: dict[str, Any], policy: dict[str, Any] | None) -> list[str]
     org = _slug(org, "organization")
     lines = [
         " same => n(blocked),NoOp(Veyra: blocked caller ${VEYRA_CID} on ${VEYRA_DID})",
+        " same => n,Set(CDR(veyra_flag)=blocked)",
         f" same => n,UserEvent({BLOCKED_EVENT},Org: {org},Number: ${{VEYRA_CID}},"
         "Did: ${VEYRA_DID})",
     ]

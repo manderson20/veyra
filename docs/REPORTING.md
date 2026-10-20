@@ -45,19 +45,21 @@ own variables, every field through `CSV_QUOTE` so caller names with commas
 or quotes cannot break a line:
 
 ```
-veyra.csv => "v1",${CSV_QUOTE(${CDR(uniqueid)})},${CSV_QUOTE(${CDR(linkedid)})},
+veyra.csv => "v2",${CSV_QUOTE(${CDR(uniqueid)})},${CSV_QUOTE(${CDR(linkedid)})},
   ${CSV_QUOTE(${CDR(start)})},${CSV_QUOTE(${CDR(answer)})},${CSV_QUOTE(${CDR(end)})},
   ${CSV_QUOTE(${CDR(duration)})},${CSV_QUOTE(${CDR(billsec)})},
   ${CSV_QUOTE(${CDR(disposition)})},${CSV_QUOTE(${CDR(src)})},${CSV_QUOTE(${CDR(clid)})},
   ${CSV_QUOTE(${CDR(dst)})},${CSV_QUOTE(${CDR(dcontext)})},${CSV_QUOTE(${CDR(channel)})},
   ${CSV_QUOTE(${CDR(dstchannel)})},${CSV_QUOTE(${CDR(lastapp)})},
-  ${CSV_QUOTE(${CDR(veyra_rec)})}
+  ${CSV_QUOTE(${CDR(veyra_rec)})},${CSV_QUOTE(${CDR(veyra_flag)})}
 ```
 
 Checked on dev1 (Asterisk 22.5, 2026-10-15): `CSV_QUOTE` and `FILTER`
 exist, there is no JSON encoding function (only `JSON_DECODE`), so CSV it
-is; the `v1` tag lets the format change later without misreading old
-lines.
+is; the tag lets the format change without misreading old lines. `v2`
+(0.27.9, #135) adds `veyra_flag`, set by the dialplan when Veyra refuses a
+call (`blocked`: caller block list, `denied`: class of service); the call's
+outcome is then `blocked` or `denied`. `v1` lines are still read.
 
 Measured on dev1 with a temporary mapping and a runtime test context
 (both removed afterwards): `cdr_custom` does **not** see channel variables

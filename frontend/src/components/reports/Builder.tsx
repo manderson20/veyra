@@ -296,7 +296,7 @@ export function ReportBuilder({ definition, setDefinition, saved, onSaved }: {
                 </fieldset>
                 <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
                   <legend className="field__label">Outcomes</legend>
-                  {(["answered", "missed", "voicemail", "busy", "abandoned", "failed"] as const).map((v) => (
+                  {(["answered", "missed", "voicemail", "busy", "abandoned", "failed", "blocked", "denied"] as const).map((v) => (
                     <Checkbox key={v} label={v[0]!.toUpperCase() + v.slice(1)} checked={d.filters.outcomes.includes(v)}
                       onChange={(e) => setFilter("outcomes", e.target.checked ? [...d.filters.outcomes, v] : d.filters.outcomes.filter((x) => x !== v))} />
                   ))}

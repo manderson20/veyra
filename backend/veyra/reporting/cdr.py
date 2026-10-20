@@ -39,7 +39,9 @@ CDR_FILE = Path("/var/log/asterisk/cdr-custom/veyra.csv")
 CURSOR_KEY = "cdr.cursor"
 RETENTION_KEY = "calls.retention_days"
 DEFAULT_RETENTION_DAYS = 400
-FORMAT_TAG = "v1"
+FORMAT_TAG = "v2"
+# v1 lines (before 0.27.9) have no flag field; both are read.
+FORMATS = {"v1": 16, "v2": 17}
 FIELDS = (
     "uniqueid",
     "linkedid",
@@ -57,6 +59,9 @@ FIELDS = (
     "dstchannel",
     "lastapp",
     "rec",
+    # A call Veyra refused (issue #135): "blocked" (caller block list),
+    # "denied" (class of service); empty otherwise.
+    "flag",
 )
 # A call is complete once no leg has arrived for this long after its end.
 SETTLE = timedelta(seconds=60)
@@ -84,6 +89,7 @@ class Cdr:
     dstchannel: str
     lastapp: str
     rec: str
+    flag: str = ""
 
 
 def _time(value: str) -> datetime | None:
@@ -111,9 +117,10 @@ def parse_line(line: str) -> Cdr | None:
         row = next(csv.reader([line]))
     except (csv.Error, StopIteration):
         return None
-    if not row or row[0] != FORMAT_TAG or len(row) < len(FIELDS) + 1:
+    if not row or row[0] not in FORMATS or len(row) < FORMATS[row[0]] + 1:
         return None
     v = dict(zip(FIELDS, row[1:], strict=False))
+    v.setdefault("flag", "")
     start = _time(v["start"])
     if start is None or not v["linkedid"]:
         return None
@@ -134,6 +141,7 @@ def parse_line(line: str) -> Cdr | None:
         dstchannel=v["dstchannel"][:128],
         lastapp=v["lastapp"][:80],
         rec=v["rec"][:64],
+        flag=v["flag"][:16],
     )
 
 
@@ -312,7 +320,12 @@ def fold(call: CallRecord, legs: list[CallLeg], d: Directory, now: datetime) -> 
 
     apps = {leg.lastapp for leg in legs}
     dispositions = {leg.disposition for leg in legs}
-    if answered:
+    flags = {leg.flag for leg in legs if leg.flag}
+    if "blocked" in flags:
+        outcome = "blocked"
+    elif "denied" in flags and not answered:
+        outcome = "denied"
+    elif answered:
         outcome = "answered"
     elif "VoiceMail" in apps:
         outcome = "voicemail"

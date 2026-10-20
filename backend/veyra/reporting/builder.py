@@ -111,9 +111,11 @@ def _default_measures() -> list[Measure]:
 
 class Filters(BaseModel):
     directions: list[Literal["internal", "inbound", "outbound"]] = Field(default_factory=list)
-    outcomes: list[Literal["answered", "missed", "busy", "failed", "voicemail", "abandoned"]] = (
-        Field(default_factory=list)
-    )
+    outcomes: list[
+        Literal[
+            "answered", "missed", "busy", "failed", "voicemail", "abandoned", "blocked", "denied"
+        ]
+    ] = Field(default_factory=list)
     extension_ids: list[uuid.UUID] = Field(default_factory=list, max_length=200)
     dids: list[str] = Field(default_factory=list, max_length=200)
     trunk_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)

@@ -2514,7 +2514,7 @@ export interface FirewallFeed {
 // ---------------------------------------------------------------- call history (docs/REPORTING.md §3)
 
 export type CallDirection = "internal" | "inbound" | "outbound";
-export type CallOutcome = "answered" | "missed" | "busy" | "failed" | "voicemail" | "abandoned";
+export type CallOutcome = "answered" | "missed" | "busy" | "failed" | "voicemail" | "abandoned" | "blocked" | "denied";
 
 export interface CallExtensionRef {
   id: string;

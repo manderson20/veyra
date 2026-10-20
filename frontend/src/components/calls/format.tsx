@@ -10,6 +10,8 @@ export const OUTCOME: Record<CallOutcome, { label: string; tone: Tone }> = {
   failed: { label: "Failed", tone: "danger" },
   voicemail: { label: "Voicemail", tone: "info" },
   abandoned: { label: "Abandoned", tone: "warn" },
+  blocked: { label: "Blocked caller", tone: "neutral" },
+  denied: { label: "Not allowed", tone: "neutral" },
 };
 export const DIRECTION: Record<CallDirection, { label: string; icon: string }> = {
   internal: { label: "Internal", icon: "phone" },

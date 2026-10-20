@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Added
+- **Refused calls in the call history** (#135): calls from a blocked caller show as "Blocked caller", and calls a class of service did not allow (a number or feature the phone may not use) as "Not allowed", instead of answered or failed; the report builder can filter on both. Calls before this release keep their old outcome. Migration `0060`; deploy the telephony configuration after installing.
+
 ## 0.27.8 — 2026-10-20
 
 Migrations `0058` and `0059`. Deploy the telephony configuration after installing: the trunk registration fix is in the generated configuration.

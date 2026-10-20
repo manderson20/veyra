@@ -27,7 +27,7 @@ class CallRecord(UUIDPrimaryKey, TenantScoped, Base):
         ForeignKey("organizations.id", ondelete="SET NULL")
     )
     direction: Mapped[str] = mapped_column(String(10))  # internal | inbound | outbound
-    # answered | missed | busy | failed | voicemail | abandoned
+    # answered | missed | busy | failed | voicemail | abandoned | blocked | denied
     outcome: Mapped[str] = mapped_column(String(10))
     from_number: Mapped[str | None] = mapped_column(String(64), index=True)
     from_name: Mapped[str | None] = mapped_column(String(200))
@@ -88,6 +88,8 @@ class CallLeg(UUIDPrimaryKey, Base):
     duration: Mapped[int] = mapped_column(Integer, default=0)
     billsec: Mapped[int] = mapped_column(Integer, default=0)
     rec: Mapped[str] = mapped_column(String(64), default="")
+    # A call Veyra refused (issue #135): blocked, denied; empty otherwise.
+    flag: Mapped[str] = mapped_column(String(16), default="", server_default="")
 
 
 class QueueEvent(UUIDPrimaryKey, Base):

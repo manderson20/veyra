@@ -42,7 +42,9 @@ READ = "calls.history.read"
 EXPORT = "calls.history.export"
 EXPORT_LIMIT = 100_000
 Direction = Literal["internal", "inbound", "outbound"]
-Outcome = Literal["answered", "missed", "busy", "failed", "voicemail", "abandoned"]
+Outcome = Literal[
+    "answered", "missed", "busy", "failed", "voicemail", "abandoned", "blocked", "denied"
+]
 
 
 class ExtensionRef(BaseModel):

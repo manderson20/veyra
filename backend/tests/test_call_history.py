@@ -33,12 +33,14 @@ def line(
     lastapp="Dial",
     billsec=0,
     rec="",
+    flag=None,
 ):
-    """A line as cdr_custom writes it: every field through CSV_QUOTE."""
+    """A line as cdr_custom writes it: every field through CSV_QUOTE (v1, or
+    v2 with the refusal flag when ``flag`` is given)."""
     buf = io.StringIO()
     csv.writer(buf, quoting=csv.QUOTE_ALL, lineterminator="").writerow(
         [
-            "v1",
+            "v1" if flag is None else "v2",
             uniqueid,
             linkedid,
             start,
@@ -55,6 +57,7 @@ def line(
             dstchannel,
             lastapp,
             rec,
+            *([] if flag is None else [flag]),
         ]
     )
     return buf.getvalue()
@@ -438,3 +441,49 @@ def test_api_search_detail_mine_and_export(admin, app):
     assert resp.status_code == 200, resp.text
     mine = resp.json()
     assert mine["total"] == 1 and mine["items"][0]["to_extension"]["number"] == "1002"
+
+
+def test_refused_calls_have_their_own_outcome(app):
+    """Blocked callers and class-of-service refusals (#135, CDR v2 flag)."""
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from veyra.core.db import session_scope
+    from veyra.core.models import CallRecord
+
+    now = datetime.now(UTC)
+    with session_scope() as db:
+        cdr.ingest(
+            db,
+            [
+                line(
+                    "7.1",
+                    "7.1",
+                    t(0),
+                    t(0),
+                    t(1),
+                    src="5551234",
+                    dst="5550100",
+                    lastapp="Playback",
+                    flag="blocked",
+                ),
+                line(
+                    "8.1",
+                    "8.1",
+                    t(2),
+                    t(2),
+                    t(3),
+                    src="1001",
+                    dst="9011441234",
+                    lastapp="Hangup",
+                    flag="denied",
+                ),
+                line("9.1", "9.1", t(4), t(4), t(5), src="1001", dst="1002", flag=""),
+            ],
+            now=now + timedelta(hours=1),
+        )
+        out = {c.linkedid: c.outcome for c in db.scalars(select(CallRecord))}
+    assert out == {"7.1": "blocked", "8.1": "denied", "9.1": "answered"}
+    assert cdr.parse_line(line("1", "1", t(0), flag="blocked")).flag == "blocked"
+    assert cdr.parse_line(line("1", "1", t(0))).flag == ""
