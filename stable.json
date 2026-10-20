@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 33,
+  "sequence": 34,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.17",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Email a voicemail and delete it once sent; delete-after-email now waits for a successful send. Deploy the telephony configuration after installing.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.2.0",
+      "revision": "a810625f18",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.17/veyra-0.27.17.tar.gz",
+        "sha256": "ace1e7763a4c2c81714067aad92c0c9fbf15739e5a49afa7b5f837c33e93abf6",
+        "size": 8332740
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -564,6 +581,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-20T04:06:46+00:00",
-  "expires_at": "2027-01-18T04:06:46+00:00"
+  "generated_at": "2026-10-20T04:46:16+00:00",
+  "expires_at": "2027-01-18T04:46:16+00:00"
 }
