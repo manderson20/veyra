@@ -140,7 +140,9 @@ def test_download_approve_start_and_finish(admin, app, tmp_path, served, monkeyp
 
     # One fixed source (issue #84); outside production the server setting
     # may point at a local feed, and only the recipients are set here.
-    official = admin.get("/api/v1/updates/source").json()
+    with monkeypatch.context() as m:
+        m.setattr(settings, "environment", "production")
+        official = admin.get("/api/v1/updates/source").json()
     assert official["effective_url"] == manager.OFFICIAL_FEED_URL and official["official"]
     monkeypatch.setattr(settings, "update_metadata_url", f"{base}/stable.json")
     r = admin.put(

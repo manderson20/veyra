@@ -81,12 +81,13 @@ OFFICIAL_FEED_URL = "https://raw.githubusercontent.com/manderson20/veyra/updates
 
 
 def source_url(db: Session, settings: Settings) -> str:
-    """Where releases come from: always this repository's feed (issue #84).
-    Outside production ``VEYRA_UPDATE_METADATA_URL`` may point at another
-    feed (tests, a local release under development)."""
-    if not settings.is_production and settings.update_metadata_url:
-        return settings.update_metadata_url
-    return OFFICIAL_FEED_URL
+    """Where releases come from: in production always this repository's
+    feed (issue #84). Outside production only ``VEYRA_UPDATE_METADATA_URL``
+    (tests, a local release under development); empty: no source, so tests
+    never reach the network."""
+    if settings.is_production:
+        return OFFICIAL_FEED_URL
+    return settings.update_metadata_url
 
 
 def check_url(url: str, settings: Settings) -> None:
