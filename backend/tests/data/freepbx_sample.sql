@@ -69,3 +69,12 @@ CREATE TABLE `queues_details` (
   `flags` int(1) NOT NULL DEFAULT 0
 );
 INSERT INTO `queues_details` VALUES ('7700','strategy','rrordered',0),('7700','timeout','20',0),('7700','member','Local/1101@from-queue/n,0',1),('7700','member','Local/1102@from-queue/n,0',2),('7700','joinempty','yes',0);
+CREATE TABLE `ivr_entries` (
+  `ivr_id` int(11) NOT NULL,
+  `selection` varchar(10) DEFAULT NULL,
+  `dest` varchar(50) DEFAULT NULL,
+  `ivr_ret` tinyint(1) NOT NULL DEFAULT 0
+);
+INSERT INTO `ivr_entries` VALUES (2,'1','from-did-direct,1101,1',0),(2,'2','ext-group,6600,1',0),(2,'9','ext-queues,7700,1',0),(2,'12','from-did-direct,1102,1',0);
+CREATE TABLE `recordings` (`id` int(11) NOT NULL, `displayname` varchar(50) DEFAULT NULL, `filename` blob);
+INSERT INTO `recordings` VALUES (5,'Main greeting','custom/main-greeting');

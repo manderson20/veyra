@@ -24,6 +24,7 @@ template, checks a file (dry run) and imports it.
 | `extensions` | `number` | display_name, user_email, caller_id_name, caller_id_number, outbound_caller_id_number, outbound_caller_id_name, emergency_caller_id_number, intercom (default/allow/deny), class_of_service, site, building, location, department (by name), max_registrations, enabled, voicemail (yes creates the box with a random PIN; no never deletes one), voicemail_email, voicemail_attach_audio, voicemail_delete_after_email, voicemail_ring_seconds, pickup_groups (the full list: the extension leaves groups not named) |
 | `ring_groups` | `number` | name, description, strategy (ringall/sequential), ring_seconds, ring_busy_members, members (extension numbers in ringing order — the full list), external_members, caller_id_prefix, failover (`type:target` or `hangup`), enabled |
 | `queues` | `number` | name, description, strategy (ringall, rrmemory, leastrecent, fewestcalls, random, linear), member_timeout, wrapup_seconds, max_wait_seconds, join_when_empty, announce_position, members (static), dynamic_members (log in with the code), failover, enabled |
+| `ivr_menus` | `name` | description, prompt (a recording of the audio library, by name; a missing one is a note, not an error), timeout_seconds, max_retries, allow_direct_dial, keys (`1=extension:1001; 2=ring_group:6000; *=hangup`, the full list), timeout and invalid (`type:target`), enabled |
 | `users` | `email` | display_name, enabled, roles (organization-scope role keys, added, never removed), password (temporary; empty for a new user: they set one with "Forgot password") |
 | `inbound_routes` | `did` (with `trunk` when given) | trunk (by name), description, destination and after_hours as `type:target` — `extension:1001`, `voicemail:1001`, `voicemail_box:1900`, `ivr:<name>`, `ring_group:<number or name>`, `queue:…`, `announcement:…`, `conference:…`, `call_flow:…`, `fax:…`, `directory` — time_condition (by name), caller_id_prefix, enabled |
 | `shared_inboxes` | `number` | name, members (extension numbers), email, attach_audio, delete_after_email, ring_seconds, enabled |
@@ -60,7 +61,7 @@ importing users (role grants) asks for a recent sign-in (§ step-up, #137).
 
 ## 4. Not yet
 
-IVR menus, devices and contacts; a module hook so modules add
+Devices and contacts; a module hook so modules add
 kinds; editing rows in the page before importing.
 
 ## 5. From FreePBX (issue #42, 0.27.29)
@@ -93,5 +94,9 @@ then goes through **Check the file** and **Import** in that order.
   wrap-up, maximum wait, join when empty, announce position, static members
   (`Local/<ext>@from-queue` or `PJSIP/<ext>`), failover. Dynamic agents live
   in FreePBX's AstDB, not in the dump: add them on the queue's page.
-* Not yet: IVR menus, time conditions, voicemail settings from
+* IVR menus (0.27.32): `ivr_details`, `ivr_entries` (single-key options;
+  longer ones are warnings) and `recordings` (the announcement's name);
+  timeout and invalid destinations. The audio is not in the dump: upload
+  the recordings under the same names first.
+* Not yet: time conditions, voicemail settings from
   `voicemail.conf`, recordings and music on hold.

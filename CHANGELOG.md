@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.32 — 2026-10-20
+
+No migration.
+
+### Added
+- **IVR menus in the bulk import and from FreePBX** (#41, #42): export, edit and import auto-attendant menus with their keys (`1=extension:1001; 2=ring_group:6000`), timeout and invalid destinations and greeting recording; the FreePBX import brings its IVR menus too (upload their recordings first).
+
+### Fixed
+- The secret scan no longer flags the made-up password in the FreePBX test file.
+
 ## 0.27.31 — 2026-10-20
 
 No migration.

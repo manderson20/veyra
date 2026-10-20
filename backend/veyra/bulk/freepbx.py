@@ -42,6 +42,8 @@ TABLES = (
     "announcement",
     "queues_config",
     "queues_details",
+    "ivr_entries",
+    "recordings",
 )
 
 
@@ -368,6 +370,60 @@ def convert(text: str) -> Conversion:
         warn.append(
             "queues: dynamic agents (who log in with a code) live in FreePBX's AstDB, not in "
             "the database dump; add them on each queue's page"
+        )
+
+    recordings = {str(r.get("id")): str(r.get("displayname") or "") for r in t["recordings"]}
+    entries: dict[str, list[tuple[str, str]]] = {}
+    for e in t["ivr_entries"]:
+        entries.setdefault(str(e.get("ivr_id")), []).append(
+            (str(e.get("selection") or ""), str(e.get("dest") or ""))
+        )
+    menus: list[dict[str, str]] = []
+    for menu in t["ivr_details"]:
+        mid, mname = str(menu.get("id")), str(menu.get("name") or "")
+        if not mname:
+            continue
+        what = f"IVR {mname}"
+        keys = []
+        for digit, dest in sorted(entries.get(mid, [])):
+            if len(digit) != 1 or digit not in "0123456789*#":
+                warn.append(f"{what}: option {digit!r} is not a single key; skipped")
+                continue
+            target = _dest(dest, names, warn, f"{what} key {digit}")
+            if target:
+                keys.append(f"{digit}={target}")
+
+        def seconds(value: Any, lo: int, hi: int, default: int) -> str:
+            try:
+                return str(max(lo, min(hi, int(str(value)))))
+            except ValueError:
+                return str(default)
+
+        menus.append(
+            {
+                "name": mname[:100],
+                "description": str(menu.get("description") or "")[:2000],
+                "prompt": recordings.get(str(menu.get("announcement") or ""), ""),
+                "timeout_seconds": seconds(menu.get("timeout_time") or 5, 1, 30, 5),
+                "max_retries": seconds(menu.get("invalid_loops") or 3, 1, 9, 3),
+                "allow_direct_dial": "yes" if str(menu.get("directdial") or "") else "no",
+                "keys": "; ".join(keys),
+                "timeout": _dest(
+                    str(menu.get("timeout_destination") or ""), names, warn, f"{what} timeout"
+                )
+                or "hangup",
+                "invalid": _dest(
+                    str(menu.get("invalid_destination") or ""), names, warn, f"{what} invalid"
+                )
+                or "hangup",
+            }
+        )
+    if menus:
+        conv.csv["ivr_menus"] = service.to_csv(service.KINDS["ivr_menus"], menus)
+        conv.counts["ivr_menus"] = len(menus)
+        warn.append(
+            "IVR menus: the recordings are not in the dump; upload them to the audio library "
+            "under the same names before checking the menus, or choose them afterwards"
         )
 
     routes: list[dict[str, str]] = []

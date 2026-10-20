@@ -157,7 +157,16 @@ def test_freepbx_dump_becomes_import_files(admin):
     )
     assert r.status_code == 200, r.text
     out = r.json()
-    assert out["counts"] == {"extensions": 2, "ring_groups": 2, "queues": 1, "inbound_routes": 2}
+    assert out["counts"] == {
+        "extensions": 2,
+        "ring_groups": 2,
+        "queues": 1,
+        "ivr_menus": 1,
+        "inbound_routes": 2,
+    }
+    ivr = out["csv"]["ivr_menus"]
+    assert "1=extension:1101; 2=ring_group:6600; 9=queue:7700" in ivr, ivr
+    assert "'12'" in " ".join(out["warnings"])
     qs = out["csv"]["queues"]
     assert "7700,Attendance,,rrmemory,20,0,600,yes,no,1101; 1102,,voicemail:1101" in qs, qs
     ext = out["csv"]["extensions"]
@@ -178,6 +187,14 @@ def test_freepbx_dump_becomes_import_files(admin):
     assert qrun["counts"]["create"] == 1, qrun
     exp = admin.get("/api/v1/bulk/queues/export.csv", params={"organization_id": org}).text
     assert _import(admin, "queues", org, exp, dry_run=True)["counts"]["unchanged"] == 1
+    _import(admin, "ring_groups", org, rg, dry_run=False)
+    menus = _import(admin, "ivr_menus", org, ivr, dry_run=False)
+    assert menus["counts"]["create"] == 1, menus
+    exp = admin.get("/api/v1/bulk/ivr_menus/export.csv", params={"organization_id": org}).text
+    assert "Main menu" in exp and "9=queue:7700" in exp
+    assert _import(admin, "ivr_menus", org, exp, dry_run=True)["counts"]["unchanged"] == 1
+    routes = _import(admin, "inbound_routes", org, out["csv"]["inbound_routes"], dry_run=True)
+    assert routes["counts"]["create"] == 2, routes
     # A gzipped dump works too; garbage does not.
     import gzip
 

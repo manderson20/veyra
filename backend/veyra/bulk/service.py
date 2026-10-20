@@ -1111,6 +1111,142 @@ class QueuesKind:
         return "update", []
 
 
+class IvrMenusKind:
+    name = "ivr_menus"
+    label = "IVR menus"
+    permission = "ivr.write"
+    key = "name"
+    columns = [
+        "name",
+        "description",
+        "prompt",
+        "timeout_seconds",
+        "max_retries",
+        "allow_direct_dial",
+        "keys",
+        "timeout",
+        "invalid",
+        "enabled",
+    ]
+
+    def export(self, db: Session, org: Organization) -> list[dict[str, str]]:
+        from veyra.core.models import IvrEntry, Prompt
+
+        out = []
+        for m in db.scalars(
+            select(IvrMenu).where(IvrMenu.organization_id == org.id).order_by(IvrMenu.name)
+        ):
+            entries = db.scalars(select(IvrEntry).where(IvrEntry.menu_id == m.id)).all()
+            keys = "; ".join(
+                f"{e.digit}={_destination_of(db, e, 'destination')}"
+                for e in sorted(entries, key=lambda e: e.digit)
+            )
+            prompt = db.get(Prompt, m.prompt_id) if m.prompt_id else None
+            out.append(
+                {
+                    "name": m.name,
+                    "description": m.description or "",
+                    "prompt": prompt.name if prompt else "",
+                    "timeout_seconds": str(m.timeout_seconds),
+                    "max_retries": str(m.max_retries),
+                    "allow_direct_dial": _yn(m.allow_direct_dial),
+                    "keys": keys,
+                    "timeout": _destination_of(db, m, "timeout"),
+                    "invalid": _destination_of(db, m, "invalid"),
+                    "enabled": _yn(m.is_enabled),
+                }
+            )
+        return out
+
+    def apply(self, ctx: Ctx, row: dict[str, str]) -> tuple[str, list[str]]:
+        from veyra.api.v1 import ivr as api
+        from veyra.api.v1.destinations import DestinationIn
+        from veyra.core.models import Prompt
+
+        db, org = ctx.db, ctx.org
+        name = (row.get("name") or "").strip()
+        notes: list[str] = []
+        wanted: dict[str, Any] = {}
+        desc = _text(row, "description")
+        if desc is not None:
+            wanted["description"] = None if desc is _CLEARED else desc
+        for col in ("timeout_seconds", "max_retries"):
+            v = _int(row, col)
+            if v is not None and v is not _CLEARED:
+                wanted[col] = v
+        for col, fld in (("allow_direct_dial", "allow_direct_dial"), ("enabled", "is_enabled")):
+            b = _bool(row, col)
+            if b is not None:
+                wanted[fld] = b
+        prompt = _text(row, "prompt")
+        if prompt is _CLEARED:
+            wanted["prompt_id"] = None
+        elif isinstance(prompt, str):
+            rec = db.scalar(
+                select(Prompt).where(
+                    Prompt.organization_id == org.id, func.lower(Prompt.name) == prompt.lower()
+                )
+            )
+            if rec is None:
+                notes.append(
+                    f"recording {prompt!r} not in the audio library: upload it, then choose it"
+                )
+            else:
+                wanted["prompt_id"] = rec.id
+        dests: dict[str, Any] = {}
+        for col in ("timeout", "invalid"):
+            v = _text(row, col)
+            if isinstance(v, str):
+                dests[f"{col}_destination"] = DestinationIn(**_destination_in(db, org.id, v))
+        keys = _list(row, "keys")
+        entries = None
+        if keys is not None:
+            entries = []
+            for item in keys:
+                digit, sep, dest = item.partition("=")
+                if not sep or len(digit.strip()) != 1:
+                    raise RowError(f"keys: write each as <key>=<type:target>, not {item!r}")
+                entries.append(
+                    api.EntryIn(
+                        digit=digit.strip(),
+                        destination=DestinationIn(**_destination_in(db, org.id, dest)),
+                    )
+                )
+        menu = db.scalar(
+            select(IvrMenu).where(
+                IvrMenu.organization_id == org.id, func.lower(IvrMenu.name) == name.lower()
+            )
+        )
+        if menu is None:
+            api.create_menu(
+                api.IvrMenuIn(
+                    organization_id=org.id,
+                    name=name,
+                    entries=entries or [],
+                    **dests,
+                    **{k: v for k, v in wanted.items() if v is not None},
+                ),
+                ctx.principal,
+                db,
+                ctx.rctx,
+            )
+            return "create", notes
+        changes = _changes(menu, wanted)
+        for fld, d in dests.items():
+            prefix = fld.removesuffix("_destination")
+            if _destination_of(db, menu, prefix).lower() != str(_text(row, prefix)).lower():
+                changes[fld] = d
+        if entries is not None:
+            export = self.export(db, org)
+            current = next((r["keys"] for r in export if r["name"].lower() == name.lower()), "")
+            if current.lower() != "; ".join(str(_text(row, "keys")).split("; ")).lower():
+                changes["entries"] = entries
+        if not changes:
+            return "unchanged", notes
+        api.update_menu(menu.id, api.IvrMenuPatch(**changes), ctx.principal, db, ctx.rctx)
+        return "update", notes
+
+
 KINDS: dict[str, Any] = {
     k.name: k
     for k in (
@@ -1118,6 +1254,7 @@ KINDS: dict[str, Any] = {
         UsersKind(),
         RingGroupsKind(),
         QueuesKind(),
+        IvrMenusKind(),
         InboundRoutesKind(),
         SharedInboxesKind(),
     )
