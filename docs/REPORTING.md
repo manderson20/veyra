@@ -233,6 +233,14 @@ range):
 Every chart has a table view and a CSV download, as the dashboard charts
 already have hidden tables (now clipped correctly, 0.13.2).
 
+
+*Agent states (issue #135, 0.27.31):* the queue log's `ADDMEMBER`,
+`REMOVEMEMBER`, `PAUSE` and `UNPAUSE` are kept too; per queue and agent the
+report replays them (from up to a week before the period, so a log-in
+before it counts) into `logged_in_seconds` and `paused_seconds` within the
+period, and counts callers who left through the break-out menu
+(`EXITWITHKEY`, distinct calls) as `left_with_key`. Static members have no
+log-in events (`null`).
 ### 5.2 Dashboard additions
 
 The dashboard (Overview) gains a **"Calls today"** item (total, answered,

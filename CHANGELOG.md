@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.31 — 2026-10-20
+
+No migration.
+
+### Added
+- **Agent time in the queue report** (#135): Reports → Queues shows, for each agent, how long they were logged in to the queue and how long paused in the period, and how many callers left through the queue's break-out menu. Counted from this release on.
+
 ## 0.27.30 — 2026-10-20
 
 No migration.

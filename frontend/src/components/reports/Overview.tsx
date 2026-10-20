@@ -43,7 +43,9 @@ interface QueueRow {
   avg_wait_seconds: number;
   answered_within_sl: number;
   service_level_seconds: number;
-  agents: { agent: string; answered: number }[];
+  /** Callers who left through the break-out menu (#135). */
+  left_with_key?: number;
+  agents: { agent: string; answered: number; logged_in_seconds?: number | null; paused_seconds?: number | null }[];
 }
 
 const PERIODS = [
@@ -97,7 +99,19 @@ export function ReportsOverview() {
     { key: "abandoned", header: "Hung up waiting", render: (q) => q.abandoned + q.timed_out },
     { key: "wait", header: "Average wait", render: (q) => <span className="mono">{clock(q.avg_wait_seconds)}</span> },
     { key: "sl", header: "Answered within 20 s", render: (q) => pct(q.answered_within_sl, q.offered) },
-    { key: "agents", header: "Answered by", render: (q) => q.agents.map((a) => `${a.agent} (${a.answered})`).join(", ") || "—" },
+    { key: "menu", header: "Left by the menu", render: (q) => q.left_with_key ?? 0 },
+    {
+      key: "agents", header: "Agents", render: (q) => q.agents.length ? (
+        <ul className="list-plain" style={{ margin: 0 }}>
+          {q.agents.map((a) => (
+            <li key={a.agent}>
+              {a.agent}: {a.answered} answered
+              {a.logged_in_seconds != null ? <span className="subtle"> · logged in {clock(a.logged_in_seconds)}{a.paused_seconds ? `, paused ${clock(a.paused_seconds)}` : ""}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : "—",
+    },
   ];
 
   return (

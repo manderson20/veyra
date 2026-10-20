@@ -146,16 +146,25 @@ def test_queue_log_and_queue_report(admin, app):
         f"{base + 230}|c3|veyra-{slug}|PJSIP/{b}|CONNECT|30|c3.2|1",
         f"{base + 300}|c4|other-queue|NONE|ENTERQUEUE||1|1",
         "garbage",
+        # Agent states (issue #135): a logs in, pauses 60 s, logs out.
+        f"{base + 10}|NONE|veyra-{slug}|PJSIP/{a}|ADDMEMBER|",
+        f"{base + 200}|NONE|veyra-{slug}|PJSIP/{a}|PAUSE|lunch",
+        f"{base + 260}|NONE|veyra-{slug}|PJSIP/{a}|UNPAUSE|",
+        f"{base + 310}|NONE|veyra-{slug}|PJSIP/{a}|REMOVEMEMBER|",
     ]
     with session_scope() as db:
-        assert queues.ingest(db, log) == 9
-        assert db.query(QueueEvent).count() == 9
+        assert queues.ingest(db, log) == 13
+        assert db.query(QueueEvent).count() == 13
     rep = admin.get(f"{REP}/queues", params={"organization_id": org["id"]}).json()["queues"]
     assert len(rep) == 1
     r = rep[0]
     assert (r["offered"], r["answered"], r["abandoned"], r["answered_within_sl"]) == (3, 2, 1, 1)
     assert r["avg_wait_seconds"] == 19.0
     assert [x["agent"] for x in r["agents"]] == ["1001 Front Office", "1002 Nurse"]
+    a_row = r["agents"][0]
+    assert (a_row["logged_in_seconds"], a_row["paused_seconds"]) == (300, 60)
+    assert r["agents"][1]["logged_in_seconds"] is None
+    assert r["left_with_key"] == 1
 
     # Someone without reports.read gets nothing.
     user = admin.post(

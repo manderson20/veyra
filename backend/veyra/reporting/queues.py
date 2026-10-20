@@ -35,6 +35,11 @@ EVENTS = {
     "COMPLETEAGENT",
     "RINGNOANSWER",
     "TRANSFER",
+    # Agent states for the queue report (issue #135).
+    "ADDMEMBER",
+    "REMOVEMEMBER",
+    "PAUSE",
+    "UNPAUSE",
 }
 
 

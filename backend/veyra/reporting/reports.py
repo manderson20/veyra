@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Integer, and_, case, cast, distinct, func, literal, select, union_all
@@ -22,6 +22,7 @@ from veyra.core.models import (
     QueueEvent,
     SipTrunk,
 )
+from veyra.core.models.base import utcnow
 from veyra.reporting.cdr import endpoint_of
 from veyra.telephony.asterisk.names import Names
 
@@ -267,6 +268,58 @@ def calls_report(
     }
 
 
+STATE_LOOKBACK = timedelta(days=7)
+
+
+def _agent_states(
+    db: Session, queues: set[str], since: datetime, until: datetime
+) -> dict[tuple[str, str], tuple[int, int]]:
+    """(queue, agent) → (seconds logged in, seconds paused) within the period,
+    replayed from ADDMEMBER/REMOVEMEMBER/PAUSE/UNPAUSE (state before the
+    period comes from up to a week earlier; a state still open at the end
+    counts up to the end, or now)."""
+    end = min(until, utcnow())
+    events = db.execute(
+        select(QueueEvent.queue, QueueEvent.agent, QueueEvent.event, QueueEvent.at)
+        .where(
+            QueueEvent.at >= since - STATE_LOOKBACK,
+            QueueEvent.at < until,
+            QueueEvent.queue.in_(queues),
+            QueueEvent.event.in_(("ADDMEMBER", "REMOVEMEMBER", "PAUSE", "UNPAUSE")),
+        )
+        .order_by(QueueEvent.at)
+    ).all()
+    out: dict[tuple[str, str], tuple[int, int]] = {}
+    state: dict[tuple[str, str], dict[str, datetime | None]] = {}
+
+    def span(a: datetime | None, b: datetime) -> int:
+        if a is None:
+            return 0
+        lo, hi = max(a, since), min(b, end)
+        return max(0, int((hi - lo).total_seconds()))
+
+    for queue, agent, event, at in events:
+        key = (queue, agent)
+        st = state.setdefault(key, {"in": None, "pause": None})
+        logged, paused = out.get(key, (0, 0))
+        if event == "ADDMEMBER" and st["in"] is None:
+            st["in"] = at
+        elif event == "REMOVEMEMBER":
+            logged += span(st["in"], at)
+            paused += span(st["pause"], at)
+            st["in"] = st["pause"] = None
+        elif event == "PAUSE" and st["pause"] is None:
+            st["pause"] = at
+        elif event == "UNPAUSE":
+            paused += span(st["pause"], at)
+            st["pause"] = None
+        out[key] = (logged, paused)
+    for key, st in state.items():
+        logged, paused = out.get(key, (0, 0))
+        out[key] = (logged + span(st["in"], end), paused + span(st["pause"], end))
+    return out
+
+
 def queues_report(
     db: Session,
     *,
@@ -315,15 +368,34 @@ def queues_report(
         .group_by(QueueEvent.queue, QueueEvent.agent)
     ).all()
     by_endpoint = {e.endpoint_name: e for e in db.scalars(select(Extension))}
+    states = _agent_states(db, set(queues), since, until)
     per_agent: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for queue, agent, n in agents:
+    answered = {(q, a): n for q, a, n in agents}
+    for queue, agent in sorted(set(answered) | set(states)):
         ext = by_endpoint.get(endpoint_of(f"{agent}-00000000") or agent.removeprefix("PJSIP/"))
+        logged, paused = states.get((queue, agent), (None, None))
         per_agent[queue].append(
             {
                 "agent": f"{ext.number} {ext.display_name}" if ext else agent,
-                "answered": n,
+                "answered": answered.get((queue, agent), 0),
+                # Seconds within the period (issue #135); None: no log-in
+                # events seen (a static member, or before 0.27.31).
+                "logged_in_seconds": logged,
+                "paused_seconds": paused,
             }
         )
+    keyed = dict(
+        db.execute(
+            select(QueueEvent.queue, func.count(distinct(QueueEvent.callid)))
+            .where(
+                QueueEvent.at >= since,
+                QueueEvent.at < until,
+                QueueEvent.queue.in_(set(queues)),
+                QueueEvent.event == "EXITWITHKEY",
+            )
+            .group_by(QueueEvent.queue)
+        ).all()
+    )
     out = []
     stats = {r[0]: r for r in rows}
     for slug, q in sorted(queues.items(), key=lambda kv: kv[1].number):
@@ -342,6 +414,8 @@ def queues_report(
                 "timed_out": timeouts,
                 "avg_wait_seconds": round(float(avg_wait or 0), 1),
                 "answered_within_sl": within,
+                # Callers who left through the break-out menu (issue #135).
+                "left_with_key": int(keyed.get(slug, 0)),
                 "service_level_seconds": SERVICE_LEVEL_SECONDS,
                 "agents": sorted(per_agent.get(slug, []), key=lambda a: -a["answered"]),
             }
