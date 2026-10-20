@@ -88,7 +88,7 @@ export default function ModulesPage() {
     <div className="stack">
       <PageHeader
         title="Module Manager"
-        description="Install, enable and update the functional modules that extend Veyra."
+        description={<>Install, enable and update the functional modules that extend Veyra. Building your own? Start with the <a href="https://github.com/manderson20/veyra/blob/main/docs/MODULE_AUTHOR_GUIDE.md" target="_blank" rel="noreferrer">module author guide</a>.</>}
         actions={<Button icon="refresh" onClick={list.reload} loading={list.loading && !!list.data}>Refresh</Button>}
       />
       <RestartBanner needed={(list.data?.items ?? []).filter((m) => m.restart_required).map((m) => m.name ?? m.module_id)} />

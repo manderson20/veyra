@@ -89,7 +89,7 @@ hand with the `veyra modules` commands.
 ```
 veyra modules sign ./veyra-and-clocks --key-file official.key --key-id veyra-official --package dist/
 veyra catalog add dist/veyra.and-clocks-1.1.0.vmod --url <release asset URL> --index catalog/index.json
-veyra catalog sign catalog/index.json --key-file catalog.key
+veyra catalog sign catalog/index.json --key-file catalog.key --key-id <key id>
 ```
 
 `veyra catalog add` reads the package's manifest and computes the size and

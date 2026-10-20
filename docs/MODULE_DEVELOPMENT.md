@@ -200,8 +200,10 @@ uninstall --purge (type the module id to confirm) ──► tables dropped, row 
 * **Disable** is refused while enabled modules depend on this one. It unsubscribes events and returns 404 from the module's routes.
 * **Update** comes from a catalog or an upload ([MODULE_CATALOG.md](MODULE_CATALOG.md)): the new version is verified into the module store, its migrations run, the version is recorded, and `restart_required` is reported because running code is not hot-swapped; "Restart Veyra services" in the Module Manager restarts the units. The previous version stays in the store for **rollback** (refused when the newer version added migrations).
 
-All operations are available in the API (`/api/v1/modules/...`), the UI
-(Module Manager) and the CLI (`veyra modules ...`), and all are audited.
+All operations are available in the API (`/api/v1/modules/...`) and the UI
+(Module Manager), and all are audited. The CLI (`veyra modules ...`) has
+list, install, enable, disable, schema, validate, keygen and sign; uninstall,
+update, rollback, upload and configuration are API and UI only (#149).
 
 ## 6. Signing, packaging and trust
 
