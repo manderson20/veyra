@@ -1,5 +1,7 @@
 # Gitleaks configuration. The default rules apply; the allowlist covers only
-# throwaway credentials for local development/test databases.
+# throwaway credentials for local development/test databases and the fake
+# SIP password of the FreePBX test dump (it checks that passwords are not
+# carried over).
 [extend]
 useDefault = true
 
@@ -8,4 +10,5 @@ description = "Local development and CI test database credentials (not secrets)"
 regexes = [
   '''veyra_dev:veyra_dev@127\.0\.0\.1''',
   '''veyra_ci:veyra_ci@127\.0\.0\.1''',
+  '''s3cr3t-never-copied''',
 ]
