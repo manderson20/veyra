@@ -56,7 +56,6 @@ export const NAV: NavSection[] = [
   { id: "telephony", label: "Telephony", icon: "handsetLoop", collapsible: true, description: "Extensions, calls, trunks, routing, voicemail, menus, groups and paging.", items: [
     { label: "Extensions", href: "/extensions/", icon: "phone", permissions: ["extensions.read"], group: "Phones and calls" },
     { label: "Active Calls", href: "/calls/", icon: "activity", permissions: ["calls.read"], group: "Phones and calls" },
-    { label: "Extension Templates", href: "/extension-templates/", icon: "template", permissions: ["extensions.read"], group: "Phones and calls" },
     { label: "SIP Trunks", href: "/trunks/", icon: "trunk", permissions: ["trunks.read"], group: "Routing" },
     { label: "Inbound Routes", href: "/routing/inbound/", icon: "arrowIn", permissions: ["routing.read"], group: "Routing" },
     { label: "Outbound Routes", href: "/routing/outbound/", icon: "arrowOut", permissions: ["routing.read"], group: "Routing" },
@@ -65,6 +64,7 @@ export const NAV: NavSection[] = [
     { label: "Blocked Callers", href: "/caller-blocks/", icon: "shield", permissions: ["routing.read"], group: "Routing" },
     { label: "Classes of Service", href: "/routing/classes-of-service/", icon: "shield", permissions: ["routing.read"], group: "Routing" },
     { label: "Registrations", href: "/registrations/", icon: "device", permissions: ["extensions.read"], group: "Phones and calls" },
+    { label: "Extension Templates", href: "/extension-templates/", icon: "template", permissions: ["extensions.read"], group: "Phones and calls" },
     { label: "Voicemail", href: "/voicemail/", icon: "voicemail", permissions: ["voicemail.read"], group: "Call handling" },
     { label: "Fax", href: "/fax/", icon: "file", permissions: ["fax.read"], group: "Call handling" },
     { label: "IVR Menus", href: "/ivr/", icon: "ivr", permissions: ["ivr.read"], group: "Call handling" },
