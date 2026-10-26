@@ -68,6 +68,8 @@ function ExtensionView() {
   const [intercom, setIntercom] = useState("default");
   const [cos, setCos] = useState("");
   const [maxReg, setMaxReg] = useState("");
+  const [hotline, setHotline] = useState("");
+  const [hotlineDelay, setHotlineDelay] = useState("0");
   const [enabled, setEnabled] = useState(true);
   const [place, setPlace] = useState<Place>(EMPTY_PLACE);
   const [busy, setBusy] = useState(false);
@@ -99,6 +101,8 @@ function ExtensionView() {
       setIntercom(x.intercom ?? "default");
       setCos(x.class_of_service_id ?? "");
       setMaxReg(x.max_registrations ? String(x.max_registrations) : "");
+      setHotline(x.hotline_target ?? "");
+      setHotlineDelay(String(x.hotline_delay ?? 0));
       setEnabled(x.is_enabled);
       setPlace(placeOf(x));
     }
@@ -108,7 +112,7 @@ function ExtensionView() {
   if (ext.error) return <ErrorState title="Could not load extension" error={ext.error} onRetry={ext.reload} />;
   if (!ext.data) return <LoadingState />;
   const x = ext.data;
-  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || cos !== (x.class_of_service_id ?? "") || maxReg !== (x.max_registrations ? String(x.max_registrations) : "") || enabled !== x.is_enabled || !samePlace(place, placeOf(x));
+  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || cos !== (x.class_of_service_id ?? "") || maxReg !== (x.max_registrations ? String(x.max_registrations) : "") || hotline !== (x.hotline_target ?? "") || hotlineDelay !== String(x.hotline_delay ?? 0) || enabled !== x.is_enabled || !samePlace(place, placeOf(x));
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === x.organization_id && (u.is_active || u.id === x.user_id));
 
   const save = async (e: FormEvent) => {
@@ -129,6 +133,8 @@ function ExtensionView() {
         intercom,
         class_of_service_id: cos || null,
         max_registrations: maxReg.trim() ? Number(maxReg) : null,
+        hotline_target: hotline.trim() || null,
+        hotline_delay: Number(hotlineDelay || 0),
         ...placeBody(place),
         is_enabled: enabled,
       }));
@@ -304,6 +310,12 @@ function ExtensionView() {
                 placeholder={`Automatic (${x.registration_limit ?? 1})`}
                 help={`How many phones may register this extension at once, 1 to 16. Empty: as many as are provisioned with it (${x.provisioned_phones ?? 0} today), at least one. Raise it to let a softphone register beside the desk phone. Needs a deployment.`}
                 onChange={(e) => setMaxReg(e.target.value.replace(/\D/g, "").slice(0, 2))} />
+              <div className="form-grid">
+                <TextField label="Hotline number" inputMode="tel" disabled={!editable} value={hotline} error={errors.fields.hotline_target} placeholder="None"
+                  help="Lifting the handset dials this number: elevator, lobby, vestibule and emergency phones. Reaches provisioned Poly and Yealink phones at their next check-in." onChange={(e) => setHotline(e.target.value)} />
+                <TextField label="Warm-line delay (seconds)" type="number" min={0} max={10} disabled={!editable || !hotline.trim()} value={hotlineDelay} error={errors.fields.hotline_delay}
+                  help="0: dials at once. Otherwise the phone waits this long for a digit first (Yealink; Poly dials at once)." onChange={(e) => setHotlineDelay(e.target.value)} />
+              </div>
               {saveBar}
             </form>
           </Card>

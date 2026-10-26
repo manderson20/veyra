@@ -1,10 +1,10 @@
 spec_version = 2
-features = ["intercom_auto_answer", "multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "group_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential"]
+features = ["intercom_auto_answer", "hotline", "multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "group_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential"]
 
 [template]
 key = "poly.vvx.base"
 name = "Poly VVX (common settings)"
-version = "0.3.0"
+version = "0.4.0"
 manufacturer = "Poly"
 abstract = true
 firmware = "UC Software 5.9 / 6.x"

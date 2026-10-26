@@ -238,6 +238,23 @@ parameter), comments (no documented syntax). Facts gained `server.host` and
 `server.provisioning_path`. Template "Customize" now copies single-file and
 checksum families correctly (it used to skip every `{mac}.cfg`).
 
+### 4.2 Hotline and warm-line phones (issue #168)
+
+*Built 2026-10-26.* An extension's **Hotline number** and **Warm-line
+delay** (0 to 10 s; extension page, Phones tab) reach each line's facts as
+`line.hotline` and `line.hotline_delay`:
+
+* Yealink (`yealink.base` 0.3.0): `features.hotline_number` and
+  `features.hotline_delay` from the first line (the setting is per phone);
+  emptied when the extension has none.
+* Poly (`poly.vvx.base` 0.4.0): `call.autoOffHook.<line>.enabled`,
+  `.contact` and `.protocol="SIP"` per line. Poly has no warm-line delay, so
+  it dials at once.
+
+Unverified on hardware like the rest of the templates (§7); the ATA
+template (#37) should add Grandstream's off-hook auto-dial. A hotline to 911
+is an ordinary emergency call (route, ELIN, on-site notification).
+
 ## 5. Phone directory
 
 `GET /provisioning/directory/{format}` (device credential required, like

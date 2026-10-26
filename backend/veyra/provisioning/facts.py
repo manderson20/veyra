@@ -201,6 +201,10 @@ def _line(
         "label": ext.display_name,
         "voicemail": ext.id in boxes,
         "voicemail_number": VOICEMAIL_NUMBER,
+        # Hotline (issue #168): dialled when the handset is lifted; a delay
+        # in seconds makes it a warm line (0: at once).
+        "hotline": ext.hotline_target or None,
+        "hotline_delay": int(ext.hotline_delay or 0),
     }
 
 

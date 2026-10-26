@@ -96,6 +96,16 @@ def installation_key(request: Request) -> InstallationKey:
 # ----------------------------------------------------------------- schemas
 
 
+def _hotline_target(v: str | None) -> str | None:
+    """A number the phone dials when the handset is lifted (issue #168)."""
+    v = re.sub(r"[\s().-]", "", (v or "").strip())
+    if not v:
+        return None
+    if not re.fullmatch(r"\+?[0-9*#]{1,20}", v):
+        raise ValueError("digits (and * or #) only, up to 20")
+    return v
+
+
 def _caller_id_name(v: str | None) -> str | None:
     if v is None:
         return None
@@ -144,6 +154,10 @@ class ExtensionIn(BaseModel):
     location: str | None = Field(None, max_length=200)
     # Groups extensions for My Phone layout templates (docs/USER_PORTAL.md §8).
     department_id: uuid.UUID | None = None
+    # Hotline (issue #168): lifting the handset dials this number, at once
+    # or after hotline_delay seconds without a digit (warm line).
+    hotline_target: str | None = Field(None, max_length=32)
+    hotline_delay: int = Field(0, ge=0, le=10)
     is_enabled: bool = True
 
     @field_validator("number")
@@ -169,6 +183,11 @@ class ExtensionIn(BaseModel):
     def _cid_number(cls, v: str | None) -> str | None:
         return _caller_id_number(v)
 
+    @field_validator("hotline_target")
+    @classmethod
+    def _hotline(cls, v: str | None) -> str | None:
+        return _hotline_target(v)
+
 
 class ExtensionPatch(BaseModel):
     number: str | None = Field(None, min_length=1, max_length=32)
@@ -192,6 +211,8 @@ class ExtensionPatch(BaseModel):
     location: str | None = Field(None, max_length=200)
     # Groups extensions for My Phone layout templates (docs/USER_PORTAL.md §8).
     department_id: uuid.UUID | None = None
+    hotline_target: str | None = Field(None, max_length=32)
+    hotline_delay: int | None = Field(None, ge=0, le=10)
     is_enabled: bool | None = None
 
     @field_validator("number")
@@ -218,6 +239,11 @@ class ExtensionPatch(BaseModel):
     @classmethod
     def _cid_number(cls, v: str | None) -> str | None:
         return _caller_id_number(v)
+
+    @field_validator("hotline_target")
+    @classmethod
+    def _hotline(cls, v: str | None) -> str | None:
+        return _hotline_target(v)
 
 
 def _check_place(
@@ -373,6 +399,8 @@ class ExtensionOut(BaseModel):
     location: str | None = None
     department_id: uuid.UUID | None = None
     department_name: str | None = None
+    hotline_target: str | None = None
+    hotline_delay: int = 0
     is_enabled: bool
     sip_secret_set: bool
     sip_secret_changed_at: datetime | None
@@ -576,6 +604,8 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 location=r.location,
                 department_id=r.department_id,
                 department_name=department_names.get(r.department_id) if r.department_id else None,
+                hotline_target=r.hotline_target,
+                hotline_delay=r.hotline_delay or 0,
                 is_enabled=r.is_enabled,
                 sip_secret_set=bool(r.sip_secret_ciphertext),
                 sip_secret_changed_at=r.sip_secret_changed_at,
@@ -813,6 +843,8 @@ def create_extension(
         building_id=body.building_id,
         location=body.location,
         department_id=body.department_id,
+        hotline_target=body.hotline_target,
+        hotline_delay=body.hotline_delay,
         is_enabled=body.is_enabled,
     )
     _set_secret(ext, key)
@@ -917,6 +949,8 @@ def update_extension(
         "building_id",
         "location",
         "department_id",
+        "hotline_target",
+        "hotline_delay",
         "is_enabled",
     ):
         if field in changes and changes[field] != getattr(ext, field):

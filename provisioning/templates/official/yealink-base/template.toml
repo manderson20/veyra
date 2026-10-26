@@ -1,10 +1,10 @@
 spec_version = 2
-features = ["intercom_auto_answer", "multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
+features = ["intercom_auto_answer", "hotline", "multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
 
 [template]
 key = "yealink.base"
 name = "Yealink (common settings)"
-version = "0.2.0"
+version = "0.3.0"
 manufacturer = "Yealink"
 abstract = true
 firmware = "Yealink firmware 66.86 / 96.86 and later"

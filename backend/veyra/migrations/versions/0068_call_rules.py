@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Forward when unreachable, call waiting off, anonymous call rejection, Do
 Not Disturb exceptions (issues #163, #165, #170), the trunk channels kept
-for emergency calls (issue #171) and the voicemail extended absence (#169).
+for emergency calls (issue #171), the voicemail extended absence (#169) and
+hotline phones (#168).
 
 Revision ID: 0068
 Revises: 0067
@@ -57,8 +58,16 @@ def upgrade() -> None:
         sa.Column("absence_state", sa.String(8), nullable=False, server_default="off"),
     )
 
+    op.add_column("extensions", sa.Column("hotline_target", sa.String(32), nullable=True))
+    op.add_column(
+        "extensions",
+        sa.Column("hotline_delay", sa.Integer(), nullable=False, server_default="0"),
+    )
+
 
 def downgrade() -> None:
+    op.drop_column("extensions", "hotline_delay")
+    op.drop_column("extensions", "hotline_target")
     for col in (
         "absence_state",
         "absence_refuse",

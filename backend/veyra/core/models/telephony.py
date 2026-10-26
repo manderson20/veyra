@@ -61,6 +61,10 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         ForeignKey("buildings.id", ondelete="SET NULL")
     )
     location: Mapped[str | None] = mapped_column(String(200))
+    # Hotline (issue #168): the phone dials this when the handset is lifted,
+    # at once or after hotline_delay seconds without a digit (warm line).
+    hotline_target: Mapped[str | None] = mapped_column(String(32))
+    hotline_delay: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

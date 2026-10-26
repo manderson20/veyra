@@ -128,6 +128,16 @@
     up.screenSaver.enable="{{ (screen_saver_minutes > 0) | bool01 }}"
     up.screenSaver.waitTime="{{ screen_saver_minutes if screen_saver_minutes > 0 else 10 }}" />
 {% endblock %}
+{% block hotline %}
+{% for line in lines if line.hotline %}
+  <!-- Hotline (issue #168): lifting the handset on this line dials the
+       number at once; Poly has no warm-line delay, so a delay is ignored. -->
+  <call
+    call.autoOffHook.{{ line.index }}.enabled="1"
+    call.autoOffHook.{{ line.index }}.contact="{{ line.hotline }}"
+    call.autoOffHook.{{ line.index }}.protocol="SIP" />
+{% endfor %}
+{% endblock %}
 {% block intercom %}
 {% if intercom_auto_answer %}
   <!-- Intercom (docs/CALL_FEATURES.md §3.6): Veyra's intercom calls carry

@@ -374,6 +374,9 @@ export interface Extension {
   /** Groups extensions for My Phone layout templates. */
   department_id?: string | null;
   department_name?: string | null;
+  /** Hotline (issue #168): dialled when the handset is lifted, after hotline_delay seconds. */
+  hotline_target?: string | null;
+  hotline_delay?: number;
   is_enabled: boolean;
   sip_secret_set: boolean;
   sip_secret_changed_at: string | null;
