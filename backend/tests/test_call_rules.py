@@ -230,3 +230,32 @@ def test_state_api_writes_the_new_rules_to_the_engine(admin, app):
         adapter.states.clear()
         assert extension_state.sync(db, adapter) == 1  # only the offline forward is left
     assert adapter.states[(org["slug"], "1001")]["cf_unavailable"] == "5735550100"
+
+
+# ------------------------------------------------------------------ code sets (#164)
+
+
+def test_every_code_set_is_valid_and_metaswitch_moves_the_collisions():
+    for key in features.PRESETS:
+        codes = features.preset_codes(key)
+        assert set(codes) == set(features.BY_KEY)
+        features.validate({k: {"code": v, "enabled": True} for k, v in codes.items()})
+    ms = features.preset_codes("metaswitch")
+    assert ms["cfu_on"] == "*92" and ms["cfu_off"] == "*93"
+    assert ms["park_pickup"] != "*85" and ms["queue_count"] != "*47"
+    assert features.preset_codes("veyra") == features.DEFAULT_CODES
+
+
+def test_code_sets_api_and_saving_one(admin):
+    r = admin.get("/api/v1/telephony/feature-codes/presets")
+    assert r.status_code == 200, r.text
+    sets = {p["key"]: p for p in r.json()}
+    assert sets["metaswitch"]["notes"] and sets["veyra"]["codes"]["dnd_on"] == "*78"
+    ms = sets["metaswitch"]["codes"]
+    r = admin.put(
+        "/api/v1/telephony/feature-codes",
+        json={"codes": {k: {"code": v, "enabled": True} for k, v in ms.items()}},
+    )
+    assert r.status_code == 200, r.text
+    by = {c["key"]: c["code"] for c in r.json()["codes"]}
+    assert by["cfu_on"] == "*92" and by["park_pickup"] == "*88"

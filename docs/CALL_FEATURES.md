@@ -194,6 +194,17 @@ enabled codes are unique; a change marks a deployment (`routing.write`).
 The snapshot carries `feature_codes` (enabled key → code); the generator
 checks them again. Template and Companion export: with Milestone 21.
 
+**Code sets** (issue #164): `features.PRESETS` holds whole sets of codes
+(Veyra's defaults; Metaswitch as on Sparklight's code card, which moves
+no-answer forwarding to `*92`/`*93`, park pickup to `*88` and the queue
+waiting count to `*44` so `*85` and `*47` mean nothing unexpected). The
+Feature Codes page loads one into its table as a draft (`GET
+/telephony/feature-codes/presets`); Save validates and audits it like any
+change, and it reaches the phones at the next deployment. Codes are
+installation-wide, so a set applies to every organization. A set lists in
+`notes` what it cannot change (fixed codes such as `*8`, `*97`). To add a
+carrier, copy the `metaswitch` entry with the codes from its card.
+
 ### 3.2 Do Not Disturb
 
 `extension_states` (one row per extension, migration `0032`): `dnd`,

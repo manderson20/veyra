@@ -248,7 +248,7 @@ def put_numbering(
 
 
 class FeatureCodeIn(BaseModel):
-    code: str = Field(min_length=2, max_length=7)
+    code: str = Field(min_length=1, max_length=7)
     enabled: bool = True
 
 
@@ -267,6 +267,22 @@ def get_feature_codes(
     db: Session = Depends(get_db),
 ) -> FeatureCodesOut:
     return FeatureCodesOut(codes=features.load(db), fixed=dict(features.FIXED_CODES))
+
+
+@router.get("/feature-codes/presets", summary="Code sets to load (issue #164)")
+def get_feature_code_presets(
+    principal: Principal = Depends(require("extensions.read")),
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": key,
+            "name": p["name"],
+            "description": p["description"],
+            "codes": features.preset_codes(key),
+            "notes": list(p["notes"]),
+        }
+        for key, p in features.PRESETS.items()
+    ]
 
 
 @router.put("/feature-codes", response_model=FeatureCodesOut, summary="Change feature codes")

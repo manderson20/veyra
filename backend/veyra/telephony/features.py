@@ -235,6 +235,49 @@ BY_KEY = {d.key: d for d in DEFAULTS}
 DEFAULT_CODES = {d.key: d.code for d in DEFAULTS}
 
 
+# Code sets (issue #164): a whole set of codes matching what staff dialled on
+# their old system, loaded into the Feature Codes page as a draft and saved
+# like any change. Codes not listed keep Veyra's default; ``notes`` name the
+# differences a set cannot remove (fixed codes, features Veyra lacks).
+PRESETS: dict[str, dict[str, Any]] = {
+    "veyra": {
+        "name": "Veyra defaults",
+        "description": "The FreePBX-style codes Veyra ships with.",
+        "codes": {},
+        "notes": [],
+    },
+    "metaswitch": {
+        "name": "Metaswitch (Sparklight code card)",
+        "description": (
+            "Codes from a Metaswitch hosted PBX as published by Sparklight; other "
+            "carriers differ, so compare with the card your staff were given."
+        ),
+        "codes": {
+            "cfu_on": "*92",
+            "cfu_off": "*93",
+            # Metaswitch *85 turns caller ID delivery off; *47 starts a monitor.
+            "park_pickup": "*88",
+            "queue_count": "*44",
+        },
+        "notes": [
+            "Group pickup stays *8 (Metaswitch *11) and directed pickup ** plus the "
+            "extension (Metaswitch *12 or *97); both are fixed in Veyra.",
+            "*97 opens your own voicemail and *98 any box (Metaswitch uses *62 or *98).",
+            "*60 is the speaking clock and *95 records a prompt; Metaswitch uses them for "
+            "selective call rejection and acceptance, which Veyra does not have.",
+            "*80 is intercom in Veyra (Metaswitch: selective call rejection off).",
+            "Call park: dial the parking lot's number (Metaswitch *68 or *14).",
+        ],
+    },
+}
+
+
+def preset_codes(key: str) -> dict[str, str]:
+    """key -> code of every feature in a set (defaults where it says nothing)."""
+    preset = PRESETS[key]
+    return {d.key: str(preset["codes"].get(d.key, d.code)) for d in DEFAULTS}
+
+
 class FeatureCodeError(ValueError):
     def __init__(self, key: str, message: str) -> None:
         super().__init__(message)

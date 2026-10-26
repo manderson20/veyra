@@ -3234,6 +3234,17 @@ export interface FeatureCodes {
   fixed: Record<string, string>;
 }
 
+/** A whole set of codes to load as a draft (issue #164), such as an old carrier's code card. */
+export interface FeatureCodePreset {
+  key: string;
+  name: string;
+  description: string;
+  /** Feature key -> code, every feature. */
+  codes: Record<string, string>;
+  /** Differences the set cannot remove (fixed codes, features Veyra lacks). */
+  notes: string[];
+}
+
 // ----------------------------------------------------------------- diagnostics: logs and engine queries (Milestone 18)
 
 export interface LogFiles {

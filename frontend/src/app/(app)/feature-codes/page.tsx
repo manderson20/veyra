@@ -2,9 +2,9 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Callout, Card, DataTable, PageHeader, Switch, TextField, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Callout, Card, DataTable, PageHeader, SelectField, Switch, TextField, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import type { FeatureCode, FeatureCodes } from "@/lib/types";
+import type { FeatureCode, FeatureCodePreset, FeatureCodes } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -24,7 +24,9 @@ export default function FeatureCodesPage() {
   const data = useApiData<FeatureCodes>("/telephony/feature-codes");
   const [draft, setDraft] = useState<Draft>({});
   const [busy, setBusy] = useState(false);
-  useOnChange(data.data, (d) => { if (d) setDraft(toDraft(d.codes)); });
+  const presets = useApiData<FeatureCodePreset[]>("/telephony/feature-codes/presets");
+  const [loaded, setLoaded] = useState<FeatureCodePreset | null>(null);
+  useOnChange(data.data, (d) => { if (d) { setDraft(toDraft(d.codes)); setLoaded(null); } });
   const codes = data.data?.codes ?? [];
   const dirty = codes.some((c) => draft[c.key] && (draft[c.key]!.code !== c.code || draft[c.key]!.enabled !== c.enabled));
 
@@ -42,6 +44,16 @@ export default function FeatureCodesPage() {
       setBusy(false);
     }
   };
+
+  // Load a code set into the draft (issue #164): nothing is saved until Save.
+  const load = (key: string) => {
+    const preset = (presets.data ?? []).find((p) => p.key === key);
+    if (!preset) return;
+    errors.clear();
+    setDraft((d) => Object.fromEntries(codes.map((c) => [c.key, { code: preset.codes[c.key] ?? c.default_code, enabled: d[c.key]?.enabled ?? c.enabled }])));
+    setLoaded(preset);
+  };
+  const pending = codes.filter((c) => draft[c.key] && draft[c.key]!.code !== c.code);
 
   const columns: Column<FeatureCode>[] = [
     { key: "what", header: "Feature", render: (c) => <span><span className="table__primary" style={{ display: "block" }}>{c.label}</span><span className="table__secondary">{c.description}{c.takes_number ? " Dialled with a number after the code." : ""}</span></span> },
@@ -66,6 +78,20 @@ export default function FeatureCodesPage() {
       <PageHeader title="Feature Codes" description="What a phone dials to change its own settings. The defaults follow FreePBX so a migrating site keeps its habits. Codes start with * or #, so they never collide with extension numbers; a change takes effect at the next deployment."
         actions={editable ? <Button variant="primary" onClick={save} loading={busy} disabled={!dirty}>Save</Button> : null} />
       {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
+      {editable && (presets.data ?? []).length ? (
+        <Card title="Code sets" subtitle="Load the codes staff know from their old phone system into the table below, check them, then Save.">
+          <div className="form-grid">
+            <SelectField label="Load a code set" value="" placeholder="Choose…" options={(presets.data ?? []).map((p) => ({ value: p.key, label: p.name }))} onChange={(e) => load(e.target.value)} />
+          </div>
+          {loaded ? (
+            <Callout tone="neutral" title={`${loaded.name} loaded, not saved yet`}>
+              <p style={{ marginTop: 0 }}>{loaded.description}</p>
+              {pending.length ? <p>Changes: {pending.map((c, i) => <span key={c.key}>{i ? "; " : ""}{c.label} <span className="mono">{c.code}</span> → <span className="mono">{draft[c.key]!.code}</span></span>)}.</p> : <p>The codes already match this set.</p>}
+              {loaded.notes.length ? <ul style={{ margin: 0, paddingLeft: "1.2em" }}>{loaded.notes.map((n) => <li key={n}>{n}</li>)}</ul> : null}
+            </Callout>
+          ) : null}
+        </Card>
+      ) : null}
       <Card flush>
         <DataTable columns={columns} rows={codes} rowKey={(c) => c.key} loading={data.loading && !data.data} error={data.error} onRetry={data.reload} caption="Feature codes" />
       </Card>

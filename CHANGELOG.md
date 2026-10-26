@@ -17,10 +17,12 @@ Migration 0068. The new codes and rules need one telephony deployment (Telephony
 - **Call waiting and anonymous call rejection per phone** (#163): the call handling card (extension page and My Phone) has a Call waiting switch (off: a second caller hears busy or goes to your busy forward) and "Refuse callers who hide their number".
 - **Forward when the phone is offline** (#165): a separate target, for example a cell phone, used at once while no phone of the extension is connected (power, network or internet outage), instead of voicemail.
 - **Callers who still ring during Do Not Disturb** (#170): up to 20 numbers or extensions per phone, on the call handling card. A North American number matches however the carrier sends it.
+- **Code sets** (#164): Telephony → Feature Codes can load the codes staff know from their old system ("Metaswitch (Sparklight code card)" or the Veyra defaults) into the table as a draft, list what changes and which fixed codes still differ, and save it like any change.
 - **Extended absence on voicemail** (#169): a fifth greeting, "Extended absence", with a first and last day and "Take no messages while away" (callers hear the greeting and the call ends). It plays as the temporary greeting between the dates and removes itself after the last day. On the Greetings tab of My Phone and the Voicemail page; administrators can set the same absence on many boxes at once (`PUT /voicemail/absence`).
 - **A trunk channel kept for 911** (#171): a trunk with a maximum channel count keeps one channel (configurable, "Channels kept for emergency calls") that only emergency calls may use. The emergency readiness page advises when an emergency trunk has no channel count, so nothing can be kept.
 
 ### Changed
+- Feature codes: a one-character code (direct to voicemail's `*`) can be saved again from the API.
 - Trunks send the caller's identity header even when the number is withheld (`trust_id_outbound`), marked private, as carriers expect for `*67` calls.
 - A trunk that already has a maximum channel count now keeps one of those channels for emergency calls; set "Channels kept for emergency calls" to 0 for the old behaviour.
 
