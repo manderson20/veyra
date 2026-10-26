@@ -954,6 +954,68 @@ async def box_greeting_put(
     return vmsvc.greeting_list(db, request.app.state.settings, box)
 
 
+@router.get("/{box_id}/absence", summary="A box's extended absence")
+def box_absence(
+    box_id: uuid.UUID,
+    principal: Principal = Depends(require("voicemail.read")),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return vmsvc.absence_out(db, _get(db, principal, box_id, "voicemail.read"))
+
+
+@router.put("/{box_id}/absence", summary="Change a box's extended absence (applies at once)")
+def box_absence_put(
+    box_id: uuid.UUID,
+    body: vmsvc.AbsenceIn,
+    request: Request,
+    principal: Principal = Depends(require("voicemail.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    box = _get(db, principal, box_id, "voicemail.write")
+    details = vmsvc.set_absence(
+        db, request.app.state.settings, box, body, getattr(request.app.state, "telephony", None)
+    )
+    if details:
+        _message_audit(db, ctx, principal, "voicemail.absence_update", box, details)
+    db.commit()
+    return vmsvc.absence_out(db, box)
+
+
+class AbsenceBulkIn(vmsvc.AbsenceIn):
+    box_ids: list[uuid.UUID] = Field(min_length=1, max_length=1000)
+
+
+@router.put("/absence", summary="Set the same extended absence on many boxes (summer break)")
+def boxes_absence_put(
+    body: AbsenceBulkIn,
+    request: Request,
+    principal: Principal = Depends(require("voicemail.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    change = vmsvc.AbsenceIn.model_validate(
+        body.model_dump(exclude={"box_ids"}, exclude_unset=True)
+    )
+    boxes = [
+        _get(db, principal, box_id, "voicemail.write") for box_id in dict.fromkeys(body.box_ids)
+    ]
+    changed = 0
+    for box in boxes:
+        details = vmsvc.set_absence(
+            db,
+            request.app.state.settings,
+            box,
+            change,
+            getattr(request.app.state, "telephony", None),
+        )
+        if details:
+            changed += 1
+            _message_audit(db, ctx, principal, "voicemail.absence_update", box, details)
+    db.commit()
+    return {"boxes": len(boxes), "changed": changed}
+
+
 @router.delete(
     "/{box_id}/greetings/{kind}",
     response_model=list[vmsvc.GreetingOut],

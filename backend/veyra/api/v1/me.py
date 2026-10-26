@@ -942,6 +942,34 @@ async def my_greeting_put(
     return vmsvc.greeting_list(db, request.app.state.settings, box)
 
 
+@router.get("/voicemail/{box_id}/absence", summary="Your extended absence")
+def my_absence(
+    box_id: uuid.UUID,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return vmsvc.absence_out(db, _own_box(db, principal, box_id))
+
+
+@router.put("/voicemail/{box_id}/absence", summary="Turn your extended absence on or off")
+def my_absence_put(
+    box_id: uuid.UUID,
+    body: vmsvc.AbsenceIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    box = _own_box(db, principal, box_id)
+    details = vmsvc.set_absence(
+        db, request.app.state.settings, box, body, getattr(request.app.state, "telephony", None)
+    )
+    if details:
+        _box_audit(db, ctx, principal, "voicemail.absence_update", box, details)
+    db.commit()
+    return vmsvc.absence_out(db, box)
+
+
 @router.delete(
     "/voicemail/{box_id}/greetings/{kind}",
     response_model=list[vmsvc.GreetingOut],

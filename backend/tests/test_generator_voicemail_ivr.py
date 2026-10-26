@@ -167,11 +167,13 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n(noanswer),Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_no_answer)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
+        ' same => n,GotoIf($["${DB(veyra/vmabs/veyra/1002)}"="refuse"]?veyra-vm-absent,1002,1)\n'
         " same => n,VoiceMail(1002@veyra,u)\n"
         " same => n,Hangup()\n"
         " same => n(dnd),NoOp(Veyra: 1002 has Do Not Disturb on)\n"
         " same => n(busy),Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_busy)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
+        ' same => n,GotoIf($["${DB(veyra/vmabs/veyra/1002)}"="refuse"]?veyra-vm-absent,1002,1)\n'
         " same => n,VoiceMail(1002@veyra,b)\n"
         " same => n,Hangup()" in dp
     )
@@ -217,7 +219,9 @@ def test_ivr_context_keys_direct_dial_and_fallbacks():
         in body
     )
     assert (
-        "exten => 2,1,NoOp(Veyra IVR Main menu key 2)\n same => n,VoiceMail(1002@veyra,u)" in body
+        "exten => 2,1,NoOp(Veyra IVR Main menu key 2)\n"
+        ' same => n,GotoIf($["${DB(veyra/vmabs/veyra/1002)}"="refuse"]?veyra-vm-absent,1002,1)\n'
+        " same => n,VoiceMail(1002@veyra,u)" in body
     )
     assert (
         "exten => 3,1,NoOp(Veyra IVR Main menu key 3)\n same => n,Goto(veyra-ivr-after-hours,s,1)"

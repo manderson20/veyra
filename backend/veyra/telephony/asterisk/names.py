@@ -133,6 +133,11 @@ class Names:
         return self._p("vmplay")
 
     @property
+    def voicemail_absent(self) -> str:
+        """A box on extended absence that takes no messages (issue #169)."""
+        return self._p("vm-absent")
+
+    @property
     def directory(self) -> str:
         """Dial-by-name directory of the namespace (docs/CALL_FEATURES.md §4.2)."""
         return self._p("directory")

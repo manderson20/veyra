@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.38 — 2026-10-26
 
 Migration 0068. The new codes and rules need one telephony deployment (Telephony → Deploy) before phones use them.
 
@@ -17,10 +17,12 @@ Migration 0068. The new codes and rules need one telephony deployment (Telephony
 - **Call waiting and anonymous call rejection per phone** (#163): the call handling card (extension page and My Phone) has a Call waiting switch (off: a second caller hears busy or goes to your busy forward) and "Refuse callers who hide their number".
 - **Forward when the phone is offline** (#165): a separate target, for example a cell phone, used at once while no phone of the extension is connected (power, network or internet outage), instead of voicemail.
 - **Callers who still ring during Do Not Disturb** (#170): up to 20 numbers or extensions per phone, on the call handling card. A North American number matches however the carrier sends it.
+- **Extended absence on voicemail** (#169): a fifth greeting, "Extended absence", with a first and last day and "Take no messages while away" (callers hear the greeting and the call ends). It plays as the temporary greeting between the dates and removes itself after the last day. On the Greetings tab of My Phone and the Voicemail page; administrators can set the same absence on many boxes at once (`PUT /voicemail/absence`).
 - **A trunk channel kept for 911** (#171): a trunk with a maximum channel count keeps one channel (configurable, "Channels kept for emergency calls") that only emergency calls may use. The emergency readiness page advises when an emergency trunk has no channel count, so nothing can be kept.
 
 ### Changed
 - Trunks send the caller's identity header even when the number is withheld (`trust_id_outbound`), marked private, as carriers expect for `*67` calls.
+- A trunk that already has a maximum channel count now keeps one of those channels for emergency calls; set "Channels kept for emergency calls" to 0 for the old behaviour.
 
 ### Documentation
 - **PBX feature comparison** (`docs/research/pbx-comparison/`): Veyra compared with Metaswitch (Alianza Core) and 20 other phone systems, with a recommended roadmap. The roadmap items to build are filed as issues labelled `gap:metaswitch`.

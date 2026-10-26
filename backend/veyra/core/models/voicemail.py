@@ -9,8 +9,9 @@ organization; the mailbox number is the extension number.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -52,6 +53,16 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     locater_1: Mapped[str | None] = mapped_column(String(32))
     locater_2: Mapped[str | None] = mapped_column(String(32))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Extended absence (issue #169): between the dates (organization time
+    # zone, both optional) the "absence" greeting plays as the temporary
+    # greeting; with absence_refuse callers hear it and no message is taken.
+    absence_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    absence_starts_on: Mapped[date | None] = mapped_column(Date)
+    absence_ends_on: Mapped[date | None] = mapped_column(Date)
+    absence_refuse: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # What the worker last applied: off | temp (absence copied over the
+    # temporary greeting) | flag (no absence recording; the flag only).
+    absence_state: Mapped[str] = mapped_column(String(8), default="off", server_default="off")
 
 
 class VoicemailBoxMember(Base):

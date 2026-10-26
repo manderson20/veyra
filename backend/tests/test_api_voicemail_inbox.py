@@ -236,7 +236,7 @@ def test_greetings_upload_play_limit_and_delete(admin, app, helper):
 
     r = user.get(base)
     assert r.status_code == 200, r.text
-    assert [g["kind"] for g in r.json()] == ["unavail", "busy", "greet", "temp"]
+    assert [g["kind"] for g in r.json()] == ["unavail", "busy", "greet", "temp", "absence"]
     assert not any(g["recorded"] for g in r.json())
     # Upload a 16 kHz stereo-ish WAV: converted to the engine's 8 kHz mono WAV.
     r = user.put(base + "/unavail", files={"file": ("hello.wav", _wav(2.0, 16000), "audio/wav")})

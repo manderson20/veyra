@@ -2,16 +2,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Badge, Button, Callout, Dialog, Icon, useToast } from "@/components/ui";
+import { Badge, Button, Callout, Checkbox, Dialog, Icon, Switch, TextField, useToast } from "@/components/ui";
 import { API_BASE, api, errorMessage } from "@/lib/api";
-import type { VoicemailGreeting } from "@/lib/types";
+import type { VoicemailAbsence, VoicemailGreeting } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { useOnChange } from "@/hooks/useOnChange";
 
 const HELP: Record<VoicemailGreeting["kind"], string> = {
   unavail: "Played when you do not answer.",
   busy: "Played when you are on another call.",
   greet: "Your name, used by the directory and the default greetings.",
   temp: "Played instead of the others while it exists; remove it when you are back.",
+  absence: "For a long absence (summer break, leave): played as the temporary greeting between the dates below, then removed by itself.",
 };
 const MAX_SECONDS = 60;
 
@@ -95,7 +97,49 @@ export function GreetingsPanel({ base, editable = true }: { base: string; editab
         ))}
       </ul>
       <p className="subtle" style={{ margin: 0 }}>Up to {MAX_SECONDS} seconds each. You can also record from your phone: dial *97, then 0 for mailbox options.</p>
+      <AbsenceCard base={base} editable={editable} />
       <RecordDialog key={recording?.kind ?? "none"} greeting={recording} busy={!!busy} onClose={() => setRecording(null)} onSave={(blob) => recording && upload(recording, blob, "recording.webm")} />
+    </div>
+  );
+}
+
+/** Extended absence (issue #169): dates, and whether callers may still leave a message. */
+function AbsenceCard({ base, editable }: { base: string; editable: boolean }) {
+  const toast = useToast();
+  const absence = useApiData<VoicemailAbsence>(`${base}/absence`);
+  const [from, setFrom] = useState("");
+  const [until, setUntil] = useState("");
+  const [busy, setBusy] = useState(false);
+  const a = absence.data;
+  useOnChange(a, (v) => {
+    if (v) { setFrom(v.starts_on ?? ""); setUntil(v.ends_on ?? ""); }
+  });
+  const put = async (body: Partial<VoicemailAbsence>, done: string) => {
+    setBusy(true);
+    try {
+      absence.setData(await api.put<VoicemailAbsence>(`${base}/absence`, body));
+      toast.success(done, "Takes effect at once; no deployment needed.");
+    } catch (err) {
+      toast.error("Could not change the absence", errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (absence.error || !a) return null;
+  const datesDirty = from !== (a.starts_on ?? "") || until !== (a.ends_on ?? "");
+  return (
+    <div className="stack stack--xs" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <Switch label="Extended absence" checked={a.enabled} disabled={!editable || busy}
+        onChange={(e) => void put({ enabled: e.target.checked, starts_on: from || null, ends_on: until || null }, e.target.checked ? "Extended absence on" : "Extended absence off")}
+        description={a.active ? (a.applied ? "On now: callers hear your extended absence greeting." : "On now; record an extended absence greeting above, or callers hear your temporary greeting.") : a.enabled ? "Scheduled: starts on the first day below." : "Record the extended absence greeting above, pick the dates, then turn this on."} />
+      <div className="form-grid">
+        <TextField label="First day" type="date" disabled={!editable || busy} value={from} onChange={(e) => setFrom(e.target.value)} help="Empty: from now." />
+        <TextField label="Last day" type="date" disabled={!editable || busy} value={until} min={from || undefined} onChange={(e) => setUntil(e.target.value)} help="Empty: until you turn it off. After it, the absence turns itself off." />
+      </div>
+      <Checkbox label="Take no messages while away" checked={a.refuse_messages} disabled={!editable || busy}
+        onChange={(e) => void put({ refuse_messages: e.target.checked }, e.target.checked ? "Messages refused while away" : "Messages taken while away")}
+        description="Callers hear the greeting and the call ends; nothing waits in the box when you come back." />
+      {editable && datesDirty ? <div className="form-actions"><Button size="sm" variant="primary" loading={busy} onClick={() => void put({ starts_on: from || null, ends_on: until || null }, "Absence dates saved")}>Save dates</Button></div> : null}
     </div>
   );
 }

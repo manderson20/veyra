@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Forward when unreachable, call waiting off, anonymous call rejection, Do
-Not Disturb exceptions (issues #163, #165, #170) and the trunk channels kept
-for emergency calls (issue #171).
+Not Disturb exceptions (issues #163, #165, #170), the trunk channels kept
+for emergency calls (issue #171) and the voicemail extended absence (#169).
 
 Revision ID: 0068
 Revises: 0067
@@ -42,7 +42,31 @@ def upgrade() -> None:
     )
 
 
+    op.add_column(
+        "voicemail_boxes",
+        sa.Column("absence_enabled", sa.Boolean(), nullable=False, server_default="false"),
+    )
+    op.add_column("voicemail_boxes", sa.Column("absence_starts_on", sa.Date(), nullable=True))
+    op.add_column("voicemail_boxes", sa.Column("absence_ends_on", sa.Date(), nullable=True))
+    op.add_column(
+        "voicemail_boxes",
+        sa.Column("absence_refuse", sa.Boolean(), nullable=False, server_default="false"),
+    )
+    op.add_column(
+        "voicemail_boxes",
+        sa.Column("absence_state", sa.String(8), nullable=False, server_default="off"),
+    )
+
+
 def downgrade() -> None:
+    for col in (
+        "absence_state",
+        "absence_refuse",
+        "absence_ends_on",
+        "absence_starts_on",
+        "absence_enabled",
+    ):
+        op.drop_column("voicemail_boxes", col)
     op.drop_column("sip_trunks", "emergency_reserved_channels")
     for col in ("dnd_allow", "anonymous_reject", "call_waiting_off", "cf_unavailable"):
         op.drop_column("extension_states", col)

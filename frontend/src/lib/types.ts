@@ -1420,7 +1420,7 @@ export interface VoicemailMessage {
 
 /** One of the four greetings of a box (docs/USER_PORTAL.md §3). */
 export interface VoicemailGreeting {
-  kind: "unavail" | "busy" | "greet" | "temp";
+  kind: "unavail" | "busy" | "greet" | "temp" | "absence";
   label: string;
   recorded: boolean;
   format: string | null;
@@ -3471,4 +3471,16 @@ export interface FaxJob {
   started_at: string | null;
   finished_at: string | null;
   next_attempt_at: string | null;
+}
+
+/** Extended absence of a voicemail box (issue #169). */
+export interface VoicemailAbsence {
+  enabled: boolean;
+  starts_on: string | null;
+  ends_on: string | null;
+  refuse_messages: boolean;
+  /** On today (enabled and within the dates). */
+  active: boolean;
+  /** The worker has put the absence greeting in place. */
+  applied: boolean;
 }

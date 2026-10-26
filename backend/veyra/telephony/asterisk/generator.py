@@ -1275,6 +1275,7 @@ def _dialplan(
             )
             lines += _voicemail_exit_contexts(my_boxes(ns))
             lines += _voicemail_play_context()
+            lines += _voicemail_absent_context()
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _internal(
@@ -1956,7 +1957,7 @@ def _voicemail_direct(
             *guard,
             " same => n,Answer()",
             # The unavailable greeting (u); without it VoiceMail plays none.
-            f" same => n,{_vm(number, 'u')}",
+            *_vm_steps(number, "u"),
             " same => n,Hangup()",
             *(COS_DENIED if guard else []),
         ]
@@ -1992,6 +1993,37 @@ def _vm(number: str, flags: str) -> str:
     if (n.voicemail, number) in _vm_dtmf.get():
         flags += f"d({n.voicemail_exit(number)})"
     return f"VoiceMail({number}@{n.voicemail},{flags})"
+
+
+# Where Asterisk keeps the boxes; the absent context plays a box's
+# temporary greeting from here (issue #169).
+VOICEMAIL_SPOOL = "/var/spool/asterisk/voicemail"
+VMABS_FAMILY = "veyra/vmabs"
+
+
+def _vm_steps(number: str, flags: str) -> list[str]:
+    """``VoiceMail`` after the extended-absence check (issue #169): a box that
+    takes no messages while its owner is away only plays the greeting."""
+    n = engine_names.current()
+    return [
+        f' same => n,GotoIf($["${{DB({VMABS_FAMILY}/{n.voicemail}/{number})}}"="refuse"]'
+        f"?{n.voicemail_absent},{number},1)",
+        f" same => n,{_vm(number, flags)}",
+    ]
+
+
+def _voicemail_absent_context() -> list[str]:
+    n = engine_names.current()
+    return [
+        f"[{n.voicemail_absent}]",
+        "exten => _X.,1,NoOp(Veyra: voicemail ${EXTEN} is away and takes no messages)",
+        " same => n,Answer()",
+        " same => n,Wait(1)",
+        f" same => n,Playback({VOICEMAIL_SPOOL}/{n.voicemail}/${{EXTEN}}/temp)",
+        " same => n,Playback(vm-goodbye)",
+        " same => n,Hangup()",
+        "",
+    ]
 
 
 def _voicemail_exit_contexts(boxes: list[tuple[str, dict[str, Any]]]) -> list[str]:
@@ -2402,10 +2434,10 @@ def _internal(
             # (and Do Not Disturb) to the busy greeting (docs/VOICEMAIL_IVR.md §3.2).
             lines += [
                 *head,
-                f" same => n,{_vm(number, 'u')}",
+                *_vm_steps(number, "u"),
                 " same => n,Hangup()",
                 *busy_branch,
-                f" same => n,{_vm(number, 'b')}",
+                *_vm_steps(number, "b"),
                 " same => n,Hangup()",
                 *forward,
                 *rules_branch,
@@ -2416,7 +2448,7 @@ def _internal(
             continue
         lines += [
             f"exten => {number},1,NoOp(Veyra shared inbox {number})",
-            f" same => n,{_vm(number, 'u')}",
+            *_vm_steps(number, "u"),
             " same => n,Hangup()",
         ]
     for g in ring_groups:
@@ -2833,7 +2865,7 @@ def _goto(dest: Any) -> list[str]:
             raise GenerationError(f"destination number {number!r} is not valid")
         if kind == "voicemail":
             return [
-                f" same => n,{_vm(number, 'u')}",
+                *_vm_steps(number, "u"),
                 " same => n,Hangup()",
             ]
         internal = engine_names.current().internal

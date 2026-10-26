@@ -6,9 +6,10 @@ administrator's routes alike."""
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -21,6 +22,8 @@ from veyra.core.models import Extension, VoicemailBox
 from veyra.telephony import audio as audio_tools
 from veyra.voicemail.client import StoreClient, StoreClientError, StoreUnavailable
 from veyra.voicemail.store import FOLDERS, GREETINGS
+
+log = logging.getLogger("veyra.voicemail")
 
 FOLDER_LABELS = {
     "INBOX": "New",
@@ -35,6 +38,7 @@ GREETING_LABELS = {
     "busy": "Busy",
     "greet": "Name",
     "temp": "Temporary",
+    "absence": "Extended absence",
 }
 MEDIA_TYPES = {"wav": "audio/wav", "WAV": "audio/wav", "gsm": "audio/gsm"}
 
@@ -362,6 +366,11 @@ def greeting_save(
     context, mailbox = location(db, box)
     try:
         client(settings).greeting_put(context, mailbox, kind, wav, "wav")
+        if kind == "absence" and box.absence_state != "off":
+            # Re-recorded while away: the playing copy follows (#169).
+            client(settings).greeting_put(context, mailbox, "temp", wav, "wav")
+            box.absence_state = "temp"
+            db.flush()
     except StoreClientError as e:
         raise problem(e) from e
     return duration
@@ -563,3 +572,160 @@ def prune_boxes(db: Session, settings: Settings, now: datetime | None = None) ->
         row.value = {"at": now.isoformat(), "removed": removed}
     db.commit()
     return removed
+
+
+# ----------------------------------------------------------- extended absence (#169)
+
+# AstDB family the dialplan reads: veyra/vmabs/<voicemail context> <mailbox>
+# = "refuse" while callers hear the absence greeting and leave no message.
+ABSENCE_FAMILY = "veyra/vmabs"
+
+
+class AbsenceIn(BaseModel):
+    enabled: bool | None = None
+    starts_on: date | None = None
+    ends_on: date | None = None
+    refuse_messages: bool | None = None
+
+
+def _today(db: Session, box: VoicemailBox, now: datetime) -> date:
+    from zoneinfo import ZoneInfo
+
+    from veyra.core.models import Organization
+
+    org = db.get(Organization, box.organization_id)
+    try:
+        tz = ZoneInfo(org.timezone) if org and org.timezone else ZoneInfo("UTC")
+    except Exception:
+        tz = ZoneInfo("UTC")
+    return now.astimezone(tz).date()
+
+
+def absence_active(box: VoicemailBox, today: date) -> bool:
+    if not box.absence_enabled:
+        return False
+    if box.absence_starts_on and today < box.absence_starts_on:
+        return False
+    return not (box.absence_ends_on and today > box.absence_ends_on)
+
+
+def absence_out(db: Session, box: VoicemailBox, now: datetime | None = None) -> dict[str, Any]:
+    from veyra.core.models.base import utcnow
+
+    today = _today(db, box, now or utcnow())
+    return {
+        "enabled": box.absence_enabled,
+        "starts_on": box.absence_starts_on.isoformat() if box.absence_starts_on else None,
+        "ends_on": box.absence_ends_on.isoformat() if box.absence_ends_on else None,
+        "refuse_messages": box.absence_refuse,
+        "active": absence_active(box, today),
+        "applied": box.absence_state != "off",
+    }
+
+
+def set_absence(
+    db: Session, settings: Settings, box: VoicemailBox, body: AbsenceIn, adapter: Any = None
+) -> dict[str, Any]:
+    """Change the absence and apply it at once. Returns what changed."""
+    changes = body.model_dump(exclude_unset=True)
+    starts = changes.get("starts_on", box.absence_starts_on)
+    ends = changes.get("ends_on", box.absence_ends_on)
+    if starts and ends and ends < starts:
+        raise ProblemError(
+            422,
+            "Validation failed",
+            "The last day is before the first day.",
+            code="validation_failed",
+            errors=[{"field": "ends_on", "message": "before the first day"}],
+        )
+    details: dict[str, Any] = {}
+    for field, attr in (
+        ("enabled", "absence_enabled"),
+        ("starts_on", "absence_starts_on"),
+        ("ends_on", "absence_ends_on"),
+        ("refuse_messages", "absence_refuse"),
+    ):
+        if field not in changes:
+            continue
+        value = changes[field]
+        if attr in ("absence_enabled", "absence_refuse"):
+            value = bool(value)
+        if value != getattr(box, attr):
+            setattr(box, attr, value)
+            details[field] = value.isoformat() if isinstance(value, date) else value
+    db.flush()
+    apply_absence(db, settings, box, adapter)
+    return details
+
+
+def apply_absence(
+    db: Session,
+    settings: Settings,
+    box: VoicemailBox,
+    adapter: Any = None,
+    now: datetime | None = None,
+) -> str | None:
+    """Make the spool and the engine follow the box's absence: at the start
+    the "absence" recording becomes the temporary greeting (Asterisk plays
+    it instead of the others) and, when messages are refused, the dialplan's
+    flag is set; at the end both go and a past absence turns itself off.
+    Returns the new state when it changed; a store failure leaves the state
+    alone so the next pass tries again."""
+    from veyra.core.models.base import utcnow
+
+    now = now or utcnow()
+    today = _today(db, box, now)
+    active = absence_active(box, today)
+    context, mailbox = location(db, box)
+    c = client(settings)
+    state = box.absence_state
+    try:
+        if active and state == "off":
+            try:
+                fmt, data = c.greeting_get(context, mailbox, "absence")
+            except StoreClientError as e:
+                if e.code != "not_found":
+                    raise
+                state = "flag"
+            else:
+                c.greeting_put(context, mailbox, "temp", data, fmt)
+                state = "temp"
+        elif not active and state != "off":
+            if state == "temp":
+                c.greeting_delete(context, mailbox, "temp")
+            state = "off"
+            if box.absence_ends_on and today > box.absence_ends_on:
+                box.absence_enabled = False
+    except StoreClientError as e:
+        log.warning("Voicemail absence of %s not applied: %s", mailbox, e)
+        return None
+    flag = "refuse" if active and box.absence_refuse else None
+    if adapter is not None:
+        try:
+            adapter.store_put(f"{ABSENCE_FAMILY}/{context}", mailbox, flag)
+        except Exception as e:  # the next pass writes it again
+            log.warning("Voicemail absence flag of %s not written: %s", mailbox, e)
+    if state != box.absence_state:
+        box.absence_state = state
+        db.flush()
+        return state
+    return None
+
+
+def absence_sweep(
+    db: Session, settings: Settings, adapter: Any = None, now: datetime | None = None
+) -> int:
+    """Worker, every pass: start and end absences by date. Returns how many
+    boxes changed."""
+    changed = 0
+    q = db.query(VoicemailBox).filter(
+        (VoicemailBox.absence_enabled.is_(True)) | (VoicemailBox.absence_state != "off")
+    )
+    for box in q:
+        try:
+            if apply_absence(db, settings, box, adapter, now) is not None:
+                changed += 1
+        except ProblemError:
+            continue
+    db.commit()
+    return changed

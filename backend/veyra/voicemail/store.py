@@ -18,8 +18,8 @@ set of paths:
   (the mail worker removes a message once its email was accepted);
 * ``prune``: the messages older than a date in every folder (a box's
   ``keep_days``);
-* ``greeting_get``, ``greeting_put``, ``greeting_delete``: the four greetings
-  (``unavail``, ``busy``, ``greet``, ``temp``).
+* ``greeting_get``, ``greeting_put``, ``greeting_delete``: the greetings
+  (``unavail``, ``busy``, ``greet``, ``temp``, and Veyra's ``absence``).
 
 Every argument is checked against a fixed pattern and every path must
 resolve under the spool root without following symbolic links. The
@@ -50,7 +50,9 @@ SOCKET_PATH = Path("/run/veyra/vmstore.sock")
 MAX_LINE = 16 * 1024 * 1024  # one request or answer (a base64 message fits)
 
 FOLDERS = ("INBOX", "Old", "Work", "Family", "Friends", "Urgent")
-GREETINGS = ("unavail", "busy", "greet", "temp")
+# "absence" (issue #169) is Veyra's own: copied over "temp" while an
+# extended absence is on; Asterisk never reads it.
+GREETINGS = ("unavail", "busy", "greet", "temp", "absence")
 AUDIO_FORMATS = ("wav", "WAV", "gsm")  # preference when reading
 MAX_MESSAGES = 9999
 MAX_AUDIO = 64 * 1024 * 1024

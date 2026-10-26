@@ -159,6 +159,34 @@ boxes (row click edits, with PIN reset and delete); the extension page gets
 a Voicemail card; the account page lists the user's own boxes with a PIN
 change.
 
+### 3.4 Extended absence (issue #169)
+
+*Built 2026-10-26 from the Metaswitch comparison (roadmap row 11).* A box
+has a fifth greeting, **Extended absence** (`absence`, Veyra's own file in
+the spool; Asterisk never reads it), and an absence: on/off, an optional
+first and last day (the organization's time zone) and "take no messages".
+
+* `GET/PUT /voicemail/{id}/absence`, `GET/PUT /me/voicemail/{id}/absence`
+  (`enabled`, `starts_on`, `ends_on`, `refuse_messages`), and
+  `PUT /voicemail/absence` with `box_ids` for many boxes at once (a
+  building's summer break). Audited `voicemail.absence_update`; no
+  deployment.
+* While the absence is on, the `absence` recording is copied over the
+  box's **temporary** greeting, which Asterisk plays instead of the others
+  (a temporary greeting the user had is replaced). Re-recording the
+  absence greeting while away updates the copy. Without an absence
+  recording the box's own greetings stay.
+* "Take no messages" sets AstDB `veyra/vmabs/<voicemail context>/<box>` to
+  `refuse`; every `VoiceMail()` in the dialplan is preceded by a check that
+  sends the call to `<ns>-vm-absent`, which plays the temporary greeting
+  from the spool and hangs up.
+* The worker checks every pass (`absence_sweep`): an absence starts on its
+  first day, and after its last day the copy is deleted, the flag cleared
+  and the absence turns itself off. State `absence_state`: `off`, `temp`
+  (copy in place) or `flag` (no recording).
+
+Not built yet: a greeting chosen by an after-hours schedule.
+
 ## 4. Prompts
 
 Audio that menus play. Stored under `/var/lib/veyra/prompts/<org slug>/`

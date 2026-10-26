@@ -1201,6 +1201,17 @@ def deliver_webhooks(settings: Any, log: Any) -> None:
             pruned = vm_service.prune_boxes(db, settings)
             if pruned:
                 log.info("Voicemail: %d old message(s) deleted", pruned)
+        # Extended absences start and end by date (issue #169), every pass.
+        with session_scope() as db:
+            from veyra.telephony import get_adapter
+
+            try:
+                vm_adapter = get_adapter(settings)
+            except Exception:
+                vm_adapter = None
+            moved = vm_service.absence_sweep(db, settings, vm_adapter)
+            if moved:
+                log.info("Voicemail: %d extended absence(s) started or ended", moved)
         # Presence from users' calendars (issue #136), every few minutes.
         from veyra.portal import presence_calendar
 
