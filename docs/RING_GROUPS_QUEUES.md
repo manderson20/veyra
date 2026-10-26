@@ -83,6 +83,35 @@ ended does not ring the next member. The depth guard (`__VEYRA_GROUP_DEPTH`, sha
 groups and queues whose failovers point at each other. `hint` lines make a
 phone's BLF key for the group number light while the group rings.
 
+### 2.1 One-at-a-time strategies (issue #166)
+
+*Built 2026-10-26 from the Metaswitch comparison (roadmap row 8).* Besides
+`ringall` and `sequential`, a group can ring one member at a time in a
+moving order:
+
+| Strategy | Order |
+|---|---|
+| `circular` | Starts after the member who answered the last call |
+| `roundrobin` | Each new call starts one member later, answered or not |
+| `longest_idle` | The member who answered least recently first (never: list order) |
+
+Each member may have its own ring time (`member_ring_seconds` on the API,
+"Ring time per member" in the form; `sequential` uses it too). The dialplan
+is one `While` loop over `:`-separated member and ring-time lists, so its
+size grows with the members only for `longest_idle` (three lines each, to
+pick the next member). State is in AstDB `veyra/rg/<org>/<slug>`: `next`
+for circular and round robin, `idle_<endpoint>` (answer time) for longest
+idle. The answering member's channel writes it through Dial `U()`
+(`veyra-rg-answered`, which also records the last caller like
+`veyra-lastcid`), so a caller who hangs up during the call still counts.
+Busy members are skipped as in the other strategies unless "ring members
+who are already on a call" is on. Outside numbers ring after the members.
+
+We chose the generated dialplan over Asterisk queues behind the scenes so
+per-member ring times, hold music or ringing, and the caller ID prefix work
+as for the other ring groups. FreePBX `memoryhunt` (cumulative) is still
+imported as `sequential`.
+
 ## 3. Call queues
 
 | Field | Notes |

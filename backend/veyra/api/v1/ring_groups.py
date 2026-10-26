@@ -32,7 +32,7 @@ from veyra.telephony.asterisk.names import Names
 
 router = APIRouter(prefix="/ring-groups", tags=["ring-groups"])
 
-Strategy = Literal["ringall", "sequential"]
+Strategy = Literal["ringall", "sequential", "circular", "roundrobin", "longest_idle"]
 _PREFIX_RE = re.compile(r"^[\w .'&():-]{1,40}$", re.UNICODE)
 MAX_MEMBERS = 32
 
@@ -58,6 +58,18 @@ class RingGroupIn(BaseModel):
     moh_class_id: uuid.UUID | None = None
     failover: DestinationIn = Field(default_factory=lambda: DestinationIn(type="hangup"))
     members: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_MEMBERS)
+    # Per-member ring time (issue #166), extension id -> seconds; members
+    # left out ring for the group's ring time.
+    member_ring_seconds: dict[uuid.UUID, int] = Field(default_factory=dict)
+
+    @field_validator("member_ring_seconds")
+    @classmethod
+    def _member_rings(cls, v: dict[uuid.UUID, int]) -> dict[uuid.UUID, int]:
+        for seconds in v.values():
+            if not 5 <= seconds <= 120:
+                raise ValueError("a member's ring time is 5 to 120 seconds")
+        return v
+
     is_enabled: bool = True
 
     @field_validator("name")
@@ -124,7 +136,13 @@ class RingGroupPatch(BaseModel):
     moh_class_id: uuid.UUID | None = None
     failover: DestinationIn | None = None
     members: list[uuid.UUID] | None = Field(None, max_length=MAX_MEMBERS)
+    member_ring_seconds: dict[uuid.UUID, int] | None = None
     is_enabled: bool | None = None
+
+
+class RingMemberOut(MemberOut):
+    # This member's ring time (issue #166); None: the group's.
+    ring_seconds: int | None = None
 
 
 class RingGroupOut(BaseModel):
@@ -146,7 +164,7 @@ class RingGroupOut(BaseModel):
     moh_class_id: uuid.UUID | None
     moh_class_name: str | None
     failover: DestinationOut
-    members: list[MemberOut]
+    members: list[RingMemberOut]
     is_enabled: bool
     # Why the group will not work as configured.
     problems: list[str]
@@ -197,12 +215,13 @@ def _outs(db: Session, rows: list[RingGroup]) -> list[RingGroupOut]:
             if ext is None:
                 continue
             member_outs.append(
-                MemberOut(
+                RingMemberOut(
                     extension_id=ext.id,
                     number=ext.number,
                     display_name=ext.display_name,
                     is_enabled=ext.is_enabled,
                     position=m.position,
+                    ring_seconds=m.ring_seconds,
                 )
             )
         problems = []
@@ -252,12 +271,24 @@ def _get(db: Session, principal: Principal, group_id: uuid.UUID, perm: str) -> R
     return group
 
 
-def _set_members(db: Session, group: RingGroup, extension_ids: list[uuid.UUID]) -> None:
+def _set_members(
+    db: Session,
+    group: RingGroup,
+    extension_ids: list[uuid.UUID],
+    ring_seconds: dict[uuid.UUID, int] | None = None,
+) -> None:
     for old in db.scalars(select(RingGroupMember).where(RingGroupMember.group_id == group.id)):
         db.delete(old)
     db.flush()
     for i, ext_id in enumerate(extension_ids):
-        db.add(RingGroupMember(group_id=group.id, extension_id=ext_id, position=i))
+        db.add(
+            RingGroupMember(
+                group_id=group.id,
+                extension_id=ext_id,
+                position=i,
+                ring_seconds=(ring_seconds or {}).get(ext_id),
+            )
+        )
     db.flush()
 
 
@@ -336,7 +367,7 @@ def create_group(
         db.flush()
     except IntegrityError as e:
         raise _name_conflict(e, db) from e
-    _set_members(db, group, body.members)
+    _set_members(db, group, body.members, body.member_ring_seconds)
     helpers.record(
         db,
         ctx,
@@ -370,7 +401,9 @@ def update_group(
 ) -> RingGroupOut:
     group = _get(db, principal, group_id, WRITE)
     changes = body.model_dump(exclude_unset=True)
-    current_members = [m.extension_id for m in _members(db, {group.id})[group.id]]
+    member_rows = _members(db, {group.id})[group.id]
+    current_members = [m.extension_id for m in member_rows]
+    current_rings = {m.extension_id: m.ring_seconds for m in member_rows if m.ring_seconds}
     current = {
         "organization_id": group.organization_id,
         "name": group.name,
@@ -386,6 +419,7 @@ def update_group(
         "moh_class_id": group.moh_class_id,
         "failover": destinations.as_input(destinations.ref_of(group, "failover")),
         "members": current_members,
+        "member_ring_seconds": current_rings,
         "is_enabled": group.is_enabled,
     }
     try:
@@ -420,8 +454,11 @@ def update_group(
     if destinations.ref_of(group, "failover") != validated.failover.as_ref():
         destinations.apply(group, "failover", validated.failover)
         details["failover"] = validated.failover.model_dump(mode="json")
-    if "members" in changes and validated.members != current_members:
-        _set_members(db, group, validated.members)
+    rings = {k: v for k, v in validated.member_ring_seconds.items() if k in validated.members}
+    if ("members" in changes and validated.members != current_members) or (
+        "member_ring_seconds" in changes and rings != current_rings
+    ):
+        _set_members(db, group, validated.members, rings)
         details["members"] = len(validated.members)
     if not details:
         return _outs(db, [group])[0]

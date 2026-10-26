@@ -63,7 +63,10 @@ class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     slug: Mapped[str] = mapped_column(String(40), unique=True)
     number: Mapped[str] = mapped_column(String(32))
     description: Mapped[str | None] = mapped_column(Text)
-    # ``ringall`` (every member at once) or ``sequential`` (in order).
+    # ``ringall`` (every member at once), ``sequential`` (in order) or, one
+    # member at a time (issue #166): ``circular`` (starting after the member
+    # who answered last), ``roundrobin`` (each call starts one member later),
+    # ``longest_idle`` (the member whose last answer is oldest first).
     strategy: Mapped[str] = mapped_column(String(16), default="ringall")
     ring_seconds: Mapped[int] = mapped_column(Integer, default=20)
     ring_busy_members: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -103,6 +106,9 @@ class RingGroupMember(Base):
         ForeignKey("extensions.id", ondelete="CASCADE"), primary_key=True
     )
     position: Mapped[int] = mapped_column(Integer)
+    # This member's ring time in the one-at-a-time strategies (issue #166);
+    # None: the group's.
+    ring_seconds: Mapped[int | None] = mapped_column(Integer)
 
 
 class CallQueue(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):

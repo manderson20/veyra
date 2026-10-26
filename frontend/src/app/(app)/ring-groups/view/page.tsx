@@ -101,7 +101,7 @@ function RingGroupView() {
           <Card title="As deployed" subtitle="What the phone system does with this group after the next deployment.">
             <dl className="dl">
               <dt>Dial</dt><dd><span className="mono">{g.number}</span>{g.caller_id_prefix ? <> (phones show “{g.caller_id_prefix}” before the caller)</> : null}</dd>
-              <dt>Rings</dt><dd>{g.members.length ? `${g.members.length} phone${g.members.length === 1 ? "" : "s"}, ${RING_STRATEGY_LABELS[g.strategy].toLowerCase()}, ${g.ring_seconds} s${g.strategy === "sequential" ? " each" : ""}` : "Nobody"}</dd>
+              <dt>Rings</dt><dd>{g.members.length ? `${g.members.length} phone${g.members.length === 1 ? "" : "s"}, ${RING_STRATEGY_LABELS[g.strategy].toLowerCase()}, ${g.ring_seconds} s${g.strategy !== "ringall" ? " each" : ""}` : "Nobody"}</dd>
               <dt>Busy members</dt><dd>{g.ring_busy_members ? "Rung anyway (call waiting)" : "Skipped"}</dd>
               <dt>If unanswered</dt><dd><DestinationLabel d={g.failover} /></dd>
               <dt>Pickup</dt><dd><span className="mono">**{g.number}</span> is not needed: pick up the ringing member phone with <span className="mono">**</span>its number or <span className="mono">*8</span></dd>

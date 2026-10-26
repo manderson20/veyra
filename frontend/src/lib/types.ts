@@ -1758,9 +1758,12 @@ export interface GroupMember {
   paused?: boolean;
   state_by?: string | null;
   state_at?: string | null;
+  /** Ring group members (issue #166): this member's ring time; null: the group's. */
+  ring_seconds?: number | null;
 }
 
-export type RingGroupStrategy = "ringall" | "sequential";
+/** One-at-a-time orders (issue #166): circular starts after the last answer, roundrobin one later each call, longest_idle with the member who answered least recently. */
+export type RingGroupStrategy = "ringall" | "sequential" | "circular" | "roundrobin" | "longest_idle";
 
 export interface RingGroup {
   id: string;
@@ -1807,6 +1810,8 @@ export interface RingGroupInput {
   failover?: DestinationInput;
   members?: string[];
   is_enabled?: boolean;
+  /** Extension id -> seconds (issue #166). */
+  member_ring_seconds?: Record<string, number>;
 }
 
 export type QueueStrategy = "ringall" | "rrmemory" | "leastrecent" | "fewestcalls" | "random" | "linear";

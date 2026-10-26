@@ -23,6 +23,8 @@ export interface RingGroupDraft {
   moh_class_id: string;
   failover: DestinationDraft;
   members: MemberDraft[];
+  /** Extension id -> ring time in seconds as typed; empty: the group's (issue #166). */
+  member_rings: Record<string, string>;
   is_enabled: boolean;
 }
 
@@ -40,13 +42,20 @@ export const EMPTY_RING_GROUP: RingGroupDraft = {
   moh_class_id: "",
   failover: HANGUP,
   members: [],
+  member_rings: {},
   is_enabled: true,
 };
 
 export const RING_STRATEGY_LABELS: Record<RingGroupStrategy, string> = {
   ringall: "Ring all members at once",
   sequential: "Ring members one after the other",
+  circular: "One at a time, starting after the last who answered",
+  roundrobin: "One at a time, each call starting one member later",
+  longest_idle: "One at a time, longest without a call first",
 };
+
+/** Strategies that ring one member at a time, where a member's own ring time applies. */
+const ONE_AT_A_TIME: RingGroupStrategy[] = ["sequential", "circular", "roundrobin", "longest_idle"];
 
 export function ringGroupDraft(g: RingGroup): RingGroupDraft {
   return {
@@ -63,6 +72,7 @@ export function ringGroupDraft(g: RingGroup): RingGroupDraft {
     moh_class_id: g.moh_class_id ?? "",
     failover: destinationDraft(g.failover, HANGUP),
     members: membersFromIds(g.members),
+    member_rings: Object.fromEntries(g.members.filter((m) => m.ring_seconds).map((m) => [m.extension_id, String(m.ring_seconds)])),
     is_enabled: g.is_enabled,
   };
 }
@@ -82,6 +92,7 @@ export function ringGroupBody(d: RingGroupDraft): RingGroupInput {
     moh_class_id: d.music === "default" ? d.moh_class_id || null : null,
     failover: destinationBody(d.failover),
     members: d.members.map((m) => m.extension_id),
+    member_ring_seconds: Object.fromEntries(d.members.filter((m) => (d.member_rings[m.extension_id] ?? "").trim()).map((m) => [m.extension_id, Number(d.member_rings[m.extension_id])])),
     is_enabled: d.is_enabled,
   };
 }
@@ -114,7 +125,22 @@ export function RingGroupFields({ draft, onChange, errors, organizationId, curre
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />
       <MemberListEditor label="Members" members={draft.members} extensions={options.extensions} loading={options.loading} onChange={(members) => onChange({ members })} ordered disabled={disabled}
         error={errors.members} emptyText="No members yet: callers go straight to the failover destination."
-        help={draft.strategy === "sequential" ? "Rung in this order, each for the ring time below." : "All rung at once; the order only matters if you switch to ringing one after the other."} />
+        help={draft.strategy === "ringall" ? "All rung at once; the order only matters if you switch to ringing one at a time." : "Rung one at a time in this order (or starting further down the list, by the strategy), each for its ring time."} />
+      {ONE_AT_A_TIME.includes(draft.strategy) && draft.members.length ? (
+        <details>
+          <summary>Ring time per member</summary>
+          <div className="form-grid" style={{ marginTop: 8 }}>
+            {draft.members.map((m) => {
+              const ext = options.extensions.find((e) => e.id === m.extension_id);
+              return (
+                <TextField key={m.extension_id} label={ext ? `${ext.number} ${ext.display_name}` : "Member"} type="number" min={5} max={120} disabled={disabled}
+                  value={draft.member_rings[m.extension_id] ?? ""} placeholder={`${draft.ring_seconds || 20} (the group's)`}
+                  onChange={(e) => onChange({ member_rings: { ...draft.member_rings, [m.extension_id]: e.target.value } })} />
+              );
+            })}
+          </div>
+        </details>
+      ) : null}
       <TextArea label="Outside numbers" rows={2} value={draft.external_members} disabled={disabled} error={errors.external_members} placeholder="5735550100" spellCheck={false}
         help="Mobile or other outside numbers rung with the members, one per line; they leave through the organization’s outbound routes." onChange={(e) => onChange({ external_members: e.target.value })} />
       <Checkbox label="Outside numbers must press 1 to accept" description="Keeps a mobile’s voicemail from swallowing the call." checked={draft.confirm_external} disabled={disabled} onChange={(e) => onChange({ confirm_external: e.target.checked })} />
@@ -123,7 +149,7 @@ export function RingGroupFields({ draft, onChange, errors, organizationId, curre
           options={(Object.keys(RING_STRATEGY_LABELS) as RingGroupStrategy[]).map((k) => ({ value: k, label: RING_STRATEGY_LABELS[k] }))}
           onChange={(e) => onChange({ strategy: e.target.value as RingGroupStrategy })} />
         <TextField label="Ring time (seconds)" type="number" min={5} max={120} required disabled={disabled} value={draft.ring_seconds} error={errors.ring_seconds}
-          help={draft.strategy === "sequential" ? "Per member." : "For the whole group."} onChange={(e) => onChange({ ring_seconds: e.target.value })} />
+          help={draft.strategy === "ringall" ? "For the whole group." : "Per member, unless a member has its own below."} onChange={(e) => onChange({ ring_seconds: e.target.value })} />
       </div>
       <TextField label="Caller ID prefix" disabled={disabled} value={draft.caller_id_prefix} error={errors.caller_id_prefix} placeholder="e.g. Front: "
         help="Shown on the ringing phones before the caller's name, so users see which group the call came in on." onChange={(e) => onChange({ caller_id_prefix: e.target.value })} />

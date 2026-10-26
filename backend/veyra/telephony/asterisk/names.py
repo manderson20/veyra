@@ -177,9 +177,18 @@ class Names:
 # Contexts every organization may reach (docs/MULTI_TENANCY.md §5).
 # veyra-lastcid writes only the organization the calling group context set
 # (issue #135); veyra-cw-clear deletes only the key of the phone's own
-# organization and call (its endpoint's VEYRA_ORG, the call's UNIQUEID; #163).
+# organization and call (its endpoint's VEYRA_ORG, the call's UNIQUEID; #163);
+# veyra-rg-answered writes the state of the group whose dialplan called it
+# (its organization and slug are in that dialplan; #166).
 SHARED_CONTEXTS = frozenset(
-    {"veyra-invalid", "veyra-record", "veyra-from-trunk", "veyra-lastcid", "veyra-cw-clear"}
+    {
+        "veyra-invalid",
+        "veyra-record",
+        "veyra-from-trunk",
+        "veyra-lastcid",
+        "veyra-cw-clear",
+        "veyra-rg-answered",
+    }
 )
 SHARED_CONTEXT_PREFIXES = ("veyra-out-", "veyra-from-trunk-")
 

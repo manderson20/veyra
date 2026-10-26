@@ -960,7 +960,10 @@ def _groups(
                 "caller_id_prefix": g.caller_id_prefix,
                 "music": g.music,
                 "hold_music": moh_slug(g.moh_class_id, g.organization_id),
-                "members": [member(ext_by_id[m.extension_id]) for m in rg_members.get(g.id, [])],
+                "members": [
+                    {**member(ext_by_id[m.extension_id]), "ring_seconds": m.ring_seconds}
+                    for m in rg_members.get(g.id, [])
+                ],
                 "failover": targets.dest(g, "failover"),
             }
             for g in ring_groups

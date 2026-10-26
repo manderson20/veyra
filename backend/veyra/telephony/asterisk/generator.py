@@ -155,7 +155,13 @@ CONTEXT_ONDEMAND = "veyra-ondemand"
 ONDEMAND_FEATURE = "veyra-record"
 ONDEMAND_POLICY = "00000000-0000-0000-0000-000000000000"
 MAX_GROUP_DEPTH = 6
-RING_GROUP_STRATEGIES = ("ringall", "sequential")
+RING_GROUP_STRATEGIES = ("ringall", "sequential", "circular", "roundrobin", "longest_idle")
+# One member at a time in a moving order (issue #166).
+HUNT_STRATEGIES = ("circular", "roundrobin", "longest_idle")
+RG_STATE_FAMILY = "veyra/rg"
+# Runs on the member that answers a hunting ring group: the last-caller
+# record (as veyra-lastcid) and the group's order state (issue #166).
+CONTEXT_RG_ANSWERED = "veyra-rg-answered"
 QUEUE_STRATEGIES = ("ringall", "rrmemory", "leastrecent", "fewestcalls", "random", "linear")
 QUEUE_MUSIC = ("default", "ring")
 # Device states of a member that is already on a call (skipped unless the
@@ -1318,6 +1324,7 @@ def _dialplan(
             }
             lines += _paging_contexts(part, prompts_dir)
     lines += _lastcid_context()
+    lines += _rg_answered_context()
     lines += _cw_clear_context()
     lines += [
         f"[{CONTEXT_EMERGENCY_NOTIFY}]",
@@ -3995,6 +4002,14 @@ def _ring_group_contexts(
             _check_section(str(m["endpoint_name"]), "endpoint name")
             for m in (g.get("members") or [])
         ]
+        member_rings = []
+        for m in g.get("members") or []:
+            seconds = int(m.get("ring_seconds") or ring)
+            if not 5 <= seconds <= 120:
+                raise GenerationError(
+                    f"ring group {slug}: member ring time {seconds} is out of range"
+                )
+            member_rings.append(seconds)
         # Outside numbers (docs/CALL_FEATURES.md §3.4): Local legs through the
         # namespace's follow-me outbound context, confirmed with 1 when asked.
         outside: list[str] = []
@@ -4049,6 +4064,16 @@ def _ring_group_contexts(
                 ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
                 " same => n,Goto(failover)",
             ]
+        elif strategy in HUNT_STRATEGIES and members:
+            lines += _hunt_members(
+                org, slug, strategy, members, member_rings, ring_busy, dial_opts, music
+            )
+            for leg in outside:
+                lines += [
+                    f" same => n,Dial({leg},{ring}{dial_opts})",
+                    ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
+                ]
+            lines.append(" same => n,Goto(failover)")
         else:
             for i, m in enumerate(members):
                 nxt = f"m{i + 2}" if i + 1 < len(members) else "failover"
@@ -4060,7 +4085,7 @@ def _ring_group_contexts(
                     )
                     label = ""
                 lines += [
-                    f" same => n{label},Dial(PJSIP/{m},{ring}{dial_opts})",
+                    f" same => n{label},Dial(PJSIP/{m},{member_rings[i]}{dial_opts})",
                     ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
                 ]
             for leg in outside:
@@ -4073,6 +4098,98 @@ def _ring_group_contexts(
         lines += _group_epilogue("ring group", name, g.get("failover"))
         lines.append("")
     return lines
+
+
+def _hunt_members(
+    org: str,
+    slug: str,
+    strategy: str,
+    members: list[str],
+    rings: list[int],
+    ring_busy: bool,
+    dial_opts: str,
+    music: str,
+) -> list[str]:
+    """One member at a time in a moving order (issue #166). The members and
+    their ring times are ``:``-separated lists picked by index in a While
+    loop; the order's state is in AstDB ``veyra/rg/<org>/<slug>``: ``next``
+    (circular, round robin) or ``idle_<endpoint>`` (the time a member last
+    answered, longest idle). The answering member's channel writes it
+    through Dial ``U()``, so a caller who hangs up first changes nothing."""
+    count = len(members)
+    family = f"{RG_STATE_FAMILY}/{org}/{slug}"
+    lines = [
+        f" same => n,Set(VEYRA_EPS={':'.join(members)})",
+        f" same => n,Set(VEYRA_RINGS={':'.join(str(r) for r in rings)})",
+        " same => n,Set(VEYRA_T=0)",
+    ]
+    if strategy == "longest_idle":
+        lines.append(f" same => n,Set(VEYRA_LEFT=-{'-'.join(str(i) for i in range(count))}-)")
+    else:
+        lines += [
+            f" same => n,Set(VEYRA_S=${{DB({family}/next)}})",
+            f' same => n,ExecIf($[!${{REGEX("^[0-9]+$" ${{VEYRA_S}})}} | 0${{VEYRA_S}} >= {count}]'
+            "?Set(VEYRA_S=0))",
+        ]
+        if strategy == "roundrobin":
+            lines.append(f" same => n,Set(DB({family}/next)=$[(${{VEYRA_S}} + 1) % {count}])")
+    lines.append(f" same => n,While($[${{VEYRA_T}} < {count}])")
+    if strategy == "longest_idle":
+        lines += [" same => n,Set(VEYRA_I=-1)", " same => n,Set(VEYRA_BT=99999999999)"]
+        for i, ep in enumerate(members):
+            idle = f"0${{DB({family}/idle_{ep})}}"
+            lines += [
+                f' same => n,Set(VEYRA_C=$[${{REGEX("-{i}-" ${{VEYRA_LEFT}})}} & '
+                f"{idle} < ${{VEYRA_BT}}])",
+                f" same => n,ExecIf(${{VEYRA_C}}?Set(VEYRA_I={i}))",
+                f" same => n,ExecIf(${{VEYRA_C}}?Set(VEYRA_BT={idle}))",
+            ]
+        lines += [
+            " same => n,ExecIf($[${VEYRA_I} < 0]?ExitWhile())",
+            " same => n,Set(VEYRA_LEFT=${STRREPLACE(VEYRA_LEFT,-${VEYRA_I}-,-)})",
+        ]
+    else:
+        lines.append(f" same => n,Set(VEYRA_I=$[(${{VEYRA_S}} + ${{VEYRA_T}}) % {count}])")
+    lines += [
+        " same => n,Set(VEYRA_T=$[${VEYRA_T} + 1])",
+        " same => n,Set(VEYRA_EP=${CUT(VEYRA_EPS,:,$[${VEYRA_I} + 1])})",
+    ]
+    if not ring_busy:
+        lines.append(
+            ' same => n,GotoIf($["${DEVICE_STATE(PJSIP/${VEYRA_EP})}"'
+            f' : "{BUSY_STATES}"]?hnext)'
+        )
+    if strategy == "circular":
+        state = f"next^$[(${{VEYRA_I}} + 1) % {count}]"
+    elif strategy == "longest_idle":
+        state = "idle_${VEYRA_EP}^${EPOCH}"
+    else:
+        state = ""
+    opts = dial_opts
+    if state:
+        opts = dial_opts.replace(
+            f"U({CONTEXT_LASTCID})", f"U({CONTEXT_RG_ANSWERED}^{org}^{slug}^{state})"
+        )
+    lines += [
+        f" same => n,Dial(PJSIP/${{VEYRA_EP}},${{CUT(VEYRA_RINGS,:,$[${{VEYRA_I}} + 1])}}{opts})",
+        ' same => n,ExecIf($["${DIALSTATUS}"="ANSWER"]?ExitWhile())',
+        " same => n(hnext),EndWhile()",
+        ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
+    ]
+    return lines
+
+
+def _rg_answered_context() -> list[str]:
+    """Gosub on the answering member of a hunting group (issue #166): the
+    last-caller record, then the group's state (ARG1 org, ARG2 group, ARG3
+    key, ARG4 value)."""
+    return [
+        f"[{CONTEXT_RG_ANSWERED}]",
+        f"exten => s,1,Gosub({CONTEXT_LASTCID},s,1)",
+        f" same => n,Set(DB({RG_STATE_FAMILY}/${{ARG1}}/${{ARG2}}/${{ARG3}})=${{ARG4}})",
+        " same => n,Return()",
+        "",
+    ]
 
 
 def _queue_contexts(

@@ -148,6 +148,7 @@ def test_ring_group_ringall_skips_busy_members_and_fails_over():
         " same => n,Goto(failover)\n"
         " same => n(done),Hangup()\n"
         " same => n(failover),NoOp(Veyra ring group Sales: not answered)\n"
+        ' same => n,GotoIf($["${DB(veyra/vmabs/veyra/1002)}"="refuse"]?veyra-vm-absent,1002,1)\n'
         " same => n,VoiceMail(1002@veyra,u)\n"
         " same => n,Hangup()\n"
         " same => n(toodeep),NoOp(Veyra: groups and queues point at each other in a loop)\n" in dp
