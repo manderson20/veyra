@@ -116,9 +116,9 @@ features.remote_phonebook.enable = 1
 ## Hotline (issue #168): lifting the handset dials the first line's hotline
 ## number, at once or after the delay without a digit (warm line).
 {% set hl = lines[0] if lines else None %}
-{% if hl and hl.hotline %}
+{% if hl and hl.get("hotline") %}
 features.hotline_number = {{ c(hl.hotline) }}
-features.hotline_delay = {{ hl.hotline_delay }}
+features.hotline_delay = {{ hl.get("hotline_delay", 0) }}
 {% else %}
 features.hotline_number =
 {% endif %}

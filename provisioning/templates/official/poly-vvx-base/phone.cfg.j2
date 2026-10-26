@@ -129,7 +129,7 @@
     up.screenSaver.waitTime="{{ screen_saver_minutes if screen_saver_minutes > 0 else 10 }}" />
 {% endblock %}
 {% block hotline %}
-{% for line in lines if line.hotline %}
+{% for line in lines if line.get("hotline") %}
   <!-- Hotline (issue #168): lifting the handset on this line dials the
        number at once; Poly has no warm-line delay, so a delay is ignored. -->
   <call
