@@ -1282,6 +1282,7 @@ def _dialplan(
             lines += _voicemail_exit_contexts(my_boxes(ns))
             lines += _voicemail_play_context()
             lines += _voicemail_absent_context()
+            lines += _spy_context()
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _internal(
@@ -1692,6 +1693,80 @@ def _call_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
             ],
         )
     return lines
+
+
+SPY_MODES = {
+    "spy_listen": ("listen", ""),
+    "spy_whisper": ("whisper", "w"),
+    "spy_barge": ("barge", "B"),
+}
+MONITOR_EVENT = "VeyraMonitor"
+
+
+def _spy_codes(
+    codes: dict[str, str], cos: Cos | None, extensions: list[dict[str, Any]]
+) -> list[str]:
+    """``*222``/``*223``/``*224`` + extension (issue #167): listen, whisper or
+    join that phone's call. Only phones of a class that allows supervising
+    may use them (a phone without a class may not); extensions of a protected
+    class have their own entry that refuses. The target's device comes from
+    its hint, so only this namespace's extensions can be reached."""
+    n = engine_names.current()
+    allowed = sorted(str(c["slug"]) for c in (cos.classes if cos else []) if c.get("allow_monitor"))
+    protected = {str(c["slug"]) for c in (cos.classes if cos else []) if c.get("monitor_protected")}
+    if not allowed:
+        return []
+    alternatives = "|".join(re.escape(a) for a in allowed)
+    lines: list[str] = []
+    for key, (mode, opt) in SPY_MODES.items():
+        code = codes.get(key)
+        if not code:
+            continue
+        cut = len(code)
+        for ext in extensions:
+            if str(ext.get("class_of_service") or "") in protected:
+                lines += [
+                    f"exten => {code}{ext['number']},1,NoOp(Veyra: {ext['number']} may not be "
+                    "monitored)",
+                    " same => n,Answer()",
+                    " same => n,Playback(pbx-invalid)",
+                    " same => n,Hangup()",
+                ]
+        lines += [
+            f"exten => _{code}.,1,NoOp(Veyra {mode} on ${{EXTEN:{cut}}} by ${{VEYRA_EXT}})",
+            ' same => n,GotoIf($["${VEYRA_EXT}"=""]?nophone)',
+            f' same => n,GotoIf(${{REGEX("^({alternatives})$" ${{VEYRA_COS}})}}?spy:cosdenied)',
+            f" same => n(spy),Set(VEYRA_SPYDEV=${{HINT(${{EXTEN:{cut}}}@{n.internal})}})",
+            ' same => n,GotoIf($[!${REGEX("^PJSIP/[A-Za-z0-9_.-]+$" ${VEYRA_SPYDEV})}]?cosdenied)',
+            f' same => n,GotoIf($["${{EXTEN:{cut}}}"="${{VEYRA_EXT}}"]?cosdenied)',
+            f" same => n,UserEvent({MONITOR_EVENT},Org: ${{VEYRA_ORG}},By: ${{VEYRA_EXT}},"
+            f"Target: ${{EXTEN:{cut}}},Mode: {mode})",
+            " same => n,Answer()",
+            # The "-" keeps 1001 from matching 10010's channels.
+            f" same => n,ChanSpy(${{VEYRA_SPYDEV}}-,qE{opt})",
+            " same => n,Hangup()",
+            *_STATE_TAIL,
+            *COS_DENIED,
+        ]
+    return lines
+
+
+def _spy_context() -> list[str]:
+    """The supervisor's phone, rung from the web (issue #167): the API passes
+    the call's channel name and the mode; both are checked again here."""
+    n = engine_names.current()
+    return [
+        f"[{n.spy}]",
+        "exten => s,1,NoOp(Veyra supervisor ${VEYRA_SPY_MODE} on ${VEYRA_SPY_CHAN})",
+        ' same => n,GotoIf($[!${REGEX("^PJSIP/[A-Za-z0-9_.-]+-[0-9a-f]+$" '
+        "${VEYRA_SPY_CHAN})}]?bad)",
+        ' same => n,Set(VEYRA_OPT=${IF($["${VEYRA_SPY_MODE}"="whisper"]?w:'
+        '${IF($["${VEYRA_SPY_MODE}"="barge"]?B:)})})',
+        " same => n,Answer()",
+        " same => n,ChanSpy(${VEYRA_SPY_CHAN},qE${VEYRA_OPT})",
+        " same => n(bad),Hangup()",
+        "",
+    ]
 
 
 def _cw_clear_context() -> list[str]:
@@ -2243,7 +2318,12 @@ def _features(
             " same => n(denied),Playback(pbx-invalid)",
             " same => n,Hangup()",
         ]
-    lines += ["", f"[{n.call_codes}]", *_call_codes(codes, cos)]
+    lines += [
+        "",
+        f"[{n.call_codes}]",
+        *_call_codes(codes, cos),
+        *_spy_codes(codes, cos, extensions),
+    ]
     lines.append("")
     return lines
 

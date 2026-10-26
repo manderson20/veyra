@@ -222,6 +222,31 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
     ),
     FeatureCodeDef("acr_off", "*87", "Accept callers who hide their number", "", 22),
     FeatureCodeDef(
+        "spy_listen",
+        "*222",
+        "Listen to a call (supervisor)",
+        "Followed by an extension: hear its call without being heard. Only phones whose "
+        "class of service allows supervising.",
+        22,
+        True,
+    ),
+    FeatureCodeDef(
+        "spy_whisper",
+        "*223",
+        "Whisper on a call (supervisor)",
+        "Followed by an extension: only that phone's user hears you.",
+        22,
+        True,
+    ),
+    FeatureCodeDef(
+        "spy_barge",
+        "*224",
+        "Join a call (supervisor)",
+        "Followed by an extension: both sides of its call hear you.",
+        22,
+        True,
+    ),
+    FeatureCodeDef(
         "vm_direct",
         "*",
         "Direct to voicemail",
@@ -255,9 +280,12 @@ PRESETS: dict[str, dict[str, Any]] = {
         "codes": {
             "cfu_on": "*92",
             "cfu_off": "*93",
-            # Metaswitch *85 turns caller ID delivery off; *47 starts a monitor.
+            # Metaswitch *85 turns caller ID delivery off; *47-*49 supervise.
             "park_pickup": "*88",
             "queue_count": "*44",
+            "spy_listen": "*47",
+            "spy_whisper": "*48",
+            "spy_barge": "*49",
         },
         "notes": [
             "Group pickup stays *8 (Metaswitch *11) and directed pickup ** plus the "

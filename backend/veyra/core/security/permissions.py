@@ -124,6 +124,11 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         default_roles=("org_admin", "site_admin", "technician"),
     ),
     PermissionDef(
+        "calls.monitor",
+        "Listen to, whisper on and join calls in progress (supervisor)",
+        default_roles=("org_admin", "site_admin"),
+    ),
+    PermissionDef(
         "calls.record",
         "Start and stop recording a call in progress",
         default_roles=("org_admin", "site_admin"),

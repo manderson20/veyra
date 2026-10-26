@@ -113,6 +113,14 @@ class FakeAdapter(TelephonyAdapter):
         self.hung_up.append(channel_id)
         self.calls = [c for c in self.calls if c.channel_id != channel_id]
 
+    def monitor_call(
+        self, channel_id: str, supervisor_endpoint: str, mode: str, *, context: str, caller_id: str
+    ) -> str:
+        calls = getattr(self, "monitor_calls", [])
+        self.monitor_calls = calls
+        calls.append((channel_id, supervisor_endpoint, mode, context))
+        return f"spy-{len(calls)}"
+
     def record_call(self, channel_id: str, start: bool) -> None:
         recording = getattr(self, "recording", set())
         self.recording = recording

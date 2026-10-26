@@ -443,6 +443,8 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "allow_external_forwards": c.allow_external_forwards,
                 "allow_external_follow_me": c.allow_external_follow_me,
                 "allow_intercom": c.allow_intercom,
+                "allow_monitor": c.allow_monitor,
+                "monitor_protected": c.monitor_protected,
                 "max_outbound_calls": c.max_outbound_calls,
             }
             for c in classes

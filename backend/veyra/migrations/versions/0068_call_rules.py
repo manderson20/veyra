@@ -2,7 +2,8 @@
 """Forward when unreachable, call waiting off, anonymous call rejection, Do
 Not Disturb exceptions (issues #163, #165, #170), the trunk channels kept
 for emergency calls (issue #171), the voicemail extended absence (#169),
-hotline phones (#168) and per-member ring times in ring groups (#166).
+hotline phones (#168), per-member ring times in ring groups (#166) and the
+supervisor flags of a class of service (#167).
 
 Revision ID: 0068
 Revises: 0067
@@ -66,8 +67,19 @@ def upgrade() -> None:
 
     op.add_column("ring_group_members", sa.Column("ring_seconds", sa.Integer(), nullable=True))
 
+    op.add_column(
+        "classes_of_service",
+        sa.Column("allow_monitor", sa.Boolean(), nullable=False, server_default="false"),
+    )
+    op.add_column(
+        "classes_of_service",
+        sa.Column("monitor_protected", sa.Boolean(), nullable=False, server_default="false"),
+    )
+
 
 def downgrade() -> None:
+    op.drop_column("classes_of_service", "monitor_protected")
+    op.drop_column("classes_of_service", "allow_monitor")
     op.drop_column("ring_group_members", "ring_seconds")
     op.drop_column("extensions", "hotline_delay")
     op.drop_column("extensions", "hotline_target")

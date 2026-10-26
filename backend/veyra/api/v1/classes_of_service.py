@@ -54,6 +54,9 @@ class ClassIn(BaseModel):
     allow_external_follow_me: bool = True
     allow_intercom: bool = True
     allow_fax: bool = True
+    # Supervisor codes (issue #167).
+    allow_monitor: bool = False
+    monitor_protected: bool = False
     max_outbound_calls: int | None = Field(None, ge=1, le=500)
 
     @field_validator("name")
@@ -90,6 +93,8 @@ class ClassPatch(BaseModel):
     allow_external_follow_me: bool | None = None
     allow_intercom: bool | None = None
     allow_fax: bool | None = None
+    allow_monitor: bool | None = None
+    monitor_protected: bool | None = None
     max_outbound_calls: int | None = Field(None, ge=1, le=500)
     no_call_limit: bool | None = None
 
@@ -112,6 +117,8 @@ class ClassOut(BaseModel):
     allow_external_follow_me: bool
     allow_intercom: bool
     allow_fax: bool
+    allow_monitor: bool = False
+    monitor_protected: bool = False
     max_outbound_calls: int | None
     extensions: int
     created_at: datetime
@@ -156,6 +163,8 @@ def _outs(db: Session, rows: list[ClassOfService]) -> list[ClassOut]:
             allow_external_follow_me=r.allow_external_follow_me,
             allow_intercom=r.allow_intercom,
             allow_fax=r.allow_fax,
+            allow_monitor=r.allow_monitor,
+            monitor_protected=r.monitor_protected,
             max_outbound_calls=r.max_outbound_calls,
             extensions=int(counts.get(r.id, 0)),
             created_at=r.created_at,
@@ -252,6 +261,8 @@ def create_class(
         allow_external_follow_me=body.allow_external_follow_me,
         allow_intercom=body.allow_intercom,
         allow_fax=body.allow_fax,
+        allow_monitor=body.allow_monitor,
+        monitor_protected=body.monitor_protected,
         max_outbound_calls=body.max_outbound_calls,
     )
     db.add(row)
@@ -341,6 +352,8 @@ def update_class(
         "allow_external_follow_me",
         "allow_intercom",
         "allow_fax",
+        "allow_monitor",
+        "monitor_protected",
     ):
         if changes.get(field) is not None and changes[field] != getattr(row, field):
             setattr(row, field, changes[field])

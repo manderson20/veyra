@@ -133,6 +133,11 @@ class Names:
         return self._p("vmplay")
 
     @property
+    def spy(self) -> str:
+        """A supervisor's phone rung from the web to listen to a call (issue #167)."""
+        return self._p("spy")
+
+    @property
     def voicemail_absent(self) -> str:
         """A box on extended absence that takes no messages (issue #169)."""
         return self._p("vm-absent")

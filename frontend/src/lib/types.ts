@@ -3185,6 +3185,9 @@ export interface ClassOfService {
   allow_external_forwards: boolean;
   allow_external_follow_me: boolean;
   allow_intercom: boolean;
+  /** Supervisor codes (issue #167). */
+  allow_monitor?: boolean;
+  monitor_protected?: boolean;
   allow_fax: boolean;
   max_outbound_calls: number | null;
   extensions: number;
@@ -3202,6 +3205,8 @@ export interface ClassOfServiceInput {
   allow_external_forwards?: boolean;
   allow_external_follow_me?: boolean;
   allow_intercom?: boolean;
+  allow_monitor?: boolean;
+  monitor_protected?: boolean;
   allow_fax?: boolean;
   max_outbound_calls?: number | null;
   no_call_limit?: boolean;

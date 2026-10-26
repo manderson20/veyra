@@ -503,6 +503,34 @@ like the forwards):
 The row is the record (`extension_states`, migration 0068); the worker's
 sync rewrites the engine's copy as for DND.
 
+### 3.11 Supervisor listen, whisper and barge (issue #167)
+
+*Built 2026-10-26 (Metaswitch comparison, roadmap row 9).*
+
+* **Who:** a class of service has **May listen to, whisper on and join
+  calls** (`allow_monitor`, off by default) and **Never monitored**
+  (`monitor_protected`, for counselors and nurses). A phone without a class
+  may *not* use the codes, unlike the other codes, and no code is rendered
+  while no class allows supervising.
+* **Phone codes** (Feature Codes page): `*222`, `*223`, `*224` plus an
+  extension, to listen, whisper (only the extension's user hears you) or
+  barge (both sides hear you). The target's device comes from its hint in
+  the phone's own context, so only the organization's own extensions are
+  reachable, and a protected extension has its own entry that refuses. The
+  dialplan sends `UserEvent(VeyraMonitor)`, which the API audits as
+  `call.monitor` (actor "phone <ext>"). In the Metaswitch code set they are
+  `*47`/`*48`/`*49`.
+* **Web:** permission `calls.monitor` (organization and site administrators
+  by default); the live Calls page has a **Supervise…** choice per call.
+  `POST /calls/{channel}/monitor {mode, extension_id?}` rings the
+  supervisor's own phone (or a phone they administer) into `<ns>-spy`,
+  which runs `ChanSpy` on the call's channel once answered. Refused for a
+  protected class and across organizations (platform administrators
+  excepted). Audited `call.monitor` with the mode and both extensions.
+* ChanSpy runs with `q` (no announcement), `E` (ends with the call); the
+  monitored parties hear nothing. Recording-consent and notification rules
+  differ by state; the class-of-service option says so.
+
 ## 4. Call-flow features (Milestone 19)
 
 Parking (`res_parking` lots per organization, `70` parks, `71–79` slots

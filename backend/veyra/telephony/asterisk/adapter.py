@@ -115,6 +115,8 @@ def _check_interface(value: str) -> str:
 SWITCH_FAMILY = "veyra/switch"
 _CONF_NAME_RE = re.compile(r"^veyra[A-Za-z0-9_-]{0,80}$")
 _CONF_CHANNEL_RE = re.compile(r"^[A-Za-z]+/[A-Za-z0-9_.@;+-]{1,120}$")
+# A phone's channel, as the spy context accepts it (issue #167).
+_SPY_CHANNEL_RE = re.compile(r"^PJSIP/[A-Za-z0-9_.-]+-[0-9a-f]+$")
 
 
 def _check_conference(room: str) -> str:
@@ -567,6 +569,23 @@ class AsteriskAdapter(TelephonyAdapter):
                 self.ari.set_variable(channel_id, "VEYRA_ONDEMAND_WEB", "")
         if not ok or "No such channel" in out or "Cannot" in out:
             raise EngineUnavailable(out[:200] or "the engine refused the command")
+
+    def monitor_call(
+        self, channel_id: str, supervisor_endpoint: str, mode: str, *, context: str, caller_id: str
+    ) -> str:
+        if mode not in ("listen", "whisper", "barge"):
+            raise ValueError(f"unknown monitor mode {mode!r}")
+        name = str(self.ari.channel(channel_id).get("name") or "")
+        if not _SPY_CHANNEL_RE.match(name):
+            raise EngineUnavailable("the call's channel is not known")
+        return self.originate_channel(
+            f"PJSIP/{_check_token(supervisor_endpoint, 'endpoint')}",
+            "s",
+            context=context,
+            caller_id=caller_id,
+            timeout=30,
+            variables={"VEYRA_SPY_CHAN": name, "VEYRA_SPY_MODE": mode},
+        )
 
     def conference_live(self, room: str) -> dict[str, Any] | None:
         name = _check_conference(room)

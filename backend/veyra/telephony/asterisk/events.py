@@ -228,6 +228,60 @@ def _presence(event: dict[str, Any]) -> None:
         log.exception("Could not handle the presence event")
 
 
+MONITOR_EVENT = "VeyraMonitor"
+
+
+def is_monitor_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == MONITOR_EVENT
+
+
+def _monitor(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraMonitor)`` from ``*222``/``*223``/``*224`` (issue #167):
+    every supervisor session from a phone is audited; never raises."""
+    try:
+        from sqlalchemy import select
+
+        from veyra.core import audit
+        from veyra.core.db import session_scope
+        from veyra.core.models import Extension, Organization
+
+        ue = event.get("userevent") or {}
+
+        def field(name: str) -> str:
+            return str(ue.get(name) or ue.get(name.lower()) or "").strip()
+
+        with session_scope() as db:
+            org = db.scalar(select(Organization).where(Organization.slug == field("Org")))
+            target = (
+                db.scalar(
+                    select(Extension).where(
+                        Extension.organization_id == org.id,
+                        Extension.number == field("Target"),
+                    )
+                )
+                if org
+                else None
+            )
+            audit.record(
+                db,
+                action="call.monitor",
+                actor_type="system",
+                actor_label=f"phone {field('By')}",
+                organization_id=org.id if org else None,
+                target_type="extension" if target else None,
+                target_id=target.id if target else None,
+                details={
+                    "mode": field("Mode"),
+                    "target": field("Target"),
+                    "supervisor_phone": field("By"),
+                    "via": "feature code",
+                },
+            )
+            db.commit()
+    except Exception:
+        log.exception("Could not audit the monitor event")
+
+
 SWITCH_EVENT = "VeyraSwitch"
 
 
@@ -434,6 +488,8 @@ class AriEventListener:
                             _switch(event)
                         elif is_presence_event(event):
                             _presence(event)
+                        elif is_monitor_event(event):
+                            await asyncio.to_thread(_monitor, event)
                         elif is_page_event(event):
                             await asyncio.to_thread(_page, event)
                         elif is_blacklist_event(event):

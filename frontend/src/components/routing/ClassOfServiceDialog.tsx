@@ -26,6 +26,8 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
   const [extForwards, setExtForwards] = useState(true);
   const [extFollowMe, setExtFollowMe] = useState(true);
   const [intercom, setIntercom] = useState(true);
+  const [monitor, setMonitor] = useState(false);
+  const [protectedCls, setProtectedCls] = useState(false);
   const [fax, setFax] = useState(true);
   const [maxCalls, setMaxCalls] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,6 +46,8 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
       setExtForwards(cls?.allow_external_forwards ?? true);
       setExtFollowMe(cls?.allow_external_follow_me ?? true);
       setIntercom(cls?.allow_intercom ?? true);
+      setMonitor(cls?.allow_monitor ?? false);
+      setProtectedCls(cls?.monitor_protected ?? false);
       setFax(cls?.allow_fax ?? true);
       setMaxCalls(cls?.max_outbound_calls ? String(cls.max_outbound_calls) : "");
       errors.clear();
@@ -65,6 +69,8 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
         allow_external_forwards: extForwards,
         allow_external_follow_me: extFollowMe,
         allow_intercom: intercom,
+        allow_monitor: monitor,
+        monitor_protected: protectedCls,
         allow_fax: fax,
         ...(allCodes ? (cls ? { all_feature_codes: true } : { allowed_feature_code_keys: null }) : { allowed_feature_code_keys: codes }),
         ...(maxCalls.trim() ? { max_outbound_calls: Number(maxCalls) } : (cls ? { no_call_limit: true } : {})),
@@ -110,6 +116,10 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
           <Checkbox label="Follow-me may ring outside numbers" checked={extFollowMe} onChange={(e) => setExtFollowMe(e.target.checked)} />
           <Checkbox label="May use intercom" checked={intercom} onChange={(e) => setIntercom(e.target.checked)} />
           <Checkbox label="May send faxes from My Phone" checked={fax} onChange={(e) => setFax(e.target.checked)} />
+          <Checkbox label="May listen to, whisper on and join calls (supervisor codes)" checked={monitor} onChange={(e) => setMonitor(e.target.checked)}
+            description="The phone codes *222, *223 and *224 plus an extension. Check your state's recording-consent rules." />
+          <Checkbox label="Never monitored" checked={protectedCls} onChange={(e) => setProtectedCls(e.target.checked)}
+            description="For counselors, nurses and others whose calls must stay private: no supervisor code or web button reaches these phones." />
           <TextField label="Outside calls at once (empty: no limit)" type="number" min={1} max={500} value={maxCalls} error={errors.fields.max_outbound_calls} onChange={(e) => setMaxCalls(e.target.value)} help="Counted across all phones of the class." />
         </div>
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}

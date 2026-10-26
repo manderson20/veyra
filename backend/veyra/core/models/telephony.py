@@ -96,6 +96,10 @@ class ClassOfService(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     allow_intercom: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     # May send faxes from My Phone (docs/USER_PORTAL.md §9).
     allow_fax: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # Supervisor listen, whisper and barge (issue #167): this class's phones
+    # may use the codes; phones of a protected class are never monitored.
+    allow_monitor: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    monitor_protected: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Simultaneous outside calls of the class's phones together; None: no limit.
     max_outbound_calls: Mapped[int | None] = mapped_column(Integer)
 

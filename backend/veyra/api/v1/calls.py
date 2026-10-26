@@ -343,3 +343,107 @@ def record(
     return MessageOut(
         message="Recording started." if body.action == "start" else "Recording stopped."
     )
+
+
+class MonitorIn(BaseModel):
+    mode: str = Field(pattern="^(listen|whisper|barge)$")
+    # The supervisor's phone; empty: the first of your own extensions.
+    extension_id: uuid.UUID | None = None
+
+
+@router.post(
+    "/{channel_id}/monitor",
+    response_model=MessageOut,
+    status_code=202,
+    summary="Listen to, whisper on or join a call in progress (supervisor)",
+)
+def monitor(
+    channel_id: str,
+    body: MonitorIn,
+    request: Request,
+    principal: Principal = Depends(require("calls.monitor")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> MessageOut:
+    """Issue #167: rings the supervisor's phone; once answered it hears the
+    call (listen), talks to the extension's user only (whisper) or to both
+    sides (barge). Every session is audited. A class of service may protect
+    its phones from being monitored."""
+    from veyra.core.models import ClassOfService
+
+    adapter = _adapter(request)
+    if Capability.ACTIVE_CALLS not in adapter.capabilities() or not _CHANNEL_RE.match(channel_id):
+        raise not_found("Call")
+    try:
+        calls = adapter.active_calls()
+    except (EngineUnavailable, NotSupported) as e:
+        raise conflict(f"The engine cannot report calls: {e}", "not_available") from e
+    call = next((c for c in calls if c.channel_id == channel_id), None)
+    if call is None:
+        raise not_found("Call")
+    rows = db.scalars(visible_extensions(principal, "calls.monitor")).all()
+    target = next((e for e in rows if e.endpoint_name == call.endpoint), None)
+    if target is None:
+        raise not_found("Call")
+    if target.class_of_service_id is not None:
+        cos = db.get(ClassOfService, target.class_of_service_id)
+        if cos is not None and cos.monitor_protected:
+            raise conflict(
+                f"Extension {target.number}'s class of service does not allow monitoring.",
+                "monitor_protected",
+            )
+    if body.extension_id is not None:
+        phone = db.get(Extension, body.extension_id)
+        if phone is None:
+            raise not_found("Extension")
+        if phone.user_id != principal.user_id and not principal.has(
+            "extensions.write", phone.organization_id
+        ):
+            raise forbidden("You can only use your own phone to monitor a call.")
+    else:
+        phone = db.scalar(
+            select(Extension)
+            .where(Extension.user_id == principal.user_id, Extension.is_enabled.is_(True))
+            .order_by(Extension.number)
+        )
+        if phone is None:
+            raise conflict("You have no phone to listen on; choose one.", "no_phone")
+    if phone.organization_id != target.organization_id and not principal.is_platform_admin:
+        raise forbidden("The phone and the call are in different organizations.")
+    if phone.id == target.id:
+        raise conflict("That is the call on your own phone.", "same_number")
+    details = {
+        "channel": channel_id,
+        "mode": body.mode,
+        "target": target.number,
+        "supervisor_phone": phone.number,
+        "from": call.caller,
+        "to": call.callee,
+    }
+    try:
+        spy = adapter.monitor_call(
+            channel_id,
+            phone.endpoint_name,
+            body.mode,
+            context=tenancy.names_of(db, phone.organization_id).spy,
+            caller_id=f"Monitor {target.number} <{target.number}>",
+        )
+    except ValueError as e:
+        raise conflict(str(e), "monitor_refused") from e
+    except (EngineUnavailable, NotSupported) as e:
+        raise conflict(f"The engine did not start monitoring: {e}", "monitor_failed") from e
+    audit.record(
+        db,
+        action="call.monitor",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=target.organization_id,
+        target_type="extension",
+        target_id=target.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={**details, "supervisor_channel": spy},
+    )
+    db.commit()
+    verb = {"listen": "listen to", "whisper": "whisper on", "barge": "join"}[body.mode]
+    return MessageOut(message=f"Extension {phone.number} is ringing; answer it to {verb} the call.")

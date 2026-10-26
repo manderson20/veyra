@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Button, Callout, Card, DataTable, EmptyState, PageHeader, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Callout, Card, DataTable, EmptyState, PageHeader, SelectField, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import type { ActiveCall, ActiveCalls } from "@/lib/types";
@@ -33,6 +33,21 @@ export default function ActiveCallsPage() {
   const [ending, setEnding] = useState<string | null>(null);
   const canHangUp = can("calls.hangup");
   const canRecord = can("calls.record");
+  const canMonitor = can("calls.monitor");
+  const [monBusy, setMonBusy] = useState<string | null>(null);
+  // Supervisor (issue #167): your phone rings; answering it starts listening.
+  const supervise = async (c: ActiveCall, mode: string) => {
+    if (!mode) return;
+    setMonBusy(c.channel_id);
+    try {
+      const r = await api.post<{ message: string }>(`/calls/${encodeURIComponent(c.channel_id)}/monitor`, { mode });
+      toast.success(r.message, "The session is recorded in the audit log.");
+    } catch (err) {
+      toast.error("Could not start supervising", errorMessage(err));
+    } finally {
+      setMonBusy(null);
+    }
+  };
   // Recordings started here (issue #135); the engine refuses a second one.
   const [recording, setRecording] = useState<Set<string>>(new Set());
   const [recBusy, setRecBusy] = useState<string | null>(null);
@@ -92,6 +107,15 @@ export default function ActiveCallsPage() {
           {recording.has(c.channel_id) ? "Stop recording" : "Record"}
         </Button>
       ),
+    }] : []),
+    ...(canMonitor ? [{
+      key: "monitor",
+      header: <span className="sr-only">Supervise</span>,
+      render: (c: ActiveCall) => c.extension_number ? (
+        <SelectField label={<span className="sr-only">Supervise the call on {c.extension_number}</span>} value="" placeholder="Supervise…" disabled={monBusy === c.channel_id}
+          options={[{ value: "listen", label: "Listen" }, { value: "whisper", label: "Whisper to the user" }, { value: "barge", label: "Join the call" }]}
+          onChange={(e) => void supervise(c, e.target.value)} />
+      ) : null,
     }] : []),
     ...(canHangUp ? [{
       key: "hangup",

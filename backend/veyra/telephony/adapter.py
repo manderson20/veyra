@@ -250,6 +250,14 @@ class TelephonyAdapter(ABC):
         #135); the file is filed like the phone's on-demand recording."""
         raise NotSupported(f"{self.name}: recording from the web not implemented")
 
+    def monitor_call(
+        self, channel_id: str, supervisor_endpoint: str, mode: str, *, context: str, caller_id: str
+    ) -> str:
+        """Ring a supervisor's phone and, when answered, listen to, whisper
+        on or join (``listen``/``whisper``/``barge``) the call on
+        ``channel_id`` (issue #167). Returns the supervisor's channel id."""
+        raise NotSupported(f"{self.name}: supervisor monitoring not implemented")
+
     def conference_live(self, room: str) -> dict[str, Any] | None:
         """A running conference (issue #96): ``{locked, participants: [{channel,
         caller_id, admin, muted, marked}]}``, or None when nobody is in it."""
