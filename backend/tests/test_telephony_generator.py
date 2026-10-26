@@ -107,6 +107,7 @@ def test_feature_codes_are_not_shadowed_by_the_catch_all():
     assert includes == [
         f"include => {generator.CONTEXT_FEATURES}",
         f"include => {generator.CONTEXT_PAGING}",
+        "include => veyra-call-codes",
         f"include => {generator.CONTEXT_OUTBOUND}",
         f"include => {generator.CONTEXT_INVALID}",
     ]

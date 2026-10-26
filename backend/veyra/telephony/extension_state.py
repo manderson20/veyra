@@ -26,10 +26,18 @@ from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 log = logging.getLogger("veyra.extension_state")
 
 RING_MIN, RING_MAX, RING_DEFAULT = 5, 120, 30
-FORWARD_FIELDS = ("cf_always", "cf_busy", "cf_no_answer")
-ENGINE_FIELDS = ("dnd", *FORWARD_FIELDS, "fmfm")
-# Row attribute -> engine field, where they differ.
-_ROW_FIELD = {"fmfm": "fmfm_enabled"}
+FORWARD_FIELDS = ("cf_always", "cf_busy", "cf_no_answer", "cf_unavailable")
+# On/off switches: engine field -> row attribute (issue #163 adds nocw, acr).
+_SWITCHES = {
+    "dnd": "dnd",
+    "fmfm": "fmfm_enabled",
+    "nocw": "call_waiting_off",
+    "acr": "anonymous_reject",
+}
+ENGINE_FIELDS = ("dnd", *FORWARD_FIELDS, "fmfm", "nocw", "acr", "dnd_allow")
+# Do Not Disturb exceptions (issue #170): at most this many numbers, stored
+# in the engine as one value joined with "-".
+DND_ALLOW_MAX = 20
 _NUMBER_RE = re.compile(r"^\+?[0-9]{2,20}$")
 # Presence states a user may show (docs/USER_PORTAL.md §7).
 PRESENCE_STATES = ("available", "away", "busy", "meeting", "lunch", "out")
@@ -78,6 +86,10 @@ def out(row: ExtensionState | None) -> dict[str, Any]:
             "cf_always": None,
             "cf_busy": None,
             "cf_no_answer": None,
+            "cf_unavailable": None,
+            "call_waiting_off": False,
+            "anonymous_reject": False,
+            "dnd_allow": [],
             "fmfm_enabled": False,
             "ring_seconds": RING_DEFAULT,
             "presence": "available",
@@ -90,6 +102,10 @@ def out(row: ExtensionState | None) -> dict[str, Any]:
         "cf_always": row.cf_always,
         "cf_busy": row.cf_busy,
         "cf_no_answer": row.cf_no_answer,
+        "cf_unavailable": row.cf_unavailable,
+        "call_waiting_off": row.call_waiting_off,
+        "anonymous_reject": row.anonymous_reject,
+        "dnd_allow": list(row.dnd_allow or []),
         "fmfm_enabled": row.fmfm_enabled,
         "ring_seconds": row.ring_seconds,
         "presence": row.presence or "available",
@@ -159,14 +175,53 @@ def normalize_number(field: str, value: Any) -> str | None:
     return text
 
 
+def dnd_key(number: str) -> str:
+    """How a Do Not Disturb exception is matched: its digits, and ten of them
+    for a North American number however it was written. The dialplan reduces
+    the caller's number the same way."""
+    digits = re.sub(r"[^0-9]", "", number)
+    if len(digits) == 11 and digits.startswith("1"):
+        return digits[1:]
+    return digits
+
+
+def normalize_dnd_allow(value: Any) -> list[str]:
+    """The exception list as given (numbers kept as typed, cleaned), without
+    duplicates by their match key."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise StateError("dnd_allow", "a list of numbers")
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        number = normalize_number("dnd_allow", item)
+        if number is None:
+            continue
+        key = dnd_key(number)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(number)
+    if len(out) > DND_ALLOW_MAX:
+        raise StateError("dnd_allow", f"at most {DND_ALLOW_MAX} numbers")
+    return out
+
+
 def engine_values(row: ExtensionState) -> dict[str, str | None]:
     """What the engine's copy of a row must hold."""
+    allow = "-".join(dnd_key(n) for n in (row.dnd_allow or []))
     return {
         "dnd": "1" if row.dnd else None,
         "cf_always": row.cf_always or None,
         "cf_busy": row.cf_busy or None,
         "cf_no_answer": row.cf_no_answer or None,
+        "cf_unavailable": row.cf_unavailable or None,
         "fmfm": "1" if row.fmfm_enabled else None,
+        "nocw": "1" if row.call_waiting_off else None,
+        "acr": "1" if row.anonymous_reject else None,
+        # Leading and trailing "-" so the dialplan can look for "-<number>-".
+        "dnd_allow": f"-{allow}-" if allow else None,
     }
 
 
@@ -205,16 +260,19 @@ def apply(
     engine write). Returns what actually changed."""
     row = ensure(db, extension)
     applied: dict[str, Any] = {}
-    if "dnd" in changes and changes["dnd"] is not None and bool(changes["dnd"]) != row.dnd:
-        row.dnd = bool(changes["dnd"])
-        applied["dnd"] = row.dnd
-    if (
-        "fmfm_enabled" in changes
-        and changes["fmfm_enabled"] is not None
-        and bool(changes["fmfm_enabled"]) != row.fmfm_enabled
-    ):
-        row.fmfm_enabled = bool(changes["fmfm_enabled"])
-        applied["fmfm"] = row.fmfm_enabled
+    for field, attr in _SWITCHES.items():
+        if (
+            attr in changes
+            and changes[attr] is not None
+            and bool(changes[attr]) != getattr(row, attr)
+        ):
+            setattr(row, attr, bool(changes[attr]))
+            applied[field] = getattr(row, attr)
+    if "dnd_allow" in changes:
+        allow = normalize_dnd_allow(changes["dnd_allow"])
+        if allow != list(row.dnd_allow or []):
+            row.dnd_allow = allow
+            applied["dnd_allow"] = allow
     for field in FORWARD_FIELDS:
         if field in changes:
             value = normalize_number(field, changes[field])
@@ -268,9 +326,12 @@ def handle_userevent(db: Session, userevent: dict[str, Any]) -> ExtensionState |
     if ext is None:
         return None
     row = ensure(db, ext)
-    if field in ("dnd", "fmfm"):
+    if field == "dnd_allow":
+        # Only the web changes the list; a phone never sends it.
+        return None
+    if field in _SWITCHES:
         value: Any = fields["value"] in ("1", "true", "on", "yes")
-        setattr(row, _ROW_FIELD.get(field, field), value)
+        setattr(row, _SWITCHES[field], value)
     else:
         try:
             value = normalize_number(field, fields["value"])

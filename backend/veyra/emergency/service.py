@@ -27,6 +27,7 @@ from veyra.core.models import (
     Installation,
     OutboundRoute,
     OutboundRouteTrunk,
+    SipTrunk,
     Site,
     User,
 )
@@ -319,8 +320,10 @@ def readiness(db: Session, site: Site, now: datetime | None = None) -> dict[str,
     now = now or utcnow()
     checks: list[dict[str, Any]] = []
 
-    def check(key: str, ok: bool, label: str, detail: str = "") -> None:
-        checks.append({"key": key, "ok": ok, "label": label, "detail": detail})
+    def check(key: str, ok: bool, label: str, detail: str = "", advisory: bool = False) -> None:
+        checks.append(
+            {"key": key, "ok": ok, "label": label, "detail": detail, "advisory": advisory}
+        )
 
     routes = list(
         db.scalars(
@@ -351,6 +354,35 @@ def readiness(db: Session, site: Site, now: datetime | None = None) -> dict[str,
         bool(with_trunks),
         "An enabled emergency route with a trunk reaches this site",
         ", ".join(r.name for r in with_trunks) or "none",
+    )
+    # Issue #171: a channel is kept for emergency calls only on a trunk whose
+    # channel count is known. Advice, not a condition of readiness.
+    trunks = (
+        list(
+            db.scalars(
+                select(SipTrunk)
+                .join(OutboundRouteTrunk, OutboundRouteTrunk.trunk_id == SipTrunk.id)
+                .where(OutboundRouteTrunk.route_id.in_([r.id for r in with_trunks]))
+                .distinct()
+            )
+        )
+        if with_trunks
+        else []
+    )
+    open_trunks = [
+        tr.name for tr in trunks if not tr.max_channels or not tr.emergency_reserved_channels
+    ]
+    check(
+        "reserve",
+        bool(trunks) and not open_trunks,
+        "Every emergency trunk keeps a channel free for emergency calls",
+        (
+            "set the carrier's channel count and the channels kept for emergency calls on: "
+            + ", ".join(open_trunks)
+        )
+        if open_trunks
+        else "",
+        advisory=True,
     )
     check(
         "elin",
@@ -404,7 +436,7 @@ def readiness(db: Session, site: Site, now: datetime | None = None) -> dict[str,
         if site.last_emergency_test_at
         else "",
     )
-    ready = all(c["ok"] for c in checks)
+    ready = all(c["ok"] for c in checks if not c["advisory"])
     return {"ready": ready, "checks": checks, "extensions": len(exts)}
 
 
@@ -431,7 +463,7 @@ def sites_overview(
                 "name": site.name,
                 "organization_id": str(site.organization_id),
                 "ready": r["ready"],
-                "missing": [c["label"] for c in r["checks"] if not c["ok"]],
+                "missing": [c["label"] for c in r["checks"] if not c["ok"] and not c["advisory"]],
                 "extensions": r["extensions"],
                 "calls": int(calls),
                 "elin": site.emergency_caller_id_number,

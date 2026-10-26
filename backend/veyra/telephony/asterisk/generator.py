@@ -172,6 +172,8 @@ CONTEXT_EMERGENCY_NOTIFY = "veyra-emergency-notify"
 # Runs on the phone that answers a ring group or queue call (Dial U(), the
 # Queue gosub): remembers the outside caller for *32 (issue #135).
 CONTEXT_LASTCID = "veyra-lastcid"
+# Hangup handler of a *70 call (issue #163): call waiting comes back.
+CONTEXT_CW_CLEAR = "veyra-cw-clear"
 ASTDB_CALLBACK = "veyra_ecb"
 DEFAULT_RING_SECONDS = 30
 # Where the prompts live and the script Asterisk hands notifications to;
@@ -874,6 +876,9 @@ def _trunks(sip: SipSettings, trunks: list[dict[str, Any]]) -> GeneratedFile:
             "force_rport=yes",
             "rewrite_contact=yes",
             "trust_id_inbound=yes",
+            # A withheld number (*67) still reaches the carrier in the
+            # identity header, marked private (issue #163).
+            "trust_id_outbound=yes",
             f"send_pai={'yes' if header == 'pai' else 'no'}",
             f"send_rpid={'yes' if header == 'rpid' else 'no'}",
             f"dtmf_mode={dtmf}",
@@ -1312,6 +1317,7 @@ def _dialplan(
             }
             lines += _paging_contexts(part, prompts_dir)
     lines += _lastcid_context()
+    lines += _cw_clear_context()
     lines += [
         f"[{CONTEXT_EMERGENCY_NOTIFY}]",
         "; A responder's phone rung by the on-site notification hears the",
@@ -1440,7 +1446,8 @@ def _code_block(head: str, body: list[str], cos: Cos | None, key: str) -> list[s
 # The forwarding lamp stays lit while any forward is set.
 _CF_LAMP = (
     f' same => n,Set(DEVICE_STATE({CF_DEVICE})=${{IF($["${{DB({STATE_KEY}/cf_always)}}'
-    f'${{DB({STATE_KEY}/cf_busy)}}${{DB({STATE_KEY}/cf_no_answer)}}"=""]?NOT_INUSE:INUSE)}})'
+    f"${{DB({STATE_KEY}/cf_busy)}}${{DB({STATE_KEY}/cf_no_answer)}}"
+    f'${{DB({STATE_KEY}/cf_unavailable)}}"=""]?NOT_INUSE:INUSE)}})'
 )
 
 
@@ -1594,6 +1601,100 @@ def _dnd_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
         ]
         lines += _code_block(head, body, cos, "dnd_toggle")
     return lines
+
+
+def _acr_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
+    """``*77``/``*87`` (issue #163): the phone refuses or accepts outside
+    callers who withhold their number; like DND, the engine's copy first."""
+    lines: list[str] = []
+    for key, on in (("acr_on", True), ("acr_off", False)):
+        if key not in codes:
+            continue
+        value = "1" if on else "0"
+        head = (
+            f"exten => {codes[key]},1,NoOp(Veyra anonymous call rejection {value} "
+            "for ${VEYRA_EXT})"
+        )
+        body = [
+            f" same => n,Set(DB({STATE_KEY}/acr)={value})",
+            _state_event("acr", value),
+            f" same => n,Playback({'activated' if on else 'de-activated'})",
+            " same => n,Hangup()",
+        ]
+        lines += _code_block(head, body, cos, key)
+    return lines
+
+
+def _call_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
+    """``*67<number>``, ``*69`` and ``*70<number>`` (issue #163). Each places a
+    call, so nothing answers the phone's channel first: the caller hears the
+    far end ring. The call goes on through the phone context, where the
+    class of service and the outbound routes apply as to any call."""
+    n = engine_names.current()
+    phone = ' same => n,GotoIf($["${VEYRA_EXT}"=""]?nophone)'
+
+    def block(head: str, key: str, body: list[str]) -> list[str]:
+        guard = cos.code_guard(key) if cos else []
+        return [head, phone, *guard, *body, *_STATE_TAIL, *(COS_DENIED if guard else [])]
+
+    lines: list[str] = []
+    code = codes.get("cid_block")
+    if code:
+        lines += block(
+            f"exten => _{code}.,1,NoOp(Veyra {code}: ${{VEYRA_EXT}} calls "
+            f"${{EXTEN:{len(code)}}} with the number withheld)",
+            "cid_block",
+            [
+                # An emergency route presents the number again.
+                " same => n,Set(CALLERID(pres)=prohib)",
+                f" same => n,Goto({n.internal},${{EXTEN:{len(code)}}},1)",
+            ],
+        )
+    code = codes.get("call_return")
+    if code:
+        lines += block(
+            f"exten => {code},1,NoOp(Veyra call return for ${{VEYRA_EXT}})",
+            "call_return",
+            [
+                f" same => n,Set(VEYRA_NUM=${{DB({LASTCID_FAMILY}/"
+                "${VEYRA_ORG}/${VEYRA_EXT})})",
+                # A withheld or missing number cannot be called back.
+                ' same => n,GotoIf($[${REGEX("^\\+?[0-9]{2,20}$" ${VEYRA_NUM})}]?call)',
+                " same => n,Answer()",
+                " same => n,Playback(vm-nonumber)",
+                " same => n,Hangup()",
+                # Ten digits for a North American number, as the routes expect.
+                ' same => n(call),ExecIf($[${REGEX("^\\+?1[2-9][0-9]{9}$" ${VEYRA_NUM})}]'
+                "?Set(VEYRA_NUM=${VEYRA_NUM:-10}))",
+                f" same => n,Goto({n.internal},${{VEYRA_NUM}},1)",
+            ],
+        )
+    code = codes.get("cw_off_once")
+    if code:
+        lines += block(
+            f"exten => _{code}.,1,NoOp(Veyra {code}: ${{VEYRA_EXT}} calls "
+            f"${{EXTEN:{len(code)}}} with call waiting off)",
+            "cw_off_once",
+            [
+                # The phone's incoming dialplan sees the key while this call is up.
+                f" same => n,Set(DB({STATE_KEY}/nocw_call)=${{UNIQUEID}})",
+                f" same => n,Set(CHANNEL(hangup_handler_push)={CONTEXT_CW_CLEAR},s,1"
+                "(${VEYRA_ORG},${VEYRA_EXT},${UNIQUEID}))",
+                f" same => n,Goto({n.internal},${{EXTEN:{len(code)}}},1)",
+            ],
+        )
+    return lines
+
+
+def _cw_clear_context() -> list[str]:
+    """The *70 call ended: its key goes, unless a newer *70 call set it."""
+    return [
+        f"[{CONTEXT_CW_CLEAR}]",
+        'exten => s,1,GotoIf($["${DB(veyra/ext/${ARG1}/${ARG2}/nocw_call)}"!="${ARG3}"]?done)',
+        " same => n,Set(VEYRA_GONE=${DB_DELETE(veyra/ext/${ARG1}/${ARG2}/nocw_call)})",
+        " same => n(done),Return()",
+        "",
+    ]
 
 
 PRESENCE_EVENT = "VeyraPresence"
@@ -2012,6 +2113,7 @@ def _features(
     lines = [
         f"[{n.features}]",
         *_dnd_codes(codes, cos),
+        *_acr_codes(codes, cos),
         *_presence_codes(codes, cos),
         *_forward_codes(codes, cos),
         *_follow_me_codes(codes, cos),
@@ -2102,6 +2204,7 @@ def _features(
             " same => n(denied),Playback(pbx-invalid)",
             " same => n,Hangup()",
         ]
+    lines += ["", f"[{n.call_codes}]", *_call_codes(codes, cos)]
     lines.append("")
     return lines
 
@@ -2138,6 +2241,7 @@ def _internal(
         f"include => {n.features}",
         *lot_includes,
         f"include => {n.paging}",
+        f"include => {n.call_codes}",
         f"include => {n.outbound}",
         f"include => {CONTEXT_INVALID}",
         *(extra_hints or []),
@@ -2233,16 +2337,49 @@ def _internal(
             # The last outside caller, for the block-last-caller code (§4.8).
             f' same => n,ExecIf($["${{VEYRA_DID}}"!="" & "${{CALLERID(num)}}"!=""]'
             f"?Set(DB({LASTCID_FAMILY}/{org_slug}/{number})=${{CALLERID(num)}}))",
-            f' same => n,GotoIf($["${{DB({state}/dnd)}}"="1"]?dnd)',
-            f" same => n,Set(VEYRA_CF=${{DB({state}/cf_always)}})",
+            # An outside caller without a number, when the phone refuses them (#163).
+            f' same => n,GotoIf($["${{DB({state}/acr)}}"="1" & "${{VEYRA_DID}}"!=""]?acr)',
+            f' same => n,GotoIf($["${{DB({state}/dnd)}}"="1"]?dndallow)',
+            f" same => n(ring),Set(VEYRA_CF=${{DB({state}/cf_always)}})",
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
+            # Call waiting off (#163): busy while the phone is on a call.
+            f' same => n,GotoIf($["${{DB({state}/nocw)}}${{DB({state}/nocw_call)}}"=""]?cw)',
+            f' same => n,GotoIf(${{REGEX("^(NOT_INUSE|UNAVAILABLE|UNKNOWN|INVALID)$" '
+            f"${{DEVICE_STATE(PJSIP/{endpoint})}})}}?cw:busy)",
+            " same => n(cw),NoOp()",
             *rec,
             *([f' same => n,GotoIf($["${{DB({state}/fmfm)}}"="1"]?fm)'] if fm_branch else []),
             *(cos.transfer_guard() if cos else []),
             f" same => n,Dial(PJSIP/{endpoint},{ring},{xfer})",
             ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)',
+            # No phone registered (#165): the offline forward, else as unanswered.
+            ' same => n,GotoIf($["${DIALSTATUS}"!="CHANUNAVAIL"]?noanswer)',
+            f" same => n,Set(VEYRA_CF=${{DB({state}/cf_unavailable)}})",
+            ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
             f" same => n(noanswer),Set(VEYRA_CF=${{DB({state}/cf_no_answer)}})",
             ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)',
+        ]
+        anonymous = " | ".join(
+            f'"${{TOLOWER(${{CALLERID(num)}})}}"="{v}"' for v in ANONYMOUS_VALUES
+        )
+        rules_branch = [
+            f" same => n(acr),GotoIf($[{anonymous} | "
+            '${REGEX("^prohib" ${CALLERID(pres)})}]?refuse)',
+            f' same => n,GotoIf($["${{DB({state}/dnd)}}"="1"]?dndallow:ring)',
+            f" same => n(refuse),NoOp(Veyra: {number} refuses callers without a number)",
+            " same => n,Set(CDR(veyra_flag)=blocked)",
+            " same => n,Answer()",
+            " same => n,Playback(privacy-unident)",
+            " same => n,Hangup()",
+            # Do Not Disturb exceptions (#170): the caller's digits, ten for
+            # a North American number, looked up in "-<number>-" lists.
+            " same => n(dndallow),Set(VEYRA_DA=${FILTER(0-9,${CALLERID(num)})})",
+            ' same => n,ExecIf($[${LEN(${VEYRA_DA})} = 11 & "${VEYRA_DA:0:1}"="1"]'
+            "?Set(VEYRA_DA=${VEYRA_DA:1}))",
+            f' same => n,GotoIf($["${{VEYRA_DA}}"!="" & "${{DB({state}/dnd_allow)}}"!=""]'
+            "?dndlist:dnd)",
+            f' same => n(dndlist),GotoIf(${{REGEX("-${{VEYRA_DA}}-" ${{DB({state}/dnd_allow)}})}}'
+            "?ring:dnd)",
         ]
         busy_branch = [
             f" same => n(dnd),NoOp(Veyra: {number} has Do Not Disturb on)",
@@ -2257,6 +2394,7 @@ def _internal(
                 " same => n,Busy(10)",
                 " same => n,Hangup()",
                 *forward,
+                *rules_branch,
                 *fm_branch,
             ]
         else:
@@ -2270,6 +2408,7 @@ def _internal(
                 f" same => n,{_vm(number, 'b')}",
                 " same => n,Hangup()",
                 *forward,
+                *rules_branch,
                 *fm_branch,
             ]
     for number, b in sorted(by_number.items(), key=lambda kv: (len(kv[0]), kv[0])):
@@ -2400,6 +2539,8 @@ def _outbound_contexts(
                 # and the trunk's numbers (docs/TRUNKS_ROUTING.md §7).
                 lines += [
                     " same => n,Set(__VEYRA_EMERGENCY=1)",
+                    # *67 never hides the number from the 911 centre (issue #163).
+                    " same => n,Set(CALLERID(pres)=allowed_not_screened)",
                     # On-site notification (Kari's Law): the API's event listener
                     # turns this into emergency.call (docs/PRODUCTION_HARDENING.md §6).
                     f" same => n,UserEvent({EMERGENCY_EVENT},Extension: ${{CALLERID(num)}},"
@@ -2429,9 +2570,17 @@ def _outbound_contexts(
                 first = f" same => n({label})," if label else " same => n,"
                 step = [f"{first}Set(GROUP(veyra_trunk)={tslug})"]
                 if trunk.get("max_channels") and not emergency:
+                    # Channels kept for emergency calls (issue #171): another
+                    # call may use only the rest; an emergency call is never
+                    # counted against the limit.
+                    usable = max(
+                        int(trunk["max_channels"])
+                        - int(trunk.get("emergency_reserved_channels") or 0),
+                        0,
+                    )
                     step.append(
                         f" same => n,GotoIf($[${{GROUP_COUNT({tslug}@veyra_trunk)}} > "
-                        f"{int(trunk['max_channels'])}]?{nxt})"
+                        f"{usable}]?{nxt})"
                     )
                 if cid and not _NUMBER_RE.match(str(cid)):
                     raise GenerationError(f"trunk {tslug}: caller ID {cid!r} is not valid")

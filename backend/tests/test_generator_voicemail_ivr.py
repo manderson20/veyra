@@ -124,11 +124,20 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
         "exten => 1001,1,NoOp(Veyra extension 1001)\n"
         ' same => n,ExecIf($["${VEYRA_DID}"!="" & "${CALLERID(num)}"!=""]'
         "?Set(DB(veyra/lastcid/example/1001)=${CALLERID(num)}))\n"
-        ' same => n,GotoIf($["${DB(veyra/ext/example/1001/dnd)}"="1"]?dnd)\n'
-        " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_always)})\n"
+        ' same => n,GotoIf($["${DB(veyra/ext/example/1001/acr)}"="1" & "${VEYRA_DID}"!=""]?acr)\n'
+        ' same => n,GotoIf($["${DB(veyra/ext/example/1001/dnd)}"="1"]?dndallow)\n'
+        " same => n(ring),Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_always)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
+        ' same => n,GotoIf($["${DB(veyra/ext/example/1001/nocw)}'
+        '${DB(veyra/ext/example/1001/nocw_call)}"=""]?cw)\n'
+        ' same => n,GotoIf(${REGEX("^(NOT_INUSE|UNAVAILABLE|UNKNOWN|INVALID)$" '
+        "${DEVICE_STATE(PJSIP/example-1001)})}?cw:busy)\n"
+        " same => n(cw),NoOp()\n"
         " same => n,Dial(PJSIP/example-1001,30,${VEYRA_XFER})\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)\n'
+        ' same => n,GotoIf($["${DIALSTATUS}"!="CHANUNAVAIL"]?noanswer)\n'
+        " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_unavailable)})\n"
+        ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n(noanswer),Set(VEYRA_CF=${DB(veyra/ext/example/1001/cf_no_answer)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n,Hangup()\n"
@@ -142,11 +151,20 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
         "exten => 1002,1,NoOp(Veyra extension 1002)\n"
         ' same => n,ExecIf($["${VEYRA_DID}"!="" & "${CALLERID(num)}"!=""]'
         "?Set(DB(veyra/lastcid/example/1002)=${CALLERID(num)}))\n"
-        ' same => n,GotoIf($["${DB(veyra/ext/example/1002/dnd)}"="1"]?dnd)\n'
-        " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_always)})\n"
+        ' same => n,GotoIf($["${DB(veyra/ext/example/1002/acr)}"="1" & "${VEYRA_DID}"!=""]?acr)\n'
+        ' same => n,GotoIf($["${DB(veyra/ext/example/1002/dnd)}"="1"]?dndallow)\n'
+        " same => n(ring),Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_always)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
+        ' same => n,GotoIf($["${DB(veyra/ext/example/1002/nocw)}'
+        '${DB(veyra/ext/example/1002/nocw_call)}"=""]?cw)\n'
+        ' same => n,GotoIf(${REGEX("^(NOT_INUSE|UNAVAILABLE|UNKNOWN|INVALID)$" '
+        "${DEVICE_STATE(PJSIP/example-1002)})}?cw:busy)\n"
+        " same => n(cw),NoOp()\n"
         " same => n,Dial(PJSIP/example-1002,25,${VEYRA_XFER})\n"
         ' same => n,GotoIf($["${DIALSTATUS}"="BUSY"]?busy)\n'
+        ' same => n,GotoIf($["${DIALSTATUS}"!="CHANUNAVAIL"]?noanswer)\n'
+        " same => n,Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_unavailable)})\n"
+        ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n(noanswer),Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_no_answer)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         " same => n,VoiceMail(1002@veyra,u)\n"

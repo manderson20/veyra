@@ -42,6 +42,12 @@ class Names:
     def features(self) -> str:
         return self._p("features")
 
+    @property
+    def call_codes(self) -> str:
+        # Codes dialled before a number (*67, *70; issue #163): searched after
+        # paging and parking, so an exact page or slot number is never shadowed.
+        return self._p("call-codes")
+
     def voicemail_exit(self, number: str) -> str:
         """Where 0 and * go during a box's greeting (docs/CALL_FEATURES.md §3.7)."""
         return self._p(f"vmx-{number}")
@@ -165,8 +171,11 @@ class Names:
 
 # Contexts every organization may reach (docs/MULTI_TENANCY.md §5).
 # veyra-lastcid writes only the organization the calling group context set
-# (issue #135).
-SHARED_CONTEXTS = frozenset({"veyra-invalid", "veyra-record", "veyra-from-trunk", "veyra-lastcid"})
+# (issue #135); veyra-cw-clear deletes only the key of the phone's own
+# organization and call (its endpoint's VEYRA_ORG, the call's UNIQUEID; #163).
+SHARED_CONTEXTS = frozenset(
+    {"veyra-invalid", "veyra-record", "veyra-from-trunk", "veyra-lastcid", "veyra-cw-clear"}
+)
 SHARED_CONTEXT_PREFIXES = ("veyra-out-", "veyra-from-trunk-")
 
 _current: ContextVar[Names | None] = ContextVar("veyra_engine_names", default=None)

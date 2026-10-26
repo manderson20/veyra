@@ -10,6 +10,18 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased
 
+Migration 0068. The new codes and rules need one telephony deployment (Telephony → Deploy) before phones use them.
+
+### Added
+- **Codes staff know from the phone company** (#163): `*67` before a number hides your number on that call (never on 911), `*69` calls back the last outside caller, `*70` before a number turns call waiting off for that call, `*77` / `*87` refuse or accept callers who hide their number. All are on the Feature Codes page, where they can be renamed or turned off.
+- **Call waiting and anonymous call rejection per phone** (#163): the call handling card (extension page and My Phone) has a Call waiting switch (off: a second caller hears busy or goes to your busy forward) and "Refuse callers who hide their number".
+- **Forward when the phone is offline** (#165): a separate target, for example a cell phone, used at once while no phone of the extension is connected (power, network or internet outage), instead of voicemail.
+- **Callers who still ring during Do Not Disturb** (#170): up to 20 numbers or extensions per phone, on the call handling card. A North American number matches however the carrier sends it.
+- **A trunk channel kept for 911** (#171): a trunk with a maximum channel count keeps one channel (configurable, "Channels kept for emergency calls") that only emergency calls may use. The emergency readiness page advises when an emergency trunk has no channel count, so nothing can be kept.
+
+### Changed
+- Trunks send the caller's identity header even when the number is withheld (`trust_id_outbound`), marked private, as carriers expect for `*67` calls.
+
 ### Documentation
 - **PBX feature comparison** (`docs/research/pbx-comparison/`): Veyra compared with Metaswitch (Alianza Core) and 20 other phone systems, with a recommended roadmap. The roadmap items to build are filed as issues labelled `gap:metaswitch`.
 - The README's status line now says where Veyra is (pre-1.0, Milestone 22 in progress) instead of "Milestone 1".

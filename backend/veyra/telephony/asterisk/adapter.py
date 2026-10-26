@@ -48,9 +48,21 @@ _CHANNEL_ENDPOINT_RE = re.compile(r"^PJSIP/([A-Za-z0-9_.-]+)-[0-9a-f]+$")
 
 
 STATE_FAMILY = "veyra/ext"
-STATE_FIELDS = ("dnd", "cf_always", "cf_busy", "cf_no_answer", "fmfm")
+STATE_FIELDS = (
+    "dnd",
+    "cf_always",
+    "cf_busy",
+    "cf_no_answer",
+    "cf_unavailable",
+    "fmfm",
+    "nocw",
+    "acr",
+    "dnd_allow",
+)
+FORWARD_FIELDS = ("cf_always", "cf_busy", "cf_no_answer", "cf_unavailable")
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9+][A-Za-z0-9_.-]{0,62}$")
-_VALUE_RE = re.compile(r"^[+0-9]{0,32}$")
+# A number, or the Do Not Disturb exceptions joined with "-" (issue #170).
+_VALUE_RE = re.compile(r"^[+0-9-]{0,480}$")
 # "/veyra/ext/example/1001/cf_always                 : 5735550100"
 _STATE_ROW_RE = re.compile(
     r"^/veyra/ext/(?P<org>[^/]+)/(?P<number>[^/]+)/(?P<field>[a-z_]+)\s*:\s*(?P<value>.*)$"
@@ -335,11 +347,13 @@ class AsteriskAdapter(TelephonyAdapter):
             device, on = f"Custom:veyra-dnd-{org}-{num}", bool(value)
         elif field == "fmfm":
             device, on = f"Custom:veyra-fm-{org}-{num}", bool(value)
-        else:
-            # The forwarding lamp is lit while any of the three forwards is set.
+        elif field in FORWARD_FIELDS:
+            # The forwarding lamp is lit while any forward is set.
             current = self.extension_states().get((org, num), {})
             device = f"Custom:veyra-cf-{org}-{num}"
-            on = any(current.get(f) for f in ("cf_always", "cf_busy", "cf_no_answer"))
+            on = any(current.get(f) for f in FORWARD_FIELDS)
+        else:
+            return
         cli.run(f"devstate change {device} {'INUSE' if on else 'NOT_INUSE'}")
 
     def set_switch(self, kind: str, organization: str, key: str, value: str | None) -> None:

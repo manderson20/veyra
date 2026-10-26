@@ -81,7 +81,7 @@ def test_one_organization_is_unchanged():
     """A snapshot with the empty namespace gives exactly the names of before M14."""
     files = _files(_base())
     dp = files["extensions.conf"].content
-    assert "[veyra-internal]" in dp and "veyra_" not in dp
+    assert "[veyra-internal]" in dp and "veyra_" not in dp.replace("CDR(veyra_flag)", "")
     assert "context=veyra-internal" in files["pjsip.endpoints.conf"].content
     assert "\n[veyra]\n" in files["voicemail.conf"].content
     assert "[veyra-support]" in files["queues.conf"].content

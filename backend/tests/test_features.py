@@ -21,8 +21,8 @@ from veyra.telephony.settings import SipSettings
 
 def test_feature_code_validation():
     assert features.validate({}) == {}
-    out = features.validate({"dnd_on": {"code": " *70 ", "enabled": True}})
-    assert out == {"dnd_on": {"code": "*70", "enabled": True}}
+    out = features.validate({"dnd_on": {"code": " *74 ", "enabled": True}})
+    assert out == {"dnd_on": {"code": "*74", "enabled": True}}
     for bad in ({"nope": {"code": "*1"}}, {"dnd_on": "x"}, {"dnd_on": {"code": "70"}}):
         with pytest.raises(features.FeatureCodeError):
             features.validate(bad)
@@ -42,14 +42,14 @@ def test_feature_codes_load_save_and_active(admin):
         assert codes["dnd_toggle"]["code"] == "*76" and codes["dnd_toggle"]["enabled"]
         assert features.active(db)["cf_on"] == "*72"
         features.save(
-            db, {"dnd_on": {"code": "*70"}, "intercom": {"code": "*80", "enabled": False}}, None
+            db, {"dnd_on": {"code": "*74"}, "intercom": {"code": "*80", "enabled": False}}, None
         )
         assert db.get(SystemSetting, features.SETTINGS_KEY).value == {
-            "dnd_on": {"code": "*70", "enabled": True},
+            "dnd_on": {"code": "*74", "enabled": True},
             "intercom": {"code": "*80", "enabled": False},
         }
         active = features.active(db)
-        assert active["dnd_on"] == "*70" and "intercom" not in active
+        assert active["dnd_on"] == "*74" and "intercom" not in active
         # Back to the default: the override disappears.
         features.save(db, {"dnd_on": {"code": "*78"}}, None)
         assert "dnd_on" not in db.get(SystemSetting, features.SETTINGS_KEY).value
@@ -63,11 +63,11 @@ def test_feature_codes_api(admin, app):
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "dnd_on"
     r = admin.put(
         "/api/v1/telephony/feature-codes",
-        json={"codes": {"dnd_on": {"code": "*70"}, "dnd_off": {"code": "*71", "enabled": True}}},
+        json={"codes": {"dnd_on": {"code": "*74"}, "dnd_off": {"code": "*75", "enabled": True}}},
     )
     assert r.status_code == 200, r.text
     by = {c["key"]: c for c in r.json()["codes"]}
-    assert by["dnd_on"]["code"] == "*70" and by["dnd_on"]["default_code"] == "*78"
+    assert by["dnd_on"]["code"] == "*74" and by["dnd_on"]["default_code"] == "*78"
     with session_scope() as db:
         assert (configmgmt.pending_change(db) or {}).get("what") == "feature codes"
     actions = [e["action"] for e in admin.get("/api/v1/audit").json()["items"]]
@@ -125,9 +125,9 @@ def test_generator_renders_dnd_codes_check_and_hint():
     assert "Playback(feature-not-avail-line)" in feat  # a caller without VEYRA_EXT
     internal = _section(d, "veyra-internal")
     assert "exten => *761001,hint,Custom:veyra-dnd-example-1001" in internal
-    assert 'GotoIf($["${DB(veyra/ext/example/1001/dnd)}"="1"]?dnd)' in internal
+    assert 'GotoIf($["${DB(veyra/ext/example/1001/dnd)}"="1"]?dndallow)' in internal
     assert "n(dnd),NoOp(Veyra: 1001 has Do Not Disturb on)" in internal and "Busy(10)" in internal
-    assert internal.index("?dnd)") < internal.index("Dial(PJSIP/example-1001")
+    assert internal.index("?dndallow)") < internal.index("Dial(PJSIP/example-1001")
     # Codes off: no feature code, no hint, the check stays (the API can still set DND).
     files = {f.path: f.content for f in generator.generate(_snapshot(feature_codes={}))}
     d = files["extensions.conf"]

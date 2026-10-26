@@ -951,6 +951,10 @@ class StateIn(BaseModel):
     cf_always: str | None = Field(None, max_length=32)
     cf_busy: str | None = Field(None, max_length=32)
     cf_no_answer: str | None = Field(None, max_length=32)
+    cf_unavailable: str | None = Field(None, max_length=32)
+    call_waiting_off: bool | None = None
+    anonymous_reject: bool | None = None
+    dnd_allow: list[str] | None = Field(None, max_length=extension_state.DND_ALLOW_MAX)
     ring_seconds: int | None = Field(None, ge=extension_state.RING_MIN, le=extension_state.RING_MAX)
 
 

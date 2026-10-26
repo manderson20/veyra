@@ -150,6 +150,10 @@ class MyStateIn(BaseModel):
     cf_always: str | None = Field(None, max_length=32)
     cf_busy: str | None = Field(None, max_length=32)
     cf_no_answer: str | None = Field(None, max_length=32)
+    cf_unavailable: str | None = Field(None, max_length=32)
+    call_waiting_off: bool | None = None
+    anonymous_reject: bool | None = None
+    dnd_allow: list[str] | None = Field(None, max_length=extension_state.DND_ALLOW_MAX)
 
 
 @router.get("/extensions/{extension_id}/state", summary="Your phone's Do Not Disturb and forwards")
@@ -203,7 +207,9 @@ def _check_forward_limits(db: Session, ext: Extension, changes: dict[str, Any]) 
     §4): a class of service without outside forwards refuses a forward target
     longer than an extension number."""
     targets = {
-        k: str(v or "") for k, v in changes.items() if k in ("cf_always", "cf_busy", "cf_no_answer")
+        k: str(v or "")
+        for k, v in changes.items()
+        if k in ("cf_always", "cf_busy", "cf_no_answer", "cf_unavailable")
     }
     if not any(targets.values()) or ext.class_of_service_id is None:
         return

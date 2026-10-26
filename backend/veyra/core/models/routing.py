@@ -45,6 +45,8 @@ class SipTrunk(UUIDPrimaryKey, Timestamps, Base):
     match_addresses: Mapped[list[str]] = mapped_column(JSONB, default=list)
     codecs: Mapped[list[str] | None] = mapped_column(JSONB)
     max_channels: Mapped[int | None] = mapped_column(Integer)
+    # Of max_channels, how many only emergency calls may use (issue #171).
+    emergency_reserved_channels: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     default_caller_id: Mapped[str | None] = mapped_column(String(32))
     caller_id_header: Mapped[str] = mapped_column(String(8), default="pai")
     dtmf_mode: Mapped[str] = mapped_column(String(8), default="rfc4733")

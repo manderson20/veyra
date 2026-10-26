@@ -88,6 +88,8 @@ class TrunkBase(BaseModel):
     match_addresses: list[str] = Field(default_factory=list, max_length=32)
     codecs: list[str] | None = None
     max_channels: int | None = Field(None, ge=1, le=10000)
+    # Of max_channels, kept for emergency calls (issue #171).
+    emergency_reserved_channels: int = Field(1, ge=0, le=100)
     default_caller_id: str | None = Field(None, max_length=32)
     caller_id_header: CallerIdHeader = "pai"
     dtmf_mode: DtmfMode = "rfc4733"
@@ -204,6 +206,7 @@ class TrunkPatch(BaseModel):
     match_addresses: list[str] | None = Field(None, max_length=32)
     codecs: list[str] | None = None
     max_channels: int | None = Field(None, ge=1, le=10000)
+    emergency_reserved_channels: int | None = Field(None, ge=0, le=100)
     default_caller_id: str | None = Field(None, max_length=32)
     caller_id_header: CallerIdHeader | None = None
     dtmf_mode: DtmfMode | None = None
@@ -243,6 +246,7 @@ class TrunkOut(BaseModel):
     match_addresses: list[str]
     codecs: list[str] | None
     max_channels: int | None
+    emergency_reserved_channels: int
     default_caller_id: str | None
     caller_id_header: str
     dtmf_mode: str
@@ -346,6 +350,7 @@ def _out(trunk: SipTrunk, live: Live | None) -> TrunkOut:
         match_addresses=list(trunk.match_addresses or []),
         codecs=list(trunk.codecs) if trunk.codecs else None,
         max_channels=trunk.max_channels,
+        emergency_reserved_channels=trunk.emergency_reserved_channels,
         default_caller_id=trunk.default_caller_id,
         caller_id_header=trunk.caller_id_header,
         dtmf_mode=trunk.dtmf_mode,

@@ -28,6 +28,8 @@ export interface TrunkDraft {
   /** null = installation default. */
   codecs: string[] | null;
   max_channels: string;
+  /** Of max_channels, kept for emergency calls (issue #171). */
+  emergency_reserved_channels: string;
   default_caller_id: string;
   caller_id_header: CallerIdHeader;
   dtmf_mode: DtmfMode;
@@ -58,6 +60,7 @@ export const EMPTY_TRUNK: TrunkDraft = {
   match_addresses: "",
   codecs: null,
   max_channels: "",
+  emergency_reserved_channels: "1",
   default_caller_id: "",
   caller_id_header: "pai",
   dtmf_mode: "rfc4733",
@@ -88,6 +91,7 @@ export function trunkDraft(t: Trunk): TrunkDraft {
     match_addresses: t.match_addresses.join("\n"),
     codecs: t.codecs ? [...t.codecs] : null,
     max_channels: t.max_channels === null ? "" : String(t.max_channels),
+    emergency_reserved_channels: String(t.emergency_reserved_channels ?? 1),
     default_caller_id: t.default_caller_id ?? "",
     caller_id_header: t.caller_id_header,
     dtmf_mode: t.dtmf_mode,
@@ -125,6 +129,7 @@ export function trunkBody(d: TrunkDraft): TrunkInput {
     match_addresses: parseList(d.match_addresses),
     codecs: d.codecs ? [...d.codecs].sort((a, b) => CODECS.indexOf(a as (typeof CODECS)[number]) - CODECS.indexOf(b as (typeof CODECS)[number])) : null,
     max_channels: d.max_channels.trim() ? int(d.max_channels, 0) : null,
+    emergency_reserved_channels: int(d.emergency_reserved_channels, 1),
     default_caller_id: text(d.default_caller_id),
     caller_id_header: d.caller_id_header,
     dtmf_mode: d.dtmf_mode,
@@ -268,7 +273,9 @@ export function TrunkAllFields({ draft, onChange, errors, disabled, hasPassword 
         </div>
         <div className="form-grid">
           <TextField label="Maximum channels" inputMode="numeric" disabled={disabled} value={draft.max_channels} error={errors.max_channels} placeholder="Unlimited"
-            help="Concurrent calls allowed on this trunk." onChange={(e) => onChange({ max_channels: e.target.value.replace(/\D/g, "") })} />
+            help="Concurrent calls the carrier allows on this trunk." onChange={(e) => onChange({ max_channels: e.target.value.replace(/\D/g, "") })} />
+          <TextField label="Channels kept for emergency calls" inputMode="numeric" disabled={disabled || !draft.max_channels.trim()} value={draft.emergency_reserved_channels} error={errors.emergency_reserved_channels}
+            help="Of the maximum: other calls may not use these, so a 911 call always gets out. Needs the maximum channels." onChange={(e) => onChange({ emergency_reserved_channels: e.target.value.replace(/\D/g, "") })} />
           <TextField label="Default caller ID" disabled={disabled} value={draft.default_caller_id} error={errors.default_caller_id} inputMode="tel"
             help="Used when the route and extension set none." onChange={(e) => onChange({ default_caller_id: e.target.value })} />
         </div>

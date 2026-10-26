@@ -991,6 +991,8 @@ export interface Trunk {
   match_addresses: string[];
   codecs: string[] | null;
   max_channels: number | null;
+  /** Of max_channels, kept for emergency calls (issue #171). */
+  emergency_reserved_channels?: number;
   default_caller_id: string | null;
   caller_id_header: CallerIdHeader;
   dtmf_mode: DtmfMode;
@@ -1028,6 +1030,7 @@ export interface TrunkInput {
   match_addresses?: string[];
   codecs?: string[] | null;
   max_channels?: number | null;
+  emergency_reserved_channels?: number;
   default_caller_id?: string | null;
   caller_id_header?: CallerIdHeader;
   dtmf_mode?: DtmfMode;
@@ -3119,6 +3122,14 @@ export interface ExtensionState {
   cf_always: string | null;
   cf_busy: string | null;
   cf_no_answer: string | null;
+  /** While no phone of the extension is registered (issue #165). */
+  cf_unavailable?: string | null;
+  /** Issue #163: a second caller hears busy while a call is up. */
+  call_waiting_off?: boolean;
+  /** Issue #163: outside callers who withhold their number are refused. */
+  anonymous_reject?: boolean;
+  /** Callers who still ring while Do Not Disturb is on (issue #170). */
+  dnd_allow?: string[];
   fmfm_enabled: boolean;
   ring_seconds: number;
   /** Presence shown to colleagues (docs/USER_PORTAL.md §7). */
@@ -3366,6 +3377,8 @@ export interface EmergencyCheck {
   ok: boolean;
   label: string;
   detail: string;
+  /** Advice only: does not decide whether the site is ready (issue #171). */
+  advisory?: boolean;
 }
 
 export interface EmergencySiteRow {

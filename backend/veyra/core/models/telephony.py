@@ -111,6 +111,15 @@ class ExtensionState(Base):
     cf_always: Mapped[str | None] = mapped_column(String(32))
     cf_busy: Mapped[str | None] = mapped_column(String(32))
     cf_no_answer: Mapped[str | None] = mapped_column(String(32))
+    # Where calls go while no phone of the extension is registered (issue #165).
+    cf_unavailable: Mapped[str | None] = mapped_column(String(32))
+    # Issue #163: a second call gets busy while one is up; outside callers
+    # who withhold their number are refused.
+    call_waiting_off: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    anonymous_reject: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Callers who still ring while Do Not Disturb is on (issue #170): numbers
+    # as dialled, matched on their digits (ten for a North American number).
+    dnd_allow: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     fmfm_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     ring_seconds: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
     # Presence the user shows to colleagues (docs/USER_PORTAL.md §7):

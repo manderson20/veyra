@@ -447,6 +447,51 @@ audited with `self_service: true` and `updated_by: user`. Phone keys and
 speed dials (#75, #76), personal contacts and the user's call history stay
 with Milestone 20.
 
+### 3.10 Telco habits and personal call rules (issues #163, #165, #170)
+
+*Built 2026-10-26 from the Metaswitch comparison
+(docs/research/pbx-comparison/COMPARISON.md, roadmap rows 5, 7 and 12).*
+Staff coming from a carrier's hosted PBX dial these on day one.
+
+| Code | What it does |
+|---|---|
+| `*67<number>` | One call with the number withheld (`CALLERID(pres)=prohib`). Trunks send `trust_id_outbound=yes`, so the carrier still gets the identity header, marked private. An emergency route sets the presentation back to allowed: 911 always sees the number. |
+| `*69` | Calls back the last outside caller that rang this phone directly (the number `*32` blocks), reduced to ten digits for a North American number; "no number" when it was withheld. The number goes through the outbound routes as dialled, so a plan that needs an outside-line prefix (`9`) does not match it. |
+| `*70<number>` | Call waiting off for that call: the code stores the call's unique ID in `veyra/ext/<org>/<ext>/nocw_call` and a hangup handler (`veyra-cw-clear`) removes it, unless a newer `*70` call replaced it. |
+| `*77` / `*87` | Anonymous call rejection on and off (engine field `acr`, UserEvent like DND). |
+
+`*67`, `*69` and `*70` place the call themselves, so nothing answers the
+phone's channel first and the caller hears the far end ring. They live in
+their own context, `veyra-call-codes`, which the phone context includes
+**after** paging and parking: an exact page or slot number that starts with
+the same digits (an all-call on `*700`) is found first.
+
+The rules each extension may set (the administrator's extension page and
+My Phone share one card; all take effect at once without a deployment,
+like the forwards):
+
+* **Forward when the phone is offline** (`cf_unavailable`): when `Dial`
+  ends with `CHANUNAVAIL` (no registered phone), the call goes to this
+  target at once instead of the no-answer path. The forwarding lamp counts
+  it; the class of service's outside-forward rule applies as to the other
+  forwards.
+* **Call waiting** (`nocw`): off means a second caller is sent to the busy
+  path (busy forward, busy greeting, or busy) while the phone's device
+  state is anything but idle or unavailable. `DEVICE_STATE` is read only
+  when call waiting is off, permanently or for a `*70` call.
+* **Refuse callers who hide their number** (`acr`): outside calls only
+  (`VEYRA_DID` set) whose number is empty, one of the carrier words in
+  `ANONYMOUS_VALUES`, or whose presentation is `prohib*`, hear
+  `privacy-unident` and are flagged `blocked` in call history.
+* **Callers who still ring during Do Not Disturb** (`dnd_allow`): up to 20
+  numbers or extensions. The engine holds them as one value
+  `-5735550100-1002-`; the dialplan reduces the caller's number to its
+  digits (ten for an eleven-digit number starting with 1) and looks for
+  `-<digits>-`. A match rings as if DND were off (forwards still apply).
+
+The row is the record (`extension_states`, migration 0068); the worker's
+sync rewrites the engine's copy as for DND.
+
 ## 4. Call-flow features (Milestone 19)
 
 Parking (`res_parking` lots per organization, `70` parks, `71–79` slots

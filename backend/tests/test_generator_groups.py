@@ -171,7 +171,9 @@ def test_ring_group_sequential_ring_busy_prefix_and_empty():
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)\n'
         " same => n,Goto(failover)\n" in dp
     )
-    assert "DEVICE_STATE" not in dp
+    # The group rings its members without looking at their state.
+    group_ctx = dp.split("[veyra-rg-sales]")[1].split("\n[")[0]
+    assert "Dial(PJSIP/example-1001" in group_ctx and "DEVICE_STATE" not in group_ctx
     assert (
         " same => n(failover),NoOp(Veyra ring group Sales: not answered)\n"
         " same => n,Playback(vm-goodbye)" in dp

@@ -1095,6 +1095,7 @@ def _routing(
                 "match_addresses": list(t.match_addresses or []),
                 "codecs": list(t.codecs) if t.codecs else None,
                 "max_channels": t.max_channels,
+                "emergency_reserved_channels": t.emergency_reserved_channels,
                 "default_caller_id": t.default_caller_id,
                 "caller_id_header": t.caller_id_header,
                 "dtmf_mode": t.dtmf_mode,

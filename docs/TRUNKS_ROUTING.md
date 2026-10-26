@@ -35,6 +35,7 @@ stub before the new code runs).
 | `match_addresses` | Addresses or CIDRs whose calls are recognised as this trunk. Defaults to the host. Required to be non-empty for `ip` mode |
 | `codecs` | Optional override of the installation codec list |
 | `max_channels` | Optional cap on simultaneous calls through the trunk (outbound; enforced with Asterisk `GROUP_COUNT`) |
+| `emergency_reserved_channels` | Of `max_channels`, how many only emergency calls may use (default 1; issue #171). Another call skips the trunk once `max_channels` minus this many calls are up; an emergency call never checks the limit. Without `max_channels` nothing can be kept, and the 911 readiness page advises setting it |
 | `default_caller_id` | Number sent as caller ID on outbound calls when the route does not override it |
 | `caller_id_header` | `pai` (P-Asserted-Identity, default), `rpid` (Remote-Party-ID) or `none` |
 | `status` (read-only) | `state` `online`/`offline` from the qualify ping, or, for a registration trunk whose registration the engine reports as anything but registered, `rejected`, `registering` or `unregistered` (Milestone 18, issue #45); `reachable`; `registration`, the engine's own word. The `trunk_down` alert fires on a refused registration even when the host answers pings. Telephony → Registrations lists the trunks with the same state |

@@ -117,7 +117,7 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
           <StatusBadge status={d.readiness.ready ? "ok" : "degraded"} label={d.readiness.ready ? "Ready (per Veyra's checks)" : "Not ready"} />
           <ul className="stack stack--xs" style={{ margin: 0, paddingLeft: "1.2em" }}>
             {d.readiness.checks.map((c) => (
-              <li key={c.key}><StatusBadge status={c.ok ? "ok" : "failed"} label={c.label} />{c.detail ? <span className="subtle"> · {c.detail}</span> : null}</li>
+              <li key={c.key}><StatusBadge status={c.ok ? "ok" : c.advisory ? "degraded" : "failed"} label={c.advisory && !c.ok ? `${c.label} (advice)` : c.label} />{c.detail ? <span className="subtle"> · {c.detail}</span> : null}</li>
             ))}
           </ul>
           <Callout tone="neutral">{d.disclaimer}</Callout>

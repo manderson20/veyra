@@ -190,6 +190,38 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         True,
     ),
     FeatureCodeDef(
+        "cid_block",
+        "*67",
+        "Hide your number on one call",
+        "Followed by the number: the person called sees no caller ID. Emergency calls "
+        "always show it.",
+        22,
+        True,
+    ),
+    FeatureCodeDef(
+        "call_return",
+        "*69",
+        "Call back the last caller",
+        "Calls the last outside number that rang this phone directly.",
+        22,
+    ),
+    FeatureCodeDef(
+        "cw_off_once",
+        "*70",
+        "Call waiting off for one call",
+        "Followed by the number: while this call is up, other callers hear busy.",
+        22,
+        True,
+    ),
+    FeatureCodeDef(
+        "acr_on",
+        "*77",
+        "Refuse callers who hide their number",
+        "Outside callers without caller ID hear that this phone does not take such calls.",
+        22,
+    ),
+    FeatureCodeDef("acr_off", "*87", "Accept callers who hide their number", "", 22),
+    FeatureCodeDef(
         "vm_direct",
         "*",
         "Direct to voicemail",
