@@ -41,6 +41,7 @@ from veyra.core.models import (
     ConferenceRoom,
     Department,
     Extension,
+    ExtensionTemplate,
     FaxInbox,
     InboundRoute,
     IvrMenu,
@@ -232,6 +233,8 @@ class ExtensionsKind:
         "building",
         "location",
         "department",
+        # The extension template it follows, by name (issue #172).
+        "template",
         "max_registrations",
         "enabled",
         "voicemail",
@@ -258,6 +261,7 @@ class ExtensionsKind:
         "site": ("site_id", Site, "site"),
         "building": ("building_id", Building, "building"),
         "department": ("department_id", Department, "department"),
+        "template": ("template_id", ExtensionTemplate, "extension template"),
     }
 
     def export(self, db: Session, org: Organization) -> list[dict[str, str]]:
@@ -296,6 +300,7 @@ class ExtensionsKind:
                     "site": _name_of(db, Site, e.site_id),
                     "building": _name_of(db, Building, e.building_id),
                     "department": _name_of(db, Department, e.department_id),
+                    "template": _name_of(db, ExtensionTemplate, e.template_id),
                     "max_registrations": str(e.max_registrations or ""),
                     "enabled": _yn(e.is_enabled),
                     "voicemail": _yn(box is not None),

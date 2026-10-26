@@ -2,8 +2,8 @@
 """Forward when unreachable, call waiting off, anonymous call rejection, Do
 Not Disturb exceptions (issues #163, #165, #170), the trunk channels kept
 for emergency calls (issue #171), the voicemail extended absence (#169),
-hotline phones (#168), per-member ring times in ring groups (#166) and the
-supervisor flags of a class of service (#167).
+hotline phones (#168), per-member ring times in ring groups (#166) the
+supervisor flags of a class of service (#167) and extension templates (#172).
 
 Revision ID: 0068
 Revises: 0067
@@ -76,8 +76,46 @@ def upgrade() -> None:
         sa.Column("monitor_protected", sa.Boolean(), nullable=False, server_default="false"),
     )
 
+    op.create_table(
+        "extension_templates",
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column(
+            "organization_id",
+            sa.Uuid(),
+            sa.ForeignKey("organizations.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
+        sa.Column("name", sa.String(100), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("settings", postgresql.JSONB(), nullable=False, server_default="{}"),
+        sa.Column("locked", postgresql.JSONB(), nullable=False, server_default="[]"),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.UniqueConstraint("organization_id", "name"),
+    )
+    op.create_index(
+        "ix_extension_templates_organization_id", "extension_templates", ["organization_id"]
+    )
+    op.add_column("extensions", sa.Column("template_id", sa.Uuid(), nullable=True))
+    op.create_foreign_key(
+        "fk_extensions_template_id",
+        "extensions",
+        "extension_templates",
+        ["template_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+
 
 def downgrade() -> None:
+    op.drop_constraint("fk_extensions_template_id", "extensions", type_="foreignkey")
+    op.drop_column("extensions", "template_id")
+    op.drop_index("ix_extension_templates_organization_id", "extension_templates")
+    op.drop_table("extension_templates")
     op.drop_column("classes_of_service", "monitor_protected")
     op.drop_column("classes_of_service", "allow_monitor")
     op.drop_column("ring_group_members", "ring_seconds")

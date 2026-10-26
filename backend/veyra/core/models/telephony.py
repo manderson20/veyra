@@ -65,6 +65,10 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # at once or after hotline_delay seconds without a digit (warm line).
     hotline_target: Mapped[str | None] = mapped_column(String(32))
     hotline_delay: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # The template it follows (issue #172); None: its own settings only.
+    template_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extension_templates.id", ondelete="SET NULL", use_alter=True)
+    )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -102,6 +106,24 @@ class ClassOfService(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     monitor_protected: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Simultaneous outside calls of the class's phones together; None: no limit.
     max_outbound_calls: Mapped[int | None] = mapped_column(Integer)
+
+
+class ExtensionTemplate(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """Settings a group of extensions follows (issue #172): applied when an
+    extension is created with it and re-applied on request; ``locked``
+    fields cannot be changed on the extension while it follows the template.
+    ``settings`` keys: veyra.telephony.ext_templates.FIELDS."""
+
+    __tablename__ = "extension_templates"
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(Text)
+    settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    locked: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
 
 
 class ExtensionState(Base):

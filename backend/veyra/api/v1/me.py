@@ -179,6 +179,9 @@ def put_my_state(
 ) -> dict[str, Any]:
     ext = _own_extension(db, principal, extension_id)
     changes = body.model_dump(exclude_unset=True)
+    from veyra.api.v1.extensions import _refuse_locked
+
+    _refuse_locked(db, ext, changes)
     _check_forward_limits(db, ext, changes)
     try:
         details = extension_state.apply(

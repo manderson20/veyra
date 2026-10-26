@@ -56,6 +56,7 @@ export const NAV: NavSection[] = [
   { id: "telephony", label: "Telephony", icon: "handsetLoop", collapsible: true, description: "Extensions, calls, trunks, routing, voicemail, menus, groups and paging.", items: [
     { label: "Extensions", href: "/extensions/", icon: "phone", permissions: ["extensions.read"], group: "Phones and calls" },
     { label: "Active Calls", href: "/calls/", icon: "activity", permissions: ["calls.read"], group: "Phones and calls" },
+    { label: "Extension Templates", href: "/extension-templates/", icon: "template", permissions: ["extensions.read"], group: "Phones and calls" },
     { label: "SIP Trunks", href: "/trunks/", icon: "trunk", permissions: ["trunks.read"], group: "Routing" },
     { label: "Inbound Routes", href: "/routing/inbound/", icon: "arrowIn", permissions: ["routing.read"], group: "Routing" },
     { label: "Outbound Routes", href: "/routing/outbound/", icon: "arrowOut", permissions: ["routing.read"], group: "Routing" },

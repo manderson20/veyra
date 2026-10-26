@@ -377,6 +377,10 @@ export interface Extension {
   /** Hotline (issue #168): dialled when the handset is lifted, after hotline_delay seconds. */
   hotline_target?: string | null;
   hotline_delay?: number;
+  /** The extension template it follows (issue #172) and the fields it locks. */
+  template_id?: string | null;
+  template_name?: string | null;
+  locked_fields?: string[];
   is_enabled: boolean;
   sip_secret_set: boolean;
   sip_secret_changed_at: string | null;
@@ -3507,4 +3511,34 @@ export interface VoicemailAbsence {
   active: boolean;
   /** The worker has put the absence greeting in place. */
   applied: boolean;
+}
+
+/** Settings a group of extensions follows (issue #172). */
+export interface ExtensionTemplateSettings {
+  class_of_service_id?: string | null;
+  intercom?: "default" | "allow" | "deny";
+  max_registrations?: number | null;
+  department_id?: string | null;
+  ring_seconds?: number;
+  call_waiting_off?: boolean;
+  anonymous_reject?: boolean;
+}
+
+export interface ExtensionTemplate {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  settings: ExtensionTemplateSettings;
+  /** Fields the extensions cannot change while they follow the template. */
+  locked: (keyof ExtensionTemplateSettings)[];
+  extensions: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExtensionTemplateApply {
+  dry_run: boolean;
+  extensions: { extension_id: string; number: string; changes: Record<string, { from: unknown; to: unknown }> }[];
+  needs_deployment: boolean;
 }

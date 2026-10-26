@@ -156,6 +156,29 @@ and places the call when it is picked up; users may dial from their own
 extensions, administrators from any extension in their organizations.
 Until trunks exist the dialplan reaches internal numbers and feature codes.
 
+## 5b. Extension templates (issue #172)
+
+*Built 2026-10-26 from the Metaswitch comparison (its "Call Service
+Groups").* A template (Telephony → Extension Templates, per organization)
+sets any of: class of service, intercom, phones that may register,
+department, ring time, call waiting off, refuse hidden numbers. Each set
+field may be **locked**.
+
+* Creating an extension with `template_id` (web, API, or the bulk import's
+  `template` column, by name) gives it the template's settings wherever the
+  request names none; locked settings always come from the template.
+* Choosing a template for an existing extension applies all its settings.
+* `POST /extension-templates/{id}/apply {dry_run}` lists, then applies,
+  what differs on the template's extensions (the template page's
+  **Apply…**). Class of service, intercom, phones and ring time need a
+  deployment; the rest is live.
+* A locked field is refused on the extension (`409 locked_by_template`), in
+  the state API and in My Phone, unless the request only repeats the value
+  the extension already has.
+* Deleting a template leaves its extensions' settings as they are.
+
+Not built: voicemail defaults and forwarding defaults in a template.
+
 ## 6. Permissions and scope
 
 | Permission | Default roles | Allows |

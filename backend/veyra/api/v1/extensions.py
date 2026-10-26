@@ -36,6 +36,7 @@ from veyra.core.models import (
     Department,
     Extension,
     ExtensionState,
+    ExtensionTemplate,
     FollowMe,
     InboundRoute,
     Organization,
@@ -55,7 +56,7 @@ from veyra.core.security.crypto import (
     load_installation_key,
 )
 from veyra.core.security.principal import Principal
-from veyra.telephony import extension_state, routing
+from veyra.telephony import ext_templates, extension_state, routing
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 from veyra.telephony.numbering import (
     NumberingPlan,
@@ -158,6 +159,9 @@ class ExtensionIn(BaseModel):
     # or after hotline_delay seconds without a digit (warm line).
     hotline_target: str | None = Field(None, max_length=32)
     hotline_delay: int = Field(0, ge=0, le=10)
+    # The extension template it follows (issue #172): its settings apply
+    # where the request gives none, its locked settings always.
+    template_id: uuid.UUID | None = None
     is_enabled: bool = True
 
     @field_validator("number")
@@ -213,6 +217,8 @@ class ExtensionPatch(BaseModel):
     department_id: uuid.UUID | None = None
     hotline_target: str | None = Field(None, max_length=32)
     hotline_delay: int | None = Field(None, ge=0, le=10)
+    # Following a template applies all its settings (issue #172); null: none.
+    template_id: uuid.UUID | None = None
     is_enabled: bool | None = None
 
     @field_validator("number")
@@ -401,6 +407,10 @@ class ExtensionOut(BaseModel):
     department_name: str | None = None
     hotline_target: str | None = None
     hotline_delay: int = 0
+    template_id: uuid.UUID | None = None
+    template_name: str | None = None
+    # Fields the template locks (issue #172): not editable here.
+    locked_fields: list[str] = []
     is_enabled: bool
     sip_secret_set: bool
     sip_secret_changed_at: datetime | None
@@ -539,6 +549,17 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
         if building_ids
         else {}
     )
+    template_ids = {r.template_id for r in rows if r.template_id}
+    templates = (
+        {
+            tpl.id: tpl
+            for tpl in db.scalars(
+                select(ExtensionTemplate).where(ExtensionTemplate.id.in_(template_ids))
+            )
+        }
+        if template_ids
+        else {}
+    )
     department_ids = {r.department_id for r in rows if r.department_id}
     department_names = (
         dict(
@@ -606,6 +627,13 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 department_name=department_names.get(r.department_id) if r.department_id else None,
                 hotline_target=r.hotline_target,
                 hotline_delay=r.hotline_delay or 0,
+                template_id=r.template_id,
+                template_name=templates[r.template_id].name if r.template_id in templates else None,
+                locked_fields=(
+                    list(templates[r.template_id].locked or [])
+                    if r.template_id in templates
+                    else []
+                ),
                 is_enabled=r.is_enabled,
                 sip_secret_set=bool(r.sip_secret_ciphertext),
                 sip_secret_changed_at=r.sip_secret_changed_at,
@@ -623,6 +651,30 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
             )
         )
     return out
+
+
+def _template_for(
+    db: Session, principal: Principal, organization_id: uuid.UUID, template_id: uuid.UUID
+) -> ExtensionTemplate:
+    template = db.get(ExtensionTemplate, template_id)
+    if template is None or template.organization_id != organization_id:
+        raise _validation("template_id", "no such template in this organization")
+    return template
+
+
+def _refuse_locked(db: Session, ext: Extension, changes: dict[str, Any]) -> None:
+    """A locked field of the extension's template cannot change here (#172)."""
+    hit = ext_templates.locked_change(db, ext, changes)
+    if hit is not None:
+        field, template = hit
+        raise ProblemError(
+            409,
+            "Set by the template",
+            f"{field} is locked by the template {template.name}; change the template "
+            "or stop following it.",
+            code="locked_by_template",
+            errors=[{"field": field, "message": f"locked by {template.name}"}],
+        )
 
 
 def _out(db: Session, ext: Extension, request: Request | None = None) -> ExtensionOut:
@@ -854,6 +906,20 @@ def create_extension(
     except IntegrityError as e:
         db.rollback()
         raise conflict(f"Extension {body.number} already exists.", code="number_in_use") from e
+    if body.template_id is not None:
+        template = _template_for(db, principal, org.id, body.template_id)
+        ext.template_id = template.id
+        given = body.model_fields_set
+        ext_templates.apply(
+            db,
+            template,
+            ext,
+            by="admin",
+            adapter=getattr(request.app.state, "telephony", None),
+            only={
+                f for f in ext_templates.FIELDS if f not in given or f in (template.locked or [])
+            },
+        )
     _record(
         db,
         ctx,
@@ -898,6 +964,15 @@ def update_extension(
     ext = _get_visible(db, principal, extension_id, "extensions.write")
     changes = body.model_dump(exclude_unset=True)
     details: dict[str, object] = {}
+    # A new template applies whole; otherwise its locked fields stay (#172).
+    new_template: ExtensionTemplate | None = None
+    if "template_id" in changes and changes["template_id"] != ext.template_id:
+        if changes["template_id"] is not None:
+            new_template = _template_for(db, principal, ext.organization_id, changes["template_id"])
+        ext.template_id = changes["template_id"]
+        details["template_id"] = str(changes["template_id"]) if changes["template_id"] else None
+    else:
+        _refuse_locked(db, ext, changes)
     if "number" in changes and changes["number"] != ext.number:
         org = db.get(Organization, ext.organization_id)
         assert org is not None
@@ -956,6 +1031,12 @@ def update_extension(
         if field in changes and changes[field] != getattr(ext, field):
             setattr(ext, field, changes[field])
             details[field] = changes[field]
+    if new_template is not None:
+        # The engine's copy of the state switches follows at the worker's
+        # next sync (bulk import calls this without a request).
+        applied = ext_templates.apply(db, new_template, ext, by="admin")
+        if applied:
+            details["template_applied"] = sorted(applied)
     try:
         db.flush()
     except IntegrityError as e:
@@ -1015,6 +1096,7 @@ def put_state(
     deployment is needed (docs/CALL_FEATURES.md §3.2)."""
     ext = _get_visible(db, principal, extension_id, "extensions.write")
     changes = body.model_dump(exclude_unset=True)
+    _refuse_locked(db, ext, changes)
     row = extension_state.ensure(db, ext)
     try:
         details: dict[str, Any] = extension_state.apply(

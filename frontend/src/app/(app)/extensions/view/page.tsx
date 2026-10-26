@@ -31,7 +31,7 @@ import {
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { ClassOfService, Extension, Page, RegistrationContact, SipCredentials, User } from "@/lib/types";
+import type { ClassOfService, Extension, ExtensionTemplate, Page, RegistrationContact, SipCredentials, User } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useSession } from "@/hooks/useSession";
@@ -49,6 +49,7 @@ function ExtensionView() {
   const errors = useFormErrors();
   const ext = useApiData<Extension>(id ? `/extensions/${encodeURIComponent(id)}` : null);
   const classes = useApiData<Page<ClassOfService>>(ext.data ? "/classes-of-service" : null, { organization_id: ext.data?.organization_id, limit: 200 });
+  const templates = useApiData<Page<ExtensionTemplate>>(ext.data ? "/extension-templates" : null, { organization_id: ext.data?.organization_id, limit: 200 });
   const editable = can("extensions.write");
   const users = useApiData<Page<User>>(editable && ext.data ? "/users" : null, { limit: 200 });
   const reloadExt = ext.reload;
@@ -67,6 +68,7 @@ function ExtensionView() {
   const [outCidName, setOutCidName] = useState("");
   const [intercom, setIntercom] = useState("default");
   const [cos, setCos] = useState("");
+  const [templateId, setTemplateId] = useState("");
   const [maxReg, setMaxReg] = useState("");
   const [hotline, setHotline] = useState("");
   const [hotlineDelay, setHotlineDelay] = useState("0");
@@ -100,6 +102,7 @@ function ExtensionView() {
       setOutCidName(x.outbound_caller_id_name ?? "");
       setIntercom(x.intercom ?? "default");
       setCos(x.class_of_service_id ?? "");
+      setTemplateId(x.template_id ?? "");
       setMaxReg(x.max_registrations ? String(x.max_registrations) : "");
       setHotline(x.hotline_target ?? "");
       setHotlineDelay(String(x.hotline_delay ?? 0));
@@ -112,7 +115,7 @@ function ExtensionView() {
   if (ext.error) return <ErrorState title="Could not load extension" error={ext.error} onRetry={ext.reload} />;
   if (!ext.data) return <LoadingState />;
   const x = ext.data;
-  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || cos !== (x.class_of_service_id ?? "") || maxReg !== (x.max_registrations ? String(x.max_registrations) : "") || hotline !== (x.hotline_target ?? "") || hotlineDelay !== String(x.hotline_delay ?? 0) || enabled !== x.is_enabled || !samePlace(place, placeOf(x));
+  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || cos !== (x.class_of_service_id ?? "") || templateId !== (x.template_id ?? "") || maxReg !== (x.max_registrations ? String(x.max_registrations) : "") || hotline !== (x.hotline_target ?? "") || hotlineDelay !== String(x.hotline_delay ?? 0) || enabled !== x.is_enabled || !samePlace(place, placeOf(x));
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === x.organization_id && (u.is_active || u.id === x.user_id));
 
   const save = async (e: FormEvent) => {
@@ -132,6 +135,7 @@ function ExtensionView() {
         outbound_caller_id_name: outCidName.trim() || null,
         intercom,
         class_of_service_id: cos || null,
+        ...(templateId !== (x.template_id ?? "") ? { template_id: templateId || null } : {}),
         max_registrations: maxReg.trim() ? Number(maxReg) : null,
         hotline_target: hotline.trim() || null,
         hotline_delay: Number(hotlineDelay || 0),
@@ -275,10 +279,17 @@ function ExtensionView() {
           <CallHandlingCard base={`/extensions/${x.id}`} dnd={x.dnd} editable={editable} onChanged={() => ext.reload()} onDirty={handlingDirty} />
           <Card title="Restrictions" subtitle={readOnly ?? "What this phone may do. Both need a deployment."}>
             <form className="stack stack--sm" onSubmit={save}>
-              <SelectField label="Class of service" value={cos} disabled={!editable} error={errors.fields.class_of_service_id} placeholder="None: everything allowed"
+              {(templates.data?.items ?? []).length || x.template_id ? (
+                <SelectField label="Extension template" value={templateId} disabled={!editable} error={errors.fields.template_id} placeholder="None: its own settings"
+                  options={(templates.data?.items ?? []).map((tpl) => ({ value: tpl.id, label: tpl.name }))} onChange={(e) => setTemplateId(e.target.value)}
+                  help={x.template_id && templateId === x.template_id
+                    ? (x.locked_fields?.length ? `Locked by the template: ${x.locked_fields.map((f) => f.replace(/_id$/, "").replaceAll("_", " ")).join(", ")}.` : "The template locks nothing.")
+                    : "Choosing a template applies all its settings when you save (Telephony → Extension Templates)."} />
+              ) : null}
+              <SelectField label="Class of service" value={cos} disabled={!editable || !!x.locked_fields?.includes("class_of_service_id")} error={errors.fields.class_of_service_id} placeholder="None: everything allowed"
                 options={(classes.data?.items ?? []).map((c) => ({ value: c.id, label: c.name }))} onChange={(e) => setCos(e.target.value)}
                 help="Which outbound routes and feature codes this phone may use (Telephony → Classes of Service)." />
-              <SelectField label="Intercom" value={intercom} disabled={!editable} options={[{ value: "default", label: "Organization default" }, { value: "allow", label: "Allow: other phones can intercom this one" }, { value: "deny", label: "Deny" }]} onChange={(e) => setIntercom(e.target.value)}
+              <SelectField label="Intercom" value={intercom} disabled={!editable || !!x.locked_fields?.includes("intercom")} options={[{ value: "default", label: "Organization default" }, { value: "allow", label: "Allow: other phones can intercom this one" }, { value: "deny", label: "Deny" }]} onChange={(e) => setIntercom(e.target.value)}
                 help="Intercom (the intercom feature code followed by this extension) makes the phone answer on speaker." />
               {saveBar}
             </form>

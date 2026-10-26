@@ -100,6 +100,7 @@ from veyra.core.models.telephony import (
     Device,
     Extension,
     ExtensionState,
+    ExtensionTemplate,
     FollowMe,
 )
 from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
@@ -159,6 +160,7 @@ __all__ = [
     "EmergencyCall",
     "Extension",
     "ExtensionState",
+    "ExtensionTemplate",
     "FaxInbox",
     "FaxJob",
     "FirewallBan",
