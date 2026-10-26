@@ -1,7 +1,9 @@
 # PBX feature comparison (Metaswitch and others)
 
 Research from 2026-10-20 comparing Veyra 0.27.18 with Metaswitch (Alianza Core)
-and 20 other PBX platforms, self-hosted and cloud. Written to plan the
+and 20 other PBX platforms, self-hosted and cloud. `COMPARISON.md` was
+updated on 2026-10-26 for the changes in 0.27.19 to 0.27.37; the notes files
+are kept as researched. Written to plan the
 features after Milestone 22; recommendations only, the owner decides.
 
 | File | What it holds |
@@ -12,6 +14,8 @@ features after Milestone 22; recommendations only, the owner decides.
 | [ucaas.md](ucaas.md) | RingCentral, Teams Phone, Zoom Phone, Webex/BroadWorks, 8x8, GoTo, Dialpad, Vonage, Nextiva, NetSapiens |
 | [veyra.md](veyra.md) | Veyra's feature inventory at 0.27.18 (feature codes, destinations, status per category) |
 | [taxonomy.md](taxonomy.md) | The shared feature categories A–K used by every file |
+
+Roadmap decisions are tracked as GitHub issues with the `gap:metaswitch` label.
 
 Rows marked "(inferred)" in the notes were not confirmed on a page that was
 opened. Prices are 2026 list or reseller figures and will drift.

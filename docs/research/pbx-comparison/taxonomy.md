@@ -1,4 +1,8 @@
-# Shared feature taxonomy (use these category names and IDs; add rows freely)
+# Shared feature taxonomy
+
+The categories A–K that every research file and the comparison chart use.
+Each line lists the features the research looked for in that category.
+
 A. Per-user calling features (DND, call forwarding all/busy/no-answer/unreachable, selective call forwarding/acceptance/rejection, simultaneous ring, sequential ring/find-me, remote office, anonymous call rejection, priority/distinctive ring, call waiting, per-call CLI blocking, call return/*69, last number redial, call trace, speed dial, 3-way calling, hold/transfer, call screening, CLIP/CNAM display, privacy)
 B. Business group features (hunt groups and algorithms, auto attendant/IVR, call park, pickup, intercom, paging, BLF/busy lamp, shared call appearance / shared lines / bridged line, executive-assistant (boss/admin), barge-in, whisper, silent monitor, night service / call-flow toggles, schedules/holidays, music on hold, dial-by-name directory, operator console/attendant console, extension dialing across sites)
 C. Voicemail and messaging (voicemail, unified messaging, visual voicemail, voicemail to email, transcription, fax to email / email to fax, SMS/MMS, chat/IM, team messaging)

@@ -2,6 +2,8 @@
 
 Source: repository `manderson20/veyra` at HEAD f5b12b4, version **0.27.18 (2026-10-20)**. Self-hosted (Ubuntu 24.04/26.04 installer), AGPL-3.0-or-later, Asterisk 22 engine with generated + verified config, FastAPI/PostgreSQL backend, Next.js admin/user UI, Chrome/Edge "Companion" extension. Pre-1.0: Milestones 0–21 released; M22 (adoption/ops) and M23 (public release 1.0) not started. Repo is private during development; README is stale (still says "Milestone 1"), CHANGELOG/ROADMAP/milestone reports are authoritative.
 
+> Kept as researched at 0.27.18. For what changed in 0.27.19 to 0.27.37 (bulk import and export, FreePBX importer, passkeys, live conference control, calendar presence, automation rules, the web Record button, voicemail retention) see `CHANGELOG.md` and the "since 0.27.x" notes in [COMPARISON.md](COMPARISON.md).
+
 Important caveats that apply across categories:
 - **No official phone template is hardware-verified.** Every official template (Poly VVX/Edge E/CCX, Yealink, Algo) is `status = "experimental"`; the results table in docs/PROVISIONING_HARDWARE_CHECKS.md is empty (issue #34 open).
 - Many M18/M19 phone-side behaviours were verified only in the engine config / API on dev1 with software phones, not on real handsets or a real carrier (M18 §3–4, M19 §3–4 "Not verified"). Emergency calling "not certified by Veyra".

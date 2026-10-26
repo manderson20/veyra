@@ -8,6 +8,12 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Documentation
+- **PBX feature comparison** (`docs/research/pbx-comparison/`): Veyra compared with Metaswitch (Alianza Core) and 20 other phone systems, with a recommended roadmap. The roadmap items to build are filed as issues labelled `gap:metaswitch`.
+- The README's status line now says where Veyra is (pre-1.0, Milestone 22 in progress) instead of "Milestone 1".
+
 ## 0.27.37 — 2026-10-20
 
 No migration. Module API 1.3.

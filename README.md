@@ -15,10 +15,9 @@ engine (Asterisk). It targets schools and districts, municipalities,
 businesses, MSPs and IT departments. It needs no cloud service and no
 subscription for self-hosted use.
 
-> **Status: early development (Milestone 1 — automated installation).** Not for production use.
+> **Status: pre-1.0 (0.27.x).** Milestones 0 to 21 have shipped and Milestone 22 is in progress; see the [changelog](CHANGELOG.md). Not yet recommended for production use.
 > The `companion/` directory holds the Veyra Companion browser extension (docs/COMPANION.md).
-> Telephony features (extensions, trunks, routing, voicemail…) arrive in later milestones;
-> see the [roadmap](docs/ROADMAP.md).
+> What comes next is in the [roadmap](docs/ROADMAP.md).
 
 ## What's here
 

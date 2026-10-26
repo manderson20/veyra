@@ -2,7 +2,7 @@
 
 Oct 20, 2026 · Mathew Anderson
 
-> Snapshot of the living document at https://claude.ai/code/artifact/c4c1e5fd-d336-4895-9ea6-7b7c95b443d2, exported 2026-10-26. It describes Veyra as of 0.27.18; later releases may have closed some gaps. The owner's decisions on the roadmap table are recorded in the living document.
+> Snapshot of the owner's working document (a private claude.ai page, not readable outside the project), exported 2026-10-26. The research describes Veyra as of 0.27.18; on 2026-10-26 the rows changed by 0.27.19 to 0.27.37 were updated and carry a "since 0.27.x" note. Roadmap decisions are tracked in GitHub issues labelled `gap:metaswitch`.
 
 ## Summary
 
@@ -12,7 +12,7 @@ Where Veyra is ahead of Metaswitch: paging and calendar-driven bells, 911 on-sit
 
 My top recommendations, in order:
 
-1. Finish Milestone 22 (bulk import, backups off the box) and hardware-verify the phone templates. These block every migration, from Metaswitch or FreePBX alike.
+1. Finish Milestone 22 (bulk import and the FreePBX importer shipped in 0.27.20 to 0.27.34; Let's Encrypt and backups off the box remain) and hardware-verify the phone templates. These block every migration, from Metaswitch or FreePBX alike.
 2. Add the small "telco habit" features that Metaswitch users will reach for on day one: `*67`, `*69`, `*70`, forward-when-unreachable, round-robin and longest-idle hunting, and a star-code preset that matches the codes staff already know.
 3. Add supervisor listen, whisper and barge (with an audit trail), plus hotline phones and a summer-break voicemail greeting.
 4. After 1.0, build a WebRTC phone in My Phone and the Companion, a receptionist console, a live queue board, Google and Microsoft directory sync, and on-premises voicemail transcription.
@@ -54,17 +54,17 @@ Prices are 2026 list or reseller figures, several from competitor-written roundu
 
 ## What Veyra has today
 
-Veyra 0.27.18 (repository commit f5b12b4, 2026-10-20) has shipped Milestones 0 to 21, so the everyday call features, call flow features, user portal, fax and provisioning breadth from the FreePBX gap analysis are now in place. Milestone 22 (bulk import, FreePBX importer, Let's Encrypt, SFTP/S3 backups, custom dialplan include) and Milestone 23 (1.0 release) have not started. Note that `docs/FREEPBX_GAP_ANALYSIS.md` was written at 0.23.0 and the README still says Milestone 1, so both understate what exists.
+Veyra 0.27.18 (repository commit f5b12b4, 2026-10-20) has shipped Milestones 0 to 21, so the everyday call features, call flow features, user portal, fax and provisioning breadth from the FreePBX gap analysis are now in place. At that point Milestone 22 (bulk import, FreePBX importer, Let's Encrypt, SFTP/S3 backups, custom dialplan include) and Milestone 23 (1.0 release) had not started. Since then 0.27.20 to 0.27.34 shipped bulk CSV import and export and the FreePBX importer; Let's Encrypt, SFTP/S3 backups and the custom dialplan include remain. Note that `docs/FREEPBX_GAP_ANALYSIS.md` was written at 0.23.0, so it understates what exists.
 
 | Area | What is in place | Notable holes |
 | --- | --- | --- |
 | Per-user calling | DND `*78/*79/*76`; forward always `*72/*73`, busy `*90/*91`, no answer `*52/*53` with ring time; follow-me `*21` (up to 10 legs, press-1 confirm); outbound caller ID per extension validated against owned numbers; intercom `*80<ext>` with auto-answer; direct to voicemail `*<ext>` with operator key | No call waiting toggle, no `*69` call return, no selective (per-caller) forwarding or rejection, no anonymous call rejection, no speed-dial codes, no SRTP |
 | Call flow | IVR, ring groups (ring all, sequential), queues (6 strategies, dynamic agents `*45/*46/*47`, break-out menu), parking with lamps, ConfBridge rooms with PINs and recording, announcements, dial-by-name, day/night toggles `*28<n>`, time-condition override `*27<n>`, holidays, caller block list `*30/*31/*32`, pickup `*8` and `**<ext>`, presence `*36<ext>` | No hunt/round-robin ring group modes, no shared lines, no boss/assistant, no barge/whisper/monitor, no queue callback or wallboard |
-| Voicemail, fax | Voicemail to email, shared inboxes, web inbox, browser greetings, call-me-to-play, email-and-delete; fax from a PDF on My Phone, inbound fax to email, T.38 per trunk | No transcription, no fax detection on voice numbers, fax untested with a real carrier |
+| Voicemail, fax | Voicemail to email, shared inboxes, web inbox, browser greetings, call-me-to-play, email-and-delete, per-box retention (since 0.27.36); fax from a PDF on My Phone, inbound fax to email, T.38 per trunk | No transcription, no fax detection on voice numbers, fax untested with a real carrier |
 | Users and clients | My Phone portal (widget canvas with admin-locked layouts), Companion browser extension (click-to-dial, directory, caller pop-up, SSO), missed-call email | No softphone, no mobile app, no WebRTC phone, no SMS, no chat |
 | Provisioning | HTTPS with Veyra CA, scoped variables, 12 key types, user keys around locked keys, phone directory; Poly VVX/Edge/CCX, all current Yealink, Algo | Every template is experimental and none is hardware-verified; Grandstream, ATAs and CyberData on request |
 | Paging, bells, emergency | Zones dialable from phones, multicast plus Poly group pages in step, priority and emergency pages, calendar-driven bells, AND clock module; 911/933 per site with dispatchable location, on-site notification and readiness page | Not a certified life-safety or NG911 system |
-| Platform | Multi-tenancy with isolation verifier, central console, active/passive HA (manual switchover), signed updates and modules, nftables firewall, OIDC sign-in, TOTP, audit log, encrypted backups, report builder, REST API, signed webhooks, Prometheus | No automatic failover, no SAML, no AD/LDAP sync, no CRM or Teams link, no reseller tier or billing |
+| Platform | Multi-tenancy with isolation verifier, central console, active/passive HA (manual switchover), signed updates and modules, nftables firewall, OIDC sign-in, TOTP, audit log, encrypted backups, report builder, REST API, signed webhooks, Prometheus; since 0.27.19: passkeys, bulk import and export, FreePBX importer, automation rules | No automatic failover, no SAML, no AD/LDAP sync, no CRM or Teams link, no reseller tier or billing |
 
 On Metaswitch, the repository mentions it once: the Companion extension was built to replace a Metaswitch desktop dialler (`docs/ROADMAP.md`, Milestone 6b). There is no Metaswitch import or interop tooling.
 
@@ -88,7 +88,7 @@ Each row explains a feature in a sentence, shows what Metaswitch does, names the
 | Remote access to forwarding | Change your forwarding by calling in from any phone with a PIN. | ✔ RACF | Webex (remote office) | ✘ My Phone and Companion cover this from a browser | **Skip** (the web covers it) |
 | Selective forward, accept and reject | Per-user lists: forward these callers, only ring for these callers, reject these callers. | ✔ `*63/*83`, `*95/*96`, `*60/*80`; up to 20 rule sets | Webex (BroadWorks), NS, Teams (presence rules) | ✘ Only the organization-wide block list | **After 1.0**: "personal call rules" in My Phone |
 | Anonymous call rejection | Refuses callers who hide their number. | ✔ `*77/*87` per line | Webex, NS, Vital, Fusion | ◐ Organization-wide rule only | **After 1.0** with personal call rules |
-| Personal schedules | Your own weekly schedule and holidays deciding how your calls are handled. | ✔ Incoming Call Manager with weekly schedule and holidays | 3CX (status profiles), Teams | ◐ Presence states switch DND and forwarding, but by hand | **After 1.0**: let presence change on a schedule or from Google Calendar |
+| Personal schedules | Your own weekly schedule and holidays deciding how your calls are handled. | ✔ Incoming Call Manager with weekly schedule and holidays | 3CX (status profiles), Teams | ◐ Presence states switch DND and forwarding; since 0.27.28 a user's Google or Outlook calendar (secret iCal link) can set "in a meeting". Missing: a weekly schedule and holidays of your own | **After 1.0**: a personal weekly schedule |
 | Simultaneous and sequential ring (follow-me) | Rings desk, cell and other numbers together or in turn. | ✔ Follow Me, up to 6 steps | All 20 | ✔ Up to 10 legs, ring-all or in turn, press-1 confirm on outside legs, `*21` | **Done** |
 | Call waiting toggle | Turns call waiting off, for good or for one call. | ✔ `*70` for one call | All 20 | ✘ Phones handle it locally; no server toggle | **Build next** (small; gap P2) |
 | Hide caller ID | Hides your number on one call, or by default. | ✔ `*67` per call; `*65/*85` permanent | CUCM, Webex, NS, Vonage | ✘ No code or privacy option | **Build next** (small; staff expect `*67`) |
@@ -118,7 +118,7 @@ Each row explains a feature in a sentence, shows what Metaswitch does, names the
 | Auto attendant (IVR) | "Press 1 for the office" menus. | ✔ Easy and Premium Attendant, multi-level, refuses to activate a broken menu | All 20 | ✔ Nesting, all destinations, timeout and invalid handling, problem check. Missing: multi-digit entries, "return to previous menu", speech | **After 1.0** (small parts) |
 | Schedules and holidays | Different routing after hours and on holidays. | ✔ Weekly schedule, special days, automatic public holidays | All 20 | ✔ Time zone, weekly ranges, dates, rules like "4th Thursday", override code | **Done**; optional one-click US holiday set |
 | Day/night toggle key | One key or code flips routing to "closed" (snow day, emergency). | ◐ Only through attendant schedules; no toggle key found | Fusion, Vital, NS | ✔ `*28<n>` with PIN and BLF, also from the web and API | **Done** (ahead of Metaswitch) |
-| Call park | Park a call in a slot; anyone picks it up. | ✔ Codes vary by operator; park keys | All 20 | ✔ Lots, slots with lamps, timeout ring-back, park key. Missing: park-and-page, private lots | **After 1.0**: park-and-page ("call for Mrs. Smith on 71") |
+| Call park | Park a call in a slot; anyone picks it up. | ✔ Codes vary by operator; park keys | All 20 | ✔ Lots, slots with lamps, timeout ring-back, park key, `*85<slot>` pickup (since 0.27.23). Missing: park-and-page, private lots | **After 1.0**: park-and-page ("call for Mrs. Smith on 71") |
 | Call pickup | Answer a colleague's ringing phone. | ✔ Group `*11`, directed `*12`+ext | All 20 | ✔ `*8`, `**<ext>`, BLF pickup | **Done** |
 | Busy lamp field | Keys showing colleagues' state. | ✔ Idle, ringing, busy, parked | All 20 | ✔ Extensions, DND, forwarding, toggles, parking, conferences, queues, presence | **Done** (ahead) |
 | Shared line (shared call appearance) | One number appears on several phones; anyone can answer it or pick it up from hold. | ✔ MADN, up to 1,000 per group | CUCM, Webex, Zoom, RC, GoTo, NS, Teams, Grandstream | ✘ Several phones can share an extension, but hold and line state are not shared | **After 1.0**, needs design: Asterisk has no built-in shared appearance for PJSIP phones, so it would likely be BLF plus park-on-hold (my assessment) |
@@ -166,7 +166,7 @@ Each row explains a feature in a sentence, shows what Metaswitch does, names the
 | Mobile app with push | Your extension on your cell phone, ringing even when the app is closed. | ✔ MaX UC Mobile | All cloud services, 3CX, Yeastar, Grandstream (free), Vital, CUCM, IPO, Mitel | ✘ | **After 1.0**: provision a proven third-party app with push rather than building one |
 | Single number reach | Your cell acts as your office line, including showing the office number when you call out. | ✔ Twinning, Call Jump | Webex, CUCM, Mitel, IPO, NS | ◐ Follow-me rings the cell, but calls out from the cell show the cell number | **After 1.0**, with the mobile app |
 | Browser extension | Click any number on a web page to call it; caller pop-ups. | ◐ Windows CommPortal Assistant | 3CX, Yeastar, Grandstream, 8x8 | ✔ Companion: click-to-dial, directory, pop-ups, SSO, emergency pop-up, force-install on managed Chrome. Missing: answer and hang up from the browser | **Done** (ahead) |
-| Presence | Shows colleagues as available, busy, away or in a meeting. | ✔ | All 20 | ✔ Six states with automatic DND and forwarding. Missing: "in a meeting" from Google or Outlook calendars | **After 1.0** (calendar-driven presence) |
+| Presence | Shows colleagues as available, busy, away or in a meeting. | ✔ | All 20 | ✔ Six states with automatic DND and forwarding, `*37` to set presence from a phone, "in a meeting" from a Google or Outlook calendar (since 0.27.28) | **Done** |
 | Contacts sync | Pull Google or Outlook contacts into the directory and phones. | ✔ Outlook sync | 3CX, Yeastar, Grandstream | ◐ Personal contacts with CSV import | **After 1.0** |
 | Apps on the desk phone screen | Voicemail list, presence and settings on the phone's display. | ✔ CommPortal phone apps on Yealink | FreePBX (paid) | ✘ Keys and lamps only | **Skip** for now |
 | Hot desking | See section B. | ✘ | Many | ✘ | **After 1.0** |
@@ -175,7 +175,7 @@ Each row explains a feature in a sentence, shows what Metaswitch does, names the
 
 | Feature | What it does | Metaswitch | Others with it | Veyra today | Recommendation |
 | --- | --- | --- | --- | --- | --- |
-| Conference bridge | A dial-in room with PINs. | ◐ Depends on the operator (older conference server) | All 20 | ✔ Rooms with participant and admin PINs, recording, in-room keys, lamps | **Done** |
+| Conference bridge | A dial-in room with PINs. | ◐ Depends on the operator (older conference server) | All 20 | ✔ Rooms with participant and admin PINs, recording, in-room keys, lamps; since 0.27.21 a live view of who is in a room with mute and kick from the web | **Done** |
 | Personal rooms | Each user owns a room and runs it from the portal. | ✘ | Fusion, NS, FreePBX (paid) | ✘ | **After 1.0** (small) |
 | Video meetings and screen share | Browser video meetings. | ✔ Zoom-powered MaX Meeting | All cloud services, 3CX, Grandstream, Yeastar, Vital | — | **Skip** (Meet, Zoom or Teams already in place) |
 
@@ -184,7 +184,7 @@ Each row explains a feature in a sentence, shows what Metaswitch does, names the
 | Feature | What it does | Metaswitch | Others with it | Veyra today | Recommendation |
 | --- | --- | --- | --- | --- | --- |
 | Call queues | Callers wait in line for the next free person. | ✔ Integrated ACD on hunt groups | All 20 | ✔ Six strategies, penalties, wrap-up, position announcements, break-out menu, failover | **Done** (ahead: Metaswitch has no position announcements per one operator's guide) |
-| Agent log in and pause | Agents join, leave and pause. | ✔ Plus up to 30 "unavailable" reasons | 3CX, NS, Teams, Zoom, Webex | ◐ `*45/*46` with lamps. Missing: pause reasons | **After 1.0** (small) |
+| Agent log in and pause | Agents join, leave and pause. | ✔ Plus up to 30 "unavailable" reasons | 3CX, NS, Teams, Zoom, Webex | ◐ `*45/*46` with lamps; since 0.27.31 the queue report shows each agent's logged-in and paused time. Missing: pause reasons | **After 1.0** (small) |
 | Disposition codes | Agents tag each call's outcome. | ✔ Up to 30 per queue | NS, Dialpad | ✘ | **Skip** |
 | Live queue board (wallboard) | Live callers waiting, wait times and agent states on a screen. | ✔ Supervisor dashboard, 30-second refresh | 3CX, Yeastar, Zoom, Teams, NS, 8x8, Webex | ✘ `*47` reads the waiting count; reports are after the fact | **After 1.0**, high priority (attendance lines, utility billing, front offices) |
 | Supervisor listen, whisper, barge | See section B. | ✔ | Most | ✘ | **Build next** |
@@ -216,7 +216,7 @@ Each row explains a feature in a sentence, shows what Metaswitch does, names the
 
 | Feature | What it does | Metaswitch | Others with it | Veyra today | Recommendation |
 | --- | --- | --- | --- | --- | --- |
-| Call recording | Records calls by rule or on demand. | ✔ Group recording; partner cloud (CallCabinet) | All 20 | ✔ Policies by direction and target, `*1` on demand, encrypted per recording, audited playback, holds | **Done** (ahead) |
+| Call recording | Records calls by rule or on demand. | ✔ Group recording; partner cloud (CallCabinet) | All 20 | ✔ Policies by direction and target, `*1` on demand, Record button on the live Calls page (since 0.27.25), encrypted per recording, audited playback, holds | **Done** (ahead) |
 | Pause recording | Pauses during card payments or sensitive talk. | ✘ | NS, Dialpad, Webex, 8x8 | ◐ `*1` stops and starts on-demand recording only | **After 1.0** (small; town payment lines) |
 | Archive recordings off the box | Copies recordings to SFTP or S3. | ◐ Through the partner cloud | Yeastar, Grandstream | ✘ | **Build next** alongside Milestone 22's SFTP and S3 backups |
 | Call history and reports | Searchable call records and charts. | ✔ CSV for 30 days; licensed reports (frequent callers, long ringing, missed calls) | All 20 | ✔ 400 days, report builder with saved and scheduled reports | **Done** (ahead) |
@@ -229,12 +229,12 @@ Each row explains a feature in a sentence, shows what Metaswitch does, names the
 | Feature | What it does | Metaswitch | Others with it | Veyra today | Recommendation |
 | --- | --- | --- | --- | --- | --- |
 | Open API and webhooks | Lets other systems read and drive the phone system. | ✘ Closed, partner-gated | Wazo, Yeastar, Grandstream, all cloud services | ✔ REST, WebSocket events, signed webhooks, scoped tokens | **Done** (well ahead) |
-| Single sign-on | Sign in with Google or Microsoft. | ✘ Not found | Yeastar, Grandstream, IPO, cloud services | ✔ OpenID Connect (Google, Entra) with MFA policy. Missing: SAML | **Done**; SAML **skip** unless asked |
+| Single sign-on | Sign in with Google or Microsoft. | ✘ Not found | Yeastar, Grandstream, IPO, cloud services | ✔ OpenID Connect (Google, Entra) with MFA policy; passkeys (since 0.27.22). Missing: SAML | **Done**; SAML **skip** unless asked |
 | Directory sync | Creates and removes users from Google Workspace, Entra ID or AD. | ◐ LDAP in the operator panel only | Yeastar, Grandstream, CUCM, IPO, Teams | ✘ | **After 1.0**, high priority (staff turnover every August) |
 | Microsoft Teams calling | Use the PBX line from inside Teams. | ✔ MaX UC Connector for Teams; certified Direct Routing SBC | RC, Zoom, Webex, 8x8, 3CX, Yeastar, Grandstream | ✘ | **Skip** unless a Teams district asks |
 | CRM or student-system lookup | Caller pop-up from a CRM or the student information system. | ◐ MaX UC lookup | 3CX, Yeastar, Grandstream, cloud services | ✘ Webhooks only | **Module**: a student-system lookup could show which family is calling |
 | AI receptionist | An AI answers the main line, answers questions and routes calls. | ✘ (Alianza AI layer planned for 2026) | 3CX, Yeastar, Vital, RC, Zoom, Webex, GoTo, Dialpad, Nextiva, NS | ✘ | **Module**, later: per-minute AI costs and accuracy need care; not before the core is finished |
-| Door and building systems | External systems trigger pages or calls. | ✘ | Few | ✔ Integration token starts a page (for example a door controller) | **Done** (ahead) |
+| Door and building systems | External systems trigger pages or calls. | ✘ | Few | ✔ Integration token starts a page (for example a door controller); since 0.27.27 automation rules run an action when an event happens | **Done** (ahead) |
 | Third-party tool access (AMI/ARI) | Lets operator panels and wallboards connect. | ✘ | Vital, Grandstream, IPO | ✘ Internal only | **Skip** while the API grows |
 
 ### J. Administration and platform
@@ -244,7 +244,7 @@ Each row explains a feature in a sentence, shows what Metaswitch does, names the
 | Admin portal and scoped admins | Manage the system; local admins see only their part. | ✔ Group admin and department admins; many changes need an operator ticket | All 20 | ✔ Roles scoped by organization and site, custom roles | **Done** (ahead: no ticket to the carrier) |
 | Log in as a user | Help desk sees exactly what a user sees. | ✔ | NS | ✘ | **After 1.0** (small, audited) |
 | Phone auto-provisioning | Plug in a phone and it configures itself. | ✔ Yealink, Poly, Cisco | All 20 | ◐ Poly VVX, Edge and CCX, all current Yealink, Algo, with HTTPS and locked keys. Missing: none hardware-verified; Grandstream, ATA, CyberData on request | **Build next**: hardware checks first |
-| Bulk import and export | Load users, extensions and numbers from a spreadsheet. | ◐ Short codes, contacts, line lists | Most | ✘ Planned in Milestone 22 | **Build next** (Milestone 22) |
+| Bulk import and export | Load users, extensions and numbers from a spreadsheet. | ◐ Short codes, contacts, line lists | Most | ✔ Since 0.27.20: CSV import and export for extensions, users, ring groups, queues, IVRs, inbound routes, shared inboxes and time conditions; FreePBX importer (0.27.29 to 0.27.34). Missing: user settings templates | **Done**; user templates **build next** |
 | High availability | A standby takes over if the main server fails. | ✔ Clustered, geo-redundant, run by the carrier | 3CX, Vital, Yeastar, CUCM, cloud services | ◐ Active/passive with manual switchover; two-server test pending | **Build next**: finish the two-server test, then automatic failover |
 | Branch survivability | A building keeps calling locally if its link to the main site fails. | — Carrier network | CUCM, Mitel, Zoom, Webex | ✘ | **Skip** for now; revisit for multi-building districts on one server |
 | Multi-tenancy | One system hosts several separate organizations. | ✔ Reseller hierarchy with white-label | NS, Fusion, Vital, 3CX, Yeastar | ✔ Isolated namespaces with a verifier, central console. Missing: reseller tier, per-organization branding | **After 1.0**, only if the MSP market matters |
@@ -282,6 +282,7 @@ Staff coming from a Metaswitch hosted PBX will notice star codes first. Veyra's 
 | Hunt group monitor / whisper / barge | `*47` / `*48` / `*49` | `*47<queue>` reads callers waiting | Collides |
 | Hide caller ID, call return, call waiting off | `*67`, `*69`, `*70` | None | Missing |
 | Anonymous call rejection | `*77` / `*87` | None per user | Missing |
+| Caller ID delivery permanent off | `*85` (`*65` on) | `*85<slot>` picks up a parked call (since 0.27.23) | Collides |
 
 I recommend a "carrier code set" option, loaded from the code card your current carrier gave staff, plus the three missing codes above. The other things Metaswitch users lean on are Business Call Manager rules (personal schedules and caller lists), the CommPortal call lists that show why a call was rejected, round-robin hunt groups, shared lines, and the MaX UC apps. The chart above covers each of these.
 
@@ -295,12 +296,12 @@ Thirty-five items, grouped by my recommendation. The decision column is yours: p
 
 | # | Tier | Item | Why | Size | Your decision |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Build next | Milestone 22 as planned, plus user templates and recording archive to SFTP/S3 | Bulk import and off-box backups block every migration, from Metaswitch or FreePBX | L |  |
+| 1 | Build next | The rest of Milestone 22 (Let's Encrypt, SFTP/S3 backups, custom dialplan include), plus user templates and recording archive to SFTP/S3 | Off-box backups block every migration; bulk import shipped in 0.27.20 | L |  |
 | 2 | Build next | Hardware-verify the Poly and Yealink templates; add the ATA template | No template is verified yet; ATAs carry fax machines, door and elevator phones | M |  |
 | 3 | Build next | Encrypted audio (SRTP) | Still-open P1 from the FreePBX analysis | M |  |
 | 4 | Build next | Two-server HA test, then automatic failover | Metaswitch users are used to a carrier that never goes down | L |  |
 | 5 | Build next | Telco habit codes: `*67`, `*69`, `*70`, anonymous call rejection | Staff from a telco hosted PBX dial these on day one | S |  |
-| 6 | Build next | Carrier code set (a feature-code preset matching the old carrier's card) | Removes the code collisions listed above | S |  |
+| 6 | Build next | Carrier code set (a feature-code preset matching the old carrier's card) | Removes the code collisions listed above, including `*85` | S |  |
 | 7 | Build next | Forward when the phone is offline | Keeps calls flowing to cell phones in an outage | S |  |
 | 8 | Build next | Round robin, circular and longest-idle ring groups with per-member ring time | Metaswitch has five hunt methods; Veyra ring groups have two | S |  |
 | 9 | Build next | Supervisor listen, whisper and barge with permissions and audit | Front-office training and queue supervision | M |  |
@@ -315,7 +316,7 @@ Thirty-five items, grouped by my recommendation. The decision column is yours: p
 | 18 | After 1.0 | Google Workspace and Entra directory sync | Staff turnover every August | M |  |
 | 19 | After 1.0 | Voicemail transcription on premises | Metaswitch has had it since 2010 | M |  |
 | 20 | After 1.0 | Hot desking | Substitutes and travelling staff | M |  |
-| 21 | After 1.0 | Personal call rules: selective accept, reject and forward, schedules, calendar-driven presence | Metaswitch's Business Call Manager | M |  |
+| 21 | After 1.0 | Personal call rules: selective accept, reject and forward, personal schedules (calendar-driven presence shipped in 0.27.28) | Metaswitch's Business Call Manager | M |  |
 | 22 | After 1.0 | Shared line appearance (design first) | Office and principal sharing a line | L |  |
 | 23 | After 1.0 | Mobile app (a proven third-party app with push) and single number reach | Replaces MaX UC Mobile | M |  |
 | 24 | After 1.0 | Executive / assistant | Principal and superintendent offices | M |  |
@@ -333,7 +334,7 @@ Thirty-five items, grouped by my recommendation. The decision column is yours: p
 
 ## Sources and confidence
 
-Veyra facts come from the repository at commit f5b12b4 (0.27.18): `CHANGELOG.md`, the milestone reports 18 to 21, `docs/` and the code (`backend/veyra/telephony/features.py`, the generator, the API routers, the provisioning templates). Platform facts come from 168 pages opened on 2026-10-20. The full research notes, with a source for every row, are next to this file: [metaswitch.md](metaswitch.md), [onprem.md](onprem.md), [ucaas.md](ucaas.md) and [veyra.md](veyra.md). Where a row says "not found", I found no evidence, which is not proof the feature is missing. Rows built on general knowledge rather than a page are marked "(inferred)" in those notes.
+Veyra facts come from the repository at commit f5b12b4 (0.27.18), with the rows changed by 0.27.19 to 0.27.37 (commit f00f7ea) updated on 2026-10-26: `CHANGELOG.md`, the milestone reports 18 to 21, `docs/` and the code (`backend/veyra/telephony/features.py`, the generator, the API routers, the provisioning templates). Platform facts come from 168 pages opened on 2026-10-20. The full research notes, with a source for every row, are next to this file: [metaswitch.md](metaswitch.md), [onprem.md](onprem.md), [ucaas.md](ucaas.md) and [veyra.md](veyra.md). Where a row says "not found", I found no evidence, which is not proof the feature is missing. Rows built on general knowledge rather than a page are marked "(inferred)" in those notes.
 
 Key sources:
 
