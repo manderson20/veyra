@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 56,
+  "sequence": 57,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.40",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Maintenance windows for operating system and Asterisk updates; Ubuntu's nightly updater no longer upgrades Asterisk. Run sudo installer/upgrade.sh --yes once for the Asterisk hold.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "3bf31686a7",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.40/veyra-0.27.40.tar.gz",
+        "sha256": "ac0bd5ea52694d05e57687c62cffb55d845f037495330584c754921ae9fbdcc2",
+        "size": 8643775
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -955,6 +972,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-27T01:54:48+00:00",
-  "expires_at": "2027-01-25T01:54:48+00:00"
+  "generated_at": "2026-10-27T02:51:30+00:00",
+  "expires_at": "2027-01-25T02:51:30+00:00"
 }
