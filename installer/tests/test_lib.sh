@@ -35,9 +35,13 @@ render_template "$TMP/in" "$TMP/out" ONE=1 "TWO=x y"
 t "render_template substitutes" grep -qx 'a=1 b=x y' "$TMP/out"
 # The NGINX site renders with every placeholder, including the multi-line
 # optional HTTP provisioning block (docs/DEVICE_PROVISIONING.md §3.3).
-render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx.conf" \
+# The shared HTTPS body goes first so its own placeholders are filled too
+# (render_nginx_files does the same; docs/PUBLIC_CERTIFICATES.md §2).
+site="HTTPS_SITE=$(<"$HERE/../templates/nginx/https-site.conf.in")"
+render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx.conf" "$site" \
     "LISTEN_HTTP=    listen 127.0.0.1:80;" "LISTEN_HTTPS=    listen 127.0.0.1:443 ssl;" \
-    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra HTTP_PROVISIONING=
+    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra HTTP_PROVISIONING= \
+    ACME_WEBROOT=/var/lib/veyra-acme-webroot
 render_template "$HERE/../templates/nginx/security-headers.conf.in" "$TMP/headers.conf" \
     "CSP_SCRIPT_SETS=set \$veyra_csp_scripts \" 'sha256-abc='\";"
 t "security headers render script hashes into the CSP" grep -q "^set \$veyra_csp_scripts \" 'sha256-abc='\";" "$TMP/headers.conf"
@@ -54,10 +58,21 @@ t "nginx template has the provisioning location" grep -q 'location /provisioning
 t "nginx template includes the HA listen files" grep -q 'include /etc/veyra/nginx-ha-listen-https.conf;' "$TMP/nginx.conf"
 t "nginx template serves firmware from the data directory" grep -q 'alias /var/lib/veyra/firmware/;' "$TMP/nginx.conf"
 t "nginx template has no HTTP provisioning by default" not grep -q 'Provisioning over plain HTTP' "$TMP/nginx.conf"
+t "nginx template has two HTTPS servers (Veyra CA and public certificate)" \
+    test "$(grep -c '^    listen 127.0.0.1:443 ssl;' "$TMP/nginx.conf")" = 2
+t "both HTTPS servers carry the shared body" test "$(grep -c 'location /provisioning/ {' "$TMP/nginx.conf")" = 2
+t "the public certificate's server takes its name from the managed file" \
+    grep -q 'include /etc/veyra/nginx-public-name.conf;' "$TMP/nginx.conf"
+t "the public certificate's server uses public.crt" grep -q 'ssl_certificate     /etc/veyra/tls/public.crt;' "$TMP/nginx.conf"
+t "port 80 serves ACME challenges from the webroot" grep -q 'root /var/lib/veyra-acme-webroot;' "$TMP/nginx.conf"
+t "ACME challenges come before the HTTPS redirect" test \
+    "$(grep -n 'acme-challenge' "$TMP/nginx.conf" | head -1 | cut -d: -f1)" -lt \
+    "$(grep -n 'return 301 https' "$TMP/nginx.conf" | head -1 | cut -d: -f1)"
 block="$(sed -e 's|@VEYRA_DATA@|/var/lib/veyra|g' -e 's|@VEYRA_ETC@|/etc/veyra|g' "$HERE/../templates/nginx/provisioning-http.conf.in")"
-render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx-http.conf" \
+render_template "$HERE/../templates/nginx/veyra.conf.in" "$TMP/nginx-http.conf" "$site" \
     "LISTEN_HTTP=    listen 127.0.0.1:80;" "LISTEN_HTTPS=    listen 127.0.0.1:443 ssl;" \
-    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra "HTTP_PROVISIONING=$block"
+    API_PORT=8100 VEYRA_ETC=/etc/veyra VEYRA_PREFIX=/opt/veyra VEYRA_DATA=/var/lib/veyra "HTTP_PROVISIONING=$block" \
+    ACME_WEBROOT=/var/lib/veyra-acme-webroot
 t "nginx template includes the HTTP provisioning block when enabled" grep -q 'Provisioning over plain HTTP' "$TMP/nginx-http.conf"
 t "HTTP provisioning block is rendered" not grep -q '@VEYRA_DATA@' "$TMP/nginx-http.conf"
 render_template "$HERE/../templates/veyra.env.in" "$TMP/env" VEYRA_ETC=/etc/veyra VEYRA_DATA=/var/lib/veyra \
