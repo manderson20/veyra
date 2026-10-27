@@ -98,4 +98,8 @@ def test_policy_rules():
     # Milestone 12: Veyra itself installs in a window; modules only notify.
     assert availability_problem(Component.VEYRA_CORE, auto) is None
     assert availability_problem(Component.MODULES, auto) is not None
-    assert availability_problem(Component.OPERATING_SYSTEM, ok) is not None
+    # 0.27.40: OS and Asterisk packages notify or install in a window, never download-approve.
+    for packages in (Component.OPERATING_SYSTEM, Component.TELEPHONY_ENGINE):
+        assert availability_problem(packages, ok) is None
+        assert availability_problem(packages, auto) is None
+        assert availability_problem(packages, PolicyUpdate(mode=Mode.DOWNLOAD_APPROVE)) is not None
