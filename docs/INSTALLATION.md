@@ -125,6 +125,11 @@ by one from the CA at the next upgrade.
   root (or push it to managed Chromebooks and Chrome with Google Admin:
   Devices → Networks → Certificates). Until then browsers warn, as with the
   self-signed certificate; the Companion extension needs the CA installed.
+* **A certificate from Let's Encrypt** (0.27.41): System → Settings →
+  **HTTPS certificate** gets one for the server's public name and renews
+  it; browsers then need nothing installed. Phones and the server's IP
+  addresses keep the Veyra certificate. See
+  [PUBLIC_CERTIFICATES.md](PUBLIC_CERTIFICATES.md).
 * **Phones** get the CA through provisioning (§4a).
 * **Your own certificate**: replace `veyra.crt` and `veyra.key` (key mode
   0600) and run `sudo systemctl reload nginx`. The installer never replaces

@@ -45,6 +45,10 @@ class Ruleset:
     feed: Iterable[str] = ()
     ports: dict[str, PortSpec] = field(default_factory=dict)
     restricted: Sequence[str] = ()  # services limited to the allow list
+    # TCP ports open to everyone ahead of the allow-list drops for a while:
+    # port 80 while an ACME authority checks an HTTP-01 challenge
+    # (docs/PUBLIC_CERTIFICATES.md §6). Bans and blocks still apply.
+    open_tcp: Sequence[str] = ()
 
 
 def family(cidr: str) -> int:
@@ -136,6 +140,8 @@ def render(rs: Ruleset) -> str:
             spec = rs.ports.get(service)
             for match in _ports_match(spec) if spec else []:
                 lines.append(f"    {proto} saddr {net} {match} drop")
+    if rs.open_tcp and rs.restricted:
+        lines.append(f"    tcp dport {{ {', '.join(rs.open_tcp)} }} return")
     for service in rs.restricted:
         spec = rs.ports.get(service)
         for match in _ports_match(spec) if spec else []:
@@ -148,7 +154,7 @@ def render(rs: Ruleset) -> str:
 def structure(rs: Ruleset) -> str:
     """The script without bans, so a new ban does not count as a change of
     structure (bans are added incrementally)."""
-    return render(Ruleset(rs.rules, (), rs.feed, rs.ports, rs.restricted))
+    return render(Ruleset(rs.rules, (), rs.feed, rs.ports, rs.restricted, rs.open_tcp))
 
 
 def ban_set(address: str) -> str:

@@ -43,6 +43,9 @@ FILE_MOH = "musiconhold.conf"
 FILE_CONFBRIDGE = "confbridge.conf"
 FILE_PARKING = "res_parking.conf"
 FILE_FEATURES = "features.conf"
+# The installer and veyra-acme keep Asterisk-readable copies of the HTTPS
+# certificates here (docs/PUBLIC_CERTIFICATES.md §6).
+ASTERISK_TLS_DIR = "/etc/asterisk/veyra-tls"
 FFMPEG = "/usr/bin/ffmpeg"
 _STREAM_URL_RE = re.compile(
     r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~%/?&=+:@!$*-]*)?$"
@@ -648,8 +651,9 @@ def _transports(sip: SipSettings) -> GeneratedFile:
             "protocol=tls",
             f"bind={_bind(sip.bind_address, sip.tls_port)}",
             "allow_reload=yes",
-            "cert_file=/etc/veyra/tls/veyra.crt",
-            "priv_key_file=/etc/veyra/tls/veyra.key",
+            # Copies Asterisk can read; /etc/veyra/tls is root-only.
+            f"cert_file={ASTERISK_TLS_DIR}/{sip.tls_certificate}.crt",
+            f"priv_key_file={ASTERISK_TLS_DIR}/{sip.tls_certificate}.key",
             "method=tlsv1_2",
             *nat,
             "",

@@ -10,6 +10,11 @@ VEYRA_ETC="${VEYRA_ETC:-/etc/veyra}"
 VEYRA_DATA="${VEYRA_DATA:-/var/lib/veyra}"
 VEYRA_LOG_DIR="${VEYRA_LOG_DIR:-/var/log/veyra}"
 VEYRA_BACKUP_DIR="${VEYRA_BACKUP_DIR:-/var/backups/veyra}"
+# Public certificates (docs/PUBLIC_CERTIFICATES.md): the root helper's status
+# (root:veyra 0770), the HTTP-01 webroot NGINX serves, Asterisk's copies.
+ACME_DIR="${ACME_DIR:-/var/lib/veyra-acme}"
+ACME_WEBROOT="${ACME_WEBROOT:-/var/lib/veyra-acme-webroot}"
+ASTERISK_TLS_DIR="${ASTERISK_TLS_DIR:-/etc/asterisk/veyra-tls}"
 # Optional site settings for the installer, kept across upgrades. Known keys:
 #   VEYRA_PUBLIC_HOST  the host name users and phones type for this server
 #                      (Companion host permission and policy, docs/COMPANION.md

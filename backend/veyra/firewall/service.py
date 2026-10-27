@@ -37,6 +37,7 @@ from veyra.firewall import detect, feeds
 from veyra.firewall.ports import service_ports
 from veyra.firewall.render import BanSpec, Ruleset, RuleSpec, ban_set, render, structure
 from veyra.firewall.settings import FirewallSettings, load_settings, save_settings, save_status
+from veyra.system import certificate
 from veyra.telephony.settings import load_sip_settings
 
 log = logging.getLogger("veyra.firewall")
@@ -531,6 +532,7 @@ class FirewallService:
             feed=self._feed_entries(db),
             ports=service_ports(load_sip_settings(db), fw),
             restricted=fw.restricted(),
+            open_tcp=("80",) if certificate.challenge_window_open(db, now) else (),
         )
 
     def _enforce(

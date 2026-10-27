@@ -1,0 +1,322 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Managed by Veyra installer
+#
+# Public HTTPS certificates from an ACME authority (docs/PUBLIC_CERTIFICATES.md,
+# issue #43), run as root by veyra-acme@<mode>.service, which polkit lets the
+# veyra service account start. Modes:
+#   issue   read request.json, store the credentials root-only, run certbot,
+#           deploy the certificate to NGINX (and Asterisk's copy)
+#   renew   certbot renew (only when 30 days or fewer are left), deploy if new
+#   remove  stop serving the public certificate; the Veyra CA one stays
+# Status files land in /var/lib/veyra-acme (readable by the veyra group).
+# Standard library only: it runs with the system Python, not Veyra's venv.
+
+from __future__ import annotations
+
+import datetime as dt
+import grp
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ETC = Path(os.environ.get("VEYRA_ETC", "/etc/veyra"))
+STATE = Path(os.environ.get("VEYRA_ACME_DIR", "/var/lib/veyra-acme"))
+# Served by NGINX (www-data) on port 80, so outside the veyra-only STATE.
+WEBROOT = Path(os.environ.get("VEYRA_ACME_WEBROOT", "/var/lib/veyra-acme-webroot"))
+ACME_ETC = ETC / "acme"
+TLS = ETC / "tls"
+NAME_CONF = ETC / "nginx-public-name.conf"
+AST_TLS = Path(os.environ.get("VEYRA_ASTERISK_TLS_DIR", "/etc/asterisk/veyra-tls"))
+CERTBOT = os.environ.get("VEYRA_ACME_CERTBOT", "certbot")
+NGINX = os.environ.get("VEYRA_ACME_NGINX", "nginx")
+SYSTEMCTL = os.environ.get("VEYRA_ACME_SYSTEMCTL", "systemctl")
+APT_GET = os.environ.get("VEYRA_ACME_APT_GET", "apt-get")
+GROUP = os.environ.get("VEYRA_GROUP", "veyra")
+CERT_NAME = "veyra"
+PLACEHOLDER = "server_name public-certificate.invalid;\n"
+
+
+class Failed(Exception):
+    """A step failed; the message is what the page shows."""
+
+
+def log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+def run(cmd: list[str], env: dict[str, str] | None = None) -> None:
+    log("$ " + " ".join(cmd))
+    res = subprocess.run(cmd, env=env, stdout=sys.stdout, stderr=subprocess.STDOUT, check=False)
+    if res.returncode != 0:
+        raise Failed(f"{Path(cmd[0]).name} exited with {res.returncode}")
+
+
+def certbot_dirs() -> list[str]:
+    return [
+        "--config-dir", str(ACME_ETC / "certbot"),
+        "--work-dir", str(STATE / "work"),
+        "--logs-dir", str(STATE / "logs"),
+    ]  # fmt: skip
+
+
+def write_private(path: Path, text: str) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def store_request(req: dict) -> dict:
+    """Keep what renewals need under /etc/veyra/acme (root, 0600): the
+    request without its secrets, and the DNS credentials in the form the
+    certbot plugin reads."""
+    dns = req.get("dns")
+    if dns:
+        creds = dns.pop("credentials", {}) or {}
+        style = dns.get("style")
+        if style == "ini":
+            text = "".join(f"{k} = {v}\n" for k, v in creds.items())
+            write_private(ACME_ETC / "credentials.ini", text)
+        elif style == "json":
+            write_private(ACME_ETC / "credentials.json", creds.get("service_account_json", ""))
+        elif style == "env":
+            write_private(ACME_ETC / "credentials.env", json.dumps(creds))
+    eab = req.pop("eab", None)
+    if eab:
+        write_private(ACME_ETC / "eab.json", json.dumps(eab))
+    write_private(ACME_ETC / "request.json", json.dumps(req, indent=1))
+    return req
+
+
+def certbot_command(req: dict) -> tuple[list[str], dict[str, str]]:
+    """certbot certonly for the request; returns the command and environment."""
+    env = dict(os.environ)
+    cmd = [
+        CERTBOT, "certonly", "--non-interactive", "--agree-tos",
+        "--email", req["email"], "--cert-name", CERT_NAME,
+        "--key-type", "ecdsa", "--elliptic-curve", "secp256r1",
+        "--server", req["server"], "--keep-until-expiring", "--expand",
+        *certbot_dirs(),
+    ]  # fmt: skip
+    eab_file = ACME_ETC / "eab.json"
+    if eab_file.exists():
+        eab = json.loads(eab_file.read_text())
+        cmd += ["--eab-kid", eab["kid"], "--eab-hmac-key", eab["hmac_key"]]
+    if req["challenge"] == "http":
+        cmd += ["--webroot", "-w", str(WEBROOT)]
+    else:
+        dns = req["dns"]
+        plugin = dns["plugin"]
+        cmd.append(f"--dns-{plugin}")
+        if dns["style"] == "ini":
+            cmd += [f"--dns-{plugin}-credentials", str(ACME_ETC / "credentials.ini")]
+        elif dns["style"] == "json":
+            cmd += [f"--dns-{plugin}-credentials", str(ACME_ETC / "credentials.json")]
+        elif dns["style"] == "env":
+            env.update(json.loads((ACME_ETC / "credentials.env").read_text()))
+        if dns.get("propagation_seconds"):
+            cmd += [f"--dns-{plugin}-propagation-seconds", str(dns["propagation_seconds"])]
+    for name in req["names"]:
+        cmd += ["-d", name]
+    return cmd, env
+
+
+def ensure_packages(req: dict) -> None:
+    wanted = ["certbot"]
+    if req.get("dns"):
+        wanted.append(req["dns"]["package"])
+    missing = [
+        p for p in wanted
+        if subprocess.run(
+            ["dpkg-query", "-W", "-f=${Status}", p], capture_output=True, text=True, check=False
+        ).stdout.strip() != "install ok installed"
+    ]  # fmt: skip
+    if not missing or os.environ.get("VEYRA_ACME_SKIP_PACKAGES") == "1":
+        return
+    log(f"Installing {' '.join(missing)}…")
+    env = dict(os.environ, DEBIAN_FRONTEND="noninteractive")
+    run([APT_GET, "install", "-y", "-q", "-o", "DPkg::Lock::Timeout=600", *missing], env=env)
+
+
+def describe(pem: Path) -> dict:
+    out = subprocess.run(
+        ["openssl", "x509", "-in", str(pem), "-noout", "-subject", "-issuer",
+         "-enddate", "-startdate", "-fingerprint", "-sha256", "-ext", "subjectAltName"],
+        capture_output=True, text=True, check=True,
+    ).stdout  # fmt: skip
+    info: dict = {"names": []}
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("subject="):
+            info["subject"] = line[8:].strip()
+        elif line.startswith("issuer="):
+            info["issuer"] = line[7:].strip()
+        elif line.startswith("notAfter="):
+            info["not_after"] = _date(line[9:])
+        elif line.startswith("notBefore="):
+            info["not_before"] = _date(line[10:])
+        elif "Fingerprint=" in line:
+            info["fingerprint_sha256"] = line.split("=", 1)[1]
+        elif line.startswith("DNS:"):
+            info["names"] = [n.strip()[4:] for n in line.split(",") if n.strip().startswith("DNS:")]
+    return info
+
+
+def _date(text: str) -> str:
+    d = dt.datetime.strptime(text.strip(), "%b %d %H:%M:%S %Y %Z")
+    return d.replace(tzinfo=dt.UTC).isoformat()
+
+
+def nginx_reload() -> None:
+    run([NGINX, "-t", "-q"])
+    run([SYSTEMCTL, "reload", "nginx"])
+
+
+def install_file(src: Path, dest: Path, mode: int, group: str | None = None) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".tmp")
+    shutil.copyfile(src, tmp)
+    os.chmod(tmp, mode)
+    if group:
+        try:
+            os.chown(tmp, 0, grp.getgrnam(group).gr_gid)
+        except (KeyError, PermissionError):
+            pass
+    os.replace(tmp, dest)
+
+
+def deploy(names: list[str]) -> None:
+    """Put the certificate where NGINX and Asterisk read it. The previous
+    files come back when NGINX refuses the new ones."""
+    live = ACME_ETC / "certbot" / "live" / CERT_NAME
+    chain, key = live / "fullchain.pem", live / "privkey.pem"
+    if not chain.exists():
+        raise Failed("certbot finished but left no certificate")
+    backups = {}
+    for path in (TLS / "public.crt", TLS / "public.key", NAME_CONF):
+        if path.exists():
+            backups[path] = path.read_bytes()
+    install_file(chain, TLS / "public.crt", 0o644)
+    install_file(key, TLS / "public.key", 0o600)
+    NAME_CONF.write_text(f"server_name {' '.join(names)};\n")
+    try:
+        nginx_reload()
+    except Failed:
+        log("NGINX refused the new configuration; putting the previous one back.")
+        for path, data in backups.items():
+            path.write_bytes(data)
+        if NAME_CONF not in backups:
+            NAME_CONF.write_text(PLACEHOLDER)
+        nginx_reload()
+        raise
+    install_file(chain, AST_TLS / "public.crt", 0o640, "asterisk")
+    install_file(key, AST_TLS / "public.key", 0o640, "asterisk")
+    info = describe(chain)
+    info["deployed_at"] = dt.datetime.now(dt.UTC).isoformat()
+    (STATE / "certificate.json").write_text(json.dumps(info, indent=1))
+    log(f"Serving the certificate for {', '.join(names)} until {info.get('not_after')}.")
+
+
+def do_issue() -> None:
+    path = STATE / "request.json"
+    if not path.exists():
+        raise Failed("no request: save the settings and press Get the certificate")
+    req = json.loads(path.read_text())
+    path.unlink()  # the credentials it carried move under /etc/veyra/acme
+    for stale in ("credentials.ini", "credentials.json", "credentials.env", "eab.json"):
+        (ACME_ETC / stale).unlink(missing_ok=True)
+    req = store_request(req)
+    ensure_packages(req)
+    WEBROOT.mkdir(parents=True, exist_ok=True)
+    os.chmod(WEBROOT, 0o755)
+    cmd, env = certbot_command(req)
+    log(f"Requesting a certificate for {', '.join(req['names'])} from {req['server']}…")
+    run(cmd, env=env)
+    deploy(req["names"])
+
+
+def do_renew() -> None:
+    stored = ACME_ETC / "request.json"
+    if not stored.exists():
+        raise Failed("no public certificate is set up")
+    req = json.loads(stored.read_text())
+    live = ACME_ETC / "certbot" / "live" / CERT_NAME / "fullchain.pem"
+    before = live.read_bytes() if live.exists() else b""
+    cmd, env = certbot_command(req)  # --keep-until-expiring: renews only when due
+    run(cmd, env=env)
+    if not live.exists():
+        raise Failed("certbot finished but left no certificate")
+    if live.read_bytes() != before or not (STATE / "certificate.json").exists():
+        deploy(req["names"])
+    else:
+        log("The certificate is not due for renewal yet (renewed with 30 days or fewer left).")
+
+
+def do_remove() -> None:
+    NAME_CONF.write_text(PLACEHOLDER)
+    # NGINX keeps a certificate to load for the unused block: the Veyra one.
+    for ext in ("crt", "key"):
+        src = TLS / f"veyra.{ext}"
+        if src.exists():
+            install_file(src, TLS / f"public.{ext}", 0o600 if ext == "key" else 0o644)
+    nginx_reload()
+    for name in ("credentials.ini", "credentials.json", "credentials.env", "eab.json", "request.json"):
+        (ACME_ETC / name).unlink(missing_ok=True)
+    (STATE / "certificate.json").unlink(missing_ok=True)
+    for ext in ("crt", "key"):
+        (AST_TLS / f"public.{ext}").unlink(missing_ok=True)
+    log("The public certificate is no longer used; every name gets the Veyra CA certificate.")
+
+
+def main() -> int:
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    actions = {"issue": do_issue, "renew": do_renew, "remove": do_remove}
+    if mode not in actions:
+        print("usage: veyra-acme issue|renew|remove", file=sys.stderr)
+        return 2
+    STATE.mkdir(parents=True, exist_ok=True)
+    ACME_ETC.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Readable status files (the directory itself is root:veyra 0770); the
+    # private files are written 0600 explicitly.
+    os.umask(0o022)
+    for name in ("exit", "finished", "error"):
+        (STATE / name).unlink(missing_ok=True)
+    (STATE / "mode").write_text(mode + "\n")
+    (STATE / "started").write_text(dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n")
+    code = 0
+    with open(STATE / "last.log", "w") as out:
+        sys.stdout = out
+        try:
+            actions[mode]()
+        except Failed as e:
+            code = 1
+            log(f"FAILED: {e}")
+            (STATE / "error").write_text(str(e) + "\n")
+        except Exception as e:  # reported on the page, not lost
+            code = 1
+            log(f"FAILED: {type(e).__name__}: {e}")
+            (STATE / "error").write_text(f"{type(e).__name__}: {e}\n")
+        finally:
+            sys.stdout = sys.__stdout__
+    (STATE / "exit").write_text(f"{code}\n")
+    (STATE / "finished").write_text(
+        dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n"
+    )
+    try:
+        gid = grp.getgrnam(GROUP).gr_gid
+        for p in STATE.iterdir():
+            if p.is_file():
+                os.chown(p, 0, gid)
+    except (KeyError, PermissionError):
+        pass
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

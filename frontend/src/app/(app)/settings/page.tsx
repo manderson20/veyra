@@ -5,6 +5,7 @@ import { CompanionDeploymentCard } from "@/components/account/CompanionDeploymen
 import { EmailDeliveryCard } from "@/components/account/EmailDeliveryCard";
 import { InstallationKeyCard } from "@/components/account/InstallationKeyCard";
 import { MfaPolicyCard } from "@/components/account/MfaPolicyCard";
+import { PublicCertificateCard } from "@/components/account/PublicCertificateCard";
 import { MultiTenancyCard } from "@/components/organizations/MultiTenancyCard";
 import { RetentionCard } from "@/components/account/RetentionCard";
 import { useThemePreference } from "@/components/ThemeToggle";
@@ -63,6 +64,7 @@ export default function SettingsPage() {
       {can("system.settings.read") ? <CompanionDeploymentCard /> : null}
       {can("system.settings.read") ? <MultiTenancyCard editable={can("system.settings.write")} /> : null}
       {session?.is_platform_admin ? <RetentionCard /> : null}
+      {session?.is_platform_admin ? <PublicCertificateCard editable={can("system.settings.write")} /> : null}
       {session?.is_platform_admin ? <InstallationKeyCard editable={can("system.settings.write")} /> : null}
       <Card title="Coming later">
         <p className="muted">

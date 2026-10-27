@@ -15,6 +15,7 @@ import {
   ErrorState,
   LoadingState,
   PageHeader,
+  SelectField,
   StatusBadge,
   Switch,
   TextArea,
@@ -336,8 +337,17 @@ function SipSettingsCard({ editable }: { editable: boolean }) {
           <TextField label="UDP port" type="number" min={1} max={65535} required disabled={!editable} value={f.udp_port} onChange={(e) => set("udp_port", num(e.target.value))} />
           <Switch label="TCP transport" description="Most desk phones can use TCP; keep it on." checked={f.tcp_enabled} disabled={!editable} onChange={(e) => set("tcp_enabled", e.target.checked)} />
           <TextField label="TCP port" type="number" min={1} max={65535} disabled={!editable || !f.tcp_enabled} value={f.tcp_port} onChange={(e) => set("tcp_port", num(e.target.value))} />
-          <Switch label="TLS transport" description="Uses the server certificate in /etc/veyra/tls." checked={f.tls_enabled} disabled={!editable} onChange={(e) => set("tls_enabled", e.target.checked)} />
+          <Switch label="TLS transport" description="Encrypted signalling for phones and softphones that support it." checked={f.tls_enabled} disabled={!editable} onChange={(e) => set("tls_enabled", e.target.checked)} />
           <TextField label="TLS port" type="number" min={1} max={65535} disabled={!editable || !f.tls_enabled} value={f.tls_port} onChange={(e) => set("tls_port", num(e.target.value))} />
+          <div style={{ gridColumn: "1 / -1" }}>
+            <SelectField label="TLS certificate" disabled={!editable || !f.tls_enabled} value={f.tls_certificate}
+              options={[
+                { value: "veyra", label: "Veyra CA certificate (phones provisioned by Veyra trust it)" },
+                { value: "public", label: "Public certificate (System → Settings → HTTPS certificate)" },
+              ]}
+              help="The public one suits softphones that connect by the public name. Asterisk reads a renewed certificate when it restarts."
+              onChange={(e) => set("tls_certificate", e.target.value as SipSettings["tls_certificate"])} />
+          </div>
           <TextField label="RTP port range start" type="number" min={1024} max={65535} required disabled={!editable} value={f.rtp_start} onChange={(e) => set("rtp_start", num(e.target.value))} />
           <TextField label="RTP port range end" type="number" min={1024} max={65535} required disabled={!editable} value={f.rtp_end} onChange={(e) => set("rtp_end", num(e.target.value))} />
           <TextField label="External signaling address" disabled={!editable} value={f.external_signaling_address ?? ""} help="Only when this server is behind NAT. Public IP or host name." onChange={(e) => set("external_signaling_address", e.target.value || null)} />

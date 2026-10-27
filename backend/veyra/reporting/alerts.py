@@ -57,6 +57,8 @@ RULES: dict[str, RuleDef] = {
         RuleDef("service_down", "Veyra service not running", 2),
         RuleDef("disk_space", "Disk space low", 5, 10, "% free"),
         RuleDef("certificate", "HTTPS certificate expiring", 0, 21, "days"),
+        # Public certificates (docs/PUBLIC_CERTIFICATES.md §5).
+        RuleDef("certificate_renewal", "Public certificate not renewed", 0),
         RuleDef("firewall_bans", "Many firewall bans", 0, 20, "bans per hour"),
         RuleDef("phones_unregistered", "Phones unregistered", 15, 20, "% of phones"),
         # Central console only (docs/CENTRAL_MANAGEMENT.md §6).
@@ -232,6 +234,38 @@ def check_certificate(days_left: float | None, threshold: int) -> list[Finding]:
             "certificate", "", f"The HTTPS certificate expires in {max(days_left, 0):.0f} days."
         )
     ]
+
+
+def check_public_certificate(
+    now: datetime, threshold: int, directory: str | None = None
+) -> list[Finding]:
+    """The public certificate (docs/PUBLIC_CERTIFICATES.md §5): the last
+    certbot run failed, or the certificate itself is close to expiry."""
+    from veyra.system import certificate
+
+    directory = directory or certificate.ACME_DIR
+    out: list[Finding] = []
+    info = certificate.certificate_info(directory)
+    error = certificate.renewal_failure(directory)
+    if error and info is not None:
+        out.append(
+            Finding(
+                "certificate_renewal",
+                "public",
+                f"The public certificate could not be renewed: {error}",
+            )
+        )
+    left = certificate.days_left(info, now)
+    if left is not None and left < threshold:
+        names = ", ".join(info.get("names") or []) if info else ""
+        out.append(
+            Finding(
+                "certificate",
+                names,
+                f"The public certificate for {names} expires in {max(left, 0):.0f} days.",
+            )
+        )
+    return out
 
 
 def check_central(db: Session, now: datetime) -> list[Finding]:
@@ -522,6 +556,7 @@ def run(db: Session, settings: Any, adapter: Any | None, now: datetime | None = 
         ),
         lambda: check_disk([settings.data_dir, settings.log_dir], threshold("disk_space")),
         lambda: check_certificate(certificate_days_left(), threshold("certificate")),
+        lambda: check_public_certificate(now, threshold("certificate")),
         lambda: check_firewall(db, now, threshold("firewall_bans")),
         lambda: check_central(db, now),
         lambda: check_ha(db, settings, now, threshold("replication_lag")),

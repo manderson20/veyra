@@ -63,6 +63,9 @@ do_packages() {
     [[ $SKIP_TELEPHONY == 1 ]] || pkgs+=(ghostscript libtiff-tools)
     # nftables: the Veyra firewall's table (docs/FIREWALL_TRUST.md §3).
     pkgs+=(nftables)
+    # certbot: public HTTPS certificates (docs/PUBLIC_CERTIFICATES.md); the
+    # DNS provider plugins are installed by veyra-acme when first used.
+    pkgs+=(certbot)
     local missing=()
     local p
     for p in "${pkgs[@]}"; do
@@ -460,6 +463,7 @@ do_tls() {
     run install -m 0644 -o root -g root "$dir/ca.crt" "$VEYRA_PREFIX/veyra-ca.crt"
 
     local reissue=0
+    tls_public_placeholders
     if [[ -s "$dir/veyra.crt" && -s "$dir/veyra.key" ]]; then
         subject="$(openssl x509 -in "$dir/veyra.crt" -noout -subject 2>/dev/null || true)"
         issuer="$(openssl x509 -in "$dir/veyra.crt" -noout -issuer 2>/dev/null || true)"
@@ -479,7 +483,10 @@ do_tls() {
     else
         reissue=1
     fi
-    (( reissue )) || return 0
+    if (( ! reissue )); then
+        tls_asterisk_copies
+        return 0
+    fi
     san=""
     for n in "${names[@]}"; do san+="${san:+,}DNS:$n"; done
     san+=",IP:127.0.0.1"
@@ -507,7 +514,36 @@ do_tls() {
     fi
     run chmod 0600 "$dir/veyra.key"
     run chmod 0644 "$dir/veyra.crt"
+    tls_asterisk_copies
     ok "HTTPS certificate issued by the Veyra CA (825 days). Install veyra-ca.crt in browsers to remove the warning (docs/INSTALLATION.md#tls)."
+}
+
+# Asterisk runs as asterisk and cannot read the root-only $VEYRA_ETC/tls, so
+# the SIP TLS transport reads copies (docs/PUBLIC_CERTIFICATES.md §6). The
+# public certificate's copies are kept by the veyra-acme helper.
+tls_asterisk_copies() {
+    getent group asterisk >/dev/null 2>&1 || return 0
+    local dir="$VEYRA_ETC/tls"
+    run install -d -m 0750 -o root -g asterisk "$ASTERISK_TLS_DIR"
+    run install -m 0640 -o root -g asterisk "$dir/veyra.crt" "$ASTERISK_TLS_DIR/veyra.crt"
+    run install -m 0640 -o root -g asterisk "$dir/veyra.key" "$ASTERISK_TLS_DIR/veyra.key"
+}
+
+# NGINX's server for the public certificate (docs/PUBLIC_CERTIFICATES.md §2)
+# needs a certificate and a name to load even before one is issued: the
+# Veyra certificate and a name no request carries.
+tls_public_placeholders() {
+    local dir="$VEYRA_ETC/tls"
+    if [[ ! -s "$dir/public.crt" || ! -s "$dir/public.key" ]] && [[ -s "$dir/veyra.crt" ]]; then
+        run install -m 0644 -o root -g root "$dir/veyra.crt" "$dir/public.crt"
+        run install -m 0600 -o root -g root "$dir/veyra.key" "$dir/public.key"
+    fi
+    if [[ ! -s "$VEYRA_ETC/nginx-public-name.conf" ]]; then
+        if [[ "$DRY_RUN" != "1" ]]; then
+            echo "server_name public-certificate.invalid;" >"$VEYRA_ETC/nginx-public-name.conf"
+        fi
+        run chmod 0644 "$VEYRA_ETC/nginx-public-name.conf"
+    fi
 }
 
 do_telephony() {
@@ -703,6 +739,17 @@ do_services() {
         "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_USER=$VEYRA_USER"
     install_managed_file "$tmp" "/etc/systemd/system/veyra-os-packages@.service" 0644 root:root
     rm -f "$tmp"
+    # Public HTTPS certificates (docs/PUBLIC_CERTIFICATES.md): the root unit,
+    # started only through polkit; its status directory (the API writes the
+    # request there) and the HTTP-01 webroot NGINX serves on port 80.
+    run install -d -m 0770 -o root -g "$VEYRA_USER" "$ACME_DIR"
+    run install -d -m 0755 -o root -g root "$ACME_WEBROOT"
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-acme@.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_USER=$VEYRA_USER" "VEYRA_ETC=$VEYRA_ETC" \
+        "ACME_DIR=$ACME_DIR" "ACME_WEBROOT=$ACME_WEBROOT" "ASTERISK_TLS_DIR=$ASTERISK_TLS_DIR"
+    install_managed_file "$tmp" "/etc/systemd/system/veyra-acme@.service" 0644 root:root
+    rm -f "$tmp"
     # Backups from the page and the worker (docs/PRODUCTION_HARDENING.md §2.2):
     # the root runner's unit, started only through polkit; its status directory.
     run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-backup
@@ -842,10 +889,12 @@ render_nginx_files() {
     fi
     render_template "$SCRIPT_DIR/templates/nginx/security-headers.conf.in" "$hdr_dest" \
         "CSP_SCRIPT_SETS=$(csp_script_sets "$csp_file")"
+    # HTTPS_SITE first: its own placeholders are filled by the pairs after it.
     render_template "$SCRIPT_DIR/templates/nginx/veyra.conf.in" "$site_dest" \
+        "HTTPS_SITE=$(<"$SCRIPT_DIR/templates/nginx/https-site.conf.in")" \
         "LISTEN_HTTP=$(listen_directives 80 '')" "LISTEN_HTTPS=$(listen_directives 443 ' ssl')" \
         "API_PORT=$VEYRA_API_PORT" "VEYRA_ETC=$VEYRA_ETC" "VEYRA_PREFIX=$VEYRA_PREFIX" \
-        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov"
+        "VEYRA_DATA=$VEYRA_DATA" "HTTP_PROVISIONING=$http_prov" "ACME_WEBROOT=$ACME_WEBROOT"
 }
 
 # Before an upgrade switches releases (issue #88): the new release's NGINX
@@ -870,6 +919,16 @@ do_nginx_check() {
     for inc in nginx-ha-listen-http.conf nginx-ha-listen-https.conf; do
         [[ -f "$VEYRA_ETC/$inc" ]] || sed -i "s|$VEYRA_ETC/$inc|$stage/empty.conf|g" "$site"
     done
+    # The public certificate's server before its files exist (first upgrade
+    # to the release that adds it; do_tls creates them after the switch).
+    if [[ ! -s "$VEYRA_ETC/nginx-public-name.conf" ]]; then
+        echo "server_name public-certificate.invalid;" >"$stage/public-name.conf"
+        sed -i "s|$VEYRA_ETC/nginx-public-name.conf|$stage/public-name.conf|g" "$site"
+    fi
+    if [[ ! -s "$VEYRA_ETC/tls/public.crt" ]]; then
+        sed -i -e "s|$VEYRA_ETC/tls/public.crt|$VEYRA_ETC/tls/veyra.crt|g" \
+            -e "s|$VEYRA_ETC/tls/public.key|$VEYRA_ETC/tls/veyra.key|g" "$site"
+    fi
     rm -f "$stage/nginx/sites-enabled/default"
     ln -sfn "$site" "$stage/nginx/sites-enabled/veyra.conf"
     local out

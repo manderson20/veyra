@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
@@ -44,6 +44,10 @@ class SipSettings(BaseModel):
     tcp_port: int = Field(5060, ge=1, le=65535)
     tls_enabled: bool = False
     tls_port: int = Field(5061, ge=1, le=65535)
+    # The certificate the TLS transport presents (docs/PUBLIC_CERTIFICATES.md
+    # §6): the Veyra CA one phones trust, or the public one for softphones
+    # that connect by the public name.
+    tls_certificate: Literal["veyra", "public"] = "veyra"
     external_signaling_address: str | None = Field(
         None, description="Public address phones and carriers see when this server is behind NAT"
     )

@@ -8,6 +8,17 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.41
+
+Run the installer's upgrade once (`sudo installer/upgrade.sh --yes`) for the certificate helper, its unit and permission, certbot and the new NGINX server; no migration.
+
+### Added
+- **A certificate every browser trusts, from Let's Encrypt** (#43): System → Settings → **HTTPS certificate** gets a certificate for the server's public name from Let's Encrypt (or another ACME authority, staging for a trial run), proving the name with a DNS record (Cloudflare, Route 53, Google Cloud DNS, DigitalOcean, Linode, DNSimple, OVH, or your own DNS server through RFC 2136) or a web request on port 80, and renews it by itself. Browsers, the Companion and passkeys then work without installing `veyra-ca.crt`. Phones and the server's IP addresses keep the Veyra CA certificate. The DNS provider's credentials are stored encrypted and never shown again. A failed renewal raises the new alert "Public certificate not renewed", and the certificate's expiry is watched like the Veyra one. When the firewall limits the web interface to the allow list, port 80 opens for ten minutes while the authority checks a web request. Console: `sudo veyra certificate status|renew|remove`. See docs/PUBLIC_CERTIFICATES.md.
+- **Choose the SIP TLS certificate**: System → Telephony Engine → TLS certificate picks the Veyra CA one (phones trust it) or the public one (softphones that connect by the public name).
+
+### Fixed
+- **SIP over TLS could not start**: the TLS transport pointed Asterisk at a key in the root-only `/etc/veyra/tls`, which Asterisk cannot read. Asterisk now reads copies in `/etc/asterisk/veyra-tls` that the installer keeps current. Deploy the telephony configuration after installing if TLS is on.
+
 ## 0.27.40 — 2026-10-27
 
 Run the installer's upgrade once (`sudo installer/upgrade.sh --yes`) for the Asterisk hold and the new root unit mode.

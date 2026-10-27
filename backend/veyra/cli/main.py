@@ -118,6 +118,50 @@ def cmd_emergency_readiness(args: argparse.Namespace) -> int:
     return 3 if not_ready else 0
 
 
+def cmd_certificate(args: argparse.Namespace) -> int:
+    """The public HTTPS certificate (docs/PUBLIC_CERTIFICATES.md §7): its
+    state, or start a renewal or the removal through the root unit (as the
+    Settings page does; getting a first one needs the page's credentials)."""
+    from veyra.core.db import session_scope
+    from veyra.core.models.base import utcnow
+    from veyra.system import certificate as cert
+
+    action = args.certificate_cmd
+    if action == "status":
+        info = cert.certificate_info()
+        run = cert.run_status()
+        if args.json:
+            print(json.dumps({"certificate": info, "run": run}, indent=2))
+            return 0
+        if info:
+            left = cert.days_left(info, utcnow()) or 0
+            print(
+                f"public certificate for {', '.join(info.get('names') or [])}: "
+                f"{info.get('issuer', '?')}, {left:.0f} days left (until {info.get('not_after')})"
+            )
+        else:
+            print("no public certificate: every name gets the Veyra CA certificate")
+        if run:
+            state = "running" if run["running"] else ("done" if run["ok"] else "FAILED")
+            print(f"last run: {run['mode']} {state} ({run['finished_at'] or run['started_at']})")
+            if run["error"]:
+                print(f"  {run['error']}")
+        return 0
+    with session_scope() as db:
+        if action == "renew":
+            if cert.certificate_info() is None:
+                print("no public certificate to renew", file=sys.stderr)
+                return 1
+            if cert.load_settings(db).challenge == "http":
+                cert.open_challenge_window(db, utcnow())
+    ok, error = cert.start_unit(action)
+    if not ok:
+        print(f"could not start {cert.unit_name(action)}: {error}", file=sys.stderr)
+        return 1
+    print(f"started {cert.unit_name(action)}; follow it with: veyra certificate status")
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     from sqlalchemy import text
 
@@ -1407,6 +1451,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
                     )
                     # Operating system and Asterisk packages in their windows (§6).
                     update_manager.process_os_packages(db, settings, utcnow(), calls_in_progress)
+                    # Public HTTPS certificate renewal (docs/PUBLIC_CERTIFICATES.md §5).
+                    from veyra.system import certificate as public_certificate
+
+                    if public_certificate.process_renewal(db, utcnow()):
+                        log.info("Renewing the public HTTPS certificate")
                     # Scheduled report emails (docs/REPORT_BUILDER.md §3).
                     from veyra.reporting import schedule as report_schedule
 
@@ -2279,6 +2328,16 @@ def build_parser() -> argparse.ArgumentParser:
     s = em.add_parser("readiness", help="Sites with extensions that are not emergency-ready")
     s.add_argument("--json", action="store_true", help="Print JSON")
     s.set_defaults(func=cmd_emergency_readiness)
+
+    ce = sub.add_parser("certificate", help="Public HTTPS certificate (Let's Encrypt)")
+    ce_sub = ce.add_subparsers(dest="certificate_cmd", metavar="<action>", required=True)
+    s = ce_sub.add_parser("status", help="The certificate in use and the last run")
+    s.add_argument("--json", action="store_true", help="Print JSON")
+    s.set_defaults(func=cmd_certificate)
+    s = ce_sub.add_parser("renew", help="Renew it now if 30 days or fewer are left")
+    s.set_defaults(func=cmd_certificate)
+    s = ce_sub.add_parser("remove", help="Stop using it: every name gets the Veyra certificate")
+    s.set_defaults(func=cmd_certificate)
 
     s = sub.add_parser("setup-token", help="Issue a one-time first-run setup token")
     s.add_argument("--quiet", action="store_true", help="Print only the token")

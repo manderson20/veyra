@@ -396,6 +396,28 @@ if [[ -f /etc/systemd/system/veyra-os-packages@.service ]] \
 else
     check os-packages-unit warn "veyra-os-packages@.service, its polkit rule or /var/lib/veyra-ospackages missing"
 fi
+# --- public HTTPS certificate (docs/PUBLIC_CERTIFICATES.md)
+if [[ -f /etc/systemd/system/veyra-acme@.service ]] \
+    && grep -qs "veyra-acme@" /etc/polkit-1/rules.d/50-veyra-services.rules \
+    && [[ "$(perm /var/lib/veyra-acme)" == "770 root:veyra" ]] && command -v certbot >/dev/null; then
+    check acme-unit pass "public certificates can be requested from the interface; certbot available"
+else
+    check acme-unit warn "veyra-acme@.service, its polkit rule, /var/lib/veyra-acme or certbot missing"
+fi
+if [[ -s /var/lib/veyra-acme/certificate.json ]]; then
+    pub_name="$(sed -n 's/^server_name \([^ ;]*\).*/\1/p' "$VEYRA_ETC/nginx-public-name.conf" 2>/dev/null)"
+    pub_name="${pub_name#\*.}"
+    want="$(openssl x509 -in "$VEYRA_ETC/tls/public.crt" -noout -fingerprint -sha256 2>/dev/null)"
+    got="$(openssl s_client -connect 127.0.0.1:443 -servername "$pub_name" </dev/null 2>/dev/null \
+        | openssl x509 -noout -fingerprint -sha256 2>/dev/null)"
+    if ! openssl x509 -in "$VEYRA_ETC/tls/public.crt" -noout -checkend $((14 * 86400)) >/dev/null 2>&1; then
+        check public-cert fail "the public certificate for $pub_name expires within 14 days (System → Settings → HTTPS certificate)"
+    elif [[ -n "$want" && "$want" == "$got" ]]; then
+        check public-cert pass "the public certificate is served for $pub_name and valid for more than 14 days"
+    else
+        check public-cert warn "NGINX does not serve the public certificate for $pub_name (nginx -t; systemctl reload nginx)"
+    fi
+fi
 if [[ ! -d /etc/apt/apt.conf.d ]] || grep -qs '"asterisk";' /etc/apt/apt.conf.d/52veyra-unattended-upgrades; then
     check unattended-asterisk pass "Ubuntu's nightly updater leaves Asterisk to the maintenance window"
 else

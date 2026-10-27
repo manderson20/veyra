@@ -428,6 +428,7 @@ export interface SipSettings {
   tcp_port: number;
   tls_enabled: boolean;
   tls_port: number;
+  tls_certificate: "veyra" | "public";
   external_signaling_address: string | null;
   external_media_address: string | null;
   local_nets: string[];

@@ -1,0 +1,18 @@
+# Managed by Veyra installer
+# Public HTTPS certificates (docs/PUBLIC_CERTIFICATES.md): %i is issue, renew
+# or remove. Run as root (certbot, /etc/veyra/tls, NGINX reload), started
+# only through polkit; status in @ACME_DIR@.
+[Unit]
+Description=Veyra public certificate (%i)
+Documentation=file://@VEYRA_PREFIX@/current/docs/PUBLIC_CERTIFICATES.md
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/
+Environment=VEYRA_GROUP=@VEYRA_USER@ VEYRA_ETC=@VEYRA_ETC@ VEYRA_ACME_DIR=@ACME_DIR@ VEYRA_ACME_WEBROOT=@ACME_WEBROOT@ VEYRA_ASTERISK_TLS_DIR=@ASTERISK_TLS_DIR@
+ExecStart=@VEYRA_PREFIX@/current/installer/bin/veyra-acme %i
+TimeoutStartSec=30min
+PrivateTmp=yes
+ProtectHome=yes
