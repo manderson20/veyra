@@ -163,6 +163,8 @@ export interface Organization {
   directed_pickup?: "organization" | "group" | string;
   /** Callers who ring every phone through Do Not Disturb (#170). */
   dnd_allow?: string[];
+  /** Both sides hear a beep when a supervisor starts monitoring (#167). */
+  monitor_beep?: boolean;
   /** Users may play recordings of their own calls from My Phone (docs/USER_PORTAL.md §5). */
   users_play_own_recordings?: boolean;
   fax_header?: string | null;

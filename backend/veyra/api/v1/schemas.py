@@ -76,6 +76,8 @@ class OrganizationPatch(BaseModel):
     directed_pickup: str | None = Field(None, pattern=r"^(organization|group)$")
     # Callers who ring every phone through Do Not Disturb (issue #170).
     dnd_allow: list[str] | None = Field(None, max_length=50)
+    # Both sides hear a beep when a supervisor starts monitoring (issue #167).
+    monitor_beep: bool | None = None
     # Users may play recordings of their own calls from My Phone (docs/USER_PORTAL.md §5).
     users_play_own_recordings: bool | None = None
     fax_header: str | None = Field(None, max_length=64)
@@ -115,6 +117,7 @@ class OrganizationOut(ORM):
     intercom_default: str = "allow"
     directed_pickup: str = "organization"
     dnd_allow: list[str] = []
+    monitor_beep: bool = False
     users_play_own_recordings: bool = False
     fax_header: str | None = None
     fax_station_id: str | None = None

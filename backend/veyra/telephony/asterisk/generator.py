@@ -1285,6 +1285,11 @@ def _dialplan(
                     for o in snapshot.get("organizations") or []
                     if o.get("directed_pickup") == "group"
                 },
+                {
+                    str(o.get("slug") or "")
+                    for o in snapshot.get("organizations") or []
+                    if o.get("monitor_beep")
+                },
             )
             lines += _voicemail_exit_contexts(my_boxes(ns))
             lines += _voicemail_play_context()
@@ -1298,6 +1303,7 @@ def _dialplan(
                 },
             )
             lines += _spy_context()
+            lines += _spy_beep_context()
     for ns in spaces:
         with engine_names.using(Names(ns)):
             lines += _internal(
@@ -1719,7 +1725,10 @@ MONITOR_EVENT = "VeyraMonitor"
 
 
 def _spy_codes(
-    codes: dict[str, str], cos: Cos | None, extensions: list[dict[str, Any]]
+    codes: dict[str, str],
+    cos: Cos | None,
+    extensions: list[dict[str, Any]],
+    beep_orgs: set[str] | None = None,
 ) -> list[str]:
     """``*222``/``*223``/``*224`` + extension (issue #167): listen, whisper or
     join that phone's call. Only phones of a class that allows supervising
@@ -1732,6 +1741,16 @@ def _spy_codes(
     if not allowed:
         return []
     alternatives = "|".join(re.escape(a) for a in allowed)
+    beeping = sorted(_slug(o, "organization") for o in beep_orgs or set())
+    beep = (
+        [
+            # Both sides hear that the call is monitored (the organization's choice).
+            f' same => n,ExecIf(${{REGEX("^({"|".join(beeping)})$" ${{VEYRA_ORG}})}}'
+            f"?Gosub({n.spy_beep},s,1(${{CUT(VEYRA_SPYDEV,/,2)}}-)))"
+        ]
+        if beeping
+        else []
+    )
     lines: list[str] = []
     for key, (mode, opt) in SPY_MODES.items():
         code = codes.get(key)
@@ -1757,6 +1776,7 @@ def _spy_codes(
             f" same => n,UserEvent({MONITOR_EVENT},Org: ${{VEYRA_ORG}},By: ${{VEYRA_EXT}},"
             f"Target: ${{EXTEN:{cut}}},Mode: {mode})",
             " same => n,Answer()",
+            *beep,
             # The "-" keeps 1001 from matching 10010's channels.
             f" same => n,ChanSpy(${{VEYRA_SPYDEV}}-,qE{opt})",
             " same => n,Hangup()",
@@ -1778,8 +1798,33 @@ def _spy_context() -> list[str]:
         ' same => n,Set(VEYRA_OPT=${IF($["${VEYRA_SPY_MODE}"="whisper"]?w:'
         '${IF($["${VEYRA_SPY_MODE}"="barge"]?B:)})})',
         " same => n,Answer()",
+        ' same => n,ExecIf($["${VEYRA_SPY_BEEP}"="1"]'
+        f"?Gosub({n.spy_beep},s,1(${{CUT(VEYRA_SPY_CHAN,/,2)}})))",
         " same => n,ChanSpy(${VEYRA_SPY_CHAN},qE${VEYRA_OPT})",
         " same => n(bad),Hangup()",
+        "",
+    ]
+
+
+def _spy_beep_context() -> list[str]:
+    """Gosub (issue #167): both sides of the call on ``PJSIP/<ARG1>`` hear a
+    beep. A Local channel joins the call (ChanSpy ``B``) and its other half
+    plays the beep, then hangs up; the supervisor connects afterwards."""
+    n = engine_names.current()
+    ctx = n.spy_beep
+    return [
+        f"[{ctx}]",
+        'exten => s,1,GotoIf($[!${REGEX("^[A-Za-z0-9_.-]+$" ${ARG1})}]?done)',
+        f" same => n,Originate(Local/play@{ctx}/n,exten,{ctx},${{ARG1}},1,5)",
+        " same => n,Wait(1.5)",
+        " same => n(done),Return()",
+        "exten => play,1,Answer()",
+        " same => n,Wait(0.5)",
+        " same => n,Playback(beep)",
+        " same => n,Hangup()",
+        # The joining half: barge (both sides hear it), quiet, out on hangup.
+        "exten => _[A-Za-z0-9].,1,ChanSpy(PJSIP/${EXTEN},qBE)",
+        " same => n,Hangup()",
         "",
     ]
 
@@ -2284,6 +2329,7 @@ def _features(
     conditions: list[dict[str, Any]] | None = None,
     queues: list[dict[str, Any]] | None = None,
     group_pickup_orgs: set[str] | None = None,
+    beep_orgs: set[str] | None = None,
 ) -> list[str]:
     """Feature codes of one namespace; ``**<ext>`` reaches only its phones."""
     n = engine_names.current()
@@ -2386,7 +2432,7 @@ def _features(
         "",
         f"[{n.call_codes}]",
         *_call_codes(codes, cos),
-        *_spy_codes(codes, cos, extensions),
+        *_spy_codes(codes, cos, extensions, beep_orgs or set()),
     ]
     lines.append("")
     return lines

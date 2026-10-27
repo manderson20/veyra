@@ -534,8 +534,16 @@ sync rewrites the engine's copy as for DND.
   protected class and across organizations (platform administrators
   excepted). Audited `call.monitor` with the mode and both extensions.
 * ChanSpy runs with `q` (no announcement), `E` (ends with the call); the
-  monitored parties hear nothing. Recording-consent and notification rules
-  differ by state; the class-of-service option says so.
+  monitored parties hear nothing unless the organization turns on **Beep
+  when a supervisor listens in** (`organizations.monitor_beep`, migration
+  0069, 0.27.39). Recording-consent and notification rules differ by
+  state; the class-of-service option and the switch say so.
+* The beep (`<ns>-spy-beep`, a Gosub before the supervisor's ChanSpy, for
+  the codes and the web alike): `Originate` of a `Local/play@<ns>-spy-beep`
+  channel whose answering half plays `beep` and hangs up while the other
+  half joins the call with `ChanSpy(PJSIP/<endpoint>…,qBE)`, so both sides
+  hear it; the supervisor connects about 1.5 seconds later. Checked by the
+  generator tests only so far; to be confirmed on handsets.
 
 ## 4. Call-flow features (Milestone 19)
 

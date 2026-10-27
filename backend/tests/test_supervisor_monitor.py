@@ -99,3 +99,37 @@ def test_phone_code_sessions_are_audited(admin):
     rows = admin.get("/api/v1/audit", params={"q": "call.monitor"}).json()["items"]
     assert rows and rows[0]["details"]["mode"] == "barge"
     assert rows[0]["actor_label"] == "phone 1009"
+
+
+def test_beep_when_the_organization_asks_for_it(admin, app):
+    snap = _ext_snapshot(feature_codes=SPY, numbering={"extension_length": 4})
+    snap["classes_of_service"] = [_cls("office", allow_monitor=True)]
+    quiet = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    assert "Gosub(veyra-spy-beep" not in _section(quiet, "veyra-call-codes")
+    snap["organizations"][0]["monitor_beep"] = True
+    d = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    listen = _section(d, "veyra-call-codes").split("exten => _*222.,1,")[1].split("exten => ")[0]
+    beep = (
+        'ExecIf(${REGEX("^(example)$" ${VEYRA_ORG})}'
+        "?Gosub(veyra-spy-beep,s,1(${CUT(VEYRA_SPYDEV,/,2)}-)))"
+    )
+    assert listen.index(beep) < listen.index("ChanSpy(${VEYRA_SPYDEV}-,qE)")
+    ctx = _section(d, "veyra-spy-beep")
+    assert "Originate(Local/play@veyra-spy-beep/n,exten,veyra-spy-beep,${ARG1},1,5)" in ctx
+    assert "exten => _[A-Za-z0-9].,1,ChanSpy(PJSIP/${EXTEN},qBE)" in ctx
+    assert "Playback(beep)" in ctx
+    assert 'ExecIf($["${VEYRA_SPY_BEEP}"="1"]' in _section(d, "veyra-spy")
+
+    # The web passes the organization's choice to the engine.
+    adapter = FakeAdapter()
+    app.state.telephony = adapter
+    o = _org(admin)["id"]
+    assert admin.patch(f"/api/v1/organizations/{o}", json={"monitor_beep": True}).json()[
+        "monitor_beep"
+    ]
+    me = admin.get("/api/v1/auth/session").json()["user"]
+    desk = _create(admin, o, "1001", "Front desk")
+    _create(admin, o, "1009", "Supervisor", user_id=me["id"])
+    adapter.calls = [ActiveCall("1697.1", "1001", "5735550100", "Up", 30, desk["endpoint_name"])]
+    assert admin.post("/api/v1/calls/1697.1/monitor", json={"mode": "listen"}).status_code == 202
+    assert adapter.monitor_beep is True

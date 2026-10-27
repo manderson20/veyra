@@ -114,11 +114,19 @@ class FakeAdapter(TelephonyAdapter):
         self.calls = [c for c in self.calls if c.channel_id != channel_id]
 
     def monitor_call(
-        self, channel_id: str, supervisor_endpoint: str, mode: str, *, context: str, caller_id: str
+        self,
+        channel_id: str,
+        supervisor_endpoint: str,
+        mode: str,
+        *,
+        context: str,
+        caller_id: str,
+        beep: bool = False,
     ) -> str:
         calls = getattr(self, "monitor_calls", [])
         self.monitor_calls = calls
         calls.append((channel_id, supervisor_endpoint, mode, context))
+        self.monitor_beep = beep
         return f"spy-{len(calls)}"
 
     def record_call(self, channel_id: str, start: bool) -> None:

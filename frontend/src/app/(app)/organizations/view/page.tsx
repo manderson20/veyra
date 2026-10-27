@@ -44,6 +44,7 @@ function OrganizationView() {
   const [intercom, setIntercom] = useState("allow");
   const [pickup, setPickup] = useState("organization");
   const [dndAllow, setDndAllow] = useState("");
+  const [monitorBeep, setMonitorBeep] = useState(false);
   const [ownRecordings, setOwnRecordings] = useState(false);
   const [faxHeader, setFaxHeader] = useState("");
   const [faxStation, setFaxStation] = useState("");
@@ -59,6 +60,7 @@ function OrganizationView() {
       setIntercom(o.intercom_default ?? "allow");
       setPickup(o.directed_pickup ?? "organization");
       setDndAllow((o.dnd_allow ?? []).join("\n"));
+      setMonitorBeep(!!o.monitor_beep);
       setOwnRecordings(!!o.users_play_own_recordings);
       setFaxHeader(o.fax_header ?? "");
       setFaxStation(o.fax_station_id ?? "");
@@ -75,14 +77,15 @@ function OrganizationView() {
   const allowListChanged = allowListNow.join("\n") !== (o.caller_id_allow_list ?? []).join("\n");
   const dndNow = dndAllow.split("\n").map((n) => n.trim()).filter(Boolean);
   const dndChanged = dndNow.join("\n") !== (o.dnd_allow ?? []).join("\n");
-  const dirty = dndChanged || name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || pickup !== (o.directed_pickup ?? "organization") || ownRecordings !== !!o.users_play_own_recordings || faxHeader !== (o.fax_header ?? "") || faxStation !== (o.fax_station_id ?? "");
+  const beepChanged = monitorBeep !== !!o.monitor_beep;
+  const dirty = dndChanged || beepChanged || name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || pickup !== (o.directed_pickup ?? "organization") || ownRecordings !== !!o.users_play_own_recordings || faxHeader !== (o.fax_header ?? "") || faxStation !== (o.fax_station_id ?? "");
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(pickup !== (o.directed_pickup ?? "organization") ? { directed_pickup: pickup } : {}), ...(dndChanged ? { dnd_allow: dndNow } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}), ...(faxHeader !== (o.fax_header ?? "") ? { fax_header: faxHeader.trim() || null } : {}), ...(faxStation !== (o.fax_station_id ?? "") ? { fax_station_id: faxStation.trim() || null } : {}) });
+      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(pickup !== (o.directed_pickup ?? "organization") ? { directed_pickup: pickup } : {}), ...(dndChanged ? { dnd_allow: dndNow } : {}), ...(beepChanged ? { monitor_beep: monitorBeep } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}), ...(faxHeader !== (o.fax_header ?? "") ? { fax_header: faxHeader.trim() || null } : {}), ...(faxStation !== (o.fax_station_id ?? "") ? { fax_station_id: faxStation.trim() || null } : {}) });
       org.setData(updated);
       toast.success("Organization saved", moh !== (o.moh_class_id ?? "") ? "Deploy changes to apply the hold music." : undefined);
     } catch (err) {
@@ -119,6 +122,7 @@ function OrganizationView() {
               help="Printed at the top of every page this organization faxes; a fax inbox may set its own." onChange={(e) => setFaxHeader(e.target.value)} />
             <TextField label="Fax station ID" value={faxStation} disabled={!editable} error={errors.fields.fax_station_id} inputMode="tel" placeholder="+1 573 555 0199"
               help="The number announced to the other fax machine (digits, + and spaces)." onChange={(e) => setFaxStation(e.target.value)} />
+            <Switch label="Beep when a supervisor listens in" description="Both sides of the call hear a short beep when a supervisor starts to listen, whisper or join. Some states require that everyone on a call knows it is being monitored; check your district's policy. Needs a deployment." checked={monitorBeep} disabled={!editable} onChange={(e) => setMonitorBeep(e.target.checked)} />
             <Switch label="Users may play recordings of their own calls" description="On My Phone, a user can listen to recordings of calls their extension took part in. Off by default; every listening is audited." checked={ownRecordings} disabled={!editable} onChange={(e) => setOwnRecordings(e.target.checked)} />
             <Switch label="Active" description="Inactive organizations are kept but cannot be used for new configuration." checked={active} disabled={!editable} onChange={(e) => setActive(e.target.checked)} />
             {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}

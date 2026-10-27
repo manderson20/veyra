@@ -2,7 +2,7 @@
 """The rest of the Metaswitch comparison's build-next items (issue #173):
 an organization-wide Do Not Disturb exception list (#170) and skipping a
 ring group member after unanswered calls (#166) and the voicemail
-after-hours greeting's time condition (#169).
+after-hours greeting's time condition (#169) and the supervisor beep (#167).
 
 Revision ID: 0069
 Revises: 0068
@@ -33,6 +33,10 @@ def upgrade() -> None:
     )
 
 
+    op.add_column(
+        "organizations",
+        sa.Column("monitor_beep", sa.Boolean(), nullable=False, server_default="false"),
+    )
     op.add_column("ring_groups", sa.Column("skip_after_misses", sa.Integer(), nullable=True))
     op.add_column(
         "ring_groups",
@@ -53,4 +57,5 @@ def downgrade() -> None:
     op.drop_column("voicemail_boxes", "after_hours_time_condition_id")
     op.drop_column("ring_groups", "skip_minutes")
     op.drop_column("ring_groups", "skip_after_misses")
+    op.drop_column("organizations", "monitor_beep")
     op.drop_column("organizations", "dnd_allow")

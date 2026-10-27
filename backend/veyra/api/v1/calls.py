@@ -23,7 +23,7 @@ from veyra.core import audit, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
-from veyra.core.models import Extension
+from veyra.core.models import Extension, Organization
 from veyra.core.security.principal import Principal
 from veyra.telephony.adapter import (
     ActiveCall,
@@ -427,6 +427,7 @@ def monitor(
             body.mode,
             context=tenancy.names_of(db, phone.organization_id).spy,
             caller_id=f"Monitor {target.number} <{target.number}>",
+            beep=bool(getattr(db.get(Organization, target.organization_id), "monitor_beep", False)),
         )
     except ValueError as e:
         raise conflict(str(e), "monitor_refused") from e

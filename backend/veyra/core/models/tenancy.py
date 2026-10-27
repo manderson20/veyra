@@ -73,6 +73,9 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     # Callers who ring every phone of the organization through Do Not
     # Disturb (issue #170), for example the district office.
     dnd_allow: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    # Both sides of a call hear a beep when a supervisor starts to listen,
+    # whisper or join (issue #167; some states require consent).
+    monitor_beep: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Intercom default for the organization's extensions (docs/CALL_FEATURES.md §3.6).
     intercom_default: Mapped[str] = mapped_column(
         String(8), default="allow", server_default="allow"

@@ -152,6 +152,8 @@ def update_organization(
         configmgmt.mark_changed(db, by=principal.label, what=f"hold music of {org.slug}")
     if "intercom_default" in changes:
         configmgmt.mark_changed(db, by=principal.label, what=f"intercom default of {org.slug}")
+    if "monitor_beep" in changes and changes["monitor_beep"] != org.monitor_beep:
+        configmgmt.mark_changed(db, by=principal.label, what=f"monitoring beep of {org.slug}")
     if "directed_pickup" in changes:
         configmgmt.mark_changed(db, by=principal.label, what=f"directed pickup of {org.slug}")
     audit.record(

@@ -137,6 +137,11 @@ class Names:
         """A supervisor's phone rung from the web to listen to a call (issue #167)."""
         return self._p("spy")
 
+    @property
+    def spy_beep(self) -> str:
+        """The beep both sides hear when monitoring starts (issue #167)."""
+        return self._p("spy-beep")
+
     def tc_open(self, key: str) -> str:
         """Gosub: VEYRA_OPEN=1 while the time condition is open (issue #169)."""
         return self._p(f"tcopen-{key}")

@@ -251,11 +251,19 @@ class TelephonyAdapter(ABC):
         raise NotSupported(f"{self.name}: recording from the web not implemented")
 
     def monitor_call(
-        self, channel_id: str, supervisor_endpoint: str, mode: str, *, context: str, caller_id: str
+        self,
+        channel_id: str,
+        supervisor_endpoint: str,
+        mode: str,
+        *,
+        context: str,
+        caller_id: str,
+        beep: bool = False,
     ) -> str:
         """Ring a supervisor's phone and, when answered, listen to, whisper
         on or join (``listen``/``whisper``/``barge``) the call on
-        ``channel_id`` (issue #167). Returns the supervisor's channel id."""
+        ``channel_id`` (issue #167); ``beep``: both sides of the call hear a
+        beep first. Returns the supervisor's channel id."""
         raise NotSupported(f"{self.name}: supervisor monitoring not implemented")
 
     def conference_live(self, room: str) -> dict[str, Any] | None:

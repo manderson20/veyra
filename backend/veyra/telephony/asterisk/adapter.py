@@ -571,7 +571,14 @@ class AsteriskAdapter(TelephonyAdapter):
             raise EngineUnavailable(out[:200] or "the engine refused the command")
 
     def monitor_call(
-        self, channel_id: str, supervisor_endpoint: str, mode: str, *, context: str, caller_id: str
+        self,
+        channel_id: str,
+        supervisor_endpoint: str,
+        mode: str,
+        *,
+        context: str,
+        caller_id: str,
+        beep: bool = False,
     ) -> str:
         if mode not in ("listen", "whisper", "barge"):
             raise ValueError(f"unknown monitor mode {mode!r}")
@@ -584,7 +591,11 @@ class AsteriskAdapter(TelephonyAdapter):
             context=context,
             caller_id=caller_id,
             timeout=30,
-            variables={"VEYRA_SPY_CHAN": name, "VEYRA_SPY_MODE": mode},
+            variables={
+                "VEYRA_SPY_CHAN": name,
+                "VEYRA_SPY_MODE": mode,
+                "VEYRA_SPY_BEEP": "1" if beep else "",
+            },
         )
 
     def conference_live(self, room: str) -> dict[str, Any] | None:
