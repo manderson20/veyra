@@ -15,6 +15,8 @@ Run the installer's upgrade once (`sudo installer/upgrade.sh --yes` from the rel
 ### Added
 - **Install operating system updates from the Updates page**: the "Operating system packages" card now has *Check now*, *Install security*, *Install all except Asterisk* and *Include Asterisk* (which warns before dropping calls in progress). Progress and the output show on the card, a "restart needed" notice appears when the kernel or a core library changed, and the list is read again when a run finishes. Platform administrators with "Approve and apply updates" only, after entering the password again; every run is in the audit log.
 
+- **Extension templates set forwarding, caller ID and voicemail too** (#172, from #173): the busy, no-answer and offline forwards, the outside caller ID number and name, and the voicemail options of the extension's own box (recording attached, delete after email, days kept, operator extension), each lockable like the other template settings. A voicemail box created for an extension that follows a template takes its options.
+
 ### Security
 - Calendar presence (My Phone → calendar): the server now checks that the calendar's address is on the internet at the moment it connects and again for every redirect, so a calendar address can no longer point the server at an internal address through a redirect or a DNS change after the check.
 - Module requirement strings are matched with an expression that cannot backtrack exponentially (code scanning alert 28).

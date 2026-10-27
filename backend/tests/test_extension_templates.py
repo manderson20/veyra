@@ -131,3 +131,78 @@ def test_resending_the_current_value_of_a_locked_field_is_not_a_change(admin):
     r = admin.patch(f"{EXT}/{ext['id']}", json={"display_name": "Desk 1", "intercom": "allow"})
     assert r.status_code == 200, r.text
     assert admin.patch(f"{EXT}/{ext['id']}", json={"intercom": "default"}).status_code == 409
+
+
+def test_forwarding_caller_id_and_voicemail_defaults(admin, app):
+    app.state.telephony = FakeAdapter()
+    o = _org(admin)
+    admin.post(EXT, json={"organization_id": o, "number": "1190", "display_name": "Office"})
+    bad = admin.post(
+        T,
+        json={
+            "organization_id": o,
+            "name": "Bad vm",
+            "settings": {"vm_operator_extension": "9999"},
+        },
+    )
+    assert bad.status_code == 422 and bad.json()["errors"][0]["field"] == (
+        "settings.vm_operator_extension"
+    )
+    tpl = admin.post(
+        T,
+        json={
+            "organization_id": o,
+            "name": "Front office",
+            "settings": {
+                "cf_no_answer": "1190",
+                "cf_unavailable": "(555) 010-2000",
+                "outbound_caller_id_number": "+15550102000",
+                "vm_keep_days": 60,
+                "vm_operator_extension": "1190",
+                "vm_attach_audio": False,
+            },
+            "locked": ["vm_keep_days", "cf_unavailable"],
+        },
+    ).json()
+    assert tpl["settings"]["cf_unavailable"] == "5550102000"
+
+    ext = admin.post(
+        EXT,
+        json={
+            "organization_id": o,
+            "number": "1191",
+            "display_name": "Desk 1191",
+            "template_id": tpl["id"],
+        },
+    ).json()
+    assert ext["outbound_caller_id_number"] == "+15550102000"
+    state = admin.get(f"{EXT}/{ext['id']}/state").json()
+    assert state["cf_no_answer"] == "1190" and state["cf_unavailable"] == "5550102000"
+    # A locked forward cannot change on the extension.
+    r = admin.put(f"{EXT}/{ext['id']}/state", json={"cf_unavailable": "1190"})
+    assert r.status_code == 409 and r.json()["code"] == "locked_by_template"
+
+    # The box made later takes the template's voicemail options, except what
+    # the request gives (unless locked).
+    box = admin.post(
+        "/api/v1/voicemail",
+        json={"extension_id": ext["id"], "attach_audio": True, "keep_days": 10},
+    ).json()
+    assert box["attach_audio"] is True and box["keep_days"] == 60
+    assert box["operator_extension"] == "1190"
+    r = admin.patch(f"/api/v1/voicemail/{box['id']}", json={"keep_days": 30})
+    assert r.status_code == 409 and r.json()["code"] == "locked_by_template"
+    assert (
+        admin.patch(f"/api/v1/voicemail/{box['id']}", json={"ring_seconds": 25}).status_code == 200
+    )
+
+    # Apply: the preview shows the box's own difference only.
+    preview = admin.post(f"{T}/{tpl['id']}/apply", json={"dry_run": True}).json()
+    assert preview["extensions"] == [
+        {
+            "extension_id": ext["id"],
+            "number": "1191",
+            "changes": {"vm_attach_audio": {"from": True, "to": False}},
+        }
+    ]
+    assert preview["needs_deployment"]

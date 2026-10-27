@@ -18,6 +18,15 @@ const LABELS: Record<string, string> = {
   ring_seconds: "Ring time",
   call_waiting_off: "Call waiting off",
   anonymous_reject: "Refuse hidden numbers",
+  cf_busy: "Forward when busy",
+  cf_no_answer: "Forward when not answered",
+  cf_unavailable: "Forward when offline",
+  outbound_caller_id_number: "Caller ID number",
+  outbound_caller_id_name: "Caller ID name",
+  vm_attach_audio: "Voicemail attached",
+  vm_delete_after_email: "Delete after email",
+  vm_keep_days: "Voicemail kept (days)",
+  vm_operator_extension: "Voicemail operator",
 };
 
 function shown(v: unknown): string {

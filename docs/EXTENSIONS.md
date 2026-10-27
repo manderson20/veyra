@@ -161,8 +161,11 @@ Until trunks exist the dialplan reaches internal numbers and feature codes.
 *Built 2026-10-26 from the Metaswitch comparison (its "Call Service
 Groups").* A template (Telephony → Extension Templates, per organization)
 sets any of: class of service, intercom, phones that may register,
-department, ring time, call waiting off, refuse hidden numbers. Each set
-field may be **locked**.
+department, ring time, call waiting off, refuse hidden numbers, the
+outside caller ID (number and name), the busy / no-answer / offline
+forwards, and the options of the extension's own voicemail box (recording
+attached, delete after email, days messages are kept, operator extension).
+Each set field may be **locked**.
 
 * Creating an extension with `template_id` (web, API, or the bulk import's
   `template` column, by name) gives it the template's settings wherever the
@@ -170,14 +173,18 @@ field may be **locked**.
 * Choosing a template for an existing extension applies all its settings.
 * `POST /extension-templates/{id}/apply {dry_run}` lists, then applies,
   what differs on the template's extensions (the template page's
-  **Apply…**). Class of service, intercom, phones and ring time need a
-  deployment; the rest is live.
+  **Apply…**). Class of service, intercom, phones, ring time, caller ID and
+  the voicemail options (except the days kept) need a deployment; the rest
+  is live.
 * A locked field is refused on the extension (`409 locked_by_template`), in
   the state API and in My Phone, unless the request only repeats the value
   the extension already has.
+* Voicemail options apply to an extension that has its own box: a box
+  created later takes the template's options the request does not give
+  (locked ones always), and a locked option is refused on the box. *Delete
+  after email* applies only to boxes with an email address (and turns the
+  attachment on, which it needs).
 * Deleting a template leaves its extensions' settings as they are.
-
-Not built: voicemail defaults and forwarding defaults in a template.
 
 ## 6. Permissions and scope
 

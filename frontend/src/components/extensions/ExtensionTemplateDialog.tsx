@@ -12,9 +12,23 @@ import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
 
 type Field = keyof ExtensionTemplateSettings;
-const FIELDS: Field[] = ["class_of_service_id", "intercom", "max_registrations", "department_id", "ring_seconds", "call_waiting_off", "anonymous_reject"];
-type Values = { class_of_service_id: string; intercom: string; max_registrations: string; department_id: string; ring_seconds: string; call_waiting_off: boolean; anonymous_reject: boolean };
-const EMPTY: Values = { class_of_service_id: "", intercom: "default", max_registrations: "", department_id: "", ring_seconds: "30", call_waiting_off: false, anonymous_reject: false };
+const FIELDS: Field[] = [
+  "class_of_service_id", "intercom", "max_registrations", "department_id", "outbound_caller_id_number", "outbound_caller_id_name",
+  "ring_seconds", "call_waiting_off", "anonymous_reject", "cf_busy", "cf_no_answer", "cf_unavailable",
+  "vm_attach_audio", "vm_delete_after_email", "vm_keep_days", "vm_operator_extension",
+];
+type Values = {
+  class_of_service_id: string; intercom: string; max_registrations: string; department_id: string; ring_seconds: string; call_waiting_off: boolean; anonymous_reject: boolean;
+  cf_busy: string; cf_no_answer: string; cf_unavailable: string; outbound_caller_id_number: string; outbound_caller_id_name: string;
+  vm_attach_audio: boolean; vm_delete_after_email: boolean; vm_keep_days: string; vm_operator_extension: string;
+};
+const EMPTY: Values = {
+  class_of_service_id: "", intercom: "default", max_registrations: "", department_id: "", ring_seconds: "30", call_waiting_off: false, anonymous_reject: false,
+  cf_busy: "", cf_no_answer: "", cf_unavailable: "", outbound_caller_id_number: "", outbound_caller_id_name: "",
+  vm_attach_audio: true, vm_delete_after_email: false, vm_keep_days: "", vm_operator_extension: "",
+};
+// Text fields sent as null when empty.
+const TEXT: Field[] = ["cf_busy", "cf_no_answer", "cf_unavailable", "outbound_caller_id_number", "outbound_caller_id_name", "vm_operator_extension"];
 
 /** Create or edit an extension template (issue #172): each setting is either left to the extension, set by the template, or set and locked. */
 export function ExtensionTemplateDialog({ open, onClose, template, onSaved }: { open: boolean; onClose: () => void; template?: ExtensionTemplate; onSaved: (t: ExtensionTemplate) => void }) {
@@ -47,6 +61,15 @@ export function ExtensionTemplateDialog({ open, onClose, template, onSaved }: { 
       ring_seconds: String(s.ring_seconds ?? 30),
       call_waiting_off: s.call_waiting_off ?? false,
       anonymous_reject: s.anonymous_reject ?? false,
+      cf_busy: s.cf_busy ?? "",
+      cf_no_answer: s.cf_no_answer ?? "",
+      cf_unavailable: s.cf_unavailable ?? "",
+      outbound_caller_id_number: s.outbound_caller_id_number ?? "",
+      outbound_caller_id_name: s.outbound_caller_id_name ?? "",
+      vm_attach_audio: s.vm_attach_audio ?? true,
+      vm_delete_after_email: s.vm_delete_after_email ?? false,
+      vm_keep_days: s.vm_keep_days ? String(s.vm_keep_days) : "",
+      vm_operator_extension: s.vm_operator_extension ?? "",
     });
     setChosen(new Set(Object.keys(s) as Field[]));
     setLocked(new Set(template?.locked ?? []));
@@ -65,7 +88,8 @@ export function ExtensionTemplateDialog({ open, onClose, template, onSaved }: { 
       case "max_registrations": return values.max_registrations ? Number(values.max_registrations) : null;
       case "ring_seconds": return Number(values.ring_seconds);
       case "intercom": return values.intercom;
-      default: return values[f];
+      case "vm_keep_days": return values.vm_keep_days ? Number(values.vm_keep_days) : null;
+      default: return TEXT.includes(f) ? (String(values[f]).trim() || null) : values[f];
     }
   };
 
@@ -104,6 +128,10 @@ export function ExtensionTemplateDialog({ open, onClose, template, onSaved }: { 
     </div>
   );
 
+  const text = (f: Field, label: string, placeholder: string) => row(f, label,
+    <TextField label={<span className="sr-only">{label}</span>} value={String(values[f])} placeholder={placeholder}
+      onChange={(e) => setValues({ ...values, [f]: e.target.value })} />);
+
   return (
     <Dialog open={open} onClose={onClose} busy={busy} size="lg" title={template ? `Edit template "${template.name}"` : "New extension template"}
       description="Tick what the template sets. Extensions created with it take these settings; Apply brings its extensions back to them. Locked settings cannot be changed on the extensions while they follow the template."
@@ -127,6 +155,18 @@ export function ExtensionTemplateDialog({ open, onClose, template, onSaved }: { 
           onChange={(e) => setValues({ ...values, ring_seconds: e.target.value })} />)}
         {row("call_waiting_off", "Call waiting", <Switch label="Call waiting off" checked={values.call_waiting_off} onChange={(e) => setValues({ ...values, call_waiting_off: e.target.checked })} />)}
         {row("anonymous_reject", "Callers who hide their number", <Switch label="Refused" checked={values.anonymous_reject} onChange={(e) => setValues({ ...values, anonymous_reject: e.target.checked })} />)}
+        {text("outbound_caller_id_number", "Outside caller ID number", "+15735550100")}
+        {text("outbound_caller_id_name", "Outside caller ID name", "Lincoln Elementary")}
+        <h3 className="card__title" style={{ marginTop: 8 }}>Forwarding</h3>
+        {text("cf_busy", "Forward when busy", "Extension or number")}
+        {text("cf_no_answer", "Forward when not answered", "Extension or number")}
+        {text("cf_unavailable", "Forward when the phone is offline", "Extension or number")}
+        <h3 className="card__title" style={{ marginTop: 8 }}>Voicemail (the extension&apos;s own box)</h3>
+        {row("vm_attach_audio", "Attach the recording to the email", <Switch label="Attached" checked={values.vm_attach_audio} onChange={(e) => setValues({ ...values, vm_attach_audio: e.target.checked })} />)}
+        {row("vm_delete_after_email", "Delete after email", <Switch label="Delete once emailed (boxes with an email address)" checked={values.vm_delete_after_email} onChange={(e) => setValues({ ...values, vm_delete_after_email: e.target.checked })} />)}
+        {row("vm_keep_days", "Delete messages after (days)", <TextField label={<span className="sr-only">Days</span>} type="number" min={1} max={3650} value={values.vm_keep_days} placeholder="Keep messages"
+          onChange={(e) => setValues({ ...values, vm_keep_days: e.target.value })} />)}
+        {text("vm_operator_extension", "Operator extension (0 in voicemail)", "e.g. 1000")}
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>

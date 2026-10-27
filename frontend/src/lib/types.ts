@@ -3537,6 +3537,15 @@ export interface ExtensionTemplateSettings {
   ring_seconds?: number;
   call_waiting_off?: boolean;
   anonymous_reject?: boolean;
+  cf_busy?: string | null;
+  cf_no_answer?: string | null;
+  cf_unavailable?: string | null;
+  outbound_caller_id_number?: string | null;
+  outbound_caller_id_name?: string | null;
+  vm_attach_audio?: boolean;
+  vm_delete_after_email?: boolean;
+  vm_keep_days?: number | null;
+  vm_operator_extension?: string | null;
 }
 
 export interface ExtensionTemplate {

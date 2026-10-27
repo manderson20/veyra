@@ -102,6 +102,31 @@ def _operator(db: Session, organization_id: uuid.UUID, value: str | None) -> str
     return number
 
 
+def _apply_template(db: Session, ext: Extension, given: set[str]) -> None:
+    """A new box of an extension that follows a template (issue #172) takes
+    the template's voicemail options the request did not give (locked ones
+    always)."""
+    from veyra.core.models import ExtensionTemplate
+    from veyra.telephony import ext_templates
+
+    template = db.get(ExtensionTemplate, ext.template_id) if ext.template_id else None
+    if template is None:
+        return
+    locked = set(template.locked or [])
+    only = {
+        f
+        for f, where in ext_templates.FIELDS.items()
+        if where == "voicemail" and (ext_templates.voicemail_field(f) not in given or f in locked)
+    }
+    ext_templates.apply(db, template, ext, by="admin", only=only)
+
+
+def _refuse_locked(db: Session, ext: Extension, changes: dict[str, Any]) -> None:
+    from veyra.api.v1.extensions import _refuse_locked as refuse
+
+    refuse(db, ext, {f"vm_{k}": v for k, v in changes.items()})
+
+
 def check_locater(
     db: Session,
     organization_id: uuid.UUID,
@@ -534,6 +559,7 @@ def create_box(
     except IntegrityError as e:
         db.rollback()
         raise conflict(f"Extension {ext.number} already has a voicemail box.", "box_exists") from e
+    _apply_template(db, ext, body.model_fields_set)
     _audit(
         db,
         ctx,
@@ -571,6 +597,8 @@ def update_box(
     ext = db.get(Extension, box.extension_id) if box.extension_id else None
     number = ext.number if ext else (box.number or "?")
     changes = body.model_dump(exclude_unset=True)
+    if ext is not None:
+        _refuse_locked(db, ext, changes)
     details: dict[str, Any] = {}
     if box.extension_id is None:
         if changes.get("number") and changes["number"].strip() != box.number:
