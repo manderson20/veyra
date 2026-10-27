@@ -70,6 +70,9 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     caller_id_allow_list: Mapped[list[str]] = mapped_column(
         JSONB, default=list, server_default="[]"
     )
+    # Callers who ring every phone of the organization through Do Not
+    # Disturb (issue #170), for example the district office.
+    dnd_allow: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     # Intercom default for the organization's extensions (docs/CALL_FEATURES.md §3.6).
     intercom_default: Mapped[str] = mapped_column(
         String(8), default="allow", server_default="allow"

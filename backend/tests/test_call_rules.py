@@ -259,3 +259,26 @@ def test_code_sets_api_and_saving_one(admin):
     assert r.status_code == 200, r.text
     by = {c["key"]: c["code"] for c in r.json()["codes"]}
     assert by["cfu_on"] == "*92" and by["park_pickup"] == "*88"
+
+
+def test_organization_dnd_list_rings_through_every_phone(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    r = admin.patch(
+        f"/api/v1/organizations/{org['id']}",
+        json={"dnd_allow": ["(573) 555-0199", "15735550199", "1000"]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["dnd_allow"] == ["5735550199", "1000"]
+    bad = admin.patch(f"/api/v1/organizations/{org['id']}", json={"dnd_allow": ["12ab"]})
+    assert bad.status_code == 422 and bad.json()["errors"][0]["field"] == "dnd_allow"
+
+    snap = _ext_snapshot()
+    snap["extensions"][0]["dnd_allow_org"] = extension_state.dnd_list(["5735550199", "1000"])
+    internal = _section(_files(snap)["extensions.conf"].content, "veyra-internal")
+    org_line = 'GotoIf($["${VEYRA_DA}"!="" & ${REGEX("-${VEYRA_DA}-" -5735550199-1000-)}]?ring)'
+    assert org_line in internal
+    # Checked before the phone's own list.
+    assert internal.index(org_line) < internal.index("n(dndlist)")
+    snap["extensions"][0]["dnd_allow_org"] = "-1$(x)-"
+    with pytest.raises(generator.GenerationError):
+        _files(snap)

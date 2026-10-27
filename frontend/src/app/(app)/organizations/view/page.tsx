@@ -43,6 +43,7 @@ function OrganizationView() {
   const [allowList, setAllowList] = useState("");
   const [intercom, setIntercom] = useState("allow");
   const [pickup, setPickup] = useState("organization");
+  const [dndAllow, setDndAllow] = useState("");
   const [ownRecordings, setOwnRecordings] = useState(false);
   const [faxHeader, setFaxHeader] = useState("");
   const [faxStation, setFaxStation] = useState("");
@@ -57,6 +58,7 @@ function OrganizationView() {
       setAllowList((o.caller_id_allow_list ?? []).join("\n"));
       setIntercom(o.intercom_default ?? "allow");
       setPickup(o.directed_pickup ?? "organization");
+      setDndAllow((o.dnd_allow ?? []).join("\n"));
       setOwnRecordings(!!o.users_play_own_recordings);
       setFaxHeader(o.fax_header ?? "");
       setFaxStation(o.fax_station_id ?? "");
@@ -71,14 +73,16 @@ function OrganizationView() {
   const routingEditable = editable && can("routing.write");
   const allowListNow = allowList.split("\n").map((n) => n.trim()).filter(Boolean);
   const allowListChanged = allowListNow.join("\n") !== (o.caller_id_allow_list ?? []).join("\n");
-  const dirty = name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || pickup !== (o.directed_pickup ?? "organization") || ownRecordings !== !!o.users_play_own_recordings || faxHeader !== (o.fax_header ?? "") || faxStation !== (o.fax_station_id ?? "");
+  const dndNow = dndAllow.split("\n").map((n) => n.trim()).filter(Boolean);
+  const dndChanged = dndNow.join("\n") !== (o.dnd_allow ?? []).join("\n");
+  const dirty = dndChanged || name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || pickup !== (o.directed_pickup ?? "organization") || ownRecordings !== !!o.users_play_own_recordings || faxHeader !== (o.fax_header ?? "") || faxStation !== (o.fax_station_id ?? "");
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(pickup !== (o.directed_pickup ?? "organization") ? { directed_pickup: pickup } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}), ...(faxHeader !== (o.fax_header ?? "") ? { fax_header: faxHeader.trim() || null } : {}), ...(faxStation !== (o.fax_station_id ?? "") ? { fax_station_id: faxStation.trim() || null } : {}) });
+      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(pickup !== (o.directed_pickup ?? "organization") ? { directed_pickup: pickup } : {}), ...(dndChanged ? { dnd_allow: dndNow } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}), ...(faxHeader !== (o.fax_header ?? "") ? { fax_header: faxHeader.trim() || null } : {}), ...(faxStation !== (o.fax_station_id ?? "") ? { fax_station_id: faxStation.trim() || null } : {}) });
       org.setData(updated);
       toast.success("Organization saved", moh !== (o.moh_class_id ?? "") ? "Deploy changes to apply the hold music." : undefined);
     } catch (err) {
@@ -105,6 +109,8 @@ function OrganizationView() {
             <SelectField label="Answer another phone's call (**extension)" value={pickup} disabled={!editable}
               options={[{ value: "organization", label: "Any phone of the organization" }, { value: "group", label: "Only phones in the same pickup group" }]}
               onChange={(e) => setPickup(e.target.value)} help="Who may dial ** and an extension to answer the call ringing there. *8 always stays within the pickup groups. Needs a deployment." />
+            <TextArea label="Callers who ring through Do Not Disturb" rows={3} value={dndAllow} disabled={!editable} error={errors.fields.dnd_allow} spellCheck={false} placeholder="5735550100"
+              help="Numbers or extensions that ring every phone of this organization even when it has Do Not Disturb on, such as the district office or emergency responders; one per line, at most 50. Each phone can add its own. Needs a deployment." onChange={(e) => setDndAllow(e.target.value)} />
             <TextArea label="Outbound caller ID allow list" rows={3} value={allowList} disabled={!routingEditable} error={errors.fields.caller_id_allow_list} spellCheck={false} placeholder="5735550100"
               help="Numbers an extension may send as outbound caller ID besides the organization's own numbers (inbound routes), one per line. Changing it needs the routing permission." onChange={(e) => setAllowList(e.target.value)} />
             <HoldMusicSelect organizationId={o.id} label="Hold music" value={moh} disabled={!editable} error={errors.fields.moh_class_id}

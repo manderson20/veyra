@@ -38,6 +38,8 @@ ENGINE_FIELDS = ("dnd", *FORWARD_FIELDS, "fmfm", "nocw", "acr", "dnd_allow")
 # Do Not Disturb exceptions (issue #170): at most this many numbers, stored
 # in the engine as one value joined with "-".
 DND_ALLOW_MAX = 20
+# The organization-wide list (issue #170).
+DND_ALLOW_ORG_MAX = 50
 _NUMBER_RE = re.compile(r"^\+?[0-9]{2,20}$")
 # Presence states a user may show (docs/USER_PORTAL.md §7).
 PRESENCE_STATES = ("available", "away", "busy", "meeting", "lunch", "out")
@@ -185,7 +187,7 @@ def dnd_key(number: str) -> str:
     return digits
 
 
-def normalize_dnd_allow(value: Any) -> list[str]:
+def normalize_dnd_allow(value: Any, limit: int = DND_ALLOW_MAX) -> list[str]:
     """The exception list as given (numbers kept as typed, cleaned), without
     duplicates by their match key."""
     if value is None:
@@ -203,14 +205,19 @@ def normalize_dnd_allow(value: Any) -> list[str]:
             continue
         seen.add(key)
         out.append(number)
-    if len(out) > DND_ALLOW_MAX:
-        raise StateError("dnd_allow", f"at most {DND_ALLOW_MAX} numbers")
+    if len(out) > limit:
+        raise StateError("dnd_allow", f"at most {limit} numbers")
     return out
+
+
+def dnd_list(numbers: list[str] | None) -> str | None:
+    """A list as the dialplan looks into it: "-<key>-<key>-"."""
+    keys = "-".join(dnd_key(n) for n in numbers or [])
+    return f"-{keys}-" if keys else None
 
 
 def engine_values(row: ExtensionState) -> dict[str, str | None]:
     """What the engine's copy of a row must hold."""
-    allow = "-".join(dnd_key(n) for n in (row.dnd_allow or []))
     return {
         "dnd": "1" if row.dnd else None,
         "cf_always": row.cf_always or None,
@@ -221,7 +228,7 @@ def engine_values(row: ExtensionState) -> dict[str, str | None]:
         "nocw": "1" if row.call_waiting_off else None,
         "acr": "1" if row.anonymous_reject else None,
         # Leading and trailing "-" so the dialplan can look for "-<number>-".
-        "dnd_allow": f"-{allow}-" if allow else None,
+        "dnd_allow": dnd_list(row.dnd_allow),
     }
 
 

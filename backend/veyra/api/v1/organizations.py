@@ -15,7 +15,7 @@ from veyra.configmgmt import service as configmgmt
 from veyra.core import audit, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
-from veyra.core.errors import conflict, forbidden, not_found
+from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
 from veyra.core.models import Organization
 from veyra.core.pagination import Page, PageParams, page_params, paginate
@@ -127,6 +127,25 @@ def update_organization(
         from veyra.api.v1 import hold_music
 
         hold_music.check_set(db, org.id, changes["moh_class_id"], "moh_class_id")
+    if "dnd_allow" in changes:
+        from veyra.telephony import extension_state
+
+        try:
+            changes["dnd_allow"] = extension_state.normalize_dnd_allow(
+                changes["dnd_allow"], extension_state.DND_ALLOW_ORG_MAX
+            )
+        except extension_state.StateError as e:
+            raise ProblemError(
+                422,
+                "Validation failed",
+                e.message,
+                code="validation_failed",
+                errors=[{"field": "dnd_allow", "message": e.message}],
+            ) from e
+        if changes["dnd_allow"] != list(org.dnd_allow or []):
+            configmgmt.mark_changed(
+                db, by=principal.label, what=f"Do Not Disturb exceptions of {org.slug}"
+            )
     for k, v in changes.items():
         setattr(org, k, v)
     if "moh_class_id" in changes:

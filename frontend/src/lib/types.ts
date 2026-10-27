@@ -161,6 +161,8 @@ export interface Organization {
   intercom_default?: "allow" | "deny" | string;
   /** Who may answer with **<extension> (#138). */
   directed_pickup?: "organization" | "group" | string;
+  /** Callers who ring every phone through Do Not Disturb (#170). */
+  dnd_allow?: string[];
   /** Users may play recordings of their own calls from My Phone (docs/USER_PORTAL.md §5). */
   users_play_own_recordings?: boolean;
   fax_header?: string | null;

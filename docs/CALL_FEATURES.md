@@ -499,6 +499,12 @@ like the forwards):
   `-5735550100-1002-`; the dialplan reduces the caller's number to its
   digits (ten for an eleven-digit number starting with 1) and looks for
   `-<digits>-`. A match rings as if DND were off (forwards still apply).
+* **The organization's list** (`organizations.dnd_allow`, migration 0069,
+  0.27.39): up to 50 numbers or extensions on the organization page that
+  ring every phone of it through DND, for example the district office or
+  the emergency responders' phones. Unlike the phone's own list it is
+  written into the dialplan (checked first), so a change needs a
+  deployment.
 
 The row is the record (`extension_states`, migration 0068); the worker's
 sync rewrites the engine's copy as for DND.

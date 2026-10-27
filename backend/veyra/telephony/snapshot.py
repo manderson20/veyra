@@ -66,7 +66,7 @@ from veyra.core.models import (
     VoicemailBoxMember,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
-from veyra.telephony import features, moh
+from veyra.telephony import extension_state, features, moh
 from veyra.telephony.numbering import load_numbering_plan
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
@@ -295,6 +295,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     org_slug = {o.id: o.slug for o in orgs}
     org_tz = {o.id: o.timezone for o in orgs}
     org_intercom = {o.id: o.intercom_default for o in orgs}
+    org_dnd = {o.id: extension_state.dnd_list(o.dnd_allow) for o in orgs}
     # Classes of service (docs/CALL_FEATURES.md §3.8), by id for the extensions
     # and as a list for the generator's guards.
     classes = list(db.scalars(select(ClassOfService).order_by(ClassOfService.slug)))
@@ -510,6 +511,8 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "pickup_groups": pickup.get(e.id, []),
                 "shared_mailboxes": shared_by_ext.get(e.id, []),
                 "site": str(e.site_id) if e.site_id else None,
+                # The organization's Do Not Disturb exceptions (issue #170).
+                "dnd_allow_org": org_dnd.get(e.organization_id),
             }
             for e in extensions
         ],

@@ -2383,6 +2383,9 @@ def _internal(
         lines.append(f"exten => {number},hint,PJSIP/{endpoint}")
         org_slug = _check_value(str(ext.get("organization") or ""), "organization")
         state = f"veyra/ext/{org_slug}/{number}"
+        org_dnd = str(ext.get("dnd_allow_org") or "")
+        if org_dnd and not re.fullmatch(r"-[0-9-]{1,1000}-", org_dnd):
+            raise GenerationError(f"extension {number}: bad Do Not Disturb list")
         # Keys lit while Do Not Disturb or a forward is on (docs/CALL_FEATURES.md §3.2, §3.3).
         if presence_code:
             # A presence key (issue #132): a BLF on the colleague's presence
@@ -2495,6 +2498,15 @@ def _internal(
             " same => n(dndallow),Set(VEYRA_DA=${FILTER(0-9,${CALLERID(num)})})",
             ' same => n,ExecIf($[${LEN(${VEYRA_DA})} = 11 & "${VEYRA_DA:0:1}"="1"]'
             "?Set(VEYRA_DA=${VEYRA_DA:1}))",
+            *(
+                [
+                    # The organization's list, written into the dialplan.
+                    f' same => n,GotoIf($["${{VEYRA_DA}}"!="" & '
+                    f'${{REGEX("-${{VEYRA_DA}}-" {org_dnd})}}]?ring)'
+                ]
+                if org_dnd
+                else []
+            ),
             f' same => n,GotoIf($["${{VEYRA_DA}}"!="" & "${{DB({state}/dnd_allow)}}"!=""]'
             "?dndlist:dnd)",
             f' same => n(dndlist),GotoIf(${{REGEX("-${{VEYRA_DA}}-" ${{DB({state}/dnd_allow)}})}}'
