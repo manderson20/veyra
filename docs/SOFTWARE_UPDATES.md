@@ -234,11 +234,30 @@ list on the core policy; the dashboard's Updates item shows the same.
 
 ## 6. Operating system and Asterisk packages
 
-Shown, not applied: the worker reads `apt list --upgradable` (no
-privileges needed) daily and the Updates page lists the count, security
-updates first, Asterisk separately ("upgrading Asterisk restarts it and
-drops calls"). Applying them stays with the administrator
-(`unattended-upgrades` or `apt`).
+The worker reads `apt list --upgradable` (no privileges needed) daily and
+the Updates page lists the count, security updates first, Asterisk
+separately ("upgrading Asterisk restarts it and drops calls").
+
+Since 0.27.39 a platform administrator with *Approve and apply updates*
+can also act on them from that card (after entering the password again):
+
+| Button | Mode | What runs as root |
+|---|---|---|
+| Check now | `refresh` | `apt-get update`; the list is then read again |
+| Install security | `security` | `apt-get install --only-upgrade` of the packages from a `-security` suite |
+| Install all except Asterisk | `all` | the same for every upgradable package except `asterisk*` and `libpj*` |
+| Include Asterisk | `everything` | `apt-get upgrade`; refused while calls are up unless the administrator confirms dropping them |
+
+Each runs the root unit `veyra-os-packages@<mode>.service`
+(`installer/bin/veyra-os-packages`, non-interactive, existing configuration
+files kept), which polkit lets the service account start for these four
+modes only. Its status (`mode`, `started`, `finished`, `exit`, `last.log`,
+and `reboot` when `/var/run/reboot-required` exists) lands in
+`/var/lib/veyra-ospackages` (0750 root:veyra); the page polls it, shows
+the output and a "restart needed" notice, and reads the upgradable list
+again as soon as a run has finished. A run is refused while another one
+or a Veyra update is in progress, and every start is audited
+(`updates.system_packages`). `unattended-upgrades` keeps working beside it.
 
 ## 7. API
 
@@ -249,7 +268,8 @@ POST     /updates/available/{id}/download        download and verify
 POST     /updates/available/{id}/approve         {when: "now" | "window"}
 POST     /updates/available/{id}/cancel          withdraw an approval before it starts
 GET      /updates/status                         installed version and the runner's status.json
-GET      /updates/system-packages                apt summary
+GET      /updates/system-packages                apt summary and the last run from the page
+POST     /updates/system-packages/{mode}         refresh | security | all | everything {drop_calls}
 ```
 
 The update source in the interface overrides `VEYRA_UPDATE_METADATA_URL`
@@ -261,7 +281,9 @@ itself (not to redirect targets), and never returned.
 
 `veyra-upgrade@.service`, the polkit rule extended (start of
 `veyra-upgrade@<version>.service` only), `<data>/updates` (0750 veyra) and
-`/var/lib/veyra-upgrade` (0750 root:veyra; its `work/` 0700). Release
+`/var/lib/veyra-upgrade` (0750 root:veyra; its `work/` 0700);
+`veyra-os-packages@.service` with its polkit rule and
+`/var/lib/veyra-ospackages` (§6; `verify.sh`: `os-packages-unit`). Release
 archives carry a `REVISION` file that install.sh and upgrade.sh use when
 there is no git checkout. `verify.sh`: `upgrade-unit`. uninstall.sh removes
 the unit and the polkit rule.

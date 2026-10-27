@@ -388,6 +388,14 @@ if [[ -f /etc/systemd/system/veyra-backup@.service ]] \
 else
     check backup-unit warn "veyra-backup@.service, its polkit rule, /var/lib/veyra-backup or age missing"
 fi
+# --- operating system packages (docs/SOFTWARE_UPDATES.md §6)
+if [[ -f /etc/systemd/system/veyra-os-packages@.service ]] \
+    && grep -qs "veyra-os-packages@" /etc/polkit-1/rules.d/50-veyra-services.rules \
+    && [[ "$(perm /var/lib/veyra-ospackages)" == "750 root:veyra" ]]; then
+    check os-packages-unit pass "operating system packages can be upgraded from the interface"
+else
+    check os-packages-unit warn "veyra-os-packages@.service, its polkit rule or /var/lib/veyra-ospackages missing"
+fi
 # --- packet captures (docs/CALL_FEATURES.md §2.2)
 if [[ -f /etc/systemd/system/veyra-capture@.service ]] \
     && grep -qs "veyra-capture@" /etc/polkit-1/rules.d/50-veyra-services.rules \

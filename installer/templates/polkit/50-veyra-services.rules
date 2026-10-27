@@ -26,6 +26,10 @@ polkit.addRule(function (action, subject) {
     if (unit === "veyra-key-rotate.service" && verb === "start") {
         return polkit.Result.YES;
     }
+    // Operating system packages from the Updates page (docs/SOFTWARE_UPDATES.md §6).
+    if (/^veyra-os-packages@(refresh|security|all|everything)\.service$/.test(unit) && verb === "start") {
+        return polkit.Result.YES;
+    }
     // Packet captures (docs/CALL_FEATURES.md §2.2): one unit per recorded capture, start and stop.
     if (/^veyra-capture@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.service$/.test(unit) && (verb === "start" || verb === "stop")) {
         return polkit.Result.YES;

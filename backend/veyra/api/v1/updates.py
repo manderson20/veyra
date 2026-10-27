@@ -455,14 +455,29 @@ def install_status(
     return manager.install_progress(db, settings)
 
 
+def _os_dir(request: Request) -> str:
+    return str(getattr(request.app.state, "os_packages_dir", manager.OS_PACKAGES_DIR))
+
+
 @router.get("/system-packages", summary="Operating system packages that could be upgraded")
 def system_packages(
+    request: Request,
     principal: Principal = Depends(require("updates.read")),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     from veyra.core.models import SystemSetting
 
+    run = manager.os_packages_run(_os_dir(request))
     row = db.get(SystemSetting, manager.SYSTEM_PACKAGES_KEY)
+    # A refresh or upgrade finished since the list was read: read it again.
+    checked = manager.parse_ts((row.value or {}).get("checked_at")) if row else None
+    finished = manager.parse_ts(run["finished_at"]) if run else None
+    if finished and (checked is None or finished > checked):
+        manager.refresh_system_packages(
+            db, run=getattr(request.app.state, "apt_run", None), force=True
+        )
+        db.commit()
+        row = db.get(SystemSetting, manager.SYSTEM_PACKAGES_KEY)
     value = dict(row.value) if row else {"checked_at": None, "packages": [], "error": None}
     pk = value.get("packages", [])
     value["counts"] = {
@@ -470,4 +485,80 @@ def system_packages(
         "security": sum(1 for p in pk if p.get("security")),
         "telephony": sum(1 for p in pk if p.get("telephony")),
     }
+    value["run"] = run
     return value
+
+
+class OsPackagesIn(BaseModel):
+    # "everything" restarts Asterisk: refused while calls are up unless set.
+    drop_calls: bool = False
+
+
+@router.post(
+    "/system-packages/{mode}",
+    status_code=202,
+    dependencies=[Depends(recent_auth)],
+    summary="Refresh the package lists or upgrade operating system packages",
+)
+def upgrade_system_packages(
+    mode: str,
+    body: OsPackagesIn,
+    request: Request,
+    principal: Principal = Depends(require("updates.approve")),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """refresh (apt-get update), security, all (Asterisk held back) or
+    everything, through the root unit veyra-os-packages@<mode>."""
+    import subprocess
+
+    if mode not in manager.OS_PACKAGES_MODES:
+        raise not_found("Package action")
+    run = manager.os_packages_run(_os_dir(request))
+    if run and run["running"]:
+        raise ProblemError(409, "Already running", "A package run is in progress.", code="running")
+    if manager.install_progress(db, settings).get("pending"):
+        raise ProblemError(
+            409, "Veyra is updating", "Wait for the Veyra update to finish.", code="running"
+        )
+    if mode == "everything" and not body.drop_calls and settings.telephony_engine != "none":
+        from veyra.configmgmt.service import active_call_count
+
+        adapter = getattr(request.app.state, "telephony", None)
+        calls = active_call_count(adapter) if adapter is not None else None
+        if calls:
+            raise ProblemError(
+                409,
+                "Calls in progress",
+                f"{calls} call(s) in progress would drop when Asterisk restarts.",
+                code="calls_in_progress",
+            )
+    audit.record(
+        db,
+        action="updates.system_packages",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        target_type="system_packages",
+        target_id=mode,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"mode": mode},
+    )
+    db.commit()
+    systemctl = getattr(request.app.state, "systemctl_run", None)
+    cmd = ["systemctl", "start", "--no-block", manager.os_packages_unit(mode)]
+    res = (
+        systemctl(cmd)
+        if systemctl
+        else subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)  # noqa: S603
+    )
+    if getattr(res, "returncode", 1) != 0:
+        raise ProblemError(
+            503,
+            "Could not start",
+            (getattr(res, "stderr", "") or "systemctl failed").strip()[:500]
+            + " (run the installer's upgrade once so the unit and its permission exist)",
+            code="unit_unavailable",
+        )
+    return {"started": mode}

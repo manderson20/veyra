@@ -381,7 +381,7 @@ def read_status(settings: Settings) -> dict[str, Any] | None:
 WORKER_INTERVAL_SECONDS = 60
 
 
-def _parse_ts(value: Any) -> datetime | None:
+def parse_ts(value: Any) -> datetime | None:
     try:
         return datetime.fromisoformat(str(value)) if value else None
     except ValueError:
@@ -418,7 +418,7 @@ def install_progress(
     )
     pending: dict[str, Any] | None = None
     if row is not None:
-        started = _parse_ts(run.get("started_at")) if run else None
+        started = parse_ts(run.get("started_at")) if run else None
         this_run = (
             run is not None
             and run.get("version") == row.version
@@ -775,10 +775,13 @@ def parse_apt_upgradable(text: str) -> list[dict[str, Any]]:
     return out
 
 
-def refresh_system_packages(db: Session, run: Callable[[list[str]], Any] | None = None) -> None:
-    """Daily: what the package manager could upgrade (shown, never applied)."""
+def refresh_system_packages(
+    db: Session, run: Callable[[list[str]], Any] | None = None, *, force: bool = False
+) -> None:
+    """Daily (and after an upgrade from the page): what the package manager
+    could upgrade."""
     row = db.get(SystemSetting, SYSTEM_PACKAGES_KEY)
-    if row is not None:
+    if row is not None and not force:
         try:
             last = datetime.fromisoformat(row.value.get("checked_at", ""))
             if utcnow() - last < timedelta(hours=24):
@@ -804,3 +807,42 @@ def refresh_system_packages(db: Session, run: Callable[[list[str]], Any] | None 
         db.add(SystemSetting(key=SYSTEM_PACKAGES_KEY, value=value))
     else:
         row.value = value
+
+
+# Upgrades from the Updates page: the root unit veyra-os-packages@<mode>,
+# which only the service account may start (polkit), writes its status here.
+OS_PACKAGES_DIR = "/var/lib/veyra-ospackages"
+OS_PACKAGES_MODES = ("refresh", "security", "all", "everything")
+
+
+def os_packages_unit(mode: str) -> str:
+    if mode not in OS_PACKAGES_MODES:
+        raise ValueError(mode)
+    return f"veyra-os-packages@{mode}.service"
+
+
+def os_packages_run(directory: str = OS_PACKAGES_DIR) -> dict[str, Any] | None:
+    """The last (or running) refresh or upgrade; None before the first."""
+    d = Path(directory)
+
+    def read(name: str) -> str | None:
+        try:
+            return (d / name).read_text(errors="replace").strip()
+        except OSError:
+            return None
+
+    started = read("started")
+    if started is None:
+        return None
+    exit_code = read("exit")
+    reboot = read("reboot")
+    return {
+        "mode": read("mode"),
+        "started_at": started,
+        "finished_at": read("finished") if exit_code is not None else None,
+        "running": exit_code is None,
+        "ok": exit_code == "0",
+        "output": (read("last.log") or "")[-4000:],
+        "reboot_required": reboot is not None,
+        "reboot_packages": [p for p in (reboot or "").split() if p][:50],
+    }

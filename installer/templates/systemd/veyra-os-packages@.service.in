@@ -1,0 +1,17 @@
+# Managed by Veyra installer
+# Operating system packages from the Updates page (docs/SOFTWARE_UPDATES.md
+# §6): %i is refresh, security, all (Asterisk held) or everything. Run as
+# root, started only through polkit; status in /var/lib/veyra-ospackages.
+[Unit]
+Description=Veyra operating system packages (%i)
+Documentation=file://@VEYRA_PREFIX@/current/docs/SOFTWARE_UPDATES.md
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/
+Environment=VEYRA_GROUP=@VEYRA_USER@
+ExecStart=@VEYRA_PREFIX@/current/installer/bin/veyra-os-packages %i
+TimeoutStartSec=60min
+PrivateTmp=yes
+ProtectHome=yes

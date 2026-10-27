@@ -8,6 +8,20 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.39
+
+Run the installer's upgrade once (`sudo installer/upgrade.sh --yes` from the release tree) for the operating-system package buttons: they need a new root unit and its permission, which an update from the web interface does not install.
+
+### Added
+- **Install operating system updates from the Updates page**: the "Operating system packages" card now has *Check now*, *Install security*, *Install all except Asterisk* and *Include Asterisk* (which warns before dropping calls in progress). Progress and the output show on the card, a "restart needed" notice appears when the kernel or a core library changed, and the list is read again when a run finishes. Platform administrators with "Approve and apply updates" only, after entering the password again; every run is in the audit log.
+
+### Security
+- Calendar presence (My Phone → calendar): the server now checks that the calendar's address is on the internet at the moment it connects and again for every redirect, so a calendar address can no longer point the server at an internal address through a redirect or a DNS change after the check.
+- Module requirement strings are matched with an expression that cannot backtrack exponentially (code scanning alert 28).
+
+### Changed
+- Dependency updates: FastAPI 0.161.1, alembic 1.20.1, pydantic-settings 2.16.1, websockets 17.3, setuptools ≥ 84.2.1; Next.js 16.4.3, react-dom 19.3.1, vite 8.3.5, eslint 10.13.0, typescript-eslint 8.72.0; companion vite 8.3.5 and @types/chrome 0.3.6.
+
 ## 0.27.38 — 2026-10-26
 
 Migration 0068. The new codes and rules need one telephony deployment (Telephony → Deploy) before phones use them.

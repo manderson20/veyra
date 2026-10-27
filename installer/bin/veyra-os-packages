@@ -1,0 +1,71 @@
+#!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Managed by Veyra installer
+#
+# Operating system packages from the Updates page (docs/SOFTWARE_UPDATES.md
+# §6), run as root by veyra-os-packages@<mode>.service, which polkit lets
+# the veyra service account start. Modes:
+#   refresh     apt-get update (the page then lists what is upgradable)
+#   security    upgrade the packages from a -security suite
+#   all         upgrade everything except Asterisk (asterisk*, libpj*)
+#   everything  apt-get upgrade, Asterisk included (restarts it: calls drop)
+# Status files land in /var/lib/veyra-ospackages (readable by the veyra group).
+set -u
+
+mode="${1:-}"
+out="${VEYRA_OSPACKAGES_DIR:-/var/lib/veyra-ospackages}"
+case "$mode" in
+    refresh | security | all | everything) ;;
+    *)
+        echo "usage: veyra-os-packages refresh|security|all|everything" >&2
+        exit 2
+        ;;
+esac
+
+umask 027
+rm -f "$out/exit" "$out/finished"
+echo "$mode" >"$out/mode"
+date -u +%Y-%m-%dT%H:%M:%SZ >"$out/started"
+
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+APT_OPTS=(-y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+
+# Names of upgradable packages; $1: security | all.
+upgradable() {
+    apt list --upgradable 2>/dev/null | awk -F'[/ ]' -v want="$1" '
+        NR == 1 && /^Listing/ { next }
+        $1 == "" { next }
+        want == "security" && $2 !~ /-security/ { next }
+        want == "all" && $1 ~ /^(asterisk|libpj)/ { next }
+        { print $1 }'
+}
+
+main() {
+    apt-get update -q || return $?
+    case "$mode" in
+        refresh) return 0 ;;
+        everything) apt-get "${APT_OPTS[@]}" upgrade ;;
+        *)
+            local pkgs
+            mapfile -t pkgs < <(upgradable "$mode")
+            if ((${#pkgs[@]} == 0)); then
+                echo "Nothing to upgrade."
+                return 0
+            fi
+            echo "Upgrading: ${pkgs[*]}"
+            apt-get "${APT_OPTS[@]}" install --only-upgrade "${pkgs[@]}"
+            ;;
+    esac
+}
+
+main >"$out/last.log" 2>&1
+code=$?
+if [[ -f /var/run/reboot-required ]]; then
+    cat /var/run/reboot-required.pkgs >"$out/reboot" 2>/dev/null || : >"$out/reboot"
+else
+    rm -f "$out/reboot"
+fi
+echo "$code" >"$out/exit"
+date -u +%Y-%m-%dT%H:%M:%SZ >"$out/finished"
+chgrp "${VEYRA_GROUP:-veyra}" "$out"/* 2>/dev/null || true
+exit "$code"

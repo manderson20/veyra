@@ -893,6 +893,21 @@ export interface SystemPackages {
   packages: SystemPackage[];
   error: string | null;
   counts: { total: number; security: number; telephony: number };
+  /** The last (or running) refresh or upgrade from the page. */
+  run: SystemPackagesRun | null;
+}
+
+export type SystemPackagesMode = "refresh" | "security" | "all" | "everything";
+
+export interface SystemPackagesRun {
+  mode: SystemPackagesMode | null;
+  started_at: string;
+  finished_at: string | null;
+  running: boolean;
+  ok: boolean;
+  output: string;
+  reboot_required: boolean;
+  reboot_packages: string[];
 }
 
 export interface UpdateHistoryItem {

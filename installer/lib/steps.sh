@@ -689,6 +689,14 @@ do_services() {
         "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_USER=$VEYRA_USER"
     install_managed_file "$tmp" "/etc/systemd/system/veyra-key-rotate.service" 0644 root:root
     rm -f "$tmp"
+    # Operating system packages from the Updates page (docs/SOFTWARE_UPDATES.md
+    # §6): the root unit, started only through polkit; its status directory.
+    run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-ospackages
+    tmp="$(mktemp)"
+    render_template "$SCRIPT_DIR/templates/systemd/veyra-os-packages@.service.in" "$tmp" \
+        "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_USER=$VEYRA_USER"
+    install_managed_file "$tmp" "/etc/systemd/system/veyra-os-packages@.service" 0644 root:root
+    rm -f "$tmp"
     # Backups from the page and the worker (docs/PRODUCTION_HARDENING.md §2.2):
     # the root runner's unit, started only through polkit; its status directory.
     run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-backup

@@ -34,6 +34,7 @@ import type {
   MaintenanceWindow,
   Page,
   SystemPackages,
+  SystemPackagesMode,
   UpdateCheck,
   UpdateDetail,
   UpdateHistoryItem,
@@ -260,7 +261,7 @@ function UpdatesPage() {
       </TabPanel>
 
       <TabPanel idBase="upd" id="packages" active={tab}>
-        <SystemPackagesCard data={packages.data} error={packages.error} onRetry={packages.reload} />
+        <SystemPackagesCard data={packages.data} error={packages.error} onRetry={packages.reload} editable={can("updates.approve")} />
       </TabPanel>
 
       {review ? (
@@ -627,7 +628,44 @@ function ReviewDialog({ id, editable, progress, onClose, onChanged }: {
   );
 }
 
-function SystemPackagesCard({ data, error, onRetry }: { data: SystemPackages | undefined; error: unknown; onRetry: () => void }) {
+const PACKAGE_RUNS: Record<SystemPackagesMode, { label: string; running: string; confirm?: string }> = {
+  refresh: { label: "Check now", running: "Checking for package updates" },
+  security: { label: "Install security updates", running: "Installing security updates", confirm: "Installs the packages from the security suite. Asterisk is upgraded only if it has a security update itself, which restarts it and drops calls in progress." },
+  all: { label: "Install all except Asterisk", running: "Installing package updates (Asterisk held back)", confirm: "Installs every upgradable package except Asterisk and its libraries. Calls are not affected; services whose packages change restart." },
+  everything: { label: "Install all, including Asterisk", running: "Installing every package update", confirm: "Installs every upgradable package. Upgrading Asterisk restarts it: calls in progress drop and phones re-register." },
+};
+
+function SystemPackagesCard({ data, error, onRetry, editable }: { data: SystemPackages | undefined; error: unknown; onRetry: () => void; editable: boolean }) {
+  const toast = useToast();
+  const [confirm, setConfirm] = useState<SystemPackagesMode | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [dropCalls, setDropCalls] = useState<string | null>(null);
+  const run = data?.run;
+  const running = !!run?.running;
+  // While a run is going on, read the status every few seconds.
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setInterval(onRetry, 4000);
+    return () => window.clearInterval(t);
+  }, [running, onRetry]);
+
+  const start = async (mode: SystemPackagesMode, drop = false) => {
+    setBusy(true);
+    try {
+      await api.post(`/updates/system-packages/${mode}`, { drop_calls: drop });
+      setConfirm(null);
+      setDropCalls(null);
+      toast.success(PACKAGE_RUNS[mode].running, "Progress shows on this card.");
+      onRetry();
+    } catch (err) {
+      const msg = errorMessage(err);
+      if (mode === "everything" && /calls? in progress/i.test(msg)) setDropCalls(msg);
+      else toast.error("Could not start", msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const columns: Column<SystemPackages["packages"][number]>[] = [
     { key: "name", header: "Package", render: (p) => <span className="mono">{p.name}</span> },
     { key: "version", header: "Version", render: (p) => <span className="mono">{p.from ?? "?"} → {p.version}</span> },
@@ -640,16 +678,56 @@ function SystemPackagesCard({ data, error, onRetry }: { data: SystemPackages | u
       ),
     },
   ];
+  const counts = data?.counts;
+  const nonTelephony = counts ? counts.total - counts.telephony : 0;
   return (
     <Card title="Operating system packages" flush
-      subtitle={data?.checked_at ? `${data.counts.total} upgradable (${data.counts.security} security) · checked ${formatRelative(data.checked_at)}` : "Checked daily by the worker"}>
+      subtitle={data?.checked_at ? `${data.counts.total} upgradable (${data.counts.security} security) · checked ${formatRelative(data.checked_at)}` : "Checked daily by the worker"}
+      actions={editable ? (
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <Button size="sm" icon="refresh" onClick={() => void start("refresh")} disabled={running || busy}>Check now</Button>
+          <Button size="sm" variant="primary" onClick={() => setConfirm("security")} disabled={running || busy || !counts?.security}>Install security ({counts?.security ?? 0})</Button>
+          <Button size="sm" onClick={() => setConfirm("all")} disabled={running || busy || !nonTelephony}>Install all except Asterisk ({nonTelephony})</Button>
+          {counts?.telephony ? <Button size="sm" variant="danger" onClick={() => setConfirm("everything")} disabled={running || busy}>Include Asterisk</Button> : null}
+        </div>
+      ) : undefined}>
       {data?.error ? <div style={{ padding: "0 var(--space-4)" }}><Callout tone="warn">{data.error}</Callout></div> : null}
+      {run ? (
+        <div className="stack stack--sm" style={{ padding: "0 var(--space-4) var(--space-3)" }}>
+          {running ? (
+            <Callout tone="neutral">{run.mode ? PACKAGE_RUNS[run.mode].running : "Running"}… started {formatRelative(run.started_at)}.</Callout>
+          ) : run.ok ? (
+            <Callout tone="ok">{run.mode === "refresh" ? "Package lists refreshed" : "Packages upgraded"} {run.finished_at ? formatRelative(run.finished_at) : ""}.</Callout>
+          ) : (
+            <Callout tone="danger">The last package run failed {run.finished_at ? formatRelative(run.finished_at) : ""}; the output is below.</Callout>
+          )}
+          {run.reboot_required ? (
+            <Callout tone="warn">The server needs a restart to finish the upgrade{run.reboot_packages.length ? ` (${run.reboot_packages.slice(0, 5).join(", ")}${run.reboot_packages.length > 5 ? ", …" : ""})` : ""}. Restart it in a quiet moment: calls drop while it is down.</Callout>
+          ) : null}
+          {run.output && (running || !run.ok || run.mode !== "refresh") ? (
+            <details open={running || !run.ok}>
+              <summary className="subtle">Output</summary>
+              <pre className="mono" style={{ maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "var(--text-xs)" }}>{run.output}</pre>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
       <DataTable columns={columns} rows={data?.packages.slice(0, 50)} rowKey={(p) => p.name} loading={!data && !error} error={error} onRetry={onRetry}
         caption="Upgradable operating system packages"
         empty={<EmptyState compact icon="checkCircle" title="Up to date">{data?.checked_at ? "No package upgrades are waiting." : "Not checked yet."}</EmptyState>} />
       <p className="subtle" style={{ padding: "var(--space-3) var(--space-4)" }}>
-        Shown only: apply them on the server with <code>sudo apt upgrade</code> or unattended-upgrades. Upgrading Asterisk restarts it and drops calls in progress.
+        Installed with the server&apos;s package manager (<code>apt</code>). Upgrading Asterisk restarts it and drops calls in progress, so it is held back unless you include it.
       </p>
+      <Dialog open={!!confirm} onClose={() => { setConfirm(null); setDropCalls(null); }} busy={busy} title={confirm ? PACKAGE_RUNS[confirm].label : ""}
+        footer={<>
+          <Button onClick={() => { setConfirm(null); setDropCalls(null); }} disabled={busy}>Cancel</Button>
+          {dropCalls && confirm === "everything"
+            ? <Button variant="danger" loading={busy} onClick={() => void start("everything", true)}>Drop the calls and install</Button>
+            : <Button variant={confirm === "everything" ? "danger" : "primary"} loading={busy} onClick={() => confirm && void start(confirm)}>Install</Button>}
+        </>}>
+        <p>{confirm ? PACKAGE_RUNS[confirm].confirm : null}</p>
+        {dropCalls ? <Callout tone="warn">{dropCalls}</Callout> : null}
+      </Dialog>
     </Card>
   );
 }
