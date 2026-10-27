@@ -1798,6 +1798,9 @@ export interface RingGroup {
   strategy: RingGroupStrategy;
   ring_seconds: number;
   ring_busy_members: boolean;
+  /** Skip a member after this many unanswered calls in a row, for skip_minutes (#166); null: never. */
+  skip_after_misses?: number | null;
+  skip_minutes?: number;
   /** Outside numbers rung with the members (CALL_FEATURES.md §3.4); the leg presses 1 when confirm_external is on. */
   external_members?: string[];
   confirm_external?: boolean;
@@ -1823,6 +1826,8 @@ export interface RingGroupInput {
   strategy?: RingGroupStrategy;
   ring_seconds?: number;
   ring_busy_members?: boolean;
+  skip_after_misses?: number | null;
+  skip_minutes?: number;
   external_members?: string[];
   confirm_external?: boolean;
   caller_id_prefix?: string | null;

@@ -15,6 +15,9 @@ export interface RingGroupDraft {
   strategy: RingGroupStrategy;
   ring_seconds: string;
   ring_busy_members: boolean;
+  /** Unanswered calls in a row before a member is skipped; empty: never (issue #166). */
+  skip_after_misses: string;
+  skip_minutes: string;
   /** One outside number per line. */
   external_members: string;
   confirm_external: boolean;
@@ -35,6 +38,8 @@ export const EMPTY_RING_GROUP: RingGroupDraft = {
   strategy: "ringall",
   ring_seconds: "20",
   ring_busy_members: false,
+  skip_after_misses: "",
+  skip_minutes: "15",
   external_members: "",
   confirm_external: false,
   caller_id_prefix: "",
@@ -65,6 +70,8 @@ export function ringGroupDraft(g: RingGroup): RingGroupDraft {
     strategy: g.strategy,
     ring_seconds: String(g.ring_seconds),
     ring_busy_members: g.ring_busy_members,
+    skip_after_misses: g.skip_after_misses ? String(g.skip_after_misses) : "",
+    skip_minutes: String(g.skip_minutes ?? 15),
     external_members: (g.external_members ?? []).join("\n"),
     confirm_external: g.confirm_external ?? false,
     caller_id_prefix: g.caller_id_prefix ?? "",
@@ -85,6 +92,8 @@ export function ringGroupBody(d: RingGroupDraft): RingGroupInput {
     strategy: d.strategy,
     ring_seconds: Number(d.ring_seconds),
     ring_busy_members: d.ring_busy_members,
+    skip_after_misses: ONE_AT_A_TIME.includes(d.strategy) && d.skip_after_misses.trim() ? Number(d.skip_after_misses) : null,
+    skip_minutes: Number(d.skip_minutes) || 15,
     external_members: d.external_members.split("\n").map((n) => n.trim()).filter(Boolean),
     confirm_external: d.confirm_external,
     caller_id_prefix: d.caller_id_prefix.trim() || null,
@@ -164,6 +173,16 @@ export function RingGroupFields({ draft, onChange, errors, organizationId, curre
       </div>
       <Checkbox label="Ring members who are already on a call" description="Off: a member on a call is skipped. On: the phone gets a second call (call waiting)." checked={draft.ring_busy_members} disabled={disabled}
         onChange={(e) => onChange({ ring_busy_members: e.target.checked })} />
+      {ONE_AT_A_TIME.includes(draft.strategy) ? (
+        <div className="form-grid">
+          <TextField label="Skip a member after unanswered calls" type="number" min={1} max={10} disabled={disabled} value={draft.skip_after_misses} error={errors.skip_after_misses} placeholder="Never"
+            help="A member who let this many calls in a row go unanswered is passed over for a while; answering a call clears it. If every member would be skipped, none is." onChange={(e) => onChange({ skip_after_misses: e.target.value })} />
+          {draft.skip_after_misses.trim() ? (
+            <TextField label="Skip for (minutes)" type="number" min={1} max={1440} disabled={disabled} value={draft.skip_minutes} error={errors.skip_minutes}
+              help="Counted from the last unanswered call." onChange={(e) => onChange({ skip_minutes: e.target.value })} />
+          ) : null}
+        </div>
+      ) : null}
       <DestinationPicker label="When nobody answers" idBase="rg-failover" draft={draft.failover} onChange={(failover) => onChange({ failover })} options={options} allowHangup
         current={current?.failover} error={errors.failover} disabled={disabled} exclude={current?.id} />
       <Switch label="Enabled" description="A disabled group is left out of the phone system; routes and menus that point at it are flagged." checked={draft.is_enabled} disabled={disabled} onChange={(e) => onChange({ is_enabled: e.target.checked })} />

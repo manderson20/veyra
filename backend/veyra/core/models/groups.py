@@ -70,6 +70,10 @@ class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     strategy: Mapped[str] = mapped_column(String(16), default="ringall")
     ring_seconds: Mapped[int] = mapped_column(Integer, default=20)
     ring_busy_members: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Skip a member after this many unanswered calls in a row, for
+    # skip_minutes (issue #166); None: never.
+    skip_after_misses: Mapped[int | None] = mapped_column(Integer)
+    skip_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
     # Outside numbers rung with the members (docs/CALL_FEATURES.md §3.4):
     # ["5735550100", ...]; the leg must press 1 when confirm_external is on.
     external_members: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")

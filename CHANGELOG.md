@@ -17,6 +17,7 @@ Run the installer's upgrade once (`sudo installer/upgrade.sh --yes` from the rel
 
 - **Extension templates set forwarding, caller ID and voicemail too** (#172, from #173): the busy, no-answer and offline forwards, the outside caller ID number and name, and the voicemail options of the extension's own box (recording attached, delete after email, days kept, operator extension), each lockable like the other template settings. A voicemail box created for an extension that follows a template takes its options.
 - **An organization-wide "still ring during Do Not Disturb" list** (#170, from #173): on the organization page, up to 50 numbers or extensions (the district office, emergency responders) that ring every phone of the organization through Do Not Disturb. Needs a deployment after a change. Migration 0069.
+- **Ring groups can skip a member who keeps missing calls** (#166, from #173): for groups that ring one member at a time, "Skip a member after unanswered calls" passes over someone who let that many calls in a row ring out, for a set number of minutes (15 by default); answering a call clears it, and if everyone would be skipped nobody is. Needs a deployment.
 
 ### Security
 - Calendar presence (My Phone → calendar): the server now checks that the calendar's address is on the internet at the moment it connects and again for every redirect, so a calendar address can no longer point the server at an internal address through a redirect or a DNS change after the check.

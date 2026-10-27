@@ -4113,6 +4113,12 @@ def _ring_group_contexts(
             f"U({engine_names.current().follow_me_confirm}^s)" if g.get("confirm_external") else ""
         )
         ring_busy = bool(g.get("ring_busy_members"))
+        skip = int(g.get("skip_after_misses") or 0)
+        skip_minutes = int(g.get("skip_minutes") or 15)
+        if not 0 <= skip <= 10 or not 1 <= skip_minutes <= 1440:
+            raise GenerationError(f"ring group {slug}: skip setting out of range")
+        # Sequential with skipping is a hunt that always starts at the first.
+        hunt = "linear" if strategy == "sequential" and skip else strategy
         music = str(g.get("music") or "ring")
         if music not in QUEUE_MUSIC:
             raise GenerationError(f"ring group {slug}: unknown hold music {music!r}")
@@ -4156,9 +4162,17 @@ def _ring_group_contexts(
                 ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
                 " same => n,Goto(failover)",
             ]
-        elif strategy in HUNT_STRATEGIES and members:
+        elif (hunt in HUNT_STRATEGIES or hunt == "linear") and members:
             lines += _hunt_members(
-                org, slug, strategy, members, member_rings, ring_busy, dial_opts, music
+                org,
+                slug,
+                hunt,
+                members,
+                member_rings,
+                ring_busy,
+                dial_opts,
+                music,
+                skip=(skip, skip_minutes * 60) if skip else None,
             )
             for leg in outside:
                 lines += [
@@ -4201,13 +4215,21 @@ def _hunt_members(
     ring_busy: bool,
     dial_opts: str,
     music: str,
+    skip: tuple[int, int] | None = None,
 ) -> list[str]:
     """One member at a time in a moving order (issue #166). The members and
     their ring times are ``:``-separated lists picked by index in a While
     loop; the order's state is in AstDB ``veyra/rg/<org>/<slug>``: ``next``
     (circular, round robin) or ``idle_<endpoint>`` (the time a member last
     answered, longest idle). The answering member's channel writes it
-    through Dial ``U()``, so a caller who hangs up first changes nothing."""
+    through Dial ``U()``, so a caller who hangs up first changes nothing.
+    ``linear`` always starts at the first member (sequential with skipping).
+
+    ``skip`` (misses, seconds): a member whose last ``misses`` calls went
+    unanswered (``miss_<endpoint>``, the time of the last in
+    ``missat_<endpoint>``) is passed over for ``seconds`` after that last
+    miss; answering clears the count. When every member would be skipped,
+    none is."""
     count = len(members)
     family = f"{RG_STATE_FAMILY}/{org}/{slug}"
     lines = [
@@ -4215,7 +4237,20 @@ def _hunt_members(
         f" same => n,Set(VEYRA_RINGS={':'.join(str(r) for r in rings)})",
         " same => n,Set(VEYRA_T=0)",
     ]
-    if strategy == "longest_idle":
+    if skip:
+        misses, window = skip
+
+        def resting(ep: str) -> str:
+            return (
+                f"0${{DB({family}/miss_{ep})}} >= {misses} & "
+                f"${{EPOCH}} - 0${{DB({family}/missat_{ep})}} < {window}"
+            )
+
+        lines.append(" same => n,Set(VEYRA_SKIP=0)")
+        lines += [f" same => n,ExecIf($[!({resting(ep)})]?Set(VEYRA_SKIP=1))" for ep in members]
+    if strategy == "linear":
+        lines.append(" same => n,Set(VEYRA_S=0)")
+    elif strategy == "longest_idle":
         lines.append(f" same => n,Set(VEYRA_LEFT=-{'-'.join(str(i) for i in range(count))}-)")
     else:
         lines += [
@@ -4251,6 +4286,8 @@ def _hunt_members(
             ' same => n,GotoIf($["${DEVICE_STATE(PJSIP/${VEYRA_EP})}"'
             f' : "{BUSY_STATES}"]?hnext)'
         )
+    if skip:
+        lines.append(f" same => n,GotoIf($[${{VEYRA_SKIP}} & {resting('${VEYRA_EP}')}]?hnext)")
     if strategy == "circular":
         state = f"next^$[(${{VEYRA_I}} + 1) % {count}]"
     elif strategy == "longest_idle":
@@ -4258,13 +4295,26 @@ def _hunt_members(
     else:
         state = ""
     opts = dial_opts
-    if state:
+    if state or skip:
+        key, _, value = state.partition("^")
+        reset = "^${VEYRA_EP}" if skip else ""
         opts = dial_opts.replace(
-            f"U({CONTEXT_LASTCID})", f"U({CONTEXT_RG_ANSWERED}^{org}^{slug}^{state})"
+            f"U({CONTEXT_LASTCID})",
+            f"U({CONTEXT_RG_ANSWERED}^{org}^{slug}^{key}^{value}{reset})",
         )
     lines += [
         f" same => n,Dial(PJSIP/${{VEYRA_EP}},${{CUT(VEYRA_RINGS,:,$[${{VEYRA_I}} + 1])}}{opts})",
         ' same => n,ExecIf($["${DIALSTATUS}"="ANSWER"]?ExitWhile())',
+    ]
+    if skip:
+        miss = f"{family}/miss_${{VEYRA_EP}}"
+        lines += [
+            f' same => n,ExecIf($["${{DIALSTATUS}}"="NOANSWER"]'
+            f"?Set(DB({miss})=$[0${{DB({miss})}} + 1]))",
+            f' same => n,ExecIf($["${{DIALSTATUS}}"="NOANSWER"]'
+            f"?Set(DB({family}/missat_${{VEYRA_EP}})=${{EPOCH}}))",
+        ]
+    lines += [
         " same => n(hnext),EndWhile()",
         ' same => n,GotoIf($["${DIALSTATUS}"="ANSWER"]?done)',
     ]
@@ -4274,12 +4324,17 @@ def _hunt_members(
 def _rg_answered_context() -> list[str]:
     """Gosub on the answering member of a hunting group (issue #166): the
     last-caller record, then the group's state (ARG1 org, ARG2 group, ARG3
-    key, ARG4 value)."""
+    key, ARG4 value; no key: none) and, with ARG5 (the member's endpoint),
+    its unanswered-call count cleared."""
+    family = f"{RG_STATE_FAMILY}/${{ARG1}}/${{ARG2}}"
     return [
         f"[{CONTEXT_RG_ANSWERED}]",
         f"exten => s,1,Gosub({CONTEXT_LASTCID},s,1)",
-        f" same => n,Set(DB({RG_STATE_FAMILY}/${{ARG1}}/${{ARG2}}/${{ARG3}})=${{ARG4}})",
-        " same => n,Return()",
+        f' same => n,ExecIf($["${{ARG3}}"!=""]?Set(DB({family}/${{ARG3}})=${{ARG4}}))',
+        f' same => n,GotoIf($["${{ARG5}}"=""]?done)',
+        f" same => n,Set(VEYRA_X=${{DB_DELETE({family}/miss_${{ARG5}})}})",
+        f" same => n,Set(VEYRA_X=${{DB_DELETE({family}/missat_${{ARG5}})}})",
+        " same => n(done),Return()",
         "",
     ]
 

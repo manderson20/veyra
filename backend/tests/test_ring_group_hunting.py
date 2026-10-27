@@ -95,3 +95,60 @@ def test_sequential_uses_each_members_ring_time():
     )
     ctx = _ctx(_files(_snapshot(ring_groups=[group]))["extensions.conf"].content)
     assert "Dial(PJSIP/example-1001,20," in ctx and "Dial(PJSIP/example-1002,45," in ctx
+
+
+def test_skip_a_member_after_unanswered_calls():
+    group = _group(strategy="sequential", skip_after_misses=2, skip_minutes=10)
+    dp = _files(_snapshot(ring_groups=[group]))["extensions.conf"].content
+    ctx = _ctx(dp)
+    family = "veyra/rg/example/sales"
+    # Sequential with skipping hunts from the first member each time.
+    assert "Set(VEYRA_S=0)" in ctx and "While($[${VEYRA_T} < 2])" in ctx
+    # Skipping is on unless every member is resting.
+    assert "Set(VEYRA_SKIP=0)" in ctx
+    assert (
+        f"ExecIf($[!(0${{DB({family}/miss_example-1001)}} >= 2 & "
+        f"${{EPOCH}} - 0${{DB({family}/missat_example-1001)}} < 600)]?Set(VEYRA_SKIP=1))" in ctx
+    )
+    assert (
+        f"GotoIf($[${{VEYRA_SKIP}} & 0${{DB({family}/miss_${{VEYRA_EP}})}} >= 2 & "
+        f"${{EPOCH}} - 0${{DB({family}/missat_${{VEYRA_EP}})}} < 600]?hnext)" in ctx
+    )
+    # An unanswered ring counts; answering clears the count.
+    assert (
+        f'ExecIf($["${{DIALSTATUS}}"="NOANSWER"]?Set(DB({family}/miss_${{VEYRA_EP}})='
+        f"$[0${{DB({family}/miss_${{VEYRA_EP}})}} + 1]))" in ctx
+    )
+    assert "U(veyra-rg-answered^example^sales^^^${VEYRA_EP})" in ctx
+    answered = dp.split("[veyra-rg-answered]")[1].split("\n[")[0]
+    assert "DB_DELETE(veyra/rg/${ARG1}/${ARG2}/miss_${ARG5})" in answered
+
+    # Circular keeps its own state beside the reset.
+    dp = _files(_snapshot(ring_groups=[_group(strategy="circular", skip_after_misses=1)]))[
+        "extensions.conf"
+    ].content
+    assert "U(veyra-rg-answered^example^sales^next^$[(${VEYRA_I} + 1) % 2]^${VEYRA_EP})" in dp
+    # Without skipping, sequential stays the plain list.
+    dp = _files(_snapshot(ring_groups=[_group(strategy="sequential")]))["extensions.conf"].content
+    assert "While(" not in _ctx(dp)
+
+
+def test_skip_settings_in_the_api(admin):
+    o = _org(admin)["id"]
+    e1 = _api_ext(admin, o, "1201")
+    r = admin.post(
+        RG,
+        json={
+            "organization_id": o,
+            "name": "Office",
+            "number": "6201",
+            "strategy": "circular",
+            "members": [e1["id"]],
+            "skip_after_misses": 3,
+        },
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["skip_after_misses"] == 3 and r.json()["skip_minutes"] == 15
+    r = admin.patch(f"{RG}/{r.json()['id']}", json={"skip_after_misses": None, "skip_minutes": 5})
+    assert r.status_code == 200 and r.json()["skip_after_misses"] is None
+    assert r.json()["skip_minutes"] == 5

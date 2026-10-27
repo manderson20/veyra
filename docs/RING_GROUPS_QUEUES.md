@@ -107,6 +107,16 @@ idle. The answering member's channel writes it through Dial `U()`
 Busy members are skipped as in the other strategies unless "ring members
 who are already on a call" is on. Outside numbers ring after the members.
 
+**Skip after unanswered calls** (`skip_after_misses` 1–10, `skip_minutes`
+default 15; migration 0069, 0.27.39): in the one-at-a-time strategies, a
+member who let that many calls in a row ring out (`DIALSTATUS` `NOANSWER`)
+is passed over until `skip_minutes` after the last of them; answering a
+call clears the count (`miss_<endpoint>`, `missat_<endpoint>` in the same
+AstDB family, cleared by `veyra-rg-answered`). If every member would be
+skipped, none is. Busy and offline phones do not count as misses. A
+`sequential` group with skipping is generated as the same loop, always
+starting at the first member.
+
 We chose the generated dialplan over Asterisk queues behind the scenes so
 per-member ring times, hold music or ringing, and the caller ID prefix work
 as for the other ring groups. FreePBX `memoryhunt` (cumulative) is still

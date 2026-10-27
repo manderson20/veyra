@@ -48,6 +48,10 @@ class RingGroupIn(BaseModel):
     strategy: Strategy = "ringall"
     ring_seconds: int = Field(20, ge=5, le=120)
     ring_busy_members: bool = False
+    # Skip a member who did not answer this many calls in a row, for
+    # skip_minutes (issue #166); null: never skipped. One at a time only.
+    skip_after_misses: int | None = Field(None, ge=1, le=10)
+    skip_minutes: int = Field(15, ge=1, le=1440)
     # Outside numbers rung with the members (docs/CALL_FEATURES.md §3.4).
     external_members: list[str] = Field(default_factory=list, max_length=10)
     confirm_external: bool = False
@@ -123,6 +127,8 @@ class RingGroupPatch(BaseModel):
     strategy: Strategy | None = None
     ring_seconds: int | None = Field(None, ge=5, le=120)
     ring_busy_members: bool | None = None
+    skip_after_misses: int | None = Field(None, ge=1, le=10)
+    skip_minutes: int | None = Field(None, ge=1, le=1440)
     external_members: list[str] | None = Field(None, max_length=10)
     confirm_external: bool | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
@@ -157,6 +163,8 @@ class RingGroupOut(BaseModel):
     strategy: str
     ring_seconds: int
     ring_busy_members: bool
+    skip_after_misses: int | None = None
+    skip_minutes: int = 15
     external_members: list[str] = []
     confirm_external: bool = False
     caller_id_prefix: str | None
@@ -245,6 +253,8 @@ def _outs(db: Session, rows: list[RingGroup]) -> list[RingGroupOut]:
                 strategy=r.strategy,
                 ring_seconds=r.ring_seconds,
                 ring_busy_members=r.ring_busy_members,
+                skip_after_misses=r.skip_after_misses,
+                skip_minutes=r.skip_minutes,
                 external_members=list(r.external_members or []),
                 confirm_external=r.confirm_external,
                 caller_id_prefix=r.caller_id_prefix,
@@ -354,6 +364,8 @@ def create_group(
         strategy=body.strategy,
         ring_seconds=body.ring_seconds,
         ring_busy_members=body.ring_busy_members,
+        skip_after_misses=body.skip_after_misses,
+        skip_minutes=body.skip_minutes,
         external_members=body.external_members,
         confirm_external=body.confirm_external,
         caller_id_prefix=body.caller_id_prefix,
@@ -412,6 +424,8 @@ def update_group(
         "strategy": group.strategy,
         "ring_seconds": group.ring_seconds,
         "ring_busy_members": group.ring_busy_members,
+        "skip_after_misses": group.skip_after_misses,
+        "skip_minutes": group.skip_minutes,
         "external_members": list(group.external_members or []),
         "confirm_external": group.confirm_external,
         "caller_id_prefix": group.caller_id_prefix,
@@ -440,6 +454,8 @@ def update_group(
         "strategy",
         "ring_seconds",
         "ring_busy_members",
+        "skip_after_misses",
+        "skip_minutes",
         "external_members",
         "confirm_external",
         "caller_id_prefix",
