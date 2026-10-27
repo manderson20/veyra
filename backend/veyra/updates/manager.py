@@ -812,7 +812,7 @@ def refresh_system_packages(
 # Upgrades from the Updates page: the root unit veyra-os-packages@<mode>,
 # which only the service account may start (polkit), writes its status here.
 OS_PACKAGES_DIR = "/var/lib/veyra-ospackages"
-OS_PACKAGES_MODES = ("refresh", "security", "all", "everything")
+OS_PACKAGES_MODES = ("refresh", "security", "all", "everything", "telephony")
 
 
 def os_packages_unit(mode: str) -> str:
@@ -846,3 +846,148 @@ def os_packages_run(directory: str = OS_PACKAGES_DIR) -> dict[str, Any] | None:
         "reboot_required": reboot is not None,
         "reboot_packages": [p for p in (reboot or "").split() if p][:50],
     }
+
+
+# ------------------------------------------- package maintenance windows (§6)
+
+OS_AUTO_KEY = "updates.os_packages_auto"
+
+
+def window_started(window: dict[str, Any] | None, now: datetime) -> datetime | None:
+    """The start of the window occurrence ``now`` is in (as ``window_open``)."""
+    if not window or not window_open(window, now):
+        return None
+    tz = ZoneInfo(window.get("timezone") or "UTC")
+    local = now.astimezone(tz)
+    hh, mm = (int(x) for x in window["start"].split(":"))
+    duration = timedelta(minutes=int(window["duration_minutes"]))
+    for back in (0, 1):
+        day = local.date() - timedelta(days=back)
+        start = datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz)
+        if start <= local < start + duration:
+            return start
+    return None
+
+
+def os_auto_mode(component: str, policy: UpdatePolicy | None) -> str | None:
+    """The package run a policy installs in its window: the operating system
+    "security" or "all" (Asterisk held back), the engine "telephony"."""
+    if policy is None or policy.mode != "auto_install_window" or not policy.maintenance_window:
+        return None
+    categories = set(policy.auto_install_categories or [])
+    if component == "operating_system":
+        if categories & {"bugfix", "feature"}:
+            return "all"
+        return "security" if "security" in categories else None
+    if component == "telephony_engine":
+        return "telephony" if categories else None
+    return None
+
+
+def _package_mail(db: Session, settings: Settings, run: dict[str, Any]) -> None:
+    from veyra.core import mail
+    from veyra.core.models import Installation
+
+    recipients = [r for r in load_source(db).get("recipients", []) if r]
+    smtp = mail.load_smtp_settings(db)
+    if not recipients or not smtp.enabled:
+        return
+    inst = db.scalar(select(Installation))
+    name = inst.name if inst else "Veyra"
+    what = "Asterisk" if run.get("mode") == "telephony" else "Operating system packages"
+    subject = f"{what} {'upgraded' if run['ok'] else 'upgrade failed'}"
+    text = f"{subject} on {name} in the maintenance window.\n\n"
+    if run.get("reboot_required"):
+        pkgs = ", ".join(run.get("reboot_packages") or [])
+        text += (
+            "The server needs a restart to finish the upgrade"
+            + (f" ({pkgs})" if pkgs else "")
+            + ". Restart it at a quiet moment: calls drop while it is down.\n\n"
+        )
+    text += "Output (end):\n" + (run.get("output") or "")[-1500:] + "\n\nSee System → Updates.\n"
+    address, from_name = mail.sender(smtp, name)
+    try:
+        for to in recipients:
+            msg = mail.compose(
+                from_address=address,
+                from_name=from_name,
+                to=to,
+                subject=f"[{name}] {subject}",
+                text=text,
+            )
+            mail.enqueue(settings.mailqueue_dir, msg.as_bytes())
+    except Exception as e:
+        log.warning("Package email not queued: %s", e)
+
+
+def process_os_packages(
+    db: Session,
+    settings: Settings,
+    now: datetime,
+    calls_in_progress: Callable[[], int | None],
+    run: Callable[[list[str]], Any] | None = None,
+    directory: str = OS_PACKAGES_DIR,
+) -> str | None:
+    """Worker: once per window occurrence, the operating system run, then
+    (once it has finished, and only with no call in progress) the Asterisk
+    run; a finished automatic run is emailed once. Returns the mode started."""
+    from veyra.core import audit
+
+    row = db.get(SystemSetting, OS_AUTO_KEY)
+    state: dict[str, Any] = dict(row.value) if row is not None else {}
+    current = os_packages_run(directory)
+    changed = False
+    notify_after = parse_ts(state.get("notify_after"))
+    if current and not current["running"] and notify_after:
+        started = parse_ts(current["started_at"])
+        if started and started >= notify_after.replace(microsecond=0) - timedelta(seconds=1):
+            _package_mail(db, settings, current)
+            state.pop("notify_after", None)
+            changed = True
+    started_mode: str | None = None
+    if not (current and current["running"]) and not install_progress(db, settings).get("pending"):
+        for component in ("operating_system", "telephony_engine"):
+            policy = db.get(UpdatePolicy, component)
+            mode = os_auto_mode(component, policy)
+            start = window_started(policy.maintenance_window if policy else None, now)
+            if mode is None or start is None or state.get(component) == start.isoformat():
+                continue
+            # Asterisk restarts: only when the engine says no call is up.
+            if mode == "telephony" and calls_in_progress() != 0:
+                continue
+            cmd = ["systemctl", "start", "--no-block", os_packages_unit(mode)]
+            res = (
+                run(cmd)
+                if run
+                else subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)  # noqa: S603
+            )
+            ok = getattr(res, "returncode", 1) == 0
+            state[component] = start.isoformat()
+            if ok:
+                state["notify_after"] = now.isoformat()
+                started_mode = mode
+            else:
+                log.warning(
+                    "Scheduled %s package run not started: %s",
+                    mode,
+                    (getattr(res, "stderr", "") or "").strip()[:300],
+                )
+            audit.record(
+                db,
+                action="updates.system_packages",
+                outcome="success" if ok else "failure",
+                actor_type="system",
+                actor_label="maintenance window",
+                target_type="system_packages",
+                target_id=mode,
+                details={"mode": mode, "component": component, "window": start.isoformat()},
+            )
+            changed = True
+            break
+    if changed:
+        if row is None:
+            db.add(SystemSetting(key=OS_AUTO_KEY, value=state))
+        else:
+            row.value = state
+        db.commit()
+    return started_mode

@@ -689,6 +689,12 @@ do_services() {
         "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_USER=$VEYRA_USER"
     install_managed_file "$tmp" "/etc/systemd/system/veyra-key-rotate.service" 0644 root:root
     rm -f "$tmp"
+    # Ubuntu's nightly unattended upgrade leaves Asterisk to Veyra's
+    # telephony maintenance window (docs/SOFTWARE_UPDATES.md §6).
+    if [[ -d /etc/apt/apt.conf.d ]]; then
+        install_managed_file "$SCRIPT_DIR/templates/apt/52veyra-unattended-upgrades" \
+            /etc/apt/apt.conf.d/52veyra-unattended-upgrades 0644 root:root
+    fi
     # Operating system packages from the Updates page (docs/SOFTWARE_UPDATES.md
     # §6): the root unit, started only through polkit; its status directory.
     run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-ospackages

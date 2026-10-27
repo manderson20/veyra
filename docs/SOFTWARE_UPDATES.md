@@ -259,6 +259,34 @@ again as soon as a run has finished. A run is refused while another one
 or a Veyra update is in progress, and every start is audited
 (`updates.system_packages`). `unattended-upgrades` keeps working beside it.
 
+**Maintenance windows (0.27.40).** The *Operating system* and *Telephony
+engine (Asterisk)* policies accept *Notify* or *Install automatically in a
+maintenance window* (not download-and-approve). In its window, once per
+window occurrence, the worker starts:
+
+* *Operating system*: `all` ("every update except Asterisk") or `security`;
+* *Telephony engine*: `telephony` (only `asterisk*` and `libpj*`), after
+  the operating system run of the same pass has finished and only while
+  the engine reports **no** call (an unknown count waits too); retried
+  every worker pass until the window closes.
+
+Every run but `refresh` takes a Veyra backup first (`veyra backup run
+--kind upgrade`; a failed backup is reported in the output, the upgrade
+goes ahead) and only when something is upgradable; `apt` waits up to ten
+minutes for the package lock. The update recipients get one email per
+automatic run with the end of the output and, when
+`/var/run/reboot-required` exists, a "restart needed" notice; the server
+is never restarted automatically. The worker keeps which window each
+policy last ran in (`updates.os_packages_auto`).
+
+The installer adds `/etc/apt/apt.conf.d/52veyra-unattended-upgrades`,
+which puts `asterisk` and `libpj` on unattended-upgrades'
+`Package-Blacklist` (anchored at the start of the name), so Ubuntu's
+nightly run never restarts Asterisk during calls; Asterisk security
+updates then wait for the telephony window (or a click on the page).
+`verify.sh`: `unattended-asterisk`. Two-server (HA) installations should
+give the nodes different windows; nothing enforces it yet.
+
 ## 7. API
 
 ```
@@ -269,7 +297,7 @@ POST     /updates/available/{id}/approve         {when: "now" | "window"}
 POST     /updates/available/{id}/cancel          withdraw an approval before it starts
 GET      /updates/status                         installed version and the runner's status.json
 GET      /updates/system-packages                apt summary and the last run from the page
-POST     /updates/system-packages/{mode}         refresh | security | all | everything {drop_calls}
+POST     /updates/system-packages/{mode}         refresh | security | all | everything | telephony {drop_calls}
 ```
 
 The update source in the interface overrides `VEYRA_UPDATE_METADATA_URL`

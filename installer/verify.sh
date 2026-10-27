@@ -396,6 +396,11 @@ if [[ -f /etc/systemd/system/veyra-os-packages@.service ]] \
 else
     check os-packages-unit warn "veyra-os-packages@.service, its polkit rule or /var/lib/veyra-ospackages missing"
 fi
+if [[ ! -d /etc/apt/apt.conf.d ]] || grep -qs '"asterisk";' /etc/apt/apt.conf.d/52veyra-unattended-upgrades; then
+    check unattended-asterisk pass "Ubuntu's nightly updater leaves Asterisk to the maintenance window"
+else
+    check unattended-asterisk warn "/etc/apt/apt.conf.d/52veyra-unattended-upgrades missing: Ubuntu's nightly updater may restart Asterisk during calls"
+fi
 # --- packet captures (docs/CALL_FEATURES.md §2.2)
 if [[ -f /etc/systemd/system/veyra-capture@.service ]] \
     && grep -qs "veyra-capture@" /etc/polkit-1/rules.d/50-veyra-services.rules \

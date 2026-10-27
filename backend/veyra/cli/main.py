@@ -1405,6 +1405,8 @@ def cmd_worker(args: argparse.Namespace) -> int:
                     update_manager.process(
                         db, settings, Keyring.load(settings.trust_dir), calls_in_progress
                     )
+                    # Operating system and Asterisk packages in their windows (§6).
+                    update_manager.process_os_packages(db, settings, utcnow(), calls_in_progress)
                     # Scheduled report emails (docs/REPORT_BUILDER.md §3).
                     from veyra.reporting import schedule as report_schedule
 

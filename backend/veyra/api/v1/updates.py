@@ -522,7 +522,11 @@ def upgrade_system_packages(
         raise ProblemError(
             409, "Veyra is updating", "Wait for the Veyra update to finish.", code="running"
         )
-    if mode == "everything" and not body.drop_calls and settings.telephony_engine != "none":
+    if (
+        mode in ("everything", "telephony")
+        and not body.drop_calls
+        and settings.telephony_engine != "none"
+    ):
         from veyra.configmgmt.service import active_call_count
 
         adapter = getattr(request.app.state, "telephony", None)

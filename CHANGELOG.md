@@ -8,6 +8,17 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.40
+
+Run the installer's upgrade once (`sudo installer/upgrade.sh --yes`) for the Asterisk hold and the new root unit mode.
+
+### Added
+- **Maintenance windows for operating system and Asterisk updates**: on System → Updates, the *Operating system* and *Telephony engine (Asterisk)* policies can now install automatically in a maintenance window: every update except Asterisk (or security updates only) for the system, and Asterisk on its own, only when no call is in progress. A Veyra backup is taken first, administrators get an email after each run, and a needed server restart is reported (never done automatically).
+
+### Changed
+- **Ubuntu's nightly updater no longer upgrades Asterisk**: it restarted Asterisk at a random time, dropping calls. Asterisk updates, security ones included, now install in the telephony window or from the Updates page.
+- Package runs from the Updates page wait for the package lock instead of failing while Ubuntu's own updater runs, and back up Veyra before upgrading.
+
 ## 0.27.39 — 2026-10-27
 
 Run the installer's upgrade once (`sudo installer/upgrade.sh --yes` from the release tree) for the operating-system package buttons: they need a new root unit and its permission, which an update from the web interface does not install.

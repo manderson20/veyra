@@ -102,21 +102,25 @@ class PolicyUpdate(BaseModel):
         return self
 
 
+# Installed by the package manager in their maintenance window
+# (docs/SOFTWARE_UPDATES.md §6): no download step.
+PACKAGE_COMPONENTS = {Component.OPERATING_SYSTEM, Component.TELEPHONY_ENGINE}
+
+
 def availability_problem(component: Component, update: PolicyUpdate) -> str | None:
     """Reason a requested policy cannot be applied in this release, or None."""
+    if component in PACKAGE_COMPONENTS:
+        if update.mode == Mode.DOWNLOAD_APPROVE or update.auto_download:
+            return (
+                "Operating system and Asterisk packages are installed by the package "
+                "manager: notify, or install automatically in a maintenance window."
+            )
+        return None
     if component not in DOWNLOAD_COMPONENTS and (
         update.mode in (Mode.DOWNLOAD_APPROVE, Mode.AUTO_INSTALL_WINDOW) or update.auto_download
     ):
         return (
             "Only Veyra itself is downloaded and installed automatically; modules are "
             "updated from the module catalog."
-        )
-    if (
-        component in (Component.OPERATING_SYSTEM, Component.TELEPHONY_ENGINE)
-        and update.check_enabled
-    ):
-        return (
-            "Operating system and telephony engine updates are applied with the system "
-            "package manager; System → Updates lists the upgradable packages."
         )
     return None

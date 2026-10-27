@@ -57,6 +57,7 @@ for svc in veyra-api veyra-worker veyra-deployer veyra-pager veyra-firewall; do
 done
 [[ -f /etc/systemd/system/veyra-upgrade@.service ]] && run rm -f /etc/systemd/system/veyra-upgrade@.service
 [[ -f /etc/systemd/system/veyra-os-packages@.service ]] && run rm -f /etc/systemd/system/veyra-os-packages@.service
+[[ -f /etc/apt/apt.conf.d/52veyra-unattended-upgrades ]] && run rm -f /etc/apt/apt.conf.d/52veyra-unattended-upgrades
 [[ -f /etc/polkit-1/rules.d/50-veyra-services.rules ]] && run rm -f /etc/polkit-1/rules.d/50-veyra-services.rules
 run systemctl daemon-reload
 

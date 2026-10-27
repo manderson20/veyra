@@ -758,7 +758,9 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
 
   const core = policy.component === "veyra_core";
   const external = policy.component === "operating_system" || policy.component === "telephony_engine";
-  const allowedModes = core ? availableModes : availableModes.filter((m) => m === "manual" || m === "notify");
+  // Packages (§6): notify, or install in a maintenance window; no download step.
+  const allowedModes = core ? availableModes : availableModes.filter((m) => m === "manual" || m === "notify" || (external && m === "auto_install_window"));
+  const windowed = core || external;
   const dirty = mode !== policy.mode || channel !== policy.channel || checkEnabled !== policy.check_enabled
     || interval !== String(policy.check_interval_hours) || notify !== policy.notify_admins
     || JSON.stringify(categories) !== JSON.stringify(policy.auto_install_categories)
@@ -773,7 +775,7 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
         auto_download: false,
         auto_install_categories: mode === "auto_install_window" ? categories : [],
         require_approval: true,
-        maintenance_window: core ? window_ : null,
+        maintenance_window: windowed ? window_ : null,
       });
       onSaved({ ...saved, label: policy.label });
       toast.success("Policy saved", policy.label);
@@ -791,7 +793,9 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
       footer={editable ? <Button variant="primary" size="sm" onClick={save} loading={busy} disabled={!dirty}>Save policy</Button> : undefined}>
       <div className="stack stack--sm">
         {external ? (
-          <Callout tone="neutral">Applied with the server&apos;s package manager; the upgradable packages are listed under “Operating system packages”.</Callout>
+          <Callout tone="neutral">{policy.component === "telephony_engine"
+            ? "Asterisk is installed with the server's package manager. Ubuntu's nightly updater leaves it alone; in automatic mode it is upgraded in the window below, only when no call is in progress (calls would drop when it restarts)."
+            : "Installed with the server's package manager (Asterisk excluded; it has its own policy). Ubuntu's own updater keeps installing security updates nightly. A Veyra backup is taken before each run; a needed server restart is reported, never done automatically."}</Callout>
         ) : null}
         <div className="form-grid">
           <SelectField label="Update behaviour" value={mode} disabled={!editable} help={modeHelp}
@@ -807,12 +811,12 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
           <TextField label="Check every (hours)" type="number" min={1} max={720} value={interval} disabled={!editable || !checkEnabled || mode === "manual"} onChange={(e) => setInterval_(e.target.value)} />
         </div>
         <Switch label="Notify administrators" checked={notify} disabled={!editable} onChange={(e) => setNotify(e.target.checked)} />
-        {core ? (
+        {windowed ? (
           <fieldset className="stack stack--sm" style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="card__title">Maintenance window</legend>
             <Switch label="Use a maintenance window" checked={!!window_} disabled={!editable}
               description="Approved updates can wait for it; in automatic mode, chosen categories install in it when no call is in progress."
-              onChange={(e) => setWindow(e.target.checked ? { days: ["sat"], start: "02:00", duration_minutes: 120, timezone: browserTimeZone() } : null)} />
+              onChange={(e) => setWindow(e.target.checked ? (external ? { days: ["sun"], start: "02:00", duration_minutes: 180, timezone: browserTimeZone() } : { days: ["sat"], start: "02:00", duration_minutes: 120, timezone: browserTimeZone() }) : null)} />
             {window_ ? (
               <>
                 <div className="row" role="group" aria-label="Days">
@@ -830,7 +834,16 @@ function PolicyCard({ policy, availableModes, editable, onSaved }: {
                 </div>
               </>
             ) : null}
-            {mode === "auto_install_window" ? (
+            {mode === "auto_install_window" && policy.component === "operating_system" ? (
+              <SelectField label="Install automatically" value={categories.includes("bugfix") || categories.includes("feature") ? "all" : categories.includes("security") ? "security" : ""} disabled={!editable}
+                placeholder="Choose what installs"
+                options={[{ value: "all", label: "Every update except Asterisk" }, { value: "security", label: "Security updates only" }]}
+                help="Once per window. Packages are listed under “Operating system packages” below."
+                onChange={(e) => setCategories(e.target.value === "all" ? ["security", "bugfix", "feature"] : e.target.value === "security" ? ["security"] : [])} />
+            ) : mode === "auto_install_window" && policy.component === "telephony_engine" ? (
+              <Checkbox label="Install Asterisk updates in the window when no call is in progress" checked={categories.length > 0} disabled={!editable}
+                onChange={(e) => setCategories(e.target.checked ? ["security", "bugfix", "feature"] : [])} />
+            ) : mode === "auto_install_window" ? (
               <div className="row" role="group" aria-label="Install automatically">
                 <span className="muted">Install automatically:</span>
                 {(["security", "bugfix", "feature"] as const).map((c) => (

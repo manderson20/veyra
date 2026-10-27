@@ -1,0 +1,10 @@
+// Managed by Veyra installer
+// Upgrading Asterisk restarts it and drops every call in progress, so
+// Ubuntu's nightly unattended upgrade leaves it alone; Veyra installs it in
+// the telephony engine's maintenance window, only when no call is up
+// (System → Updates; docs/SOFTWARE_UPDATES.md §6). Patterns match the
+// start of the package name.
+Unattended-Upgrade::Package-Blacklist {
+    "asterisk";
+    "libpj";
+};
