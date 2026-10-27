@@ -4331,7 +4331,7 @@ def _rg_answered_context() -> list[str]:
         f"[{CONTEXT_RG_ANSWERED}]",
         f"exten => s,1,Gosub({CONTEXT_LASTCID},s,1)",
         f' same => n,ExecIf($["${{ARG3}}"!=""]?Set(DB({family}/${{ARG3}})=${{ARG4}}))',
-        f' same => n,GotoIf($["${{ARG5}}"=""]?done)',
+        ' same => n,GotoIf($["${ARG5}"=""]?done)',
         f" same => n,Set(VEYRA_X=${{DB_DELETE({family}/miss_${{ARG5}})}})",
         f" same => n,Set(VEYRA_X=${{DB_DELETE({family}/missat_${{ARG5}})}})",
         " same => n(done),Return()",
