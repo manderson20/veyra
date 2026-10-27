@@ -50,7 +50,7 @@ def test_meeting_on_and_off(admin, app, monkeypatch):
     )
     now = datetime(2026, 10, 20, 15, 0, tzinfo=UTC)
     feed = {"data": _ics(now - timedelta(minutes=10), 30)}
-    monkeypatch.setattr(pc.calendars, "fetch", lambda url: feed["data"])
+    monkeypatch.setattr(pc.calendars, "fetch", lambda url, **_: feed["data"])
     org = admin.get("/api/v1/organizations").json()["items"][0]
     uid = _make_user(admin, "pat@example.org")
     ext = admin.post(
@@ -98,3 +98,21 @@ def test_meeting_on_and_off(admin, app, monkeypatch):
     assert presence() == "lunch"
     assert user.delete("/api/v1/me/presence-calendar").status_code == 204
     assert user.get("/api/v1/me/presence-calendar").json()["configured"] is False
+
+
+def test_user_calendars_connect_only_to_public_addresses(monkeypatch):
+    """Checked at connect time (no DNS rebinding) and for every redirect."""
+    import socket
+
+    from veyra.bells import calendars
+
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))],
+    )
+    with pytest.raises(calendars.CalendarError, match="on the internet"):
+        pc.fetch_public("https://calendar.example.com/x.ics")
+    # A redirect (or any address) without https is refused before connecting.
+    with pytest.raises(calendars.CalendarError, match="without https"):
+        pc.fetch_public("http://calendar.example.com/x.ics")

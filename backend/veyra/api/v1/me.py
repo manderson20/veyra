@@ -1124,7 +1124,7 @@ def put_presence_calendar(
 
     try:
         url = pc.check_public_url(body.url)
-        pc.current_event(calendars.fetch(url), utcnow(), body.timezone)
+        pc.current_event(pc.fetch_public(url), utcnow(), body.timezone)
     except (pc.CalendarAddressError, calendars.CalendarError) as e:
         raise ProblemError(
             422,

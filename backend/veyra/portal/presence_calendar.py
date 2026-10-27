@@ -71,6 +71,10 @@ def check_public_url(url: str) -> str:
     return url
 
 
+def fetch_public(url: str) -> bytes:
+    return calendars.fetch(url, public_only=True)
+
+
 def load(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
     row = db.get(SystemSetting, setting_key(user_id))
     return dict(row.value) if row is not None and isinstance(row.value, dict) else {}
@@ -140,7 +144,7 @@ def process(
     if key is None:
         return 0
     now = now or utcnow()
-    fetch = fetch or calendars.fetch
+    fetch = fetch or fetch_public
     done = 0
     for row in db.scalars(
         select(SystemSetting).where(SystemSetting.key.like(f"{KEY_PREFIX}%"))

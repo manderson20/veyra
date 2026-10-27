@@ -4,7 +4,11 @@ expand its events (including recurring rules) for a window, cache them."""
 
 from __future__ import annotations
 
+import http.client
+import ipaddress
 import logging
+import socket
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -62,11 +66,45 @@ def check_url(url: str) -> str:
     return url
 
 
-def fetch(url: str) -> bytes:
+class _PublicHTTPSConnection(http.client.HTTPSConnection):
+    """Connects only to a public address, checked at connect time: the name
+    is resolved once and that address is used (no DNS rebinding), and every
+    redirect opens a new connection, so it is checked too."""
+
+    def connect(self) -> None:
+        try:
+            infos = socket.getaddrinfo(self.host, self.port, proto=socket.IPPROTO_TCP)
+        except OSError as e:
+            raise CalendarError(f"the calendar's host {self.host} is not known") from e
+        addrs = [ipaddress.ip_address(i[4][0]) for i in infos]
+        if not addrs or not all(a.is_global for a in addrs):
+            raise CalendarError("only calendars on the internet can be used")
+        sock = socket.create_connection((str(addrs[0]), self.port), self.timeout)
+        self.sock = ssl.create_default_context().wrap_socket(sock, server_hostname=self.host)
+
+
+class _PublicHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req: urllib.request.Request) -> Any:
+        return self.do_open(_PublicHTTPSConnection, req)
+
+
+class _NoHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req: urllib.request.Request) -> Any:
+        raise CalendarError("the calendar redirected to an address without https")
+
+
+def fetch(url: str, *, public_only: bool = False) -> bytes:
+    """``public_only``: for addresses users give (not administrators): https
+    to public hosts only, redirects included."""
     # The scheme was restricted to http(s) by check_url when the calendar was saved.
     req = urllib.request.Request(url, headers={"User-Agent": "Veyra calendar poller"})  # noqa: S310
+    opener = (
+        urllib.request.build_opener(_PublicHTTPSHandler(), _NoHTTPHandler())
+        if public_only
+        else urllib.request.build_opener()
+    )
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310
+        with opener.open(req, timeout=TIMEOUT) as resp:
             data = resp.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as e:
         raise CalendarError(f"the calendar server answered {e.code}") from e

@@ -16,7 +16,8 @@ from importlib import metadata
 
 REQUIREMENT_RE = re.compile(
     r"^(?P<name>[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)\s*"
-    r"(?P<specs>(?:(?:>=|<=|==|!=|>|<)\s*\d+(?:\.\d+)*\s*,?\s*)*)$"
+    # One way to match the space around a comma: no exponential backtracking.
+    r"(?P<specs>(?:(?:>=|<=|==|!=|>|<)\s*\d+(?:\.\d+)*\s*(?:,\s*)?)*)$"
 )
 _SPEC_RE = re.compile(r"(>=|<=|==|!=|>|<)\s*(\d+(?:\.\d+)*)")
 _OPS: dict[str, Callable[[tuple[int, ...], tuple[int, ...]], bool]] = {
