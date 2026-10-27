@@ -113,7 +113,8 @@ t "upgrade unit runs the verified runner" grep -q '^ExecStart=/opt/veyra/current
 t "os packages unit template renders" render_template "$HERE/../templates/systemd/veyra-os-packages@.service.in" \
     "$TMP/osp.service" VEYRA_PREFIX=/opt/veyra VEYRA_USER=veyra
 t "os packages unit runs the script with its mode" grep -q '^ExecStart=/opt/veyra/current/installer/bin/veyra-os-packages %i$' "$TMP/osp.service"
-t "os packages script refuses an unknown mode" sh -c '! VEYRA_OSPACKAGES_DIR=/nonexistent "$0" dist-upgrade 2>/dev/null' "$HERE/../bin/veyra-os-packages"
+refuses_unknown_mode() { ! VEYRA_OSPACKAGES_DIR=/nonexistent "$HERE/../bin/veyra-os-packages" dist-upgrade 2>/dev/null; }
+t "os packages script refuses an unknown mode" refuses_unknown_mode
 if command -v node >/dev/null 2>&1; then
     rule_js="$TMP/rule.js"
     { echo 'var polkit={Result:{YES:"yes",NOT_HANDLED:"no"},addRule:function(f){this.f=f}};'
