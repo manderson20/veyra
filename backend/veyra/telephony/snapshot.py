@@ -856,6 +856,12 @@ def _voicemail_ivr(
                 "locater_2": b.locater_2,
                 # Key 1 = follow me needs the extension's follow-me list.
                 "follow_me": b.extension_id in with_follow_me,
+                # The after-hours greeting's time condition (issue #169).
+                "after_hours": (
+                    str(b.after_hours_time_condition_id)
+                    if b.after_hours_time_condition_id
+                    else None
+                ),
             }
             for b in boxes
         ],
@@ -1064,7 +1070,14 @@ def _routing(
         trunk = enabled_trunks.get(link.trunk_id)
         if trunk is not None:
             route_trunks.setdefault(link.route_id, []).append(trunk.slug)
-    used_conditions: set[Any] = set()
+    # Time conditions of voicemail after-hours greetings (issue #169).
+    used_conditions: set[Any] = set(
+        db.scalars(
+            select(VoicemailBox.after_hours_time_condition_id).where(
+                VoicemailBox.after_hours_time_condition_id.is_not(None)
+            )
+        )
+    )
     inbound_out = []
     for r in inbound:
         if r.organization_id not in active_orgs:

@@ -39,6 +39,7 @@ GREETING_LABELS = {
     "greet": "Name",
     "temp": "Temporary",
     "absence": "Extended absence",
+    "afterhours": "After hours",
 }
 MEDIA_TYPES = {"wav": "audio/wav", "WAV": "audio/wav", "gsm": "audio/gsm"}
 

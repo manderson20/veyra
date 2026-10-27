@@ -1301,6 +1301,8 @@ export interface VoicemailBox {
   ring_seconds: number;
   /** Pressing 0 while the greeting plays reaches this extension (CALL_FEATURES.md §3.7). */
   operator_extension?: string | null;
+  /** The after-hours greeting plays while this time condition is closed (#169). */
+  after_hours_time_condition_id?: string | null;
   /** Pressing 1 / 2 during the greeting (#131): "followme" (1 only) or a number of the organization. */
   locater_1?: string | null;
   locater_2?: string | null;
@@ -1335,6 +1337,7 @@ export interface VoicemailBoxInput {
   ring_seconds?: number;
   is_enabled?: boolean;
   operator_extension?: string | null;
+  after_hours_time_condition_id?: string | null;
   /** Pressing 1 / 2 during the greeting (#131): "followme" (1 only) or a number of the organization. */
   locater_1?: string | null;
   locater_2?: string | null;
@@ -1444,7 +1447,7 @@ export interface VoicemailMessage {
 
 /** One of the four greetings of a box (docs/USER_PORTAL.md §3). */
 export interface VoicemailGreeting {
-  kind: "unavail" | "busy" | "greet" | "temp" | "absence";
+  kind: "unavail" | "busy" | "greet" | "temp" | "absence" | "afterhours";
   label: string;
   recorded: boolean;
   format: string | null;

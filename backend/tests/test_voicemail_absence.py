@@ -97,3 +97,65 @@ def test_bulk_absence_and_a_future_start(admin, app, helper):  # noqa: F811
             db, app.state.settings, None, now=datetime(2099, 6, 1, 12, tzinfo=UTC)
         )
         assert db.get(VoicemailBox, boxes[1]["id"]).absence_state == "flag"
+
+
+def test_after_hours_greeting_plays_while_the_condition_is_closed():
+    from test_generator_voicemail_ivr import _box
+
+    cond = {
+        "key": "hours-1",
+        "name": "Office hours",
+        "organization": "example",
+        "timezone": "America/Chicago",
+        "ranges": [{"days": ["mon", "tue", "wed", "thu", "fri"], "start": "07:30", "end": "16:00"}],
+        "holidays": [],
+    }
+    snap = _snapshot(voicemail_boxes=[_box("1002", after_hours="hours-1")], time_conditions=[cond])
+    d = _files(snap)["extensions.conf"].content
+    spool = "/var/spool/asterisk/voicemail/veyra/1002"
+    steps = (
+        " same => n,Gosub(veyra-tcopen-hours-1,s,1)\n"
+        f" same => n,Set(VEYRA_AH=$[!0${{VEYRA_OPEN}} & ${{STAT(e,{spool}/afterhours.wav)}}"
+        f" & !${{STAT(e,{spool}/temp.wav)}}])\n"
+        f" same => n,ExecIf(${{VEYRA_AH}}?Playback({spool}/afterhours))\n"
+        " same => n,VoiceMail(1002@veyra,${IF(${VEYRA_AH}?:u)})"
+    )
+    assert steps in d
+    # The busy greeting stays as it is.
+    assert " same => n,VoiceMail(1002@veyra,b)" in d
+    ctx = d.split("[veyra-tcopen-hours-1]")[1].split("\n[")[0]
+    assert "/tc/example/hours-1)}" in ctx
+    assert "GotoIfTime(07:30-16:00,mon-fri,*,*,America/Chicago?open)" in ctx
+    assert " same => n(open),Set(VEYRA_OPEN=1)" in ctx
+    # A box without a condition is untouched.
+    plain = _files(_snapshot(time_conditions=[cond]))["extensions.conf"].content
+    assert "veyra-tcopen-" not in plain
+
+
+def test_after_hours_condition_in_the_box_api(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    cond = admin.post(
+        "/api/v1/routing/time-conditions",
+        json={
+            "organization_id": org,
+            "name": "Office hours",
+            "ranges": [{"days": ["mon"], "start": "08:00", "end": "16:00"}],
+        },
+    )
+    assert cond.status_code == 201, cond.text
+    box = admin.post(
+        "/api/v1/voicemail",
+        json={
+            "extension_id": _ext(admin, "1008")["id"],
+            "after_hours_time_condition_id": cond.json()["id"],
+        },
+    ).json()
+    assert box["after_hours_time_condition_id"] == cond.json()["id"]
+    r = admin.patch(
+        f"/api/v1/voicemail/{box['id']}",
+        json={"after_hours_time_condition_id": "00000000-0000-0000-0000-000000000000"},
+    )
+    assert r.status_code == 422
+    r = admin.patch(f"/api/v1/voicemail/{box['id']}", json={"after_hours_time_condition_id": None})
+    assert r.json()["after_hours_time_condition_id"] is None
+    assert vmsvc.GREETING_LABELS["afterhours"] == "After hours"

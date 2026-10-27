@@ -63,6 +63,11 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # What the worker last applied: off | temp (absence copied over the
     # temporary greeting) | flag (no absence recording; the flag only).
     absence_state: Mapped[str] = mapped_column(String(8), default="off", server_default="off")
+    # After hours (issue #169): while this time condition is closed, the
+    # "afterhours" greeting plays instead of the unavailable one.
+    after_hours_time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("time_conditions.id", ondelete="SET NULL")
+    )
 
 
 class VoicemailBoxMember(Base):

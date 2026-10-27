@@ -137,6 +137,10 @@ class Names:
         """A supervisor's phone rung from the web to listen to a call (issue #167)."""
         return self._p("spy")
 
+    def tc_open(self, key: str) -> str:
+        """Gosub: VEYRA_OPEN=1 while the time condition is open (issue #169)."""
+        return self._p(f"tcopen-{key}")
+
     @property
     def voicemail_absent(self) -> str:
         """A box on extended absence that takes no messages (issue #169)."""

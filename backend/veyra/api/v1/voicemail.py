@@ -127,6 +127,21 @@ def _refuse_locked(db: Session, ext: Extension, changes: dict[str, Any]) -> None
     refuse(db, ext, {f"vm_{k}": v for k, v in changes.items()})
 
 
+def _condition(
+    db: Session, organization_id: uuid.UUID, value: uuid.UUID | None
+) -> uuid.UUID | None:
+    if value is None:
+        return None
+    from veyra.core.models import TimeCondition
+
+    cond = db.get(TimeCondition, value)
+    if cond is None or cond.organization_id != organization_id:
+        raise _validation(
+            "after_hours_time_condition_id", "no such time condition in this organization"
+        )
+    return cond.id
+
+
 def check_locater(
     db: Session,
     organization_id: uuid.UUID,
@@ -174,6 +189,8 @@ class VoicemailBoxIn(BaseModel):
     ring_seconds: int = Field(RING_DEFAULT, ge=RING_MIN, le=RING_MAX)
     # Pressing 0 during the greeting reaches this extension (docs/CALL_FEATURES.md §3.7).
     operator_extension: str | None = Field(None, max_length=32)
+    # The after-hours greeting plays while this time condition is closed (#169).
+    after_hours_time_condition_id: uuid.UUID | None = None
     # Pressing 1 or 2 during the greeting (issue #131).
     locater_1: str | None = Field(None, max_length=32)
     locater_2: str | None = Field(None, max_length=32)
@@ -201,6 +218,8 @@ class VoicemailBoxPatch(BaseModel):
     keep_days: int | None = Field(None, ge=1, le=3650)
     ring_seconds: int | None = Field(None, ge=RING_MIN, le=RING_MAX)
     operator_extension: str | None = Field(None, max_length=32)
+    # The after-hours greeting plays while this time condition is closed (#169).
+    after_hours_time_condition_id: uuid.UUID | None = None
     locater_1: str | None = Field(None, max_length=32)
     locater_2: str | None = Field(None, max_length=32)
     is_enabled: bool | None = None
@@ -236,6 +255,7 @@ class VoicemailBoxOut(BaseModel):
     keep_days: int | None = None
     ring_seconds: int
     operator_extension: str | None = None
+    after_hours_time_condition_id: uuid.UUID | None = None
     locater_1: str | None = None
     locater_2: str | None = None
     is_enabled: bool
@@ -350,6 +370,7 @@ def _outs(db: Session, rows: list[VoicemailBox]) -> list[VoicemailBoxOut]:
                 keep_days=r.keep_days,
                 ring_seconds=r.ring_seconds,
                 operator_extension=r.operator_extension,
+                after_hours_time_condition_id=r.after_hours_time_condition_id,
                 locater_1=r.locater_1,
                 locater_2=r.locater_2,
                 is_enabled=r.is_enabled,
@@ -481,6 +502,9 @@ def create_box(
             keep_days=body.keep_days,
             ring_seconds=body.ring_seconds,
             operator_extension=_operator(db, org.id, body.operator_extension),
+            after_hours_time_condition_id=_condition(
+                db, org.id, body.after_hours_time_condition_id
+            ),
             locater_1=check_locater(
                 db, org.id, "1", body.locater_1, own_number=body.number, shared=True
             ),
@@ -544,6 +568,9 @@ def create_box(
         keep_days=body.keep_days,
         ring_seconds=body.ring_seconds,
         operator_extension=_operator(db, ext.organization_id, body.operator_extension),
+        after_hours_time_condition_id=_condition(
+            db, ext.organization_id, body.after_hours_time_condition_id
+        ),
         locater_1=check_locater(
             db, ext.organization_id, "1", body.locater_1, own_number=ext.number, shared=False
         ),
@@ -637,6 +664,11 @@ def update_box(
         if operator != box.operator_extension:
             box.operator_extension = operator
             details["operator_extension"] = operator
+    if "after_hours_time_condition_id" in changes:
+        cond = _condition(db, box.organization_id, changes["after_hours_time_condition_id"])
+        if cond != box.after_hours_time_condition_id:
+            box.after_hours_time_condition_id = cond
+            details["after_hours_time_condition_id"] = str(cond) if cond else None
     own_ext = db.get(Extension, box.extension_id) if box.extension_id else None
     own_number = own_ext.number if own_ext else box.number
     for key in ("1", "2"):

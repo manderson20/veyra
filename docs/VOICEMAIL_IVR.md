@@ -185,7 +185,19 @@ first and last day (the organization's time zone) and "take no messages".
   and the absence turns itself off. State `absence_state`: `off`, `temp`
   (copy in place) or `flag` (no recording).
 
-Not built yet: a greeting chosen by an after-hours schedule.
+### 3.5 After-hours greeting (issue #169)
+
+*Built 2026-10-27 (0.27.39, migration 0069).* A box can name a time
+condition of its organization ("After-hours greeting" in the box dialog,
+`after_hours_time_condition_id`). While it is closed (its phone override
+first, then holidays and hours, exactly as an inbound route sees it), the
+box's **afterhours** greeting, recorded or uploaded like the others, plays
+instead of the unavailable one; the busy greeting is unchanged. The dialplan
+calls a per-condition Gosub `veyra-tcopen-<key>` that sets `VEYRA_OPEN`,
+then plays `afterhours.wav` from the box's spool directory and runs
+`VoiceMail` without `u`. A temporary greeting (and so an extended absence)
+still wins, and a box with no afterhours recording keeps its unavailable
+greeting. Deleting the time condition clears the setting.
 
 ## 4. Prompts
 

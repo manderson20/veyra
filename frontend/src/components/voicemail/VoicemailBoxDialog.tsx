@@ -6,7 +6,7 @@ import { CopyButton } from "@/components/common/CopyButton";
 import { MemberListEditor, membersFromIds, type MemberDraft } from "@/components/groups/MemberListEditor";
 import { Button, Callout, Checkbox, ConfirmDialog, Dialog, SelectField, Switch, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import type { Extension, Page, VoicemailBox, VoicemailBoxCreated, VoicemailBoxInput } from "@/lib/types";
+import type { Extension, Page, TimeCondition, VoicemailBox, VoicemailBoxCreated, VoicemailBoxInput } from "@/lib/types";
 import { LocaterField } from "./LocaterField";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -27,15 +27,16 @@ interface Draft {
   keep_days: string;
   ring_seconds: string;
   operator_extension: string;
+  after_hours: string;
   locater_1: string;
   locater_2: string;
   is_enabled: boolean;
 }
 
-const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, keep_days: "", ring_seconds: "20", operator_extension: "", locater_1: "", locater_2: "", is_enabled: true };
+const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, keep_days: "", ring_seconds: "20", operator_extension: "", after_hours: "", locater_1: "", locater_2: "", is_enabled: true };
 
 function fromBox(b: VoicemailBox): Draft {
-  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, keep_days: b.keep_days ? String(b.keep_days) : "", ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", is_enabled: b.is_enabled };
+  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, keep_days: b.keep_days ? String(b.keep_days) : "", ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", after_hours: b.after_hours_time_condition_id ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", is_enabled: b.is_enabled };
 }
 
 /** How a box is named in titles and toasts: its extension, or a shared inbox's name. */
@@ -86,6 +87,7 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
   const orgId = box?.organization_id ?? extension?.organization_id ?? organizationId ?? "";
   const needExtensions = open && orgId && (shared || (!editing && !extension));
   const extensions = useApiData<Page<Extension>>(needExtensions ? "/extensions" : null, { organization_id: orgId, limit: 200 });
+  const conditions = useApiData<Page<TimeCondition>>(open && orgId ? "/routing/time-conditions" : null, { organization_id: orgId, limit: 200 });
   const boxes = useApiData<Page<VoicemailBox>>(open && !editing && !extension && !shared && orgId ? "/voicemail" : null, { organization_id: orgId, limit: 200 });
 
   useOnChange(open, () => {
@@ -114,6 +116,7 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
       keep_days: keep,
       ring_seconds: ring,
       operator_extension: draft.operator_extension.trim() || null,
+      after_hours_time_condition_id: draft.after_hours || null,
       locater_1: draft.locater_1 || null,
       locater_2: draft.locater_2 || null,
       is_enabled: draft.is_enabled,
@@ -236,6 +239,9 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
               help={shared ? "Kept for consistency; a shared inbox answers at once." : "How long the phone rings before voicemail answers."} onChange={(e) => setDraft({ ...draft, ring_seconds: e.target.value })} />
             <TextField label="Operator extension (press 0)" inputMode="numeric" value={draft.operator_extension} error={errors.fields.operator_extension}
               help="A caller who presses 0 while the greeting plays rings this extension; * opens the box. Empty: 0 does nothing." onChange={(e) => setDraft({ ...draft, operator_extension: e.target.value })} />
+            <SelectField label="After-hours greeting" value={draft.after_hours} error={errors.fields.after_hours_time_condition_id} placeholder="Never"
+              options={(conditions.data?.items ?? []).map((c) => ({ value: c.id, label: `While “${c.name}” is closed` }))}
+              help="While this time condition is closed, the box's after-hours greeting (recorded on its Greetings tab) plays instead of the unavailable one. Needs a deployment." onChange={(e) => setDraft({ ...draft, after_hours: e.target.value })} />
           </div>
           <LocaterField key={`1-${box?.id ?? "new"}`} digit="1" value={draft.locater_1} followMe={!shared} error={errors.fields.locater_1} onChange={(v) => setDraft({ ...draft, locater_1: v })} />
           <LocaterField key={`2-${box?.id ?? "new"}`} digit="2" value={draft.locater_2} followMe={false} error={errors.fields.locater_2} onChange={(v) => setDraft({ ...draft, locater_2: v })} />

@@ -455,6 +455,12 @@ def generate(
         if (num := str(b.get("number") or "")) and _locaters(b)
     )
     token = _vm_dtmf.set(dtmf)
+    hours = {
+        (engine_names.Names(mapping.get(str(b.get("organization") or ""), "")).voicemail, num): key
+        for b in snapshot.get("voicemail_boxes") or []
+        if (num := str(b.get("number") or "")) and (key := str(b.get("after_hours") or ""))
+    }
+    hours_token = _vm_hours.set(hours)
     try:
         with engine_names.namespaces(mapping):
             files = _generate(
@@ -468,6 +474,7 @@ def generate(
             )
     finally:
         _vm_dtmf.reset(token)
+        _vm_hours.reset(hours_token)
     # Prove the organizations cannot reach each other (docs/MULTI_TENANCY.md §5).
     strict = bool((snapshot.get("installation") or {}).get("multi_tenancy_enabled"))
     if len(set(mapping.values())) > 1 or strict:
@@ -1282,6 +1289,14 @@ def _dialplan(
             lines += _voicemail_exit_contexts(my_boxes(ns))
             lines += _voicemail_play_context()
             lines += _voicemail_absent_context()
+            lines += _tc_open_contexts(
+                list(snapshot.get("time_conditions") or []),
+                {
+                    key
+                    for (vm_ctx, _num), key in _vm_hours.get().items()
+                    if vm_ctx == engine_names.current().voicemail
+                },
+            )
             lines += _spy_context()
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -2069,6 +2084,11 @@ def _locaters(b: dict[str, Any]) -> dict[str, str]:
 _vm_dtmf: ContextVar[frozenset[tuple[str, str]]] = ContextVar("veyra_vm_dtmf", default=frozenset())
 
 
+# (voicemail context, box number) -> time condition key of boxes with an
+# after-hours greeting (issue #169).
+_vm_hours: ContextVar[dict[tuple[str, str], str]] = ContextVar("veyra_vm_hours", default={})  # noqa: B039
+
+
 def _vm(number: str, flags: str) -> str:
     """``VoiceMail(<box>@<ns>,<flags>)``, with the locater's ``d()`` when set."""
     n = engine_names.current()
@@ -2087,11 +2107,55 @@ def _vm_steps(number: str, flags: str) -> list[str]:
     """``VoiceMail`` after the extended-absence check (issue #169): a box that
     takes no messages while its owner is away only plays the greeting."""
     n = engine_names.current()
-    return [
+    absent = [
         f' same => n,GotoIf($["${{DB({VMABS_FAMILY}/{n.voicemail}/{number})}}"="refuse"]'
         f"?{n.voicemail_absent},{number},1)",
-        f" same => n,{_vm(number, flags)}",
     ]
+    key = _vm_hours.get().get((n.voicemail, number))
+    if not key or flags != "u":
+        return [*absent, f" same => n,{_vm(number, flags)}"]
+    # After hours (issue #169): the box's own recording instead of the
+    # unavailable greeting, unless a temporary (or absence) greeting is set.
+    spool = f"{VOICEMAIL_SPOOL}/{n.voicemail}/{number}"
+    return [
+        *absent,
+        f" same => n,Gosub({n.tc_open(_check_value(key, 'time condition key'))},s,1)",
+        f" same => n,Set(VEYRA_AH=$[!0${{VEYRA_OPEN}} & ${{STAT(e,{spool}/afterhours.wav)}}"
+        f" & !${{STAT(e,{spool}/temp.wav)}}])",
+        f" same => n,ExecIf(${{VEYRA_AH}}?Playback({spool}/afterhours))",
+        f" same => n,{_vm(number, '${IF(${VEYRA_AH}?:u)}')}",
+    ]
+
+
+def _tc_open_contexts(conditions: list[dict[str, Any]], keys: set[str]) -> list[str]:
+    """Per time condition used by an after-hours greeting: a Gosub that sets
+    VEYRA_OPEN (1 open, 0 closed), the phone override first."""
+    n = engine_names.current()
+    lines: list[str] = []
+    for c in conditions:
+        key = _check_value(str(c.get("key") or ""), "time condition key")
+        if key not in keys:
+            continue
+        org = _slug(c.get("organization") or "", f"organization of time condition {key}")
+        tz = routing.check_timezone(str(c.get("timezone") or "UTC"))
+        opened = routing.gotoiftime_args(routing.check_ranges(list(c.get("ranges") or [])), tz)
+        closed = routing.holiday_apps(
+            routing.check_holidays(list(c.get("holidays") or [])), tz, "closed"
+        )
+        lines += [
+            f"[{n.tc_open(key)}]",
+            "exten => s,1,Set(VEYRA_OPEN=0)",
+            f" same => n,Set(VEYRA_TC=${{DB({SWITCH_FAMILY}/tc/{org}/{key})}})",
+            ' same => n,GotoIf($["${VEYRA_TC}"="open"]?open)',
+            ' same => n,GotoIf($["${VEYRA_TC}"="closed"]?closed)',
+            *[f" same => n,{app}" for app in closed],
+            *[f" same => n,GotoIfTime({args}?open)" for args in opened],
+            " same => n(closed),Return()",
+            " same => n(open),Set(VEYRA_OPEN=1)",
+            " same => n,Return()",
+            "",
+        ]
+    return lines
 
 
 def _voicemail_absent_context() -> list[str]:

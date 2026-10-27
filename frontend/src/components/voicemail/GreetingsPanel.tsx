@@ -14,6 +14,7 @@ const HELP: Record<VoicemailGreeting["kind"], string> = {
   greet: "Your name, used by the directory and the default greetings.",
   temp: "Played instead of the others while it exists; remove it when you are back.",
   absence: "For a long absence (summer break, leave): played as the temporary greeting between the dates below, then removed by itself.",
+  afterhours: "Played instead of the unavailable greeting while the office is closed, when your administrator has set the box's hours. A temporary greeting still wins.",
 };
 const MAX_SECONDS = 60;
 

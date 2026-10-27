@@ -51,8 +51,9 @@ MAX_LINE = 16 * 1024 * 1024  # one request or answer (a base64 message fits)
 
 FOLDERS = ("INBOX", "Old", "Work", "Family", "Friends", "Urgent")
 # "absence" (issue #169) is Veyra's own: copied over "temp" while an
-# extended absence is on; Asterisk never reads it.
-GREETINGS = ("unavail", "busy", "greet", "temp", "absence")
+# extended absence is on; Asterisk never reads it. "afterhours" (#169) is
+# played by the dialplan while the box's time condition is closed.
+GREETINGS = ("unavail", "busy", "greet", "temp", "absence", "afterhours")
 AUDIO_FORMATS = ("wav", "WAV", "gsm")  # preference when reading
 MAX_MESSAGES = 9999
 MAX_AUDIO = 64 * 1024 * 1024
