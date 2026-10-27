@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.42
+
+No migration.
+
+### Added
+- **Grandstream phones** (#36): official templates for the Grandstream GRP26xx (GRP2601–GRP2604, GRP2610–GRP2670) and GXP21xx (GXP2130, GXP2135, GXP2140, GXP2160, GXP2170) desk phones, from the same profiles, keys and variables as the Poly and Yealink phones: up to six lines, line, BLF, speed dial, transfer and multicast paging keys, voicemail indication, the profile's paging zones as multicast listen addresses, time zone and daylight saving, VLAN, firmware, the daily provisioning check with the device credential, the phone directory, hotline and intercom auto-answer. The phones install the Veyra CA from their configuration, so no manual certificate step is needed. Experimental until checked on hardware.
+
+### Fixed
+- **Previewing a Yealink template in the template editor failed** ("no attribute 'directory_url'") since 0.27.0: the preview's sample server lacked the directory address. It now has it, with the host and provisioning path the Grandstream templates use. Previews of a real phone (device page) were not affected.
+
 ## 0.27.41 — 2026-10-27
 
 Run the installer's upgrade once (`sudo installer/upgrade.sh --yes`) for the certificate helper, its unit and permission, certbot and the new NGINX server; no migration.

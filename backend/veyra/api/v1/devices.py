@@ -220,6 +220,16 @@ def parse_user_agent(ua: str | None) -> tuple[str | None, str | None, str | None
         model = next((p.replace("_", " ") for p in parts if p.upper().startswith("VVX")), None)
         version = next((p for p in parts if p[:1].isdigit() and "." in p), None)
         return "Poly", model, version
+    if text.lower().startswith("grandstream"):
+        # "Grandstream Model HW GRP2614 V1.0A SW 1.0.15.8 DevId 000b82…" or
+        # the short "Grandstream GXP2170 1.0.11.106".
+        parts = text.split()
+        model = parts[parts.index("HW") + 1] if "HW" in parts[:-1] else None
+        version = parts[parts.index("SW") + 1] if "SW" in parts[:-1] else None
+        if model is None and len(parts) > 1:
+            model = parts[1]
+            version = parts[2] if len(parts) > 2 else None
+        return "Grandstream", model, version
     if text.lower().startswith("yealink"):
         parts = text.split()
         model = parts[1] if len(parts) > 1 else None

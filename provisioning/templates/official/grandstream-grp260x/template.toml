@@ -1,0 +1,19 @@
+spec_version = 2
+features = ["intercom_auto_answer", "hotline", "multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
+
+[template]
+key = "grandstream.grp260x"
+name = "Grandstream GRP260x"
+version = "0.1.0"
+manufacturer = "Grandstream"
+models = ["GRP2601", "GRP2601P", "GRP2601W", "GRP2602", "GRP2602P", "GRP2602W", "GRP2602G", "GRP2603", "GRP2603P", "GRP2604", "GRP2604P"]
+parent = "grandstream.base"
+parent_version = "0.1.0"
+firmware = "GRP260x 1.0.7.71 and later (grp2600fw.bin)"
+status = "experimental"
+description = "Grandstream GRP260x essential phones (up to 4 accounts). Not yet verified on hardware."
+
+[[files]]
+name = "cfg{mac}.xml"
+source = "cfg.xml.j2"
+format = "xml"

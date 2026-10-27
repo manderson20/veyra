@@ -1,0 +1,19 @@
+spec_version = 2
+features = ["intercom_auto_answer", "hotline", "multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
+
+[template]
+key = "grandstream.grp261x"
+name = "Grandstream GRP261x-GRP267x"
+version = "0.1.0"
+manufacturer = "Grandstream"
+models = ["GRP2610", "GRP2611G", "GRP2612", "GRP2612P", "GRP2612W", "GRP2612G", "GRP2613", "GRP2613W", "GRP2614", "GRP2615", "GRP2616", "GRP2624", "GRP2634", "GRP2636", "GRP2650", "GRP2670"]
+parent = "grandstream.base"
+parent_version = "0.1.0"
+firmware = "GRP26xx 1.0.15.8 and later (firmware files grp26xxafw.bin / grp26xxbfw.bin)"
+status = "experimental"
+description = "Grandstream GRP26xx carrier-grade phones (up to 6 accounts here, up to 48 programmable keys). Not yet verified on hardware."
+
+[[files]]
+name = "cfg{mac}.xml"
+source = "cfg.xml.j2"
+format = "xml"

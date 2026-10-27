@@ -35,6 +35,7 @@ from veyra.core.models import (
     VoicemailBox,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
+from veyra.provisioning import bootstrap
 from veyra.provisioning.renderer import (
     MASK,
     RenderedFile,
@@ -666,6 +667,9 @@ def build_facts(
             "feature_codes": features.active(db),
             "firmware_url": f"{base}/provisioning/firmware/{fw.id}/{fw.filename}" if fw else None,
             "firmware_version": fw.version if fw else None,
+            # The Veyra CA (PEM), for phones that install a trusted CA from
+            # their configuration (Grandstream, issue #36).
+            "ca_certificate": bootstrap.ca_certificate(settings.config_dir),
         },
         "features": {
             "voicemail": bool(lines) and bool(lines[0]["voicemail"]),
@@ -804,6 +808,9 @@ def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]
             "provisioning_url": str(
                 values.get("provisioning_url") or f"https://{host}/provisioning/"
             ),
+            "directory_url": f"https://{host}/provisioning/directory/",
+            "host": host,
+            "provisioning_path": "provisioning",
             "provisioning_server_type": "HTTPS",
             "ntp_server": str(values.get("ntp_server") or "pool.ntp.org"),
             "timezone": tz,
@@ -814,6 +821,7 @@ def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]
             "feature_codes": dict(features.DEFAULT_CODES),
             "firmware_url": None,
             "firmware_version": None,
+            "ca_certificate": None,
         },
         "features": {"voicemail": True, "blf": False, "paging": False},
         "vars": {},

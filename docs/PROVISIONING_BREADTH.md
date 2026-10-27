@@ -238,6 +238,53 @@ parameter), comments (no documented syntax). Facts gained `server.host` and
 `server.provisioning_path`. Template "Customize" now copies single-file and
 checksum families correctly (it used to skip every `{mac}.cfg`).
 
+### 4.3 Grandstream (issue #36)
+
+*Built 2026-10-27 (0.27.42).* `grandstream.base` (abstract) with
+`grandstream.grp261x` (GRP2610–GRP2670), `grandstream.grp260x`
+(GRP2601–GRP2604, four accounts) and `grandstream.gxp21xx` (GXP2130, 2135,
+2140, 2160, 2170). One P-value XML file per phone, `cfg{mac}.xml`
+(`<gs_provision version="1"><config version="1">`); the phone's other
+requests (`cfg{mac}`, `cfg{model}.xml`, `cfg.xml`) get a 404 and it goes
+on. P-values come from Grandstream's own configuration templates
+(GRP261x 1.0.15.8, GRP260x 1.0.7.71, GXP21xx 1.0.11.106):
+
+* Accounts 1–6: P271/401/501/601/1701/1801 and the related fields; the
+  registration interval is converted to minutes; BLF pickup prefix per
+  account (P1347, P481…); intercom auto-answer by Call-Info (P298…), mute
+  on auto-answer (P26071…; GRP261x has none for account 1).
+* Keys: the profile's line, BLF, speed dial, transfer and page keys numbered
+  without gaps (Grandstream drops every key after an empty one); VPK 1–6
+  P1363+2n…, 7–48 P23800+4n…; GRP codes 31 line, 1 BLF, 0 speed dial,
+  8 transfer, 13 multicast paging (value `address:port`). On the GXP the
+  fixed keys (3/8/4/6/12 by model) use their own codes (0 line, 11 BLF,
+  10 speed dial, 18 transfer, 23 paging) and a line key past them becomes
+  empty (-1).
+* Paging: up to ten listening addresses P1569/P1570… in the zones' order,
+  RTP channel 0, codec G.722 or PCMU, P22208 on the GRP.
+* Time: P64 `customize` with a POSIX rule in P246 built from the zone
+  database (`MTZ+6MDT+5,M3.2.0,M11.1.0`); DHCP may not override time or
+  NTP (P143/P144 = 0).
+* Provisioning: HTTPS (P212), host/path (P237), the device credential
+  (P1360/P1361, P20713), daily at `polling_hour` (P194/P285), DHCP
+  options 43/66 do not replace the server unless `dhcp_override` (P145),
+  NOTIFY check-sync without authentication (P4428 = 1); firmware from the
+  assigned image's folder (P6767/P192; upload it under Grandstream's file
+  name, e.g. `grp26xxbfw.bin`) or no firmware checks at all (P238 = 2) so
+  the phone never upgrades itself from Grandstream's server.
+* Trust: the Veyra CA installed as trusted CA 1 (P8433, P8502 = 2);
+  `validate_server_certificate` (P8463) stays off by default, so a new phone
+  accepts the server over HTTPS before the CA is installed. No plain-HTTP
+  bootstrap is needed.
+* Directory: P330/P331 with the device credential in the address
+  (`user:password@host/…/grandstream.xml`), hourly. Unverified: whether the
+  firmware accepts credentials in the phonebook path.
+* Hotline: P71 and P8388 (warm-line delay) from the first line.
+
+`parse_user_agent` reads Grandstream's `… Model HW GRP2614 … SW 1.0.15.8 …`
+for the device's model and firmware. Unverified on hardware like the other
+families (§7).
+
 ### 4.2 Hotline and warm-line phones (issue #168)
 
 *Built 2026-10-26.* An extension's **Hotline number** and **Warm-line
@@ -300,8 +347,8 @@ Poly's own `<MAC>-directory.xml` request with the organization's directory;
 label, provisioning URL) and a *Redirect services* card on the Provisioning
 page with per-vendor instructions and exports; the checklist in
 [PROVISIONING_HARDWARE_CHECKS.md](PROVISIONING_HARDWARE_CHECKS.md). Still
-open: Edge V (format not published), the owner's hardware runs, Grandstream
-and CyberData on request.
+open: Edge V (format not published), the owner's hardware runs, CyberData on
+request; Grandstream built in 0.27.42 (§4.3).
 
 ## 8. Slices and order
 

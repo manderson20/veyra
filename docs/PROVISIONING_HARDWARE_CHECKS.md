@@ -42,6 +42,27 @@ family's templates to `stable` in the next release.
 | 15 | Phone book (Yealink: Directory → Remote phone book; Poly: Directory) | The organization's extensions are listed |
 | 16 | From another phone dial the intercom code and this extension (`*80<ext>`) | The phone answers on the speaker by itself with a tone; the microphone is open unless the profile sets "intercom_mic_muted" |
 
+### Grandstream notes (GRP26xx, GXP21xx)
+
+- Point the phone at Veyra: web interface → Maintenance → Upgrade and
+  Provisioning: *Config Upgrade Via* HTTPS, *Config Server Path*
+  `<server>/provisioning`, HTTP/HTTPS user name and password = the
+  organization's enrollment credential; or DHCP option 66
+  `https://<server>/provisioning`. Provisioning → Requests should show
+  `cfg<mac>.xml` with `ok` (`cfg<mac>`, `cfg<model>.xml` and `cfg.xml` show 404:
+  expected).
+- After the first fetch: Maintenance → Security → Trusted CA certificates
+  lists the Veyra CA; *Validate Server Certificates* can then be turned on
+  with the template variable `validate_server_certificate`.
+- Step 15 (phone book): check the phone downloads it (Phonebook → the
+  organization's names). If it does not, the firmware refuses credentials in
+  the phonebook path: note it in the results.
+- Step 14 (firmware): upload the image under Grandstream's own file name
+  (`grp26xxafw.bin`, `grp26xxbfw.bin`, `grp2600fw.bin`, `gxp2170fw.bin`…);
+  the phone asks for its file name in the image's folder.
+- The GXP's first keys are *line keys* with their own key codes: check a BLF
+  and a speed dial placed on keys 1–3 work as well as on later keys.
+
 ## Algo speakers, horns and adapters
 
 | # | Step | Expected |
