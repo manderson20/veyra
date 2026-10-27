@@ -8,7 +8,7 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased — 0.27.41
+## 0.27.41 — 2026-10-27
 
 Run the installer's upgrade once (`sudo installer/upgrade.sh --yes`) for the certificate helper, its unit and permission, certbot and the new NGINX server; no migration.
 
