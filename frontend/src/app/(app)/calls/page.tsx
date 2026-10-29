@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Badge, Button, Callout, Card, DataTable, EmptyState, PageHeader, SelectField, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
-import type { ActiveCall, ActiveCalls } from "@/lib/types";
+import type { ActiveCall, ActiveCalls, MyExtension } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useLiveChanges } from "@/hooks/useLiveChanges";
 import { useSession } from "@/hooks/useSession";
@@ -35,12 +35,16 @@ export default function ActiveCallsPage() {
   const canRecord = can("calls.record");
   const canMonitor = can("calls.monitor");
   const [monBusy, setMonBusy] = useState<string | null>(null);
+  // Which of your phones rings for supervising (several extensions: you choose).
+  const myExts = useApiData<MyExtension[]>(canMonitor ? "/me/extensions" : null);
+  const usable = (myExts.data ?? []).filter((x) => x.is_enabled);
+  const [monitorExt, setMonitorExt] = useState("");
   // Supervisor (issue #167): your phone rings; answering it starts listening.
   const supervise = async (c: ActiveCall, mode: string) => {
     if (!mode) return;
     setMonBusy(c.channel_id);
     try {
-      const r = await api.post<{ message: string }>(`/calls/${encodeURIComponent(c.channel_id)}/monitor`, { mode });
+      const r = await api.post<{ message: string }>(`/calls/${encodeURIComponent(c.channel_id)}/monitor`, { mode, ...(monitorExt ? { extension_id: monitorExt } : {}) });
       toast.success(r.message, "The session is recorded in the audit log.");
     } catch (err) {
       toast.error("Could not start supervising", errorMessage(err));
@@ -139,6 +143,13 @@ export default function ActiveCallsPage() {
         actions={<Button icon="refresh" onClick={reload} loading={data.loading && !!d}>Refresh</Button>}
       />
       {d && !d.available ? <Callout tone="warn" title="Live call data is not available">{d.message}</Callout> : null}
+      {canMonitor && usable.length > 1 ? (
+        <div style={{ maxWidth: 360 }}>
+          <SelectField label="Supervise from" value={monitorExt} help="The phone that rings when you listen, whisper or join."
+            options={[{ value: "", label: `${usable[0]!.number} — ${usable[0]!.display_name} (first)` }, ...usable.slice(1).map((x) => ({ value: x.id, label: `${x.number} — ${x.display_name}` }))]}
+            onChange={(e) => setMonitorExt(e.target.value)} />
+        </div>
+      ) : null}
       <Card flush>
         <DataTable
           columns={columns}

@@ -17,6 +17,14 @@ No migration.
 - **Extended absence for many boxes** (Voicemail → **Extended absence…**): one away period, such as the summer break, for the boxes you pick, with or without taking messages.
 - The trunk page shows the engine's registration status word (for example *Rejected*), the queue **Agents** card shows who last changed each agent and when, outbound routes show which organization or site they are for, and classes of service show their supervisor settings.
 - The fax cover sheet has a **From** field (empty: your name).
+- A phone's **Building** and **Location (dispatchable)** can be changed on its page; before, only when registering it.
+- Firmware images have an **Edit** button for their models and notes, and the upload dialog offers the manufacturers Veyra has templates for (a misspelt manufacturer hid the image from profiles).
+- Call history filters by talk time and by recorded or not (the CSV export follows).
+- A revision on System → Telephony Engine can be deployed **When no calls are active**, like the top-bar button.
+- The template editor's **Insert a Veyra variable** panel lists the provisioning variables (`{{ vars.name }}`).
+- **New extension** offers the organization's extension templates and, with many users, a search for the user.
+- Supervisors with more than one extension choose which phone rings on Active calls (**Supervise from**).
+- A site's emergency settings can play a **recorded page** when an emergency call is made there, and the responder list shows the site's extensions first.
 
 ### Fixed
 - **A recording in use can no longer be deleted.** Deleting a recording that a call queue, recording policy, recorded page or bell played silently removed it from them; now the delete is refused with the list of what uses it, and the Audio page's **Used by** counts all of them.

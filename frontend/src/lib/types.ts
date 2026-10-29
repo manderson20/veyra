@@ -2282,6 +2282,8 @@ export interface DeviceInput {
   values?: Record<string, string | number | boolean>;
   firmware_image_id?: string | null;
   is_enabled?: boolean;
+  building_id?: string | null;
+  location?: string | null;
 }
 
 export interface UnregisteredDevice {

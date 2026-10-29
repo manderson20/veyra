@@ -206,13 +206,13 @@ function RevisionDialog({ revision, onClose, canDeploy, onChanged }: { revision:
     return () => window.clearInterval(t);
   }, [rev, onChanged, toast]);
 
-  const act = async (action: "deploy" | "discard") => {
+  const act = async (action: "deploy" | "deploy_idle" | "discard") => {
     if (!rev) return;
     setBusy(true);
     setError(null);
     try {
-      if (action === "deploy") {
-        setRev(await api.post<ConfigRevision>(`/telephony/revisions/${rev.id}/deploy`));
+      if (action === "deploy" || action === "deploy_idle") {
+        setRev(await api.post<ConfigRevision>(`/telephony/revisions/${rev.id}/deploy`, { mode: action === "deploy_idle" ? "when_idle" : "now" }));
       } else {
         await api.post(`/telephony/revisions/${rev.id}/discard`);
         toast.success(`Revision #${rev.sequence} discarded`);
@@ -241,6 +241,9 @@ function RevisionDialog({ revision, onClose, canDeploy, onChanged }: { revision:
         <>
           <Button onClick={onClose} disabled={busy}>Close</Button>
           {canDeploy && r.state === "validated" ? <Button onClick={() => act("discard")} disabled={busy}>Discard</Button> : null}
+          {canDeploy && (r.can_deploy || r.can_rollback) ? (
+            <Button onClick={() => act("deploy_idle")} disabled={busy} title="Waits until no calls are active (up to 30 minutes), then applies">When no calls are active</Button>
+          ) : null}
           {canDeploy && (r.can_deploy || r.can_rollback) ? (
             <Button variant={r.can_rollback ? "danger" : "primary"} icon={r.can_rollback ? "history" : "upload"} loading={busy} onClick={() => act("deploy")}>
               {r.can_rollback ? "Roll back to this revision" : "Deploy"}

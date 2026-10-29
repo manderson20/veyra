@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { Badge, SearchInput } from "@/components/ui";
-import type { TemplateCatalog, TemplateVariable } from "@/lib/types";
+import type { ProvisioningVariable, TemplateCatalog, TemplateVariable } from "@/lib/types";
 
 interface Item {
   key: string;
@@ -21,7 +21,7 @@ interface Section {
   loop?: { label: string; text: string };
 }
 
-function sections(catalog: TemplateCatalog, variables: TemplateVariable[]): Section[] {
+function sections(catalog: TemplateCatalog, variables: TemplateVariable[], defined: ProvisioningVariable[]): Section[] {
   const values: Section = {
     key: "values",
     title: "This template's values",
@@ -41,16 +41,26 @@ function sections(catalog: TemplateCatalog, variables: TemplateVariable[]): Sect
     description: "Common Jinja patterns.",
     items: catalog.snippets.map((s) => ({ key: `s:${s.title}`, label: s.title, description: s.description, text: s.text })),
   };
-  return [values, ...facts, snippets];
+  // Provisioning variables (Provisioning → Variables), one entry per name.
+  const seen = new Set<string>();
+  const vars: Section = {
+    key: "vars",
+    title: "Provisioning variables",
+    description: "Values defined under Provisioning → Variables, resolved for each phone from its site, organization or the installation.",
+    items: defined.filter((v) => v.source === "defined" && !seen.has(v.name) && seen.add(v.name)).map((v) => ({
+      key: `p:${v.name}`, label: `vars.${v.name}`, description: v.description || "Provisioning variable", text: `{{ vars.${v.name} }}`, sensitive: v.sensitive,
+    })),
+  };
+  return [values, ...facts, vars, snippets];
 }
 
 /** The template editor's "Insert a Veyra variable" panel: click an entry to
  *  insert it at the cursor (docs/DEVICE_PROVISIONING.md §7). */
-export function InsertPanel({ catalog, variables, onInsert }: { catalog: TemplateCatalog; variables: TemplateVariable[]; onInsert: (text: string) => void }) {
+export function InsertPanel({ catalog, variables, defined = [], onInsert }: { catalog: TemplateCatalog; variables: TemplateVariable[]; defined?: ProvisioningVariable[]; onInsert: (text: string) => void }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>("values");
   const q = query.trim().toLowerCase();
-  const all = sections(catalog, variables);
+  const all = sections(catalog, variables, defined);
   const shown = all
     .map((s) => ({ ...s, items: q ? s.items.filter((i) => `${i.label} ${i.description}`.toLowerCase().includes(q)) : s.items }))
     .filter((s) => !q || s.items.length > 0);
@@ -80,7 +90,7 @@ export function InsertPanel({ catalog, variables, onInsert }: { catalog: Templat
                       <span className="subtle">Insert the loop; the entries below go inside it.</span>
                     </button>
                   ) : null}
-                  {s.items.length === 0 ? <p className="subtle insert-panel__note">This template declares no values of its own.</p> : null}
+                  {s.items.length === 0 ? <p className="subtle insert-panel__note">{s.key === "vars" ? "No provisioning variables are defined yet." : "This template declares no values of its own."}</p> : null}
                   {s.items.map((i) => (
                     <button type="button" key={i.key} className="insert-panel__item" title={i.text} onClick={() => onInsert(i.text)}>
                       <span className="mono">{i.label}{i.sensitive ? <> <Badge tone="warn">secret</Badge></> : null}</span>

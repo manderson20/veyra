@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Button, Callout, Card, ConfirmDialog, DataTable, Dialog, EmptyState, PageHeader, TextArea, TextField, useToast, type Column } from "@/components/ui";
+import { Button, Callout, Card, ConfirmDialog, DataTable, Dialog, EmptyState, PageHeader, SelectField, TextArea, TextField, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { FirmwareImage } from "@/lib/types";
@@ -20,7 +20,10 @@ function size(bytes: number): string {
 function UploadDialog({ open, onClose, onUploaded }: { open: boolean; onClose: () => void; onUploaded: () => void }) {
   const toast = useToast();
   const errors = useFormErrors();
-  const [manufacturer, setManufacturer] = useState("Poly");
+  const [manufacturer, setManufacturer] = useState("");
+  // The manufacturers Veyra has templates for: a profile only offers an image
+  // whose manufacturer matches its template's exactly.
+  const catalog = useApiData<{ manufacturers: { name: string; models: string[] }[] }>(open ? "/provisioning/models" : null);
   const [version, setVersion] = useState("");
   const [models, setModels] = useState("");
   const [notes, setNotes] = useState("");
@@ -54,7 +57,7 @@ function UploadDialog({ open, onClose, onUploaded }: { open: boolean; onClose: (
 
   return (
     <Dialog open={open} onClose={onClose} busy={busy} title="Upload a firmware image"
-      description="Vendor firmware files (for Poly VVX: the sip.ld file for the UC Software release). Up to 512 MB; the file keeps its name because phones request it by name."
+      description="The vendor's firmware file, as it comes from the vendor (for example the sip.ld file for Poly VVX, or the .rom or .bin file for Yealink and Grandstream). Up to 512 MB; the file keeps its name because phones request it by name."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="fw-form" loading={busy} disabled={!file || !version.trim() || !manufacturer.trim()}>Upload</Button></>}>
       <form id="fw-form" className="stack stack--sm" onSubmit={submit}>
         <div className="field">
@@ -63,11 +66,44 @@ function UploadDialog({ open, onClose, onUploaded }: { open: boolean; onClose: (
           {errors.fields.file ? <p className="field__error">{errors.fields.file}</p> : null}
         </div>
         <div className="form-grid">
-          <TextField label="Manufacturer" required value={manufacturer} error={errors.fields.manufacturer} onChange={(e) => setManufacturer(e.target.value)} />
+          <SelectField label="Manufacturer" required value={manufacturer} error={errors.fields.manufacturer} placeholder="Choose"
+            options={(catalog.data?.manufacturers ?? []).map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => setManufacturer(e.target.value)} />
           <TextField label="Version" required value={version} error={errors.fields.version} placeholder="e.g. 6.4.5.1234" onChange={(e) => setVersion(e.target.value)} />
         </div>
         <TextField label="Models" value={models} error={errors.fields.models} placeholder="VVX 411, VVX 450" help="Comma-separated; leave blank when the image fits every model of the manufacturer." onChange={(e) => setModels(e.target.value)} />
         <TextArea label="Notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
+      </form>
+    </Dialog>
+  );
+}
+
+function EditDialog({ image, onClose, onSaved }: { image: FirmwareImage; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const errors = useFormErrors();
+  const [models, setModels] = useState(image.models.join(", "));
+  const [notes, setNotes] = useState(image.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    errors.clear();
+    try {
+      await api.patch(`/provisioning/firmware/${image.id}`, { models: models.split(",").map((m) => m.trim()).filter(Boolean), notes: notes.trim() || null });
+      toast.success(`Firmware ${image.version} saved`);
+      onSaved();
+    } catch (err) {
+      errors.set(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onClose={onClose} busy={busy} title={`Edit ${image.manufacturer} ${image.version}`}
+      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="fw-edit-form" loading={busy}>Save</Button></>}>
+      <form id="fw-edit-form" className="stack stack--sm" onSubmit={save}>
+        <TextField label="Models" value={models} error={errors.fields.models} placeholder="VVX 411, VVX 450" help="Comma-separated; blank when the image fits every model of the manufacturer." onChange={(e) => setModels(e.target.value)} />
+        <TextArea label="Notes" rows={3} value={notes} error={errors.fields.notes} onChange={(e) => setNotes(e.target.value)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>
@@ -80,6 +116,7 @@ export default function FirmwarePage() {
   const list = useApiData<{ items: FirmwareImage[] }>("/provisioning/firmware");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleting, setDeleting] = useState<FirmwareImage | undefined>();
+  const [editing, setEditing] = useState<FirmwareImage | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const editable = can("provisioning.write");
@@ -105,7 +142,12 @@ export default function FirmwarePage() {
     { key: "use", header: "Assigned to", render: (f) => <span>{f.profiles} profile{f.profiles === 1 ? "" : "s"}, {f.devices} phone{f.devices === 1 ? "" : "s"}</span> },
     { key: "uploaded", header: "Uploaded", render: (f) => <span>{formatDateTime(f.created_at)}{f.uploaded_by ? <span className="table__secondary" style={{ display: "block" }}>by {f.uploaded_by}</span> : null}</span> },
     { key: "sha", header: "SHA-256", render: (f) => <span className="mono" title={f.sha256}>{f.sha256.slice(0, 12)}…</span> },
-    ...(editable ? [{ key: "actions", header: "", render: (f: FirmwareImage) => <Button size="sm" variant="ghost" icon="trash" aria-label={`Delete ${f.version}`} disabled={f.profiles + f.devices > 0} onClick={() => setDeleting(f)} /> }] : []),
+    ...(editable ? [{ key: "actions", header: "", render: (f: FirmwareImage) => (
+      <span className="row" style={{ gap: 4 }}>
+        <Button size="sm" variant="ghost" onClick={() => setEditing(f)}>Edit</Button>
+        <Button size="sm" variant="ghost" icon="trash" aria-label={`Delete ${f.version}`} disabled={f.profiles + f.devices > 0} onClick={() => setDeleting(f)} />
+      </span>
+    ) }] : []),
   ];
   return (
     <div className="stack">
@@ -115,6 +157,7 @@ export default function FirmwarePage() {
         <DataTable columns={columns} rows={list.data?.items} rowKey={(f) => f.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Firmware images"
           empty={<EmptyState icon="update" title="No firmware uploaded">{editable ? "Upload the vendor's firmware file for the phones you manage, then assign it in a device profile." : null}</EmptyState>} />
       </Card>
+      {editing ? <EditDialog key={editing.id} image={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.reload(); }} /> : null}
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={() => list.reload()} />
       <ConfirmDialog open={!!deleting} title={`Delete firmware ${deleting?.version ?? ""}?`} confirmLabel="Delete" tone="danger" busy={deleteBusy} error={deleteError} onConfirm={remove} onCancel={() => { setDeleting(undefined); setDeleteError(null); }}>
         <p>Phones that already run this version are not affected.</p>

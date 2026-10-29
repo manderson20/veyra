@@ -100,6 +100,8 @@ export default function CallHistoryPage() {
   const [org, setOrg] = useState("");
   const [direction, setDirection] = useState("");
   const [outcome, setOutcome] = useState("");
+  const [minSeconds, setMinSeconds] = useState("");
+  const [recorded, setRecorded] = useState("");
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [offset, setOffset] = useState(0);
@@ -118,6 +120,8 @@ export default function CallHistoryPage() {
     direction: direction || undefined,
     outcome: outcome || undefined,
     q: debounced || undefined,
+    min_seconds: minSeconds || undefined,
+    recorded: recorded || undefined,
   };
   const list = useApiData<Page<CallHistoryItem>>("/calls/history", { ...stable, limit: LIMIT, offset });
   const exportHref = `${API_BASE}/calls/history/export.csv?${new URLSearchParams(
@@ -166,6 +170,14 @@ export default function CallHistoryPage() {
           <div style={{ minWidth: 150 }}>
             <SelectField label={<span className="sr-only">Outcome</span>} value={outcome} placeholder="All outcomes"
               options={Object.entries(OUTCOME).map(([value, o]) => ({ value, label: o.label }))} onChange={(e) => { setOutcome(e.target.value); setOffset(0); }} />
+          </div>
+          <div style={{ minWidth: 150 }}>
+            <SelectField label={<span className="sr-only">Talk time</span>} value={minSeconds} placeholder="Any length"
+              options={[{ value: "30", label: "Talked 30 s or more" }, { value: "60", label: "Talked 1 min or more" }, { value: "300", label: "Talked 5 min or more" }, { value: "900", label: "Talked 15 min or more" }]} onChange={(e) => { setMinSeconds(e.target.value); setOffset(0); }} />
+          </div>
+          <div style={{ minWidth: 150 }}>
+            <SelectField label={<span className="sr-only">Recording</span>} value={recorded} placeholder="Recorded or not"
+              options={[{ value: "true", label: "Recorded" }, { value: "false", label: "Not recorded" }]} onChange={(e) => { setRecorded(e.target.value); setOffset(0); }} />
           </div>
         </div>
         <DataTable columns={columns} rows={list.data?.items} rowKey={(c) => c.id} loading={list.loading} error={list.error} onRetry={list.reload}

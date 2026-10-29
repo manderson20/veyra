@@ -23,7 +23,7 @@ import {
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import type { EmergencyCallRow, EmergencySiteDetail, EmergencySiteRow, Extension, Page } from "@/lib/types";
+import type { EmergencyCallRow, EmergencySiteDetail, EmergencySiteRow, Extension, Page, PagingPage } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
@@ -40,6 +40,8 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
   const [emails, setEmails] = useState("");
   const [phones, setPhones] = useState("");
   const [webhook, setWebhook] = useState(true);
+  const [pageId, setPageId] = useState("");
+  const pages = useApiData<Page<PagingPage>>(siteId ? "/pages" : null, { limit: 200 });
   const [testResult, setTestResult] = useState("");
   const [busy, setBusy] = useState(false);
   useOnChange(detail.data, (d) => {
@@ -50,6 +52,7 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
     setEmails((d.settings.recipients.emails ?? []).join("\n"));
     setPhones((d.settings.recipients.extensions ?? []).join(", "));
     setWebhook(d.settings.recipients.webhook ?? true);
+    setPageId(d.settings.recipients.page_id ?? "");
   });
 
   const save = async () => {
@@ -65,6 +68,7 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
           emails: emails.split(/[\n,;]/).map((e) => e.trim()).filter(Boolean),
           extensions: phones.split(/[\n,;]/).map((e) => e.trim()).filter(Boolean),
           webhook,
+          page_id: pageId || null,
         },
       });
       toast.success("Emergency settings saved");
@@ -108,7 +112,10 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
   };
 
   const d = detail.data;
-  const siteExts = extensions.data?.items ?? [];
+  // The site's extensions first; all of them when none is on the site.
+  const allExts = extensions.data?.items ?? [];
+  const onSite = allExts.filter((e) => e.site_id === siteId);
+  const siteExts = onSite.length ? onSite : allExts;
   return (
     <Dialog open={!!siteId} onClose={onClose} title={d ? `Emergency calling: ${d.name}` : "Emergency calling"} size="lg" busy={busy}
       footer={<><Button onClick={onClose} disabled={busy}>Close</Button>{manage ? <Button variant="primary" onClick={save} loading={busy}>Save</Button> : null}</>}>
@@ -133,8 +140,11 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
               options={siteExts.map((e) => ({ value: e.id, label: `${e.number} — ${e.display_name}` }))} onChange={(e) => setResponder(e.target.value)} />
             <TextField label="Callback window (minutes)" type="number" min={1} max={1440} value={minutes} disabled={!manage} onChange={(e) => setMinutes(e.target.value)} />
           </div>
-          <TextArea label="Notify by email" rows={2} value={emails} disabled={!manage} onChange={(e) => setEmails(e.target.value)} placeholder="office@district.org" help="One address per line; needs Settings → Email." />
+          <TextArea label="Notify by email" rows={2} value={emails} disabled={!manage} onChange={(e) => setEmails(e.target.value)} placeholder="office@district.org" help="One address per line; needs System → Settings → Email delivery." />
           <TextField label="Ring these extensions" value={phones} disabled={!manage} onChange={(e) => setPhones(e.target.value)} placeholder="1000, 1001" help="Responder phones ring with the caller's extension as the name and hear it read out." />
+          <SelectField label="Play a recorded page" value={pageId} disabled={!manage} placeholder="No page"
+            options={[{ value: "", label: "No page" }, ...(pages.data?.items ?? []).filter((p) => p.audio).map((p) => ({ value: p.id, label: p.name }))]}
+            help="A recorded page (Paging) played into its zones when an emergency call is made from this site, for example an alert to the front office speakers." onChange={(e) => setPageId(e.target.value)} />
           <Checkbox label="Send the emergency.call webhook" checked={webhook} disabled={!manage} onChange={(e) => setWebhook(e.target.checked)} />
           {manage ? <Button onClick={testNotification} loading={busy}>Test the notification now</Button> : null}
           <Card title="Carrier test call">

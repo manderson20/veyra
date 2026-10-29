@@ -10,7 +10,7 @@ import { DEVICE_STATUS } from "@/app/(app)/devices/page";
 import { Badge, Button, Callout, Card, Checkbox, ConfirmDialog, DataTable, EmptyState, ErrorState, LoadingState, PageHeader, SelectField, Switch, TabPanel, Tabs, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { Device, DeviceInput, DevicePreview, DeviceProfile, Extension, LineKey, Page, ReprovisionResult, ResolvedVariable } from "@/lib/types";
+import type { Building, Device, DeviceInput, DevicePreview, DeviceProfile, Extension, LineKey, Page, ReprovisionResult, ResolvedVariable } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -20,6 +20,7 @@ import { useSession } from "@/hooks/useSession";
 interface Draft {
   mac: string; manufacturer: string; model: string; label: string; site_id: string; profile_id: string;
   extension_id: string; lines: string[]; keys: LineKey[] | null; values: Record<string, string>; firmware_image_id: string; enabled: boolean;
+  building_id: string; location: string;
 }
 
 function draftOf(d: Device): Draft {
@@ -27,6 +28,7 @@ function draftOf(d: Device): Draft {
     mac: d.mac_display, manufacturer: d.manufacturer, model: d.model, label: d.label ?? "", site_id: d.site_id ?? "", profile_id: d.profile_id ?? "",
     extension_id: d.extension?.id ?? "", lines: d.lines.map((l) => l.id), keys: d.keys, values: Object.fromEntries(Object.entries(d.values).map(([k, v]) => [k, String(v)])),
     firmware_image_id: d.firmware?.source === "device" ? d.firmware.id : "", enabled: d.is_enabled,
+    building_id: d.building_id ?? "", location: d.location ?? "",
   };
 }
 
@@ -35,6 +37,7 @@ function bodyOf(d: Draft): DeviceInput {
     mac_address: d.mac.trim(), manufacturer: d.manufacturer.trim(), model: d.model.trim(), label: d.label.trim() || null, site_id: d.site_id || null,
     profile_id: d.profile_id || null, primary_extension_id: d.extension_id || null, lines: d.lines, keys: d.keys,
     values: Object.fromEntries(Object.entries(d.values).filter(([, v]) => v.trim() !== "")), firmware_image_id: d.firmware_image_id || null, is_enabled: d.enabled,
+    building_id: d.building_id || null, location: d.location.trim() || null,
   };
 }
 
@@ -59,6 +62,7 @@ function DeviceView() {
   const orgId = device.data?.organization_id ?? "";
   const profiles = useApiData<Page<DeviceProfile>>(orgId ? "/device-profiles" : null, { organization_id: orgId, limit: 200 });
   const extensions = useApiData<Page<Extension>>(orgId ? "/extensions" : null, { organization_id: orgId, limit: 500 });
+  const buildings = useApiData<Building[]>(orgId ? "/buildings" : null, { organization_id: orgId });
   const selectedProfile = (profiles.data?.items ?? []).find((p) => p.id === draft?.profile_id);
   const options = useProfileOptions(orgId, selectedProfile?.template_key);
 
@@ -167,6 +171,10 @@ function DeviceView() {
               <SelectField label="Device profile" disabled={!editable} value={draft.profile_id} error={errors.fields.profile_id} placeholder="No profile (nothing is served)"
                 options={(profiles.data?.items ?? []).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => set({ profile_id: e.target.value, values: {} })} />
               <SelectField label="Site" disabled={!editable} value={draft.site_id} error={errors.fields.site_id} placeholder="No site" options={options.sites.map((s) => ({ value: s.id, label: s.name }))} onChange={(e) => set({ site_id: e.target.value })} />
+              <SelectField label="Building" disabled={!editable} value={draft.building_id} error={errors.fields.building_id} placeholder="No building"
+                options={[{ value: "", label: "No building" }, ...(buildings.data ?? []).filter((b) => !draft.site_id || b.site_id === draft.site_id).map((b) => ({ value: b.id, label: b.name }))]} onChange={(e) => set({ building_id: e.target.value })} />
+              <TextField label="Location (dispatchable)" disabled={!editable} value={draft.location} error={errors.fields.location} placeholder="Room 101, first floor"
+                help="Floor and room for emergency calls from this phone; wins over the extension's location." onChange={(e) => set({ location: e.target.value })} />
             </div>
             <SelectField label="Extension (line 1)" disabled={!editable} value={draft.extension_id} error={errors.fields.primary_extension_id} placeholder="No extension" options={extOptions} onChange={(e) => set({ extension_id: e.target.value })} />
             <div className="stack stack--sm">

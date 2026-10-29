@@ -23,7 +23,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import type { Extension, NextNumber, Page, RegistrationContact, User } from "@/lib/types";
+import type { Extension, ExtensionTemplate, NextNumber, Page, RegistrationContact, User } from "@/lib/types";
 import { EMPTY_PLACE, PlaceFields, placeBody, type Place } from "@/components/extensions/PlaceFields";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -151,7 +151,14 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
   const { session } = useSession();
   const errors = useFormErrors();
   const { organizations } = useOrganizationOptions(open);
-  const users = useApiData<Page<User>>(open ? "/users" : null, { limit: 200 });
+  const [userQ, setUserQ] = useState("");
+  const [userQDebounced, setUserQDebounced] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => setUserQDebounced(userQ.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [userQ]);
+  const users = useApiData<Page<User>>(open ? "/users" : null, { limit: 200, q: userQDebounced || undefined });
+  const [templateId, setTemplateId] = useState("");
   const [org, setOrg] = useState("");
   const [number, setNumber] = useState("");
   const [name, setName] = useState("");
@@ -188,6 +195,8 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
       setCidName("");
       setCidNumber("");
       setEmergencyCid("");
+      setTemplateId("");
+      setUserQ("");
       setPlace(EMPTY_PLACE);
       setEnabled(true);
       errors.clear();
@@ -197,6 +206,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
 
   // Callers without a home organization who can see exactly one get it by default.
   const effectiveOrg = org || (organizations.length === 1 ? organizations[0]!.id : "");
+  const templates = useApiData<Page<ExtensionTemplate>>(open && effectiveOrg ? "/extension-templates" : null, { organization_id: effectiveOrg, limit: 200 });
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === effectiveOrg && u.is_active);
   const selectedUser = orgUsers.find((u) => u.id === userId);
 
@@ -215,6 +225,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
         emergency_caller_id_number: emergencyCid.trim() || null,
         ...placeBody(place),
         is_enabled: enabled,
+        template_id: templateId || null,
       });
       toast.success(`Extension ${created.number} created`, "Show the SIP credentials to configure the phone, then deploy the configuration.");
       onClose();
@@ -249,9 +260,17 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
           </div>
         </div>
         <TextField label="Name" required placeholder="e.g. Front Office or Jane Doe" value={name} error={errors.fields.display_name} onChange={(e) => setName(e.target.value)} />
+        {users.data && (users.data.total > users.data.items.length || userQ) ? (
+          <TextField label="Find a user" value={userQ} placeholder="Name or email" onChange={(e) => setUserQ(e.target.value)} help="There are many users; type to narrow the list below." />
+        ) : null}
         <SelectField label="Assigned user (optional)" value={userId} error={errors.fields.user_id} placeholder="Shared phone (no user)"
           help={selectedUser ? selectedUser.email : "Users of the chosen organization."}
           options={orgUsers.map((u) => ({ value: u.id, label: u.display_name }))} onChange={(e) => { setUserId(e.target.value); if (!name && e.target.value) setName(orgUsers.find((u) => u.id === e.target.value)?.display_name ?? ""); }} />
+        {(templates.data?.items ?? []).length ? (
+          <SelectField label="Template (optional)" value={templateId} error={errors.fields.template_id} placeholder="No template"
+            options={[{ value: "", label: "No template" }, ...(templates.data?.items ?? []).map((t) => ({ value: t.id, label: t.name }))]}
+            help="The template's settings apply to the new extension; locked ones stay as the template has them." onChange={(e) => setTemplateId(e.target.value)} />
+        ) : null}
         <div className="form-grid">
           <TextField label="Caller ID name" value={cidName} error={errors.fields.caller_id_name} help="Shown to internal callers. Defaults to the name." onChange={(e) => setCidName(e.target.value)} />
           <TextField label="Caller ID number" value={cidNumber} error={errors.fields.caller_id_number} help="Defaults to the extension number." onChange={(e) => setCidNumber(e.target.value)} />

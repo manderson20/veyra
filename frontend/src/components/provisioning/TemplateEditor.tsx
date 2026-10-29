@@ -6,7 +6,7 @@ import { InsertPanel } from "@/components/provisioning/InsertPanel";
 import { defaultValue, newRow, rowToVariable, VariablesEditor, type VarRow } from "@/components/provisioning/VariablesEditor";
 import { Button, Callout, Card, SelectField, TextArea, TextField, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { TemplateCatalog, TemplateDetail, TemplateVariable } from "@/lib/types";
+import type { ProvisioningVariable, TemplateCatalog, TemplateDetail, TemplateVariable } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -24,6 +24,7 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
   const errors = useFormErrors();
   const doc = useApiData<ExportDoc>(`/provisioning/templates/${encodeURIComponent(template.key)}/export`);
   const catalog = useApiData<TemplateCatalog>("/provisioning/template-catalog");
+  const defined = useApiData<ProvisioningVariable[]>("/provisioning/variables");
   const [name, setName] = useState(template.name);
   const [version, setVersion] = useState(template.version);
   const [models, setModels] = useState(template.models.join(", "));
@@ -135,7 +136,7 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
               <TextArea id={SOURCE_ID} label={<span className="mono">{current}</span>} rows={26} spellCheck={false} style={{ fontFamily: "var(--font-mono)", fontSize: 13 }} value={sources[current] ?? ""} onChange={(e) => setSources((s) => ({ ...s, [current]: e.target.value }))} />
             ) : <p className="muted">This template has no source files of its own.</p>}
           </div>
-          {catalog.data && current ? <InsertPanel catalog={catalog.data} variables={template.variables} onInsert={insert} /> : null}
+          {catalog.data && current ? <InsertPanel catalog={catalog.data} variables={template.variables} defined={defined.data ?? []} onInsert={insert} /> : null}
         </div>
       </Card>
       {problems.length ? <Callout tone="danger" title="The template did not validate"><ul style={{ margin: 0, paddingLeft: 18 }}>{problems.map((p) => <li key={p}>{p}</li>)}</ul></Callout> : errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
