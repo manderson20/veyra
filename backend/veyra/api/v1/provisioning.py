@@ -24,6 +24,7 @@ from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden
 from veyra.core.models import DeviceProfile, ProvisioningTemplate
 from veyra.core.security.principal import Principal
+from veyra.provisioning.catalog import payload as catalog_payload
 from veyra.provisioning.renderer import (
     MAX_SOURCE_BYTES,
     TemplateCatalog,
@@ -132,6 +133,13 @@ def list_templates(
             and parent.manifest.template.version != item["parent_version"]
         )
     return {"items": items, "load_errors": catalog.load_errors}
+
+
+@router.get("/template-catalog", summary="Facts and snippets for the template editor")
+def template_catalog(
+    principal: Principal = Depends(require("provisioning.read")),
+) -> dict[str, Any]:
+    return catalog_payload()
 
 
 @router.get("/templates/{key}", summary="Template details with resolved inheritance")

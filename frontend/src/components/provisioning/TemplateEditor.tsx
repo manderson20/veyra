@@ -2,23 +2,28 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { InsertPanel } from "@/components/provisioning/InsertPanel";
+import { defaultValue, newRow, rowToVariable, VariablesEditor, type VarRow } from "@/components/provisioning/VariablesEditor";
 import { Button, Callout, Card, SelectField, TextArea, TextField, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { TemplateDetail } from "@/lib/types";
+import type { TemplateCatalog, TemplateDetail, TemplateVariable } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 
 interface ExportDoc {
-  manifest: { template: Record<string, unknown>; files: { name: string; source: string; format: string }[]; variables: unknown[]; defaults: Record<string, unknown>; features: string[]; spec_version: number };
+  manifest: { template: Record<string, unknown>; files: { name: string; source: string; format: string }[]; variables: TemplateVariable[]; defaults: Record<string, string | number | boolean>; features: string[]; spec_version: number };
   sources: Record<string, string>;
 }
 
-/** Edit a local template's manifest fields and source files in place (docs/DEVICE_PROVISIONING.md §7). */
+const SOURCE_ID = "template-source";
+
+/** Edit a local template's manifest fields, variables and source files in place (docs/DEVICE_PROVISIONING.md §7). */
 export function TemplateEditor({ template, onSaved }: { template: TemplateDetail; onSaved: (t: TemplateDetail) => void }) {
   const toast = useToast();
   const errors = useFormErrors();
   const doc = useApiData<ExportDoc>(`/provisioning/templates/${encodeURIComponent(template.key)}/export`);
+  const catalog = useApiData<TemplateCatalog>("/provisioning/template-catalog");
   const [name, setName] = useState(template.name);
   const [version, setVersion] = useState(template.version);
   const [models, setModels] = useState(template.models.join(", "));
@@ -28,13 +33,34 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
   const [current, setCurrent] = useState("");
   const [busy, setBusy] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
+  const [rows, setRows] = useState<VarRow[]>([]);
+  const [defaults, setDefaults] = useState<Record<string, string>>({});
 
   useOnChange(doc.data, (d) => {
     if (d) {
       setSources(d.sources);
-      setCurrent(Object.keys(d.sources)[0] ?? "");
+      setCurrent((c) => (c && c in d.sources ? c : Object.keys(d.sources)[0] ?? ""));
+      setRows(d.manifest.variables.map((v) => newRow(v)));
+      setDefaults(Object.fromEntries(Object.entries(d.manifest.defaults ?? {}).map(([k, v]) => [k, String(v)])));
     }
   });
+
+  const own = new Set((doc.data?.manifest.variables ?? []).map((v) => v.name));
+  const core = new Set(catalog.data?.core_variables ?? []);
+  const inherited = template.variables.filter((v) => !own.has(v.name) && !core.has(v.name));
+
+  const insert = (text: string) => {
+    if (!current) return;
+    const el = document.getElementById(SOURCE_ID) as HTMLTextAreaElement | null;
+    const value = sources[current] ?? "";
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? start;
+    setSources((s) => ({ ...s, [current]: value.slice(0, start) + text + value.slice(end) }));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + text.length, start + text.length);
+    });
+  };
   useOnChange(template, (t) => { setName(t.name); setVersion(t.version); setModels(t.models.join(", ")); setStatus(t.status); setDescription(t.description); });
 
   const save = async (e: FormEvent) => {
@@ -44,8 +70,17 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
     errors.clear();
     setProblems([]);
     try {
+      // Defaults for inherited variables: empty keeps the parent's.
+      const nextDefaults: Record<string, string | number | boolean> = { ...doc.data.manifest.defaults };
+      for (const v of inherited) {
+        const value = defaultValue(v.type, defaults[v.name] ?? "");
+        if (value === null || v.sensitive) delete nextDefaults[v.name];
+        else nextDefaults[v.name] = value;
+      }
       const manifest = {
         ...doc.data.manifest,
+        variables: rows.map(rowToVariable),
+        defaults: nextDefaults,
         template: {
           ...doc.data.manifest.template,
           name: name.trim(),
@@ -88,15 +123,21 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
             </dl>
           </div>
         </Card>
-        <Card title="Files" subtitle="Jinja2 sources rendered in a sandbox. Use {% extends %} and {% block %} to override parts of the parent.">
+        <Card title="Variables" subtitle="Settings a profile or device can adjust; files use them as {{ name }}.">
+          <VariablesEditor rows={rows} onRows={setRows} inherited={inherited} defaults={defaults} onDefaults={setDefaults} />
+        </Card>
+      </div>
+      <Card title="Files" subtitle="Jinja2 sources rendered in a sandbox. Use {% extends %} and {% block %} to override parts of the parent.">
+        <div className="template-files">
           <div className="stack stack--sm">
             <SelectField label="File" value={current} options={files.map((f) => ({ value: f, label: f }))} onChange={(e) => setCurrent(e.target.value)} />
             {current ? (
-              <TextArea label={<span className="mono">{current}</span>} rows={22} spellCheck={false} style={{ fontFamily: "var(--font-mono)", fontSize: 13 }} value={sources[current] ?? ""} onChange={(e) => setSources((s) => ({ ...s, [current]: e.target.value }))} />
+              <TextArea id={SOURCE_ID} label={<span className="mono">{current}</span>} rows={26} spellCheck={false} style={{ fontFamily: "var(--font-mono)", fontSize: 13 }} value={sources[current] ?? ""} onChange={(e) => setSources((s) => ({ ...s, [current]: e.target.value }))} />
             ) : <p className="muted">This template has no source files of its own.</p>}
           </div>
-        </Card>
-      </div>
+          {catalog.data && current ? <InsertPanel catalog={catalog.data} variables={template.variables} onInsert={insert} /> : null}
+        </div>
+      </Card>
       {problems.length ? <Callout tone="danger" title="The template did not validate"><ul style={{ margin: 0, paddingLeft: 18 }}>{problems.map((p) => <li key={p}>{p}</li>)}</ul></Callout> : errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       <div className="form-actions"><Button variant="primary" type="submit" loading={busy} icon="check">Save template</Button></div>
     </form>

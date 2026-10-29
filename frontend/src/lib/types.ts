@@ -972,6 +972,13 @@ export interface TemplateVariable {
   pattern: string | null;
 }
 
+/** The template editor's catalog of facts and snippets (GET /provisioning/template-catalog). */
+export interface TemplateCatalog {
+  groups: { key: string; title: string; description: string; loop: string | null; facts: { expr: string; description: string; sensitive: boolean }[] }[];
+  snippets: { title: string; description: string; text: string }[];
+  core_variables: string[];
+}
+
 export interface TemplateDetail extends TemplateSummary {
   chain: string[];
   files: { name: string; source: string; format: string }[];

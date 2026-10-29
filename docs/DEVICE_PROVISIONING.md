@@ -244,6 +244,16 @@ values for the things Veyra already knows:
 | `server` | `sip_host`, `sip_port`, `transport`, `provisioning_url`, `ntp_server`, `timezone` (IANA), `dst` (§4.3), `pickup_prefix` (`**`), `group_pickup_code` (`*8`) |
 | `features` | Booleans derived from the extension: `voicemail` (box exists), `blf` (any BLF key) |
 
+The table above is the original design; the authoritative list, with what
+each fact holds, is `veyra/provisioning/catalog.py` (served as `GET
+/provisioning/template-catalog` for the template editor, §7). Since this
+table, `lines[]` gained `voicemail`, `hotline`, `hotline_delay` and
+`fax_t38`, and `server` gained `host`, `provisioning_path`,
+`provisioning_server_type`, `directory_url`, `voicemail_number`,
+`feature_codes`, `firmware_url`, `firmware_version` and `ca_certificate`.
+A test checks every catalog entry against the facts of a real device, so
+the two cannot drift apart.
+
 The core scalar variables of version 1 (`sip_username`, `timezone`, …)
 remain and are filled from line 1 for compatibility. Validation (`validate`)
 allows the fact names; `coerce_values` leaves them untouched. Facts are
@@ -400,6 +410,16 @@ hour).
   and **Save as new version**. Official templates show "Customize" which
   creates a local child under a chosen key, pre-filled with the parent's
   file as an `{% extends %}` skeleton. Export/import stay.
+  *Built 0.27.43:* beside the source editor, **Insert a Veyra variable**
+  lists this template's values, every fact (device, organization, lines,
+  keys, paging, paging zones, server, features) with what it holds, and
+  common snippets; search filters them, a click inserts `{{ … }}` (or the
+  `{% for … %}` loop of a list) at the cursor, secrets are marked. The
+  **Variables** card edits the template's own variables as a form (name,
+  type text/number/yes-no, default, description, required, secret, pattern
+  and maximum length for text) and gives inherited variables a default of
+  this template's own (saved in the manifest's `defaults`; empty keeps the
+  parent's).
 * **Provisioning → Device profiles**: list; form with template (families
   first), values (one field per resolved variable, defaults shown), line
   keys editor, paging zone memberships (subscribe, transmit, role), site.
