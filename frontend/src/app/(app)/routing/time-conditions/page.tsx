@@ -63,7 +63,7 @@ export default function TimeConditionsPage() {
     <div className="stack">
       <PageHeader
         title="Time conditions"
-        description="Opening hours and holidays. An inbound route with a time condition sends closed-hours calls to its after-hours extension."
+        description="Opening hours and holidays. An inbound route with a time condition sends calls outside these hours to its after-hours destination. A time condition can also be forced open or closed, from here or from a phone."
         actions={can("routing.write") ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New time condition</Button> : null}
       />
       <PendingChanges refreshKey={list.data?.total} />

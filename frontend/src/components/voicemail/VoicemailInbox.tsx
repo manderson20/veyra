@@ -222,7 +222,7 @@ function EmailDialog({ message, email, own, busy, error, onClose, onSend }: {
   onClose: () => void; onSend: (del: boolean, to: string) => void;
 }) {
   const [to, setTo] = useState(email ?? "");
-  const [del, setDel] = useState(true);
+  const [del, setDel] = useState(false);
   // Users send to their box's address (or their account's); administrators choose.
   const valid = own || /^[^@\s]+@[^@\s]+$/.test(to.trim());
   return (

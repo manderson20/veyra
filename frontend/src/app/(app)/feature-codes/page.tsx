@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Callout, Card, DataTable, PageHeader, SelectField, Switch, TextField, useToast, type Column } from "@/components/ui";
+import { Button, Callout, Card, DataTable, PageHeader, SelectField, Switch, TextField, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import type { FeatureCode, FeatureCodePreset, FeatureCodes } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -70,7 +70,6 @@ export default function FeatureCodesPage() {
           onChange={(e) => setDraft((d) => ({ ...d, [c.key]: { code: d[c.key]?.code ?? c.code, enabled: e.target.checked } }))} />
       ),
     },
-    { key: "ms", header: "", render: (c) => c.milestone > 18 ? <Badge tone="neutral">Milestone {c.milestone}</Badge> : null },
   ];
   const fixed = Object.entries(data.data?.fixed ?? {});
   return (

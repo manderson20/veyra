@@ -109,7 +109,7 @@ export function IvrMenuFields({ draft, onChange, errors, organizationId, current
         <TextField label="Name" required autoFocus={autoFocus} disabled={disabled} value={draft.name} error={errors.name} placeholder="e.g. Main menu"
           help={current ? <>Dialplan context <span className="mono">{current.context}</span> stays the same.</> : "Also names the menu for routes and other menus."} onChange={(e) => onChange({ name: e.target.value })} />
         <SelectField label="Menu prompt" required disabled={disabled} value={draft.prompt_id} error={errors.prompt_id}
-          placeholder={prompts.loading ? "Loading prompts…" : promptOptions.length ? "Choose a prompt" : "No prompts yet (Telephony → Prompts)"}
+          placeholder={prompts.loading ? "Loading prompts…" : promptOptions.length ? "Choose a prompt" : "No prompts yet (Telephony → Audio)"}
           help="Played when the call arrives; callers may press a key while it plays." options={promptOptions} onChange={(e) => onChange({ prompt_id: e.target.value })} />
       </div>
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />

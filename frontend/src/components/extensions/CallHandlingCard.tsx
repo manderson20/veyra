@@ -76,7 +76,7 @@ export function CallHandlingCard({ base, dnd, editable, onChanged, onDirty, ring
           <TextField label="Forward when the phone is offline to" inputMode="tel" disabled={!editable || !s} value={offline} error={errors.fields.cf_unavailable} onChange={(e) => setOffline(e.target.value)} help="While no phone of this extension is connected (power, network or internet outage). Empty: as unanswered." />
           {ringTime ? <TextField label="Ring time (seconds)" type="number" min={5} max={120} disabled={!editable || !s} value={ring} error={errors.fields.ring_seconds} onChange={(e) => setRing(e.target.value)} help="Before voicemail or the no-answer forward. Needs a deployment." /> : null}
         </div>
-        <p className="subtle">From the phone: *72 / *73 forward all, *90 / *91 on busy, *52 / *53 unanswered (Telephony → Feature Codes). Outside numbers leave through the organization’s outbound routes with this extension’s outbound caller ID.</p>
+        <p className="subtle">From the phone: forwarding has its own codes (by default *72 / *73 for all calls, *90 / *91 when busy, *52 / *53 when unanswered); the codes in use are listed on My Phone under Codes. Outside numbers leave through the organization’s outbound routes with this extension’s outbound caller ID.</p>
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
         {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save call handling</Button></div> : null}
       </form>

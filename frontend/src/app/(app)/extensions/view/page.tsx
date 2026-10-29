@@ -270,7 +270,7 @@ function ExtensionView() {
               <TextField label="Outbound caller ID name" disabled={!editable} value={outCidName} error={errors.fields.outbound_caller_id_name} help="Sent with the outbound number; carriers may replace it." onChange={(e) => setOutCidName(e.target.value)} />
             </div>
             <TextField label="Emergency caller ID number" inputMode="tel" disabled={!editable} value={emergencyCid} error={errors.fields.emergency_caller_id_number}
-              help="Presented on emergency calls (911) instead of the regular caller ID: the building's registered number. Otherwise the emergency route's number is used."
+              help="Presented on emergency calls (911) instead of the regular caller ID: the building's registered number. Otherwise the site's emergency number is used, then the emergency route's."
               onChange={(e) => setEmergencyCid(e.target.value)} />
             {saveBar}
           </form>

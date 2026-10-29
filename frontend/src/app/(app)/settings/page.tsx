@@ -66,10 +66,10 @@ export default function SettingsPage() {
       {session?.is_platform_admin ? <RetentionCard /> : null}
       {session?.is_platform_admin ? <PublicCertificateCard editable={can("system.settings.write")} /> : null}
       {session?.is_platform_admin ? <InstallationKeyCard editable={can("system.settings.write")} /> : null}
-      <Card title="Coming later">
-        <p className="muted">
-          Network, backup and branding settings are delivered in later milestones. They are not shown here until they
-          work. Single sign-on is under System → Sign-in.
+      <Card title="Elsewhere">
+        <p className="muted" style={{ margin: 0 }}>
+          SIP and media addresses are on System → Telephony Engine, backups on System → Backups, single sign-on on
+          System → Sign-in, and the Companion rollout on System → Companion rollout.
         </p>
       </Card>
     </div>

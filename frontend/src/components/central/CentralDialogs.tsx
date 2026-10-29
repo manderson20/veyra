@@ -110,7 +110,6 @@ export function PolicyDialog({ open, policy, onClose, onSaved }: { open: boolean
                   ))}
                 </div>
               ) : null}
-              <TextField label="Update source address (optional)" value={f.sourceUrl} placeholder="https://updates.example.org/veyra/" help="Empty keeps each instance's own source." onChange={(e) => set({ sourceUrl: e.target.value })} />
               <TextArea label="Update email recipients (optional)" rows={2} value={f.updateRecipients} help="One address per line. Empty keeps each instance's own list." onChange={(e) => set({ updateRecipients: e.target.value })} />
             </>
           ) : null}

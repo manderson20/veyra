@@ -210,7 +210,8 @@ export interface SetupStep {
   key: string;
   title: string;
   available: boolean;
-  milestone?: number;
+  /** Set up after the wizard, here. */
+  after?: string;
 }
 
 export interface SetupStatus {
@@ -683,6 +684,9 @@ export interface SystemHealth {
   cluster: ClusterStatus;
   active_calls: number | null;
   registrations: number | null;
+  /** False when these counts cover the whole server and are not shown to you. */
+  server_counts: boolean;
+  trunks: { total: number; up: number; known: number } | null;
 }
 
 export interface SystemInfo {

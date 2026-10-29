@@ -187,6 +187,7 @@ function CreateExtensionDialog({ open, onClose, onCreated }: { open: boolean; on
       setUserId("");
       setCidName("");
       setCidNumber("");
+      setEmergencyCid("");
       setPlace(EMPTY_PLACE);
       setEnabled(true);
       errors.clear();

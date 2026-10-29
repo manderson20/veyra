@@ -89,7 +89,7 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
       const saved = zone
         ? await api.patch<PagingZone>(`/paging-zones/${zone.id}`, body)
         : await api.post<PagingZone>("/paging-zones", { organization_id: effectiveOrg, ...body });
-      toast.success(zone ? "Paging zone saved" : `Paging zone "${saved.name}" created`, "Phones pick up the change at their next provisioning check.");
+      toast.success(zone ? "Paging zone saved" : `Paging zone "${saved.name}" created`, "Phones pick up the change at their next provisioning check; deploy the changes for dialling the zone.");
       onClose();
       onSaved(saved);
     } catch (err) {

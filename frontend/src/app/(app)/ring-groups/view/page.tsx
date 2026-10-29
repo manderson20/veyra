@@ -104,7 +104,7 @@ function RingGroupView() {
               <dt>Rings</dt><dd>{g.members.length ? `${g.members.length} phone${g.members.length === 1 ? "" : "s"}, ${RING_STRATEGY_LABELS[g.strategy].toLowerCase()}, ${g.ring_seconds} s${g.strategy !== "ringall" ? " each" : ""}` : "Nobody"}</dd>
               <dt>Busy members</dt><dd>{g.ring_busy_members ? "Rung anyway (call waiting)" : "Skipped"}</dd>
               <dt>If unanswered</dt><dd><DestinationLabel d={g.failover} /></dd>
-              <dt>Pickup</dt><dd><span className="mono">**{g.number}</span> is not needed: pick up the ringing member phone with <span className="mono">**</span>its number or <span className="mono">*8</span></dd>
+              <dt>Pickup</dt><dd>To answer a call ringing this group from another phone, pick up one of the ringing members: <span className="mono">**</span> and that member&apos;s extension, or <span className="mono">*8</span> from a phone in the same pickup group.</dd>
             </dl>
           </Card>
           <Card title="Information">

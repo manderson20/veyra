@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Button, Callout, Dialog, SelectField, TextField, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
+import { timeZones } from "@/lib/timezones";
 import type { Site, SiteInput } from "@/lib/types";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -19,6 +20,7 @@ export function SiteDialog({ open, onClose, site, onSaved }: { open: boolean; on
   const [org, setOrg] = useState("");
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("");
+  const zones = useMemo(() => timeZones(), []);
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
   const [region, setRegion] = useState("");
@@ -82,7 +84,8 @@ export function SiteDialog({ open, onClose, site, onSaved }: { open: boolean; on
         ) : null}
         <TextField label="Name" required autoFocus value={name} error={errors.fields.name} placeholder="e.g. Main Campus" onChange={(e) => setName(e.target.value)} />
         <div className="form-grid">
-          <TextField label="Time zone" value={timezone} error={errors.fields.timezone} placeholder="Organization default" help="IANA name such as America/Chicago." onChange={(e) => setTimezone(e.target.value)} />
+          <SelectField label="Time zone" value={timezone} error={errors.fields.timezone}
+            options={[{ value: "", label: "The organization's" }, ...zones.map((z) => ({ value: z, label: z.replace(/_/g, " ") }))]} onChange={(e) => setTimezone(e.target.value)} />
           <TextField label="Emergency caller ID number" inputMode="tel" value={emergency} error={errors.fields.emergency_caller_id_number}
             help="Default for this site's extensions on 911 calls (the building's registered number)." onChange={(e) => setEmergency(e.target.value)} />
         </div>

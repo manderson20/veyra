@@ -31,7 +31,7 @@ export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys
   };
   return (
     <div className="stack stack--sm">
-      {keys.length === 0 ? <p className="muted">No line keys. Line 1 is always the first key on Poly phones; add BLF, speed dial and paging keys here.</p> : null}
+      {keys.length === 0 ? <p className="muted">No line keys. The phone&apos;s own line comes first on its own; add more lines, BLF, speed dial, paging and other keys here.</p> : null}
       {keys.map((k, i) => (
         <div key={i} className="row" style={{ gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
           <span className="mono subtle" style={{ width: 24, paddingBottom: 10 }}>{i + 1}</span>

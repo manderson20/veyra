@@ -104,7 +104,7 @@ export default function SetupPage() {
       { key: "installation", title: "Installation", available: true },
       { key: "numbering", title: "Numbering plan", available: true },
       { key: "review", title: "Review", available: true },
-      ...later.map((s) => ({ key: s.key, title: s.title, available: false, note: s.milestone ? `Coming later (Milestone ${s.milestone})` : "Coming later" })),
+      ...later.map((s) => ({ key: s.key, title: s.title, available: false, note: s.after ? `After setup: ${s.after}` : "After setup" })),
     ];
   }, [status]);
 
@@ -290,8 +290,8 @@ export default function SetupPage() {
                     <dt>Extensions</dt><dd>{f.ext_length}-digit numbers from <span className="mono">{f.ext_first}</span> to <span className="mono">{f.ext_last}</span></dd>
                   </dl>
                   <Callout tone="neutral">
-                    Network, SIP, email, backup, update and high availability settings are configured in later releases;
-                    they are listed on the left as “coming later”. High availability is optional.
+                    Outside lines, email delivery, backups and updates are set up after this, in the places listed on the left.
+                    Once you are signed in, <strong>Help</strong> in the top bar has a guide for each, starting with <em>First steps after installing Veyra</em>.
                   </Callout>
                 </>
               ) : null}

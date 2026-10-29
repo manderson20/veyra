@@ -108,7 +108,7 @@ export default function DeviceProfilesPage() {
         </div>
         <DataTable columns={columns} rows={list.data?.items} rowKey={(p) => p.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Device profiles"
           onRowClick={(p) => router.push(`/device-profiles/view/?id=${p.id}`)} rowLabel={(p) => `Open profile ${p.name}`}
-          empty={<EmptyState icon="settings" title={debounced || org ? "No matching profiles" : "No device profiles yet"}>{!debounced && !org && editable ? "Create a profile from the Poly VVX family, then register phones against it." : null}</EmptyState>}
+          empty={<EmptyState icon="settings" title={debounced || org ? "No matching profiles" : "No device profiles yet"}>{!debounced && !org && editable ? "Create a profile for a family of phones (such as Poly VVX, Yealink or Grandstream), then register phones with it." : null}</EmptyState>}
           pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null} />
       </Card>
       <CreateProfileDialog open={createOpen} onClose={() => setCreateOpen(false)} onCreated={(p) => router.push(`/device-profiles/view/?id=${p.id}`)} />

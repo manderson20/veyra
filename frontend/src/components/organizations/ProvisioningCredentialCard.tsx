@@ -70,6 +70,14 @@ export function ProvisioningCredentialCard({ organizationId, editable, bootstrap
             description="Nothing to type on new phones, but anyone on that network can read the credential. Use it on a staging VLAN and rotate the credential after a batch of phones." />
         </div>
       ) : null}
+      {c && !c.http_enabled ? (
+        <p className="subtle" style={{ marginTop: 12 }}>
+          Plain-HTTP bootstrap is off, so new phones need the provisioning address and this credential typed in, or the Veyra
+          certificate installed some other way. To turn it on, add <span className="mono">VEYRA_PROVISIONING_HTTP=1</span> to
+          <span className="mono"> /etc/veyra/installer.conf</span> on the server and run the installer&apos;s upgrade again
+          (the guide <em>Connect phones to Veyra</em> under Help explains it).
+        </p>
+      ) : null}
       <ConfirmDialog open={confirm} title={c?.username ? "Rotate the enrollment credential?" : "Create the enrollment credential?"} confirmLabel={c?.username ? "Rotate" : "Create"} busy={busy} error={error} onConfirm={rotate} onCancel={() => { setConfirm(false); setError(null); }}>
         <p>Phones that have not completed their first provisioning will need the new password. Provisioned phones are unaffected.</p>
       </ConfirmDialog>

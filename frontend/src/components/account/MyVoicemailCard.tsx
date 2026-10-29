@@ -28,7 +28,7 @@ export function MyVoicemailCard() {
             <span className="row">
               {!b.is_enabled ? <Badge tone="neutral">Disabled</Badge> : null}
               {!b.shared ? <Button size="sm" onClick={() => setKeys(b)}>Greeting keys</Button> : null}
-              <Button size="sm" icon="key" onClick={() => setTarget(b)}>Change PIN</Button>
+              {!b.shared ? <Button size="sm" icon="key" onClick={() => setTarget(b)}>Change PIN</Button> : null}
             </span>
           </li>
         ))}

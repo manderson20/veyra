@@ -76,7 +76,7 @@ export default function PickupGroupsPage() {
     <div className="stack">
       <PageHeader
         title="Pickup groups"
-        description="Phones in a pickup group can answer each other's ringing calls by dialling *8. Any phone can pick up a specific phone of its organization with ** and the extension number."
+        description="Phones in a pickup group can answer each other's ringing calls by dialling *8. Picking up one particular phone with ** and its extension number works across the organization, or only within the same pickup group if the organization's setting limits it."
         actions={editable ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New pickup group</Button> : null}
       />
       <PendingChanges refreshKey={changed} />

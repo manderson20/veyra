@@ -127,7 +127,7 @@ export function ConferenceFields({ draft, onChange, errors, organizationId, curr
         <Checkbox label="Announce when participants join and leave" checked={draft.announce_join_leave} disabled={disabled} onChange={(e) => onChange({ announce_join_leave: e.target.checked })} />
         <Checkbox label="Play hold music to a participant who is alone" checked={draft.music_on_hold_alone} disabled={disabled} onChange={(e) => onChange({ music_on_hold_alone: e.target.checked })} />
         <Checkbox label="Participants wait until an administrator joins" description="Needs an administrator PIN; the room starts when someone enters it." checked={draft.wait_for_admin} disabled={disabled} onChange={(e) => onChange({ wait_for_admin: e.target.checked })} />
-        <Checkbox label="Record the conference" description="Recordings are written to the recordings folder (conferences/) on the server." checked={draft.record} disabled={disabled} onChange={(e) => onChange({ record: e.target.checked })} />
+        <Checkbox label="Record the conference" description="Each conference is recorded and listed under Call Recording, marked Conference, with the same access rules and retention as other recordings." checked={draft.record} disabled={disabled} onChange={(e) => onChange({ record: e.target.checked })} />
       </div>
       <Switch label="Enabled" description="A disabled room is left out of the phone system; routes that point at it are flagged." checked={draft.is_enabled} disabled={disabled} onChange={(e) => onChange({ is_enabled: e.target.checked })} />
     </>

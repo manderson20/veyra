@@ -153,7 +153,7 @@ function CreateUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
       onClose={onClose}
       busy={busy}
       title="New user"
-      description="Create a local account. Single sign-on arrives in a later release."
+      description="Create an account with a Veyra password. With single sign-on (System → Sign-in), people can also get an account the first time they sign in."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="user-create" loading={busy}>Create user</Button></>}
     >
       <form id="user-create" className="stack stack--sm" onSubmit={submit}>

@@ -95,10 +95,10 @@ export function EmailDeliveryCard({ editable }: { editable: boolean }) {
   };
 
   return (
-    <Card title="Email delivery" subtitle="The SMTP server Veyra sends through: voicemail notifications now, other messages later. The password is stored encrypted and never shown." id="email-delivery"
+    <Card title="Email delivery" subtitle="The SMTP server Veyra sends all its email through: voicemail and fax, password reset links, alerts, reports, update and emergency notices. The password is stored encrypted and never shown." id="email-delivery"
       actions={<Badge tone={s.enabled ? (s.problems.length ? "warn" : "ok") : "neutral"}>{s.enabled ? (s.problems.length ? "Needs attention" : "Enabled") : "Off"}</Badge>}>
       <form className="stack stack--sm" onSubmit={submit}>
-        <Switch label="Send email" description="Off: voicemail stays in the boxes and nothing is sent." checked={d.enabled} disabled={!editable} onChange={(e) => setDraft({ ...d, enabled: e.target.checked })} />
+        <Switch label="Send email" description="Off: Veyra sends no email at all; voicemail stays in the boxes." checked={d.enabled} disabled={!editable} onChange={(e) => setDraft({ ...d, enabled: e.target.checked })} />
         <div className="form-grid">
           <TextField label="SMTP server" required={d.enabled} disabled={!editable} value={d.host} error={errors.fields.host} placeholder="smtp.example.org" autoComplete="off" spellCheck={false} onChange={(e) => setDraft({ ...d, host: e.target.value })} />
           <TextField label="Port" type="number" min={1} max={65535} required disabled={!editable} value={d.port} error={errors.fields.port} onChange={(e) => setDraft({ ...d, port: e.target.value })} />

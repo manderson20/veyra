@@ -63,8 +63,9 @@ export default function ProvisioningPage() {
         actions={can("provisioning.write") ? <Button icon="upload" onClick={() => setImportOpen(true)}>Import template</Button> : null}
       />
       <Callout tone="neutral">
-        Official templates are never modified. To customise one, export it and import it under a new key with the official template
-        as its parent; your local template overrides only what it changes. Device assignment arrives with device management (Milestone 9).
+        Official templates are never modified. To change one, open it and choose <strong>Customize</strong>: Veyra makes a local copy
+        under it that overrides only what you change, for your organization (or the whole server for a platform-wide copy).
+        Phones get a template through their device profile.
       </Callout>
       {errors.length ? (
         <Callout tone="warn" title="Some templates could not be loaded">
@@ -97,7 +98,7 @@ function RedirectServices() {
     <Card title="Redirect services" subtitle="New phones find Veyra through their vendor's redirect service or DHCP; register them in bulk with the device export.">
       <div className="stack stack--sm">
         <p>Provisioning URL: <span className="mono">{url}</span> <CopyButton text={url} /></p>
-        <p className="subtle">Phones authenticate with their organization&apos;s enrollment credential (Organizations → organization → Provisioning credential) the first time, then with their own.</p>
+        <p className="subtle">Phones authenticate with their organization&apos;s enrollment credential (Directory → Organizations → the organization → Phone provisioning) the first time, then with their own.</p>
         <ul className="stack stack--sm" style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {REDIRECT_VENDORS.map((v) => (
             <li key={v.name} className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>

@@ -40,7 +40,7 @@ function AccountPage() {
           <dl className="dl">
             <dt>Name</dt><dd>{u.display_name}</dd>
             <dt>Email address</dt><dd>{u.email}</dd>
-            <dt>Sign-in method</dt><dd>{u.auth_source === "local" ? "Local password" : u.auth_source}</dd>
+            <dt>Sign-in method</dt><dd>{SIGN_IN_METHOD[u.auth_source] ?? u.auth_source}</dd>
             <dt>Access</dt>
             <dd className="row">
               {session.is_platform_admin ? <Badge tone="info" icon="shield">Platform Administrator</Badge> : <span>{session.permissions.length} permission{session.permissions.length === 1 ? "" : "s"}</span>}
@@ -52,9 +52,15 @@ function AccountPage() {
           </dl>
           <p className="subtle" style={{ marginTop: 16 }}>Names and email addresses are changed by an administrator from the Users page.</p>
         </Card>
-        <Card title="Change password" subtitle="Your other sessions are signed out when the password changes." id="password">
-          <ChangePasswordForm onChanged={refresh} />
-        </Card>
+        {u.auth_source === "local" ? (
+          <Card title="Change password" subtitle="Your other sessions are signed out when the password changes." id="password">
+            <ChangePasswordForm onChanged={refresh} />
+          </Card>
+        ) : (
+          <Card title="Password">
+            <p className="muted" style={{ margin: 0 }}>You sign in with your {SIGN_IN_METHOD[u.auth_source] ?? "organization"} account, so there is no Veyra password to change. Change your password there.</p>
+          </Card>
+        )}
       </div>
       <TwoFactorCard />
       <TrustedBrowsersCard />
@@ -146,7 +152,7 @@ function SessionsCard() {
   return (
     <Card
       title="Active sessions"
-      subtitle="Everywhere this account is signed in. Sessions end after 12 hours, or after 60 minutes without activity."
+      subtitle="Everywhere this account is signed in. A session ends after a set time, and sooner when it is not used."
       flush
       actions={<Button icon="logout" disabled={others === 0} onClick={() => setConfirmOthers(true)}>Sign out other sessions</Button>}
     >
@@ -165,6 +171,13 @@ function SessionsCard() {
     </Card>
   );
 }
+
+const SIGN_IN_METHOD: Record<string, string> = {
+  local: "Veyra password",
+  google: "Google",
+  microsoft: "Microsoft",
+  oidc: "Single sign-on",
+};
 
 export default function Page() {
   return <Suspense fallback={<LoadingState />}><AccountPage /></Suspense>;

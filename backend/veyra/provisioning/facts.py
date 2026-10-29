@@ -530,9 +530,7 @@ def resolve_device(catalog: TemplateCatalog, db: Session, device: Device) -> Dev
     if rec is None:
         raise ProvisioningError("no_template", f"template {profile.template_key} is missing")
     if rec.manifest.template.abstract:
-        found = model_templates(
-            catalog, profile.template_key, device.model, device.organization_id
-        )
+        found = model_templates(catalog, profile.template_key, device.model, device.organization_id)
         if not found:
             raise ProvisioningError(
                 "no_template", f"no template under {profile.template_key} supports {device.model}"

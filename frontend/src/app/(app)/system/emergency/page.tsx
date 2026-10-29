@@ -22,7 +22,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import { formatDateTime, formatRelative } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import type { EmergencyCallRow, EmergencySiteDetail, EmergencySiteRow, Extension, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -188,12 +188,12 @@ export default function EmergencyPage() {
       {o ? <Callout tone={o.ready === o.sites.length && o.sites.length ? "ok" : "warn"} title={`${o.ready} of ${o.sites.length} site${o.sites.length === 1 ? "" : "s"} ready`}>{o.disclaimer}</Callout> : null}
       <Card title="Sites" flush>
         {overview.error ? <ErrorState compact error={overview.error} onRetry={overview.reload} /> : !o ? <LoadingState /> : (
-          <DataTable columns={columns} rows={o.sites} rowKey={(s) => s.id} caption="Sites" empty={<EmptyState compact icon="alert" title="No sites">Create sites under Organizations → Sites with their civic address and ELIN.</EmptyState>} />
+          <DataTable columns={columns} rows={o.sites} rowKey={(s) => s.id} caption="Sites" empty={<EmptyState compact icon="alert" title="No sites">Create sites under Directory → Sites with their civic address and ELIN.</EmptyState>} />
         )}
       </Card>
       <Card title="Emergency calls" flush actions={<Button size="sm" icon="refresh" onClick={calls.reload} loading={calls.loading && !!calls.data}>Refresh</Button>}>
         {calls.error ? <ErrorState compact error={calls.error} onRetry={calls.reload} /> : (
-          <DataTable columns={callColumns} rows={calls.data ?? []} rowKey={(c) => c.id} caption="Emergency calls" empty={<EmptyState compact icon="clock" title="No emergency calls">Live and test calls are listed here with who was notified; {formatRelative(new Date().toISOString())}.</EmptyState>} />
+          <DataTable columns={callColumns} rows={calls.data ?? []} rowKey={(c) => c.id} caption="Emergency calls" empty={<EmptyState compact icon="clock" title="No emergency calls">Live and test calls are listed here with who was notified.</EmptyState>} />
         )}
       </Card>
       <SiteDialog siteId={open} onClose={() => setOpen(null)} onChanged={overview.reload} />

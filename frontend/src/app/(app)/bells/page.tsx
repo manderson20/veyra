@@ -69,7 +69,7 @@ function ScheduleDialog({ open, onClose, schedule, onSaved }: { open: boolean; o
   const recordedPages = (pages.data?.items ?? []).filter((p) => p.audio);
   return (
     <Dialog open={open} onClose={onClose} busy={busy} title={schedule ? `Edit "${schedule.name}"` : "New bell schedule"}
-      description="Every matching event of the calendar rings the page (a recording into its zones) when the event starts."
+      description="Every matching event of the calendar rings the page (a recording into its zones) at the event's start, its end, or both, as chosen below."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="bell-form" loading={busy} disabled={!effectiveOrg || !name.trim() || !calendarId || !pageId}>{schedule ? "Save changes" : "Create schedule"}</Button></>}>
       <form id="bell-form" className="stack stack--sm" onSubmit={submit}>
         {!schedule && organizations.length > 1 ? (

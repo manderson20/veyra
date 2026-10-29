@@ -135,7 +135,7 @@ function CreateMenuDialog({ open, onClose, onCreated }: { open: boolean; onClose
         ) : null}
         <TextField label="Name" required autoFocus value={name} error={errors.fields.name} placeholder="e.g. Main menu" onChange={(e) => setName(e.target.value)} />
         <SelectField label="Menu prompt" disabled={!effectiveOrg} value={prompt} error={errors.fields.prompt_id}
-          placeholder={!effectiveOrg ? "Choose an organization first" : prompts.loading ? "Loading prompts…" : (prompts.data?.items.length ?? 0) ? "Choose later" : "No prompts yet (Telephony → Prompts)"}
+          placeholder={!effectiveOrg ? "Choose an organization first" : prompts.loading ? "Loading prompts…" : (prompts.data?.items.length ?? 0) ? "Choose later" : "No prompts yet (Telephony → Audio)"}
           options={(prompts.data?.items ?? []).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => setPrompt(e.target.value)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>

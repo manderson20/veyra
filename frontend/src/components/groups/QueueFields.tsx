@@ -151,7 +151,7 @@ export function QueueFields({ draft, onChange, errors, organizationId, current, 
   const promptOptions = (prompts.data?.items ?? []).map((p) => ({ value: p.id, label: p.name }));
   const withCurrent = (value: string, label: string | null) =>
     value && !promptOptions.some((o) => o.value === value) ? [...promptOptions, { value, label: label ?? "Deleted prompt" }] : promptOptions;
-  const placeholder = prompts.loading ? "Loading prompts…" : promptOptions.length ? "None" : "None (no prompts yet: Telephony → Prompts)";
+  const placeholder = prompts.loading ? "Loading prompts…" : promptOptions.length ? "None" : "None (no prompts yet: Telephony → Audio)";
   return (
     <>
       <div className="form-grid">

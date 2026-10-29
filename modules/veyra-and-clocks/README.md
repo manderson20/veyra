@@ -35,7 +35,7 @@ here; Veyra then fills it in for every clock.
    the **path** (the part of the address after the clock's address), the
    **request body** (Payload) and whether the browser asked for a user name
    and password (basic or digest sign-in).
-5. In Veyra, **Clock Delivery → New**: enter the method and path, choose the
+5. In Veyra, **Clock Delivery → Add**: enter the method and path, choose the
    body type (`form` for `a=1&b=2` bodies) and paste the body, replacing
    the message you typed with `{text}` (and the password, if it appears in
    the body, with `{password}`).
@@ -86,5 +86,6 @@ down) is logged as not sent rather than shown late.
 
 ## Not yet
 
-Editing rows in place (delete and add again), clock models with HD images
-or countdown timers, pixmaps, and InformaCast compatibility.
+Editing delivery and message rows in place (delete and add again; clocks
+have an edit form), clock models with HD images or countdown timers,
+pixmaps, and InformaCast compatibility.

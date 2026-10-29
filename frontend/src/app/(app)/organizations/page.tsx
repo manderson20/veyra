@@ -62,7 +62,8 @@ export default function OrganizationsPage() {
       <PageHeader
         title="Organizations"
         description="The school districts, municipalities and businesses served by this installation."
-        actions={can("organizations.write") ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New organization</Button> : null}
+        actions={can("organizations.write") ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}
+          disabled={!!mt.data && !mt.data.enabled && mt.data.active_organizations >= 1}>New organization</Button> : null}
       />
       {mt.data && !mt.data.enabled ? (
         mt.data.active_organizations > 1 ? (

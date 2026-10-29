@@ -227,7 +227,7 @@ export default function CentralConsolePage() {
   const c = consoleData.data;
   return (
     <div className="stack">
-      <PageHeader title="Central console" description="Watch and steer several Veyra installations from this one: health, versions, policies and update commands. See docs/CENTRAL_MANAGEMENT.md." />
+      <PageHeader title="Central console" description="Watch and steer several Veyra installations from this one: health, versions, policies and update commands. Help in the top bar has the guide." />
       {consoleData.error ? <Card><ErrorState error={consoleData.error} onRetry={consoleData.reload} /></Card> : !c ? <Card><LoadingState /></Card> : (
         <>
           <ConsoleCard c={c} reload={consoleData.reload} />

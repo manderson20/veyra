@@ -7,7 +7,7 @@ import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { EMPTY_INBOUND_ROUTE, InboundRouteFields, inboundRouteBody, inboundRouteValid, type InboundRouteDraft } from "@/components/routing/InboundRouteFields";
 import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, Icon, PageHeader, Pagination, SearchInput, SelectField, useToast, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
-import { EMPTY_DESTINATION } from "@/lib/routing";
+import { DESTINATION_LABELS, EMPTY_DESTINATION } from "@/lib/routing";
 import type { InboundRoute, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -28,10 +28,11 @@ function Destination({ r }: { r: InboundRoute }) {
       </span>
     );
   }
+  const icon = d.type === "ivr" ? "ivr" : d.type === "voicemail" || d.type === "voicemail_box" ? "voicemail" : null;
   return (
     <span>
-      <span className="table__primary" style={{ display: "block" }}>{d.type === "ivr" ? <><Icon name="ivr" size={14} /> {d.label.replace(/^Menu: /, "")}</> : <><Icon name="voicemail" size={14} /> Voicemail of {r.destination_number}</>}</span>
-      {d.type === "voicemail" ? <span className="table__secondary">{r.destination_name}</span> : <span className="table__secondary">IVR menu</span>}
+      <span className="table__primary" style={{ display: "block" }}>{icon ? <Icon name={icon} size={14} /> : null} {d.label}</span>
+      <span className="table__secondary">{d.type === "missing" ? "" : DESTINATION_LABELS[d.type]}</span>
     </span>
   );
 }
@@ -82,7 +83,7 @@ export default function InboundRoutesPage() {
     <div className="stack">
       <PageHeader
         title="Inbound routes"
-        description="Where each number (DID) that carriers deliver is answered: an extension, a voicemail box or an IVR menu, optionally only during a time condition's open hours."
+        description="Where each number (DID) that carriers deliver is answered: an extension, a ring group or queue, a phone menu, a voicemail box, a conference, an announcement, fax to email and more, optionally with another destination outside a time condition's open hours."
         actions={can("routing.write") ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New inbound route</Button> : null}
       />
       <PendingChanges refreshKey={list.data?.total} />

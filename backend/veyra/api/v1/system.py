@@ -112,7 +112,32 @@ def health(
         # administrators see them (docs/MULTI_TENANCY.md §6).
         "active_calls": active_calls if _installation_wide(db, principal) else None,
         "registrations": registrations if _installation_wide(db, principal) else None,
+        # Whether the counts above are shown to this person (server-wide).
+        "server_counts": _installation_wide(db, principal),
+        "trunks": _trunk_counts(request, db) if _installation_wide(db, principal) else None,
     }
+
+
+def _trunk_counts(request: Request, db: Session) -> dict[str, int]:
+    """Enabled trunks and how many the engine reports as up (online, or
+    registered when the trunk registers)."""
+    from veyra.api.v1.trunks import _status, _statuses, registration_state
+    from veyra.core.models import SipTrunk
+
+    trunks = list(db.scalars(select(SipTrunk).where(SipTrunk.is_enabled.is_(True))))
+    try:
+        live = _statuses(request)
+    except Exception:  # the dashboard must load whatever the engine does
+        live = None
+    up = 0
+    for t in trunks:
+        st = _status(t, live)
+        if st is not None and (
+            st.state == "online"
+            or (st.registration is not None and registration_state(st.registration) is None)
+        ):
+            up += 1
+    return {"total": len(trunks), "up": up, "known": int(live is not None)}
 
 
 def _installation_wide(db: Session, principal: Principal) -> bool:

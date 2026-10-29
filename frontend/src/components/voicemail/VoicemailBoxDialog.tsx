@@ -45,11 +45,11 @@ function boxName(b: { shared?: boolean; number?: string; name?: string; extensio
 }
 
 /** One PIN shown once, after creation or a reset. */
-export function PinReveal({ pin, extension }: { pin: string; extension: string }) {
+export function PinReveal({ pin, extension, shared }: { pin: string; extension: string; shared?: boolean }) {
   return (
-    <Callout tone="ok" title={`PIN for extension ${extension}`}>
+    <Callout tone="ok" title={shared ? `PIN for ${extension}` : `PIN for extension ${extension}`}>
       <p className="row"><span className="mono" style={{ fontSize: "1.25rem", letterSpacing: "0.1em" }}>{pin}</span><CopyButton text={pin} label="Copy PIN" /></p>
-      <p className="subtle">Give it to the user now. It is not shown again; it can be reset here or changed by the user on their account page or from the phone.</p>
+      <p className="subtle">Give it to the user now. It is not shown again; it can be reset here, or changed by the user on their account page.</p>
     </Callout>
   );
 }
@@ -195,7 +195,7 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
     : shared ? "New shared inbox"
     : extension ? `Voicemail box for ${extension.number}` : "New voicemail box";
   const description = shared
-    ? "A mailbox that belongs to no phone: callers reach it by its number, from inbound routes or from IVR keys. Member phones light their message lamp and can open it from *97 (choosing the inbox) or by dialling its number. Messages are also sent by email when delivery is configured."
+    ? "A mailbox that belongs to no phone: callers reach it by its number, from inbound routes or from IVR keys. Member phones light their message lamp and open it with *98 and the inbox number (dialling the number itself leaves a message). Messages are also sent by email when delivery is configured."
     : "Callers reach the box when the phone does not answer, and from inbound routes or IVR keys that point at it. Messages are also sent by email when delivery is configured.";
   return (
     <Dialog open={open} onClose={onClose} busy={busy} size="lg" title={title}
@@ -209,7 +209,7 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
       )}>
       {created ? (
         <div className="stack stack--sm">
-          <PinReveal pin={created.pin} extension={boxName(created)} />
+          <PinReveal pin={created.pin} extension={boxName(created)} shared={created.shared} />
           <p className="subtle">Deploy changes so the phone system learns about the box. Dial <span className="mono">*97</span> from the phone to record the greeting and listen to messages.</p>
         </div>
       ) : (
@@ -231,7 +231,7 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
             <MemberListEditor label="Member phones" members={draft.members} extensions={extensions.data?.items ?? []} loading={extensions.loading} onChange={(members) => setDraft({ ...draft, members })}
               error={errors.fields.members} help="Their message lamp follows this inbox as well as their own box." emptyText="No member phones yet: the inbox is reached by its number, routes and IVR keys only." />
           ) : null}
-          {resetPin ? <PinReveal pin={resetPin} extension={box ? boxName(box) : ""} /> : null}
+          {resetPin ? <PinReveal pin={resetPin} extension={box ? boxName(box) : ""} shared={box?.shared} /> : null}
           <div className="form-grid">
             <TextField label={editing ? "New PIN" : "PIN"} inputMode="numeric" autoComplete="off" value={draft.pin} error={errors.fields.pin}
               placeholder={editing ? "Leave empty to keep the current PIN" : "Leave empty for a random PIN"} help="4 to 10 digits." onChange={(e) => setDraft({ ...draft, pin: e.target.value.replace(/\D/g, "") })} />

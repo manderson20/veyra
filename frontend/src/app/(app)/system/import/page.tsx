@@ -109,7 +109,7 @@ export default function ImportPage() {
   return (
     <div className="stack">
       <PageHeader title="Import and export"
-        description="Many extensions, users, inbound routes or shared inboxes at once, as a CSV file. Export what exists (or a blank template), edit it in a spreadsheet, check it, then import it. Rows are matched on their first column: a match is updated, otherwise it is created. An empty cell keeps the value; a dash (-) clears it." />
+        description="Many extensions, users, inbound routes, shared inboxes, ring groups, queues, phone menus or time conditions at once, as a CSV file. Export what exists (or a blank template), edit it in a spreadsheet, check it, then import it. Rows are matched on their first column: a match is updated, otherwise it is created. An empty cell keeps the value; a dash (-) clears it." />
       <Card title="1. Choose what">
         <div className="grid grid--2">
           <SelectField label="Kind" value={kindName} options={(kinds.data ?? []).map((k) => ({ value: k.name, label: k.label }))}

@@ -18,7 +18,7 @@ export function VoicemailCard({ extension, editable, onChanged }: { extension: E
       actions={editable ? <Button icon={box ? "settings" : "plus"} onClick={() => setOpen(true)}>{box ? "Edit box" : "Create box"}</Button> : null}>
       {boxes.error ? <ErrorState compact error={boxes.error} onRetry={boxes.reload} />
         : !boxes.data ? <LoadingState />
-        : !box ? <p className="muted">No voicemail box. Calls ring for 30 seconds and then end.</p> : (
+        : !box ? <p className="muted">No voicemail box. Unanswered calls ring for the extension&apos;s ring time and then end, unless call forwarding sends them elsewhere.</p> : (
           <dl className="dl">
             <dt>Status</dt><dd><Badge tone={box.is_enabled ? "ok" : "neutral"}>{box.is_enabled ? "Enabled" : "Disabled"}</Badge></dd>
             <dt>Rings for</dt><dd>{box.ring_seconds} seconds before voicemail answers</dd>

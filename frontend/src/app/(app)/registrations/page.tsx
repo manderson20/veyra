@@ -36,8 +36,13 @@ function address(host: string | null, port: number | null) {
 export default function RegistrationsPage() {
   const { session } = useSession();
   const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [org, setOrg] = useState("");
-  const query = { ...(q ? { q } : {}), ...(org ? { organization_id: org } : {}) };
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(q.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
+  const query = { ...(debounced ? { q: debounced } : {}), ...(org ? { organization_id: org } : {}) };
   const data = useApiData<Registrations>("/telephony/registrations", query);
   const orgs = useApiData<Page<Organization>>(session?.is_platform_admin ? "/organizations" : null, { limit: 200 });
   const organizations = orgs.data?.items ?? [];

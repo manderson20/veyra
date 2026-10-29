@@ -29,7 +29,7 @@ const REFRESH_MS = 30_000;
 function NotAvailable({ text }: { text: string }) {
   return (
     <span className="row" style={{ gap: 8 }}>
-      <Badge tone="outline">Not available yet</Badge>
+      <Badge tone="outline">Not available</Badge>
       <span className="subtle">{text}</span>
     </span>
   );
@@ -111,6 +111,7 @@ export default function Dashboard() {
   const backups = useApiData<{ summary: BackupSummary; backups: unknown[] }>(session?.is_platform_admin ? "/backups" : null);
   const emergency = useApiData<{ sites: { id: string }[]; ready: number }>(can("emergency.read") ? "/emergency/sites" : null);
   const h = health.data;
+  const unavailable = h && !h.server_counts ? "These counts cover the whole server." : "The telephony engine is not answering.";
   return (
     <div className="stack">
       <PageHeader
@@ -180,14 +181,15 @@ export default function Dashboard() {
             <Card title="Calls and registrations" subtitle="Live telephony activity">
               <dl className="dl">
                 <dt>Active calls</dt>
-                <dd>{h.active_calls === null ? <NotAvailable text="Arrives with SIP calling (Milestone 5)." /> : h.active_calls}</dd>
+                <dd>{h.active_calls === null ? <NotAvailable text={unavailable} /> : h.active_calls}</dd>
                 <dt>Registered extensions</dt>
-                <dd>{h.registrations === null ? <NotAvailable text="Arrives with SIP registration (Milestone 5)." /> : h.registrations}</dd>
+                <dd>{h.registrations === null ? <NotAvailable text={unavailable} /> : h.registrations}</dd>
                 <dt>SIP trunks</dt>
-                <dd><NotAvailable text="Arrives with SIP trunks (Milestone 6)." /></dd>
+                <dd>{!h.trunks ? <NotAvailable text={unavailable} /> : h.trunks.total === 0 ? <span className="subtle">None set up</span>
+                  : h.trunks.known ? <Link href="/trunks/">{h.trunks.up} of {h.trunks.total} up</Link> : <Link href="/trunks/">{h.trunks.total} (status unknown)</Link>}</dd>
               </dl>
             </Card>
-            <Card title="Cluster and updates" actions={<Link href="/system/ha/" className="subtle">Details</Link>}>
+            <Card title="Cluster and updates" actions={can("ha.read") ? <Link href="/system/ha/" className="subtle">Details</Link> : null}>
               <dl className="dl">
                 <dt>Deployment</dt>
                 <dd>{h.cluster.ha_enabled ? "High availability" : "Standalone"}</dd>

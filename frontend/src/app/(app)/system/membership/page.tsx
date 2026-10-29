@@ -25,7 +25,7 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useSession } from "@/hooks/useSession";
 
 const ACCEPT_HELP: Record<string, string> = {
-  updates: "The console sets the update mode, maintenance window, update source and recipients.",
+  updates: "The console sets the update mode, maintenance window and email recipients. Updates always come from the official signed feed.",
   firewall_allow: "The console adds networks to the firewall allow list. Local entries are never removed.",
   alert_recipients: "The console sets who receives alert emails.",
   notice: "The console can show a banner to administrators of this installation.",

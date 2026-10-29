@@ -163,7 +163,7 @@ function VariableDialog({ variable, isPlatform, onClose, onSaved }: { variable: 
         <TextField label="Description" value={description} error={errors.fields.description} placeholder="What the value is for" onChange={(e) => setDescription(e.target.value)} />
         <Checkbox label="Sensitive (shown masked to those who cannot change it)" checked={sensitive} onChange={(e) => setSensitive(e.target.checked)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
-        {confirmDelete ? <Callout tone="warn">Remove this variable? Phones that use it from this scope fall back to a wider scope, or go without it.</Callout> : null}
+        {confirmDelete ? <Callout tone="warn">Remove this variable? Phones that use it from this scope fall back to the same variable in a wider scope. A variable that line keys still use cannot be removed until those keys change.</Callout> : null}
       </form>
     </Dialog>
   );

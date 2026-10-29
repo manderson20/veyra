@@ -500,7 +500,7 @@ function SourceCard({ editable, onSaved }: { editable: boolean; onSaved: () => v
           <span className="mono">{s.effective_url}</span>. Only releases signed by an official Veyra key are accepted.
         </p>
         <TextArea label="Email notifications to" rows={2} value={recipients} disabled={!editable}
-          help="Addresses told when a release is available, downloaded, installed or failed (System → Settings → Email must be on)."
+          help="Addresses told when a release is available, downloaded, installed or failed (System → Settings → Email delivery must be on)."
           onChange={(e) => setRecipients(e.target.value)} />
         {error ? <Callout tone="danger">{error}</Callout> : null}
       </div>

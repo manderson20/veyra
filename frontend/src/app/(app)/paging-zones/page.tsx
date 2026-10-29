@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { PAGING_KIND_LABELS, PagingZoneDialog } from "@/components/paging/PagingZoneDialog";
 import { Badge, Button, Callout, Card, ConfirmDialog, DataTable, EmptyState, PageHeader, Pagination, SearchInput, SelectField, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -66,8 +67,11 @@ export default function PagingZonesPage() {
       <PageHeader title="Paging zones"
         description="Each zone pairs the multicast group your speakers already listen to with the Poly group number the phones subscribe to. Device profiles subscribe phones to zones."
         actions={editable ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New paging zone</Button> : null} />
+      <PendingChanges refreshKey={list.data} />
       <Callout tone="neutral">
-        Poly phones only hear Poly group pages, not plain multicast. This milestone writes the groups into the phones; sending pages from Veyra into both formats at once (so phones and speakers stay in sync) comes with the paging milestone.
+        Poly phones only hear Poly group pages, not plain multicast. Veyra writes the groups into the phones, and a page sent from
+        Veyra goes out in both formats at once, so phones and speakers stay in sync. Dialling a zone&apos;s number needs a deployment
+        after a change (Deploy changes at the top).
       </Callout>
       <Card flush>
         <div className="table-toolbar">

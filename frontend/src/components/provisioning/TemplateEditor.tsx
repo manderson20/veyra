@@ -112,7 +112,7 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
           <div className="stack stack--sm">
             <div className="form-grid">
               <TextField label="Name" required value={name} error={errors.fields["manifest.template.name"]} onChange={(e) => setName(e.target.value)} />
-              <TextField label="Version" required value={version} error={errors.fields["manifest.template.version"]} help="Semantic version; a new version keeps a copy of the previous one." onChange={(e) => setVersion(e.target.value)} />
+              <TextField label="Version" required value={version} error={errors.fields["manifest.template.version"]} help="Semantic version, such as 1.2.0. Raise it when you change the template; the previous version is replaced." onChange={(e) => setVersion(e.target.value)} />
             </div>
             <TextField label="Models" value={models} disabled={template.abstract} placeholder={template.abstract ? "Family: models come from the templates under it" : "VVX 411, VVX 450"} help="Comma-separated model names this template serves." onChange={(e) => setModels(e.target.value)} />
             <SelectField label="Status" value={status} options={[{ value: "experimental", label: "Experimental" }, { value: "stable", label: "Stable (verified on hardware)" }, { value: "deprecated", label: "Deprecated" }]} onChange={(e) => setStatus(e.target.value as TemplateDetail["status"])} />

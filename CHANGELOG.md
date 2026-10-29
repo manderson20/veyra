@@ -17,6 +17,15 @@ No migration.
 - **Phone passwords in profiles and devices are no longer shown.** Secret template settings (such as the phone's administrator password) come back masked; leaving the dots in place keeps the saved value, typing replaces it.
 - **Editing a My Phone layout** (System → Portal layouts) opened the dialog empty, so saving could overwrite the layout with blanks. It now opens with the layout's own settings.
 - Yes/no setting overrides on a phone's page are a choice (**As the profile**, **Yes**, **No**) instead of a text box where a typo silently meant no.
+- **Out-of-date text across the interface**, found while writing the guides: "coming later" notes for things that exist (dashboard, first-run setup, Settings, users, feature codes, paging zones, provisioning templates), wrong menu paths (Audio, Directory → Sites, Phone provisioning, Email delivery), the email card saying only voicemail uses it, the shared-inbox text (members open it with **\*98**), conference recordings, pickup, bells (start, end or both), the extension's voicemail card, the import kinds, and the central console's ignored update-source field (removed).
+- The dashboard's **SIP trunks** row shows how many trunks are up instead of "not available yet", and says why counts are missing (engine not answering, or server-wide counts not shown to you). The HA **Details** link shows only to those who can open it.
+- Inbound routes list every kind of destination by name; before, anything but an extension or a menu showed as "Voicemail of".
+- First-run setup lists where to set up outside lines, email, backups and updates afterwards, instead of milestone numbers.
+- Paging zones show the pending-deployment banner; the zone dialog says dialling a zone needs a deployment.
+- Single sign-on users see where to change their password instead of a password form that cannot work; the sign-in method shows as Google, Microsoft or Single sign-on.
+- **Change PIN** is no longer offered for shared inboxes (it could not work); the PIN shown after a reset names a shared inbox correctly.
+- The **Email** dialog in a voicemail inbox no longer deletes the message by default.
+- The site **Time zone** is a list like the organization's, the New extension dialog no longer keeps the previous emergency caller ID, **New organization** is disabled while multi-tenancy is off, the Registrations search waits for typing to stop, and the Phone provisioning card explains how to turn on the plain-HTTP bootstrap.
 
 ## 0.27.44 — 2026-10-29
 

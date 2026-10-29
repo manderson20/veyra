@@ -30,24 +30,34 @@ from veyra.telephony.numbering import NumberingPlan, save_numbering_plan
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 
-# Wizard steps. ``available`` is False for steps delivered in later milestones;
-# the UI shows them as "coming later" rather than offering inert controls.
+# Wizard steps. ``available`` is False for what is set up after the wizard,
+# in the place ``after`` names (the UI lists them instead of inert controls).
 STEPS = [
     {"key": "administrator", "title": "Administrator account", "available": True},
     {"key": "organization", "title": "Organization", "available": True},
     {"key": "installation", "title": "Installation name and time zone", "available": True},
-    {"key": "network", "title": "Network settings", "available": False, "milestone": 1},
+    {
+        "key": "network",
+        "title": "SIP and media addresses",
+        "available": False,
+        "after": "System → Telephony Engine",
+    },
     {"key": "telephony", "title": "Telephony engine check", "available": True},
     {"key": "numbering", "title": "Extension numbering plan", "available": True},
-    {"key": "sip", "title": "SIP settings", "available": False, "milestone": 5},
-    {"key": "email", "title": "Email delivery", "available": False, "milestone": 7},
-    {"key": "backup", "title": "Backups", "available": False, "milestone": 17},
-    {"key": "updates", "title": "Update preferences", "available": False, "milestone": 12},
+    {"key": "sip", "title": "Outside lines", "available": False, "after": "Telephony → SIP Trunks"},
+    {"key": "email", "title": "Email delivery", "available": False, "after": "System → Settings"},
+    {"key": "backup", "title": "Backups", "available": False, "after": "System → Backups"},
+    {
+        "key": "updates",
+        "title": "Update preferences",
+        "available": False,
+        "after": "System → Updates",
+    },
     {
         "key": "ha",
-        "title": "High availability enrollment (optional)",
+        "title": "High availability (optional)",
         "available": False,
-        "milestone": 16,
+        "after": "System → High Availability",
     },
 ]
 

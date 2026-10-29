@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Badge,
@@ -191,7 +192,7 @@ export default function BackupsPage() {
       <Card title="Restore">
         <p className="subtle">On a server with the same Veyra release installed (a fresh install is fine), as root:</p>
         <pre className="mono" style={{ margin: 0 }}>{"sudo veyra backup restore /var/backups/veyra/<backup>.tar.age --identity ~/veyra-backup-identity.txt"}</pre>
-        <p className="subtle">The database, configuration and secrets, engine files, data and voicemail come back, migrations run when the backup is older, and the services restart. The instance identity, keys and certificates are part of the backup, so phones and a central console keep recognising the server. See docs/PRODUCTION_HARDENING.md §2.5.</p>
+        <p className="subtle">The database, configuration and secrets, engine files, data and voicemail come back, migrations run when the backup is older, and the services restart. The instance identity, keys and certificates are part of the backup, so phones and a central console keep recognising the server. The guide <Link href="/help/backups/">Backups and restore</Link> has the steps.</p>
       </Card>
       <ConfirmDialog open={!!remove} title={`Delete the backup of ${remove ? formatDateTime(remove.started_at) : ""}`} confirmLabel="Delete" tone="danger" busy={busy}
         onCancel={() => setRemove(null)} onConfirm={doDelete}>

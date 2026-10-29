@@ -71,7 +71,7 @@ function RuleDialog({ rule, onClose, onSaved }: { rule: AlertRule | null; onClos
           <TextField label={`Limit (${rule?.unit})`} type="number" min={1} value={threshold} error={errors.fields.threshold} onChange={(e) => setThreshold(e.target.value)} />
         ) : null}
         <TextArea label="Email to" rows={3} value={recipients} error={errors.fields.recipients} placeholder="it@district.example"
-          help="One address per line. Sent when raised, every 24 hours while it lasts, and when cleared. Uses the email settings under System → Settings."
+          help="One address per line. Sent when raised, every 24 hours while it lasts, and when cleared. Uses System → Settings → Email delivery."
           onChange={(e) => setRecipients(e.target.value)} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>

@@ -207,7 +207,7 @@ function InboxDialog({ inbox, onClose, onSaved }: { inbox: FaxInbox | null; onCl
         ) : null}
         <TextField label="Name" required autoFocus value={name} error={errors.fields.name} placeholder="e.g. Front office" onChange={(e) => setName(e.target.value)} />
         <TextArea label="Email the PDF to" rows={3} value={recipients} error={errors.fields.recipients} placeholder="office@example.org" spellCheck={false}
-          help="One address per line. System → Settings → Email must be on for the mail to leave." onChange={(e) => setRecipients(e.target.value)} />
+          help="One address per line. System → Settings → Email delivery must be on for the mail to leave." onChange={(e) => setRecipients(e.target.value)} />
         <div className="grid grid--2">
           <TextField label="Station ID" value={station} error={errors.fields.station_id} inputMode="tel" placeholder="Organization's"
             help="Announced to the sending machine; empty uses the organization's." onChange={(e) => setStation(e.target.value)} />

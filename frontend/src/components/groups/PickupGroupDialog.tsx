@@ -57,7 +57,7 @@ export function PickupGroupDialog({ open, onClose, group, onSaved }: { open: boo
 
   return (
     <Dialog open={open} onClose={onClose} busy={busy} title={group ? `Edit pickup group "${group.name}"` : "New pickup group"}
-      description="Members may answer each other's ringing calls by dialling *8. Directed pickup (**extension) works between any two phones of the organization."
+      description="Members may answer each other's ringing calls by dialling *8. Directed pickup (** and the extension) works across the organization unless the organization limits it to the same pickup group."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="pg-form" loading={busy} disabled={!effectiveOrg || !name.trim()}>{group ? "Save changes" : "Create group"}</Button></>}>
       <form id="pg-form" className="stack stack--sm" onSubmit={submit}>
         {!group && organizations.length > 1 ? (
