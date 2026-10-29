@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 60,
+  "sequence": 61,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.44",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Help built into Veyra and on the wiki; Companion rollout guide; backups to a NAS, SFTP or S3 storage.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "f4e5d58e72",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.44/veyra-0.27.44.tar.gz",
+        "sha256": "d8c8d2a012777d70be414c7e6b91efb4c10ef3f7c317a3a6e4af002b3fad78d8",
+        "size": 9335830
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1023,6 +1040,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-29T16:12:57+00:00",
-  "expires_at": "2027-01-27T16:12:57+00:00"
+  "generated_at": "2026-10-29T19:39:54+00:00",
+  "expires_at": "2027-01-27T19:39:54+00:00"
 }
