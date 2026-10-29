@@ -21,8 +21,14 @@ No migration.
 
 - **Roll back a module**: the Module Manager shows **Roll back** when the previous version of a module is kept, with the version it goes back to. Before, this was only possible through the API.
 
+- **Backup destinations** (#44): System → Backups → **Destinations** copies every verified backup to a NAS folder, an **SFTP server** or **S3-compatible storage** (Amazon S3, Backblaze B2, Wasabi, Cloudflare R2, MinIO…), up to five. SFTP signs in with Veyra's own SSH key and a confirmed host key; S3 secrets are stored encrypted. Each copy is checked; a failed copy raises the new **Backup copy to a destination failed** alert and is retried with the next backup; each destination can keep its own number of backups. **Test** checks a destination at any time.
+
 ### Changed
 - Settings → **Companion extension deployment** is now a short summary with a button to the rollout guide.
+- The backup **Copy to directory** setting became a **Folder** destination (*Copy folder*); nothing to redo.
+
+### Fixed
+- Rotating the installation key now also re-encrypts the Let's Encrypt DNS credentials and EAB key; before, they could no longer be read after a rotation.
 
 ## 0.27.43 — 2026-10-29
 

@@ -3137,7 +3137,39 @@ export interface BackupSettings {
   keep: { daily_days: number; weekly_weeks: number; upgrades: number };
   recordings: boolean;
   recipients: string[];
-  copy_dir: string;
+  destinations: BackupDestination[];
+  ssh_public: string;
+}
+
+/** Where backups are copied (docs/PRODUCTION_HARDENING.md §2.7); never a secret. */
+export interface BackupDestination {
+  id: string;
+  kind: "directory" | "sftp" | "s3";
+  name: string;
+  enabled: boolean;
+  keep: { daily_days: number; weekly_weeks: number; upgrades: number } | null;
+  target: string;
+  path?: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  host_key?: string | null;
+  host_key_fingerprint?: string | null;
+  endpoint?: string;
+  bucket?: string;
+  region?: string;
+  prefix?: string;
+  access_key_id?: string;
+  addressing?: "path" | "virtual";
+  has_secret?: boolean;
+  last: { state: "ok" | "failed"; at: string; error?: string | null; count?: number; copied?: string[] } | null;
+}
+
+export interface BackupDestinationTest {
+  state: "ok" | "failed" | "host_key";
+  message: string;
+  host_key?: string;
+  fingerprint?: string | null;
 }
 
 export interface BackupRow {
@@ -3152,7 +3184,7 @@ export interface BackupRow {
   recipients: string[];
   bytes: number;
   parts: { name: string; bytes: number; sha256: string }[];
-  copies: Record<string, { state: string; at: string; error?: string }>;
+  copies: Record<string, { state: string; at: string; error?: string | null; name?: string }>;
   verify: { ok?: boolean | null; restore?: boolean; schema?: boolean; parts?: Record<string, boolean> };
   version: string | null;
   schema: string | null;

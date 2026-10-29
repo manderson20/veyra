@@ -1851,7 +1851,7 @@ def cmd_backup_unit(args: argparse.Namespace) -> int:
         if not match:
             raise RuntimeError("unknown backup")
         name, kind = str(match[0]["name"]), str(match[0].get("kind") or "manual")
-        runner.delete_backup(name, copy_dir=settings.get("copy_dir") or "")
+        runner.delete_backup(name, settings=settings)
         r = runner.record(run, {"name": name, "state": "deleted", "kind": kind})
         return 0 if r.ok else 1
     raise RuntimeError(f"unknown backup unit instance {instance!r}")
@@ -2021,13 +2021,21 @@ def cmd_backup_record(args: argparse.Namespace) -> int:
 
 
 def cmd_backup_settings(args: argparse.Namespace) -> int:
+    """The backup settings; with ``--secrets`` (for the root runner) the
+    destinations' secrets decrypted."""
     import json
 
     from veyra.backups import service
+    from veyra.core.config import get_settings
     from veyra.core.db import session_scope
+    from veyra.core.security.crypto import load_installation_key
 
     with session_scope() as db:
-        print(json.dumps(service.settings(db)))
+        if args.secrets:
+            key = load_installation_key(get_settings())
+            print(json.dumps(service.runner_settings(db, key)))
+        else:
+            print(json.dumps(service.public_settings(db)))
     return 0
 
 
@@ -2606,6 +2614,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_backup_record)
     s = bk.add_parser("settings", help="Show the backup settings")
     s.add_argument("--json", action="store_true")
+    s.add_argument(
+        "--secrets", action="store_true", help="Include the destinations' secrets (the runner)"
+    )
     s.set_defaults(func=cmd_backup_settings)
     cp = sub.add_parser(
         "capture", help="Packet captures (docs/CALL_FEATURES.md §2.2)"

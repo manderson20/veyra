@@ -11,7 +11,6 @@ covers:
   - frontend/src/app/(app)/updates/*
   - backend/veyra/api/v1/updates.py
   - backend/veyra/updates/*.py
-  - backend/veyra/cli/main.py
   - installer/bin/veyra-os-packages
 ---
 

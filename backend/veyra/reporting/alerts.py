@@ -68,6 +68,7 @@ RULES: dict[str, RuleDef] = {
         # Backups (docs/PRODUCTION_HARDENING.md §2.6).
         RuleDef("backup_failed", "Backup failed", 0),
         RuleDef("backup_stale", "No recent good backup", 0),
+        RuleDef("backup_copy_failed", "Backup copy to a destination failed", 0),
         # High availability (docs/HIGH_AVAILABILITY.md §10).
         RuleDef("node_offline", "HA node offline", 2),
         RuleDef("replication_broken", "Replication broken", 2),
@@ -326,6 +327,8 @@ def check_backups(db: Session, now: datetime) -> list[Finding]:
     out: list[Finding] = []
     if s["last_state"] == "failed":
         out.append(Finding("backup_failed", "backup", f"The last backup failed: {s['last_error']}"))
+    for name, error in s.get("copies_failed", []):
+        out.append(Finding("backup_copy_failed", "backup", f"Copying to {name} failed: {error}"))
     if s["stale"]:
         out.append(
             Finding(

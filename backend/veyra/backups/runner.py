@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from veyra import __version__
-from veyra.backups import policy
+from veyra.backups import destinations, policy
 
 log = logging.getLogger("veyra.backup")
 
@@ -316,21 +316,36 @@ class Backup:
         shutil.rmtree(self.workdir, ignore_errors=True)
         return out
 
-    def copy(self, artifact: Path) -> None:
-        copy_dir = str(self.settings.get("copy_dir") or "")
-        if not copy_dir:
-            return
-        target = Path(copy_dir)
-        try:
-            if not target.is_dir():
-                raise BackupError(f"{copy_dir} is not a directory (is the share mounted?)")
-            if artifact.is_dir():
-                shutil.copytree(artifact, target / artifact.name, dirs_exist_ok=True)
-            else:
-                shutil.copy2(artifact, target / artifact.name)
-            self.copies[copy_dir] = {"state": "ok", "at": _now().isoformat()}
-        except (OSError, BackupError) as e:
-            self.copies[copy_dir] = {"state": "failed", "at": _now().isoformat(), "error": str(e)}
+    def copy(self, known: list[dict[str, Any]]) -> None:
+        """Bring every enabled destination in line (§2.7): copy the verified
+        backups it is missing, this one included, and prune it. A failed
+        copy does not fail the backup; it is retried at the next run."""
+        verified = {
+            str(k["name"]): str(k.get("kind") or "scheduled")
+            for k in known
+            if k.get("state") == "verified"
+        }
+        verified[self.name] = self.kind
+        for dest in self.settings.get("destinations") or []:
+            if not dest.get("enabled", True):
+                continue
+            try:
+                rem = destinations.remote(
+                    dest,
+                    secret=dest.get("secret"),
+                    ssh_private_key=self.settings.get("ssh_private_key"),
+                )
+                result = destinations.sync(
+                    rem,
+                    store=self.store,
+                    verified=verified,
+                    keep=destinations.keep_for(dest, self.settings),
+                    now=self.now,
+                )
+            except (destinations.DestinationError, OSError) as e:
+                result = {"state": "failed", "at": _now().isoformat(), "error": str(e)[:1000]}
+            result["name"] = dest.get("name") or dest["id"]
+            self.copies[str(dest["id"])] = result
 
     def prune(self, known: list[dict[str, Any]]) -> list[str]:
         """Apply the keep policy to the store; ``known`` are the recorded
@@ -349,13 +364,6 @@ class Backup:
             else:
                 p.unlink(missing_ok=True)
             removed.append(e.name)
-            copy_dir = str(self.settings.get("copy_dir") or "")
-            if copy_dir:
-                c = Path(copy_dir) / e.name
-                if c.is_dir():
-                    shutil.rmtree(c, ignore_errors=True)
-                else:
-                    c.unlink(missing_ok=True)
         return removed
 
     def total_bytes(self) -> int:
@@ -381,14 +389,21 @@ def record(run: Runner, payload: dict[str, Any]) -> Result:
 
 def load_settings(run: Runner) -> dict[str, Any]:
     """The backup settings through the service account (root has no database)."""
-    r = run(["runuser", "-u", "veyra", "--", VEYRA_CLI, "backup", "settings", "--json"])
+    r = run(
+        ["runuser", "-u", "veyra", "--", VEYRA_CLI, "backup", "settings", "--json", "--secrets"]
+    )
     if not r.ok:
         raise BackupError(f"reading the backup settings: {(r.stderr or r.stdout).strip()[:300]}")
     try:
         data = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError) as e:
         raise BackupError("the backup settings are not JSON") from e
-    return policy.settings_doc(data if isinstance(data, dict) else {})
+    data = data if isinstance(data, dict) else {}
+    out = policy.settings_doc(data)
+    # The decrypted secrets (``--secrets``) the document itself does not carry.
+    if data.get("ssh_private_key"):
+        out["ssh_private_key"] = str(data["ssh_private_key"])
+    return out
 
 
 def known_backups(run: Runner) -> list[dict[str, Any]]:
@@ -419,7 +434,10 @@ def run_backup(
     """The whole sequence; returns the record payload."""
     run = run or subprocess_runner()
     status = Status(status_dir, kind)
-    settings = settings if settings is not None else load_settings(run)
+    if settings is None:
+        settings = load_settings(run)
+    else:
+        settings = {**settings, **policy.settings_doc(settings)}
     b = Backup(
         kind,
         settings,
@@ -450,10 +468,12 @@ def run_backup(
         b.restore_test()
         status.update(step="Encrypting" if settings.get("recipients") else "Finishing")
         artifact = b.encrypt()
-        status.update(step="Copying")
-        b.copy(artifact)
+        known = known_backups(run)
         status.update(step="Pruning")
-        removed = b.prune(known_backups(run))
+        removed = b.prune(known)
+        if settings.get("destinations"):
+            status.update(step="Copying to the destinations")
+            b.copy(known)
         payload.update(
             {
                 "state": "verified",
@@ -492,17 +512,32 @@ def policy_fingerprint(recipient: str) -> str:
     return recipient.strip()[:16] + "…"
 
 
-def delete_backup(name: str, *, store: Path = STORE, copy_dir: str = "") -> bool:
-    """Remove a backup's files (root); the row is marked by the caller."""
+def delete_backup(
+    name: str, *, store: Path = STORE, settings: dict[str, Any] | None = None
+) -> bool:
+    """Remove a backup's files (root) here and, best effort, from every
+    destination; the row is marked by the caller."""
     if not policy.STAMP_RE.fullmatch(name.split(".")[0]):
         raise BackupError("not a backup name")
     found = False
-    for base in [store] + ([Path(copy_dir)] if copy_dir else []):
-        for p in (base / name, base / f"{name}.tar.age"):
-            if p.is_dir():
-                shutil.rmtree(p, ignore_errors=True)
-                found = True
-            elif p.exists():
-                p.unlink()
-                found = True
+    for p in (store / name, store / f"{name}.tar.age"):
+        if p.is_dir():
+            shutil.rmtree(p, ignore_errors=True)
+            found = True
+        elif p.exists():
+            p.unlink()
+            found = True
+    settings = settings or {}
+    for dest in settings.get("destinations") or []:
+        try:
+            rem = destinations.remote(
+                dest,
+                secret=dest.get("secret"),
+                ssh_private_key=settings.get("ssh_private_key"),
+            )
+            for candidate in (name, f"{name}.tar.age"):
+                if candidate in rem.names():
+                    rem.delete(candidate)
+        except (destinations.DestinationError, OSError) as e:
+            log.warning("Could not delete %s from %s: %s", name, dest.get("name"), e)
     return found

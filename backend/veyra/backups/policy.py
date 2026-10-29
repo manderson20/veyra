@@ -17,8 +17,13 @@ DEFAULTS: dict[str, Any] = {
     "keep": {"daily_days": 14, "weekly_weeks": 8, "upgrades": 3},
     "recordings": False,
     "recipients": [],  # age recipients (age1… or ssh-ed25519 …)
-    "copy_dir": "",
+    "destinations": [],  # backups/destinations.py
+    "ssh_public": "",  # Veyra's SSH key for SFTP destinations
+    "ssh_private_ciphertext": None,
 }
+DESTINATION_KINDS = ("directory", "sftp", "s3")
+# The copy directory of 0.23 to 0.27.43 becomes a folder destination.
+LEGACY_COPY_DIR_ID = "copy-dir"
 
 
 def settings_doc(value: dict[str, Any] | None) -> dict[str, Any]:
@@ -35,8 +40,32 @@ def settings_doc(value: dict[str, Any] | None) -> dict[str, Any]:
         "keep": keep,
         "recordings": bool(v.get("recordings", False)),
         "recipients": recipients,
-        "copy_dir": str(v.get("copy_dir") or "").strip(),
+        "destinations": _destinations(v),
+        "ssh_public": str(v.get("ssh_public") or ""),
+        "ssh_private_ciphertext": v.get("ssh_private_ciphertext") or None,
     }
+
+
+def _destinations(v: dict[str, Any]) -> list[dict[str, Any]]:
+    out = [
+        dict(d)
+        for d in v.get("destinations") or []
+        if isinstance(d, dict) and d.get("kind") in DESTINATION_KINDS and d.get("id")
+    ]
+    copy_dir = str(v.get("copy_dir") or "").strip()
+    if copy_dir and not any(d["id"] == LEGACY_COPY_DIR_ID for d in out):
+        out.insert(
+            0,
+            {
+                "id": LEGACY_COPY_DIR_ID,
+                "kind": "directory",
+                "name": "Copy folder",
+                "enabled": True,
+                "keep": None,
+                "path": copy_dir,
+            },
+        )
+    return out
 
 
 def valid_time(value: str) -> str:

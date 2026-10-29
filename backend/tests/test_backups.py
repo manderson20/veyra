@@ -202,7 +202,9 @@ def test_runner_takes_verifies_and_records(world):
     assert (
         out["verify"]["ok"] and out["verify"]["schema"] and out["verify"]["counts"]["users"]["ok"]
     )
-    assert out["copies"][s["copy_dir"]]["state"] == "ok"
+    # The copy directory of earlier releases is a folder destination now.
+    assert out["copies"]["copy-dir"]["state"] == "ok", out["copies"]
+    assert out["copies"]["copy-dir"]["copied"] == [bdir.name]
     assert (Path(s["copy_dir"]) / bdir.name / "manifest.json").exists()
     assert (
         world["sys"].recorded["name"] == bdir.name and world["sys"].recorded["state"] == "verified"
@@ -319,8 +321,8 @@ def recorder(monkeypatch):
 def test_settings_rows_summary_and_tick(admin, recorder):
     r = admin.put("/api/v1/backups/settings", json={"time": "03:15", "recipients": ["nope"]})
     assert r.status_code == 400 and r.json()["code"] == "bad_recipient"
-    r = admin.put("/api/v1/backups/settings", json={"time": "03:15", "copy_dir": "relative"})
-    assert r.status_code == 400
+    r = admin.post("/api/v1/backups/destinations", json={"kind": "directory", "path": "relative"})
+    assert r.status_code == 400 and "absolute" in r.json()["detail"]
     r = admin.put(
         "/api/v1/backups/settings",
         json={
@@ -328,12 +330,10 @@ def test_settings_rows_summary_and_tick(admin, recorder):
             "keep": {"daily_days": 5, "weekly_weeks": 1, "upgrades": 2},
             "recordings": True,
             "recipients": ["age1" + "q" * 58],
-            "copy_dir": "/mnt/nas/veyra",
         },
     )
     assert r.status_code == 200, r.text
     assert r.json()["time"] == "03:15" and r.json()["keep"]["daily_days"] == 5
-    assert admin.get("/api/v1/backups/settings").json()["copy_dir"] == "/mnt/nas/veyra"
     # Nothing yet: stale.
     lst = admin.get("/api/v1/backups").json()
     assert lst["summary"]["stale"] is True and lst["backups"] == []
@@ -475,9 +475,9 @@ def test_settings_partial_update_keeps_the_rest(admin):
         json={"recipients": ["age1tjp6mpjd2jcnsyujzl4efy36jy4zm9mawtqfkkrn2nnflcxwhfkq9cxc3m"]},
     )
     assert r.status_code == 200 and len(r.json()["recipients"]) == 1
-    r = admin.put("/api/v1/backups/settings", json={"copy_dir": "/mnt/backups"})
+    r = admin.put("/api/v1/backups/settings", json={"time": "04:00"})
     assert r.status_code == 200
-    assert len(r.json()["recipients"]) == 1 and r.json()["copy_dir"] == "/mnt/backups"
-    assert r.json()["time"] == "02:30" and r.json()["enabled"] is True
-    r = admin.put("/api/v1/backups/settings", json={"recipients": [], "copy_dir": ""})
-    assert r.json()["recipients"] == [] and r.json()["copy_dir"] == ""
+    assert len(r.json()["recipients"]) == 1 and r.json()["time"] == "04:00"
+    assert r.json()["enabled"] is True
+    r = admin.put("/api/v1/backups/settings", json={"recipients": []})
+    assert r.json()["recipients"] == [] and r.json()["time"] == "04:00"

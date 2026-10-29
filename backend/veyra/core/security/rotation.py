@@ -80,6 +80,7 @@ def _setting(db: Session, key: str, field: str, purpose: str) -> Iterator[Cipher
 def ciphers(db: Session) -> Iterator[Cipher]:
     """Every ciphertext bound to the installation key."""
     from veyra.api.v1.enrollment import device_purpose, enrollment_purpose
+    from veyra.backups import policy as backup_policy
     from veyra.bells import calendars
     from veyra.central import protocol
     from veyra.configmgmt.revisions import artifact_purpose
@@ -87,6 +88,7 @@ def ciphers(db: Session) -> Iterator[Cipher]:
     from veyra.core.security import mfa
     from veyra.ha import service as ha_service
     from veyra.integrations import sso, webhooks
+    from veyra.system import certificate
     from veyra.telephony.snapshot import (
         call_flow_pin_purpose,
         conference_pin_purpose,
@@ -203,6 +205,47 @@ def ciphers(db: Session) -> Iterator[Cipher]:
         db, mail.SMTP_SETTINGS_KEY, "password_ciphertext", mail.SMTP_PASSWORD_PURPOSE
     )
     yield from _setting(db, updates.SOURCE_KEY, "token", updates.TOKEN_PURPOSE)
+    # Public certificate (docs/PUBLIC_CERTIFICATES.md): DNS credentials, EAB key.
+    yield from _setting(
+        db, certificate.SETTINGS_KEY, "credentials_ciphertext", certificate.CREDENTIALS_PURPOSE
+    )
+    yield from _setting(
+        db, certificate.SETTINGS_KEY, "eab_hmac_ciphertext", certificate.EAB_PURPOSE
+    )
+    # Backup destinations (docs/PRODUCTION_HARDENING.md §2.7).
+    from veyra.backups import destinations as backup_dests
+
+    yield from _setting(
+        db, backup_policy.SETTINGS_KEY, "ssh_private_ciphertext", backup_dests.SSH_KEY_PURPOSE
+    )
+    yield from _backup_destinations(db)
+
+
+def _backup_destinations(db: Session) -> Iterator[Cipher]:
+    from veyra.backups import destinations as backup_dests
+    from veyra.backups import policy as backup_policy
+
+    row = db.get(SystemSetting, backup_policy.SETTINGS_KEY)
+    if row is None or not isinstance(row.value, dict):
+        return
+    for i, d in enumerate(row.value.get("destinations") or []):
+        if not isinstance(d, dict) or not d.get("secret_ciphertext"):
+            continue
+
+        def put(new: str, row: SystemSetting = row, i: int = i) -> None:
+            value = dict(row.value)
+            dests = [dict(x) for x in value["destinations"]]
+            dests[i]["secret_ciphertext"] = new
+            value["destinations"] = dests
+            row.value = value
+            flag_modified(row, "value")
+
+        yield Cipher(
+            f"backup destination {d.get('name') or d.get('id')}",
+            backup_dests.secret_purpose(str(d["id"])),
+            str(d["secret_ciphertext"]),
+            put,
+        )
 
 
 @dataclass

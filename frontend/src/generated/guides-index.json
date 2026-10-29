@@ -704,7 +704,7 @@
   {
    "slug": "backups",
    "title": "Backups and restore",
-   "summary": "Schedule verified, encrypted backups, copy them off the server, and restore a server from one.",
+   "summary": "Schedule verified, encrypted backups, copy them to a NAS, an SFTP server or S3 storage, and restore a server from one.",
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",

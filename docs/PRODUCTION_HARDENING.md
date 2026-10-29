@@ -106,6 +106,45 @@ Alert rules (`ensure_rules`): `backup_failed` and `backup_stale` (no good
 backup for 2 days, the rule REPORTING.md deferred). Central management:
 a `backups` policy section (schedule and keep policy) in a later milestone.
 
+### 2.7 Destinations (issue #44, 0.27.44)
+
+Built as one destination model that call-recording archives will share:
+`backup.settings.destinations`, up to five, each a **folder** (a mounted
+share; the copy directory of earlier releases becomes the folder
+destination `copy-dir`), an **SFTP server** or an **S3-compatible
+bucket** (`backend/veyra/backups/destinations.py`).
+
+* **Secrets.** S3 secret access keys are encrypted with the installation
+  key (purpose `backups.destination:<id>`), write-only in the API. SFTP
+  uses Veyra's own Ed25519 key pair, created on first use
+  (`GET /backups/ssh-key`), its private half encrypted the same way
+  (`backups.ssh_key`); the person adds the public key to the server's
+  `authorized_keys`. Both are in the rotation registry. The root runner
+  gets them decrypted from `veyra backup settings --json --secrets`.
+* **SFTP** runs the system `sftp` client in batch mode with
+  `StrictHostKeyChecking=yes` against a **pinned host key**: the first
+  *Test* scans it (`ssh-keyscan`) and shows its SHA-256 fingerprint for the
+  person to confirm; changing the host or port forgets it.
+* **S3** uses SigV4-signed requests over httpx (no SDK), path-style or
+  virtual-host addressing, `x-amz-content-sha256` set to the real body hash
+  so the storage verifies every request, and multipart uploads of 64 MiB
+  parts above 100 MiB. Errors name the likely cause (wrong secret or
+  region, missing bucket, no permission).
+* **Sync, not copy.** After each verified backup, every enabled
+  destination gets the verified backups its keep policy wants and it lacks,
+  newest first — so a failed copy is retried at the next run. Each copy is
+  written under a temporary name (`….partial`, or for S3 the manifest
+  last) and checked (file sizes) before it counts; then the destination is
+  pruned with its own keep policy (default: the server's). A failure stops
+  that destination for this run, does not fail the backup, is recorded in
+  the backup's `copies` and raises the `backup_copy_failed` alert.
+  Deleting a backup deletes it from every destination, best effort.
+* **Interface.** System → Backups → *Destinations*: add, edit, *Test*
+  (writes, checks and removes a file; a folder is only checked to exist,
+  since the service cannot write as root), remove, the last copy's
+  outcome and how many backups are there; a warning while backups are not
+  encrypted.
+
 ## 3. Encryption
 
 ### 3.1 Installation key rotation

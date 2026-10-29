@@ -18,10 +18,12 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from veyra.backups import destinations as dests
 from veyra.backups import policy
 from veyra.core import audit
 from veyra.core.models import Backup, SystemSetting
 from veyra.core.models.base import utcnow
+from veyra.core.security.crypto import InstallationKey
 
 UNIT = "veyra-backup@{instance}.service"
 STALE_RUNNING_HOURS = 8  # longer than TimeoutStartSec of the unit (6 h)
@@ -57,8 +59,6 @@ def save_settings(db: Session, body: dict[str, Any], by: uuid.UUID | None) -> di
             "bad_recipient",
             "Recipients are age public keys (age1…) or SSH public keys (ssh-ed25519 …).",
         )
-    if value["copy_dir"] and not value["copy_dir"].startswith("/"):
-        raise BackupError(400, "bad_copy_dir", "The copy directory is an absolute path.")
     row = db.get(SystemSetting, policy.SETTINGS_KEY)
     if row is None:
         db.add(SystemSetting(key=policy.SETTINGS_KEY, value=value, updated_by=by))
@@ -67,6 +67,128 @@ def save_settings(db: Session, body: dict[str, Any], by: uuid.UUID | None) -> di
         row.updated_by = by
     db.flush()
     return value
+
+
+def public_settings(db: Session) -> dict[str, Any]:
+    """The settings for the interface: destinations without secrets, with
+    the outcome of their last copy."""
+    value = settings(db)
+    last = _last_copies(db)
+    return {
+        **{k: v for k, v in value.items() if k != "ssh_private_ciphertext"},
+        "destinations": [dests.public(d, last.get(d["id"])) for d in value["destinations"]],
+    }
+
+
+def _last_copies(db: Session) -> dict[str, dict[str, Any]]:
+    """Each destination's most recent copy result, from the newest backups."""
+    out: dict[str, dict[str, Any]] = {}
+    for b in rows(db, 20):
+        for dest_id, result in (b.copies or {}).items():
+            if isinstance(result, dict) and dest_id not in out:
+                out[dest_id] = result
+    return out
+
+
+def runner_settings(db: Session, key: InstallationKey) -> dict[str, Any]:
+    """The settings for the root runner, with the secrets decrypted."""
+    value = settings(db)
+    out = dict(value)
+    out.pop("ssh_private_ciphertext", None)
+    if value["ssh_private_ciphertext"]:
+        out["ssh_private_key"] = key.decrypt(value["ssh_private_ciphertext"], dests.SSH_KEY_PURPOSE)
+    out["destinations"] = []
+    for d in value["destinations"]:
+        d = dict(d)
+        cipher = d.pop("secret_ciphertext", None)
+        if cipher:
+            d["secret"] = key.decrypt(cipher, dests.secret_purpose(d["id"]))
+        out["destinations"].append(d)
+    return out
+
+
+def ssh_public_key(db: Session, key: InstallationKey, by: uuid.UUID | None) -> str:
+    """Veyra's SSH key for SFTP destinations, created the first time."""
+    value = settings(db)
+    if value["ssh_public"] and value["ssh_private_ciphertext"]:
+        return str(value["ssh_public"])
+    private, public_line = dests.generate_ssh_key("veyra-backup")
+    value["ssh_private_ciphertext"] = key.encrypt(private, dests.SSH_KEY_PURPOSE)
+    value["ssh_public"] = public_line
+    _store(db, value, by)
+    return public_line
+
+
+def _store(db: Session, value: dict[str, Any], by: uuid.UUID | None) -> None:
+    row = db.get(SystemSetting, policy.SETTINGS_KEY)
+    if row is None:
+        db.add(SystemSetting(key=policy.SETTINGS_KEY, value=value, updated_by=by))
+    else:
+        row.value = value
+        row.updated_by = by
+    db.flush()
+
+
+def save_destination(
+    db: Session,
+    body: dict[str, Any],
+    key: InstallationKey,
+    by: uuid.UUID | None,
+    dest_id: str | None = None,
+) -> dict[str, Any]:
+    """Add (``dest_id`` None) or change a destination. A secret in the body
+    replaces the stored one; leaving it out keeps it."""
+    value = settings(db)
+    current = value["destinations"]
+    existing = next((d for d in current if d["id"] == dest_id), None) if dest_id else None
+    if dest_id and existing is None:
+        raise BackupError(404, "not_found", "No such destination.")
+    if existing is None and len(current) >= dests.MAX_DESTINATIONS:
+        raise BackupError(
+            400, "too_many", f"At most {dests.MAX_DESTINATIONS} destinations can be set up."
+        )
+    try:
+        dest = dests.normalize(body, existing=existing)
+    except (ValueError, TypeError) as e:
+        raise BackupError(400, "bad_destination", str(e)) from e
+    secret = str(body.get("secret_access_key") or "").strip()
+    if dest["kind"] == "s3":
+        if secret:
+            dest["secret_ciphertext"] = key.encrypt(secret, dests.secret_purpose(dest["id"]))
+        elif not dest.get("secret_ciphertext"):
+            raise BackupError(400, "bad_destination", "Enter the secret access key.")
+    others = [d for d in current if d["id"] != dest["id"]]
+    if any(dests.describe(d) == dests.describe(dest) for d in others):
+        raise BackupError(400, "duplicate", "Another destination already goes there.")
+    value["destinations"] = (
+        [dest if d["id"] == dest["id"] else d for d in current] if existing else [*current, dest]
+    )
+    _store(db, value, by)
+    return dest
+
+
+def destination(db: Session, dest_id: str) -> dict[str, Any] | None:
+    return next((d for d in settings(db)["destinations"] if d["id"] == dest_id), None)
+
+
+def delete_destination(db: Session, dest_id: str, by: uuid.UUID | None) -> dict[str, Any]:
+    value = settings(db)
+    dest = next((d for d in value["destinations"] if d["id"] == dest_id), None)
+    if dest is None:
+        raise BackupError(404, "not_found", "No such destination.")
+    value["destinations"] = [d for d in value["destinations"] if d["id"] != dest_id]
+    _store(db, value, by)
+    return dest
+
+
+def pin_host_key(db: Session, dest_id: str, host_key: str, by: uuid.UUID | None) -> None:
+    value = settings(db)
+    for d in value["destinations"]:
+        if d["id"] == dest_id and d["kind"] == "sftp":
+            d["host_key"] = host_key
+            _store(db, value, by)
+            return
+    raise BackupError(404, "not_found", "No such SFTP destination.")
 
 
 # ------------------------------------------------------------------ rows
@@ -207,10 +329,24 @@ def summary(db: Session) -> dict[str, Any]:
         "last_error": last.error if last else None,
         "stale": stale,
         "encrypted": bool(s["recipients"]),
+        "copies_failed": _failed_copies(s, last),
         "count": db.scalar(
             select(func.count()).select_from(Backup).where(Backup.state == "verified")
         ),
     }
+
+
+def _failed_copies(s: dict[str, Any], last: Backup | None) -> list[tuple[str, str]]:
+    """(destination name, error) for each enabled destination whose copy
+    failed in the latest finished backup."""
+    if last is None or last.state == "running":
+        return []
+    names = {d["id"]: d.get("name") or d["id"] for d in s["destinations"] if d.get("enabled")}
+    return [
+        (names[k], str(v.get("error") or "unknown error"))
+        for k, v in (last.copies or {}).items()
+        if k in names and isinstance(v, dict) and v.get("state") == "failed"
+    ]
 
 
 # ------------------------------------------------------------------ the unit

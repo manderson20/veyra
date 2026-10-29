@@ -5,12 +5,15 @@ verify-again (a new backup), delete, and the runner's status."""
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.extensions import installation_key
+from veyra.backups import destinations as dests
 from veyra.backups import policy, service
 from veyra.core import audit
 from veyra.core.db import get_db
@@ -58,14 +61,13 @@ class SettingsIn(BaseModel):
     keep: KeepIn | None = None
     recordings: bool | None = None
     recipients: list[str] | None = Field(None, max_length=10)
-    copy_dir: str | None = Field(None, max_length=1024)
 
 
 @router.get("/settings", summary="Backup schedule, keep policy, encryption and destinations")
 def get_settings(
     principal: Principal = Depends(require(READ)), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
-    return service.settings(db)
+    return service.public_settings(db)
 
 
 @router.put("/settings", summary="Change the backup settings")
@@ -85,11 +87,179 @@ def put_settings(
         principal,
         ctx,
         "backups.settings_update",
-        **{k: v for k, v in value.items() if k != "recipients"},
+        **{
+            k: v
+            for k, v in value.items()
+            if k not in ("recipients", "destinations", "ssh_private_ciphertext")
+        },
         recipients=len(value["recipients"]),
     )
     db.commit()
-    return value
+    return service.public_settings(db)
+
+
+# ------------------------------------------------------------- destinations
+
+
+class DestinationIn(BaseModel):
+    """A folder, an SFTP server or an S3-compatible bucket (§2.7). The
+    secret access key is write-only: left out, the stored one stays."""
+
+    kind: Literal["directory", "sftp", "s3"]
+    name: str = Field("", max_length=80)
+    enabled: bool = True
+    keep: KeepIn | None = None
+    path: str | None = Field(None, max_length=1024)
+    host: str | None = Field(None, max_length=253)
+    port: int | None = Field(None, ge=1, le=65535)
+    username: str | None = Field(None, max_length=64)
+    endpoint: str | None = Field(None, max_length=300)
+    bucket: str | None = Field(None, max_length=63)
+    region: str | None = Field(None, max_length=40)
+    prefix: str | None = Field(None, max_length=300)
+    access_key_id: str | None = Field(None, max_length=128)
+    secret_access_key: str | None = Field(None, max_length=200)
+    addressing: Literal["path", "virtual"] | None = None
+
+
+class HostKeyIn(BaseModel):
+    host_key: str = Field(min_length=20, max_length=2000)
+
+
+def _dest_audit(dest: dict[str, Any]) -> dict[str, Any]:
+    return {"id": dest["id"], "kind": dest["kind"], "target": dests.describe(dest)}
+
+
+@router.get("/ssh-key", summary="Veyra's SSH public key for SFTP destinations")
+def ssh_key(
+    request: Request,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    public_key = service.ssh_public_key(db, installation_key(request), principal.user_id)
+    db.commit()
+    return {"public_key": public_key}
+
+
+@router.post("/destinations", status_code=201, summary="Add a backup destination")
+def add_destination(
+    body: DestinationIn,
+    request: Request,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    try:
+        dest = service.save_destination(
+            db, body.model_dump(exclude_none=True), installation_key(request), principal.user_id
+        )
+    except service.BackupError as e:
+        raise _problem(e) from e
+    _audit(db, principal, ctx, "backups.destination_add", **_dest_audit(dest))
+    db.commit()
+    return dests.public(dest)
+
+
+@router.put("/destinations/{dest_id}", summary="Change a backup destination")
+def change_destination(
+    dest_id: str,
+    body: DestinationIn,
+    request: Request,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    try:
+        dest = service.save_destination(
+            db,
+            body.model_dump(exclude_none=True),
+            installation_key(request),
+            principal.user_id,
+            dest_id=dest_id,
+        )
+    except service.BackupError as e:
+        raise _problem(e) from e
+    _audit(db, principal, ctx, "backups.destination_update", **_dest_audit(dest))
+    db.commit()
+    return dests.public(dest)
+
+
+@router.delete("/destinations/{dest_id}", status_code=204, summary="Remove a backup destination")
+def delete_destination(
+    dest_id: str,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> None:
+    """Veyra stops copying there; the copies already made stay."""
+    try:
+        dest = service.delete_destination(db, dest_id, principal.user_id)
+    except service.BackupError as e:
+        raise _problem(e) from e
+    _audit(db, principal, ctx, "backups.destination_delete", **_dest_audit(dest))
+    db.commit()
+
+
+@router.post("/destinations/{dest_id}/test", summary="Check that Veyra can write there")
+def test_destination(
+    dest_id: str,
+    request: Request,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Writes, checks and removes a small file. An SFTP server whose host
+    key is not confirmed yet answers with the key to confirm instead."""
+    dest = service.destination(db, dest_id)
+    if dest is None:
+        raise not_found("Destination")
+    try:
+        if dest["kind"] == "directory":
+            # The copies run as root; the service can only see the folder.
+            path = Path(dest["path"])
+            if not path.is_dir():
+                raise dests.DestinationError(f"{path} is not a folder (is the share mounted?)")
+            return {
+                "state": "ok",
+                "message": f"{path} exists"
+                + (" and is a mounted share." if path.is_mount() else ".")
+                + " The copies are written by the backup service.",
+            }
+        if dest["kind"] == "sftp" and not dest.get("host_key"):
+            line = dests.scan_host_key(dest["host"], int(dest["port"]))
+            return {
+                "state": "host_key",
+                "host_key": line,
+                "fingerprint": dests.host_key_fingerprint(line),
+                "message": "Confirm that this is the server's host key.",
+            }
+        settings = service.runner_settings(db, installation_key(request))
+        full = next(d for d in settings["destinations"] if d["id"] == dest_id)
+        dests.remote(
+            full, secret=full.get("secret"), ssh_private_key=settings.get("ssh_private_key")
+        ).test()
+    except dests.DestinationError as e:
+        return {"state": "failed", "message": str(e)}
+    return {"state": "ok", "message": "Veyra wrote, checked and removed a test file."}
+
+
+@router.post("/destinations/{dest_id}/host-key", summary="Confirm an SFTP server's host key")
+def confirm_host_key(
+    dest_id: str,
+    body: HostKeyIn,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    fingerprint = dests.host_key_fingerprint(body.host_key)
+    if fingerprint is None or len(body.host_key.split()) != 3:
+        raise ProblemError(400, "Backups", "That is not a host key.", code="bad_host_key")
+    try:
+        service.pin_host_key(db, dest_id, body.host_key.strip(), principal.user_id)
+    except service.BackupError as e:
+        raise _problem(e) from e
+    _audit(db, principal, ctx, "backups.destination_host_key", id=dest_id, fingerprint=fingerprint)
+    db.commit()
+    return {"fingerprint": fingerprint}
 
 
 @router.get("", summary="Backups, newest first")

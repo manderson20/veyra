@@ -1,6 +1,6 @@
 ---
 title: Backups and restore
-summary: Schedule verified, encrypted backups, copy them off the server, and restore a server from one.
+summary: Schedule verified, encrypted backups, copy them to a NAS, an SFTP server or S3 storage, and restore a server from one.
 audience: admin
 section: Maintenance
 order: 20
@@ -11,6 +11,7 @@ covers:
   - frontend/src/app/(app)/system/backups/*
   - backend/veyra/api/v1/backups.py
   - backend/veyra/backups/*.py
+  - frontend/src/components/backups/*
 ---
 
 Open [System → Backups](app:/system/backups/). Veyra backs up everything needed to rebuild the phone system:
@@ -40,7 +41,6 @@ Choose **Save** after changing any of these.
 
 - **Scheduled backups:** on or off.
 - **Time of day:** server local time, such as `02:30`.
-- **Copy to directory:** a folder on a mounted network share (NFS or CIFS) that receives a copy of every backup, for example `/mnt/nas/veyra`. The share must be mounted on the server; Veyra does not mount it. Set up encryption first, so the copy is unreadable without your key.
 - **Keep daily for (days)** (default 14), **Then one per week for (weeks)** (default 8), and **Keep pre-upgrade backups** (default 3). Old backups are removed only after a new one succeeds.
 - **Include call recordings:** recordings are usually the largest files. Without them, a restore keeps the list of recordings but not the audio.
 - **Encryption recipients (age public keys, one per line):** see below.
@@ -57,13 +57,39 @@ Veyra encrypts with [age](https://age-encryption.org) to a *public* key you give
 
 > **Warning:** Without the private key, an encrypted backup cannot be restored by anyone. Test a restore once, on a spare server, while you still have the original.
 
+## Copy backups off the server
+
+A backup that only lives on the server is lost with the server. Under **Destinations**, choose **Add a destination** (up to five):
+
+| Kind | What you need |
+|---|---|
+| **Folder** | A share mounted on the server (NFS or Windows/SMB), for example `/mnt/nas/veyra`. Mount it in `/etc/fstab` so it is there after a restart; Veyra does not mount it. |
+| **SFTP server** | A server reachable over SSH (a NAS with SFTP turned on, a Linux server): its **Server** name, **Port**, **User name** and **Folder on the server**. |
+| **S3-compatible storage** | Amazon S3, Backblaze B2, Wasabi, Cloudflare R2, MinIO and others: the **Endpoint** (empty for Amazon S3), **Region**, **Bucket**, an optional **Folder in the bucket**, and an **Access key ID** with its **Secret access key**. |
+
+Set up encryption first (below). Until there is a recipient, the page warns that backups leave the server unencrypted, and they include the configuration's secrets.
+
+**SFTP:** Veyra signs in with its own SSH key, not a password. The dialog shows the public key: add it to the user's `~/.ssh/authorized_keys` on the server. Then choose **Test**. The first test shows the server's host key; compare it with what the server shows (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` as root) and choose **This is the server's key**. Veyra then refuses any other server at that address.
+
+**S3:** create an access key that can only list, write and delete in this bucket. The secret is stored encrypted and never shown again; to change it, enter a new one when editing. Most S3-compatible storage needs **Path style** addressing, which is the default when you enter an endpoint.
+
+How copies work:
+
+- After each verified backup, Veyra copies every verified backup the destination is missing, newest first, and checks each copy (sizes, and for S3 a checksum of every upload). A copy is written under a temporary name and only takes its real name when it is complete.
+- A copy that fails does not fail the backup. It raises the **Backup copy to a destination failed** alert, the destination shows **last copy failed** with the reason, and the next backup copies what is missing.
+- Each destination keeps backups by the same rule as the server unless you turn off **Same keep policy as on this server** and give it its own, for example a longer history off-site. Old copies are removed there by that rule.
+- **Test** writes, checks and removes a small file. For a **Folder** it only checks that the folder exists, because the copies are written by the backup service as root.
+- **Remove** stops the copies; the copies already made stay where they are.
+
+> **Note:** The **Copy to directory** setting of earlier releases is now a **Folder** destination named *Copy folder*.
+
 ## Take a backup now
 
 Choose **Back up now**. A **Backup running** note shows the current step. Take one before a large change, such as importing many extensions.
 
 ## The backup list
 
-Each row shows when it was **Taken** and how (**Scheduled**, **Manual** or **Before upgrade**, which Veyra takes before every update), its **State**, **Size**, **Contents**, whether it is **Encrypted** (**age** or **clear**), whether the **Copies** to the share worked (**copied**, **copy failed** or **local only**), and the Veyra **Version** it came from. **Delete** removes the files from the server and from the copy directory.
+Each row shows when it was **Taken** and how (**Scheduled**, **Manual** or **Before upgrade**, which Veyra takes before every update), its **State**, **Size**, **Contents**, whether it is **Encrypted** (**age** or **clear**), the **Copies** to each destination (*name*: **ok** or **failed**, or **local only**), and the Veyra **Version** it came from. **Delete** removes the files from the server and from every destination.
 
 Backups are stored on the server in `/var/backups/veyra`.
 
@@ -90,5 +116,5 @@ Other console commands: `sudo veyra backup list` lists backups and `sudo veyra b
 ## When it does not work
 
 - **Last run failed:** the **Schedule** card shows the error, and the **Backup failed** alert is raised (see [Health, alerts and diagnostics](guide:health-alerts-diagnostics)). Disk space is the usual cause.
-- **copy failed:** the share is not mounted or not writable. Check it on the server; the copy is retried at the next backup.
+- **Copy failed:** the destination shows the reason. A folder that is not mounted, an SFTP server that refuses Veyra's key (add the public key again) or whose host key changed (confirm the new one with **Test** if the server was reinstalled), or S3 credentials or a region that are wrong. Fix it and choose **Test**; the missing copies are made at the next backup.
 - **No recent good backup:** the **No recent good backup** alert is raised after two days without a verified backup.

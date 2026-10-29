@@ -53,7 +53,7 @@ From the server console, `sudo veyra status` prints the same summary.
 | **Public certificate not renewed** | A Let's Encrypt renewal failed |
 | **Many firewall bans** | More bans per hour than the limit (20 by default): probably an attack |
 | **Phones unregistered** | More than the limit (20 % by default) of phones are not registered |
-| **Backup failed**, **No recent good backup** | See [Backups and restore](guide:backups) |
+| **Backup failed**, **No recent good backup**, **Backup copy to a destination failed** | See [Backups and restore](guide:backups) |
 | **Instance not checking in**, **Instance unhealthy**, **Instance update failed** | On a central console only |
 | **HA node offline**, **Replication broken**, **Replication lagging**, **File sync failing**, **Primary isolated**, **HA operation failed** | On a high availability pair only |
 

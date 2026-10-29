@@ -28,6 +28,7 @@ import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
+import { DestinationsCard } from "@/components/backups/DestinationsCard";
 
 const KIND: Record<string, string> = { scheduled: "Scheduled", manual: "Manual", upgrade: "Before upgrade" };
 
@@ -41,11 +42,10 @@ function SettingsCard({ s, manage, onSaved }: { s: BackupSettings; manage: boole
   const [upgrades, setUpgrades] = useState(String(s.keep.upgrades));
   const [recordings, setRecordings] = useState(s.recordings);
   const [recipients, setRecipients] = useState(s.recipients.join("\n"));
-  const [copyDir, setCopyDir] = useState(s.copy_dir);
   const [busy, setBusy] = useState(false);
   useOnChange(s, (v) => {
     setEnabled(v.enabled); setTime(v.time); setDaily(String(v.keep.daily_days)); setWeekly(String(v.keep.weekly_weeks));
-    setUpgrades(String(v.keep.upgrades)); setRecordings(v.recordings); setRecipients(v.recipients.join("\n")); setCopyDir(v.copy_dir);
+    setUpgrades(String(v.keep.upgrades)); setRecordings(v.recordings); setRecipients(v.recipients.join("\n"));
   });
 
   const save = async () => {
@@ -53,7 +53,7 @@ function SettingsCard({ s, manage, onSaved }: { s: BackupSettings; manage: boole
     errors.clear();
     try {
       await api.put("/backups/settings", {
-        enabled, time, recordings, copy_dir: copyDir.trim(),
+        enabled, time, recordings,
         keep: { daily_days: Number(daily), weekly_weeks: Number(weekly), upgrades: Number(upgrades) },
         recipients: recipients.split("\n").map((r) => r.trim()).filter(Boolean),
       });
@@ -74,8 +74,6 @@ function SettingsCard({ s, manage, onSaved }: { s: BackupSettings; manage: boole
           description="A backup every day at the time below, verified by a restore test before it counts." />
         <div className="grid grid--2">
           <TextField label="Time of day" value={time} disabled={!manage} onChange={(e) => setTime(e.target.value)} placeholder="02:30" help="Server local time, HH:MM." error={errors.fields["time"]} />
-          <TextField label="Copy to directory" value={copyDir} disabled={!manage} onChange={(e) => setCopyDir(e.target.value)} placeholder="/mnt/nas/veyra"
-            help="A mounted share (NFS, CIFS) that receives every backup; needs encryption below." error={errors.fields["copy_dir"]} />
         </div>
         <div className="grid grid--3">
           <TextField label="Keep daily for (days)" type="number" min={0} value={daily} disabled={!manage} onChange={(e) => setDaily(e.target.value)} />
@@ -157,7 +155,7 @@ export default function BackupsPage() {
     { key: "size", header: "Size", render: (b) => formatBytes(b.bytes) },
     { key: "parts", header: "Contents", render: (b) => <span className="subtle">{b.parts.map((p) => p.name.replace(/\.(tar|dump)$/, "")).join(", ") || "—"}</span> },
     { key: "enc", header: "Encrypted", render: (b) => b.encrypted ? <Badge tone="ok">age</Badge> : <Badge tone="warn">clear</Badge> },
-    { key: "copies", header: "Copies", render: (b) => Object.entries(b.copies).length ? Object.entries(b.copies).map(([d, c]) => <Badge key={d} tone={c.state === "ok" ? "ok" : "danger"}>{c.state === "ok" ? "copied" : `copy failed`}</Badge>) : <span className="subtle">local only</span> },
+    { key: "copies", header: "Copies", render: (b) => Object.entries(b.copies).length ? <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>{Object.entries(b.copies).map(([d, c]) => <Badge key={d} tone={c.state === "ok" ? "ok" : "danger"}>{c.name ?? "copy"}: {c.state === "ok" ? "ok" : "failed"}</Badge>)}</span> : <span className="subtle">local only</span> },
     { key: "ver", header: "Version", render: (b) => <span className="mono">{b.version ?? "—"}</span> },
     { key: "actions", header: "", render: (b) => manage && b.state !== "running" && b.state !== "deleted" ? <Button size="sm" variant="danger" onClick={() => setRemove(b)}>Delete</Button> : null },
   ];
@@ -172,14 +170,17 @@ export default function BackupsPage() {
           <Card title="Last good backup"><p className="metric__value" style={{ fontSize: "var(--text-lg)" }}>{summary.last_good_at ? formatRelative(summary.last_good_at) : "Never"}</p>
             <p className="subtle">{summary.stale ? "No verified backup in the last two days." : `${summary.count} verified backup${summary.count === 1 ? "" : "s"} kept.`}</p></Card>
           <Card title="Encryption"><p className="metric__value" style={{ fontSize: "var(--text-lg)" }}>{summary.encrypted ? "age" : "Off"}</p>
-            <p className="subtle">{summary.encrypted ? "Backups leave this server encrypted." : "Local backups are root-only; set recipients before copying them anywhere."}</p></Card>
+            <p className="subtle">{summary.encrypted ? "Backups leave this server encrypted." : "Local backups are root-only; set recipients before adding a destination."}</p></Card>
           <Card title="Schedule"><p className="metric__value" style={{ fontSize: "var(--text-lg)" }}>{summary.enabled ? `Daily at ${settings.data?.time ?? ""}` : "Off"}</p>
             <p className="subtle">{summary.last_state === "failed" ? `Last run failed: ${summary.last_error}` : "Scheduled by the worker; runs as root."}</p></Card>
         </div>
       ) : null}
       {summary?.stale && summary.enabled ? <Callout tone="warn" title="No recent good backup">Run one now, or check the last error above.</Callout> : null}
       {settings.error ? <Card><ErrorState error={settings.error} onRetry={settings.reload} /></Card> : !settings.data ? <Card><LoadingState /></Card> : (
-        <SettingsCard s={settings.data} manage={manage} onSaved={() => { settings.reload(); list.reload(); }} />
+        <>
+          <SettingsCard s={settings.data} manage={manage} onSaved={() => { settings.reload(); list.reload(); }} />
+          <DestinationsCard settings={settings.data} manage={manage} onChanged={settings.reload} />
+        </>
       )}
       <Card title="Backups" flush>
         {list.error ? <ErrorState compact error={list.error} onRetry={list.reload} /> : (
@@ -194,7 +195,7 @@ export default function BackupsPage() {
       </Card>
       <ConfirmDialog open={!!remove} title={`Delete the backup of ${remove ? formatDateTime(remove.started_at) : ""}`} confirmLabel="Delete" tone="danger" busy={busy}
         onCancel={() => setRemove(null)} onConfirm={doDelete}>
-        <p>The files are removed from this server and from the copy directory. Keep at least one verified backup.</p>
+        <p>The files are removed from this server and from every destination. Keep at least one verified backup.</p>
       </ConfirmDialog>
     </div>
   );
