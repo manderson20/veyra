@@ -177,7 +177,10 @@ def test_queue_crud_prompts_and_in_use(admin, app):
     assert q["queue_name"] == "veyra-support" and q["context"] == "veyra-queue-support"
     assert [(m["number"], m["penalty"]) for m in q["members"]] == [("1001", 0), ("1002", 2)]
     assert q["periodic_prompt_name"] == "Please hold" and q["failover"]["type"] == "hangup"
-    assert admin.get(f"/api/v1/prompts/{hold['id']}").json()["in_use_by"] == 0  # menus only
+    # The queue plays it: it counts as used and cannot be deleted from under the queue.
+    assert admin.get(f"/api/v1/prompts/{hold['id']}").json()["in_use_by"] == 1
+    r = admin.delete(f"/api/v1/prompts/{hold['id']}")
+    assert r.status_code == 409 and "call queues: Support" in r.json()["detail"]
     # validation
     r = admin.post(
         QUEUES,

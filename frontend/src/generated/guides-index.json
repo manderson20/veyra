@@ -18,8 +18,8 @@
    "summary": "Put Veyra on an Ubuntu server, open the setup wizard and create the first administrator.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [],
    "wiki": "https://github.com/manderson20/veyra/wiki/Install-Veyra"
   },
@@ -29,8 +29,8 @@
    "summary": "Finish the setup wizard, then set Veyra up in the order that gets the first phones ringing.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [],
    "wiki": "https://github.com/manderson20/veyra/wiki/First-steps-after-installing-Veyra"
   },
@@ -40,8 +40,8 @@
    "summary": "What the dashboard shows about the server, the phone system and today's calls.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/"
    ],
@@ -53,8 +53,8 @@
    "summary": "Set up your organization's defaults, and add its sites, buildings and departments.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/organizations/",
     "/organizations/view/",
@@ -122,8 +122,8 @@
    "summary": "Set up email delivery, the two-factor rule, how long data is kept, the installation key and multi-tenancy.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/settings/"
    ],
@@ -189,8 +189,8 @@
    "summary": "Set up the programmable keys on desk phones (lines, busy lamps, speed dials, paging, parking and more) and decide which keys users may change.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/device-profiles/view/",
     "/devices/view/"
@@ -214,8 +214,8 @@
    "summary": "Change what Veyra writes into phones' configuration files with your own template, edited in the browser, previewed, exported and imported.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/provisioning/",
     "/provisioning/view/"
@@ -541,8 +541,8 @@
    "summary": "Group your overhead speakers and Poly phones into paging zones that anyone allowed can page by dialling a number.",
    "audience": "admin",
    "section": "Paging and bells",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/paging-zones/"
    ],
@@ -567,8 +567,8 @@
    "summary": "Let a Google Calendar or any iCal calendar ring your school bells through the paging speakers.",
    "audience": "admin",
    "section": "Paging and bells",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/bells/",
     "/calendars/"
@@ -592,8 +592,8 @@
    "summary": "Give extensions a voicemail box, set PINs and email delivery, and create shared inboxes that several phones watch.",
    "audience": "admin",
    "section": "Voicemail and fax",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/voicemail/"
    ],
@@ -842,8 +842,8 @@
    "summary": "Listen to your messages from your phone or the browser, record your greetings, set an away message for the holidays, and choose your PIN.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/my-phone/"
    ],
@@ -855,8 +855,8 @@
    "summary": "Change your password, set up a passkey or an authenticator app, keep your recovery codes, and sign out devices you no longer use.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/account/"
    ],

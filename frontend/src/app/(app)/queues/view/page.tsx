@@ -118,6 +118,7 @@ function QueueView() {
                     <span className="row" style={{ gap: 8 }}>
                       <span className="table__primary">{m.number} — {m.display_name}</span>
                       <Badge tone={m.logged_in ? (m.paused ? "warn" : "ok") : "neutral"}>{m.logged_in ? (m.paused ? "Paused" : "Logged in") : "Logged out"}</Badge>
+                      {m.state_at ? <span className="subtle">{formatRelative(m.state_at)}{m.state_by ? ` by ${m.state_by}` : ""}</span> : null}
                     </span>
                     {editable ? (
                       <span className="row" style={{ gap: 4 }}>

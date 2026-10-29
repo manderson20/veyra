@@ -34,6 +34,7 @@ export function FaxCard() {
   const [file, setFile] = useState<File | null>(null);
   const [cover, setCover] = useState(false);
   const [to, setTo] = useState("");
+  const [from, setFrom] = useState("");
   const [subject, setSubject] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,6 +66,7 @@ export function FaxCard() {
       form.append("cover", cover ? "true" : "false");
       if (cover) {
         form.append("cover_to", to);
+        if (from.trim()) form.append("cover_from", from.trim());
         form.append("cover_subject", subject);
         form.append("cover_note", note);
       }
@@ -113,6 +115,7 @@ export function FaxCard() {
             <div className="stack stack--sm">
               <div className="grid grid--2">
                 <TextField label="To" value={to} maxLength={120} disabled={busy} onChange={(e) => setTo(e.target.value)} />
+                <TextField label="From" value={from} maxLength={120} disabled={busy} placeholder="Your name" help="Empty: your name." onChange={(e) => setFrom(e.target.value)} />
                 <TextField label="Subject" value={subject} maxLength={120} disabled={busy} onChange={(e) => setSubject(e.target.value)} />
               </div>
               <TextArea label="Note" rows={3} value={note} maxLength={2000} disabled={busy} onChange={(e) => setNote(e.target.value)} />

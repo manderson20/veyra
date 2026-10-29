@@ -1190,6 +1190,18 @@ class LayoutOut(BaseModel):
     template_id: uuid.UUID | None
     template_name: str | None
     locked_widgets: list[str]
+    # The layout template's announcement text, so a user's own arrangement
+    # shows the current one rather than the copy it was saved with.
+    announcement: str | None = None
+
+
+def _announcement(layout: dict[str, Any] | None) -> str | None:
+    for tab in (layout or {}).get("tabs") or []:
+        for w in tab.get("widgets") or []:
+            if w.get("key") == "announce":
+                text = (w.get("settings") or {}).get("text")
+                return str(text) if text else None
+    return None
 
 
 class LayoutIn(BaseModel):
@@ -1214,6 +1226,7 @@ def _layout_out(db: Session, principal: Principal) -> LayoutOut:
             template_id=template.id if template else None,
             template_name=template.name if template else None,
             locked_widgets=locked,
+            announcement=_announcement(template.layout) if template else None,
         )
     if template is not None:
         return LayoutOut(
@@ -1222,6 +1235,7 @@ def _layout_out(db: Session, principal: Principal) -> LayoutOut:
             template_id=template.id,
             template_name=template.name,
             locked_widgets=locked,
+            announcement=_announcement(template.layout),
         )
     return LayoutOut(
         layout=None, source="default", template_id=None, template_name=None, locked_widgets=[]

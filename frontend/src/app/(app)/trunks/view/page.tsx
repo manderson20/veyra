@@ -104,7 +104,7 @@ function TrunkView() {
         </Card>
         <Card title="Information">
           <dl className="dl">
-            <dt>Status</dt><dd><TrunkStatusBadge trunk={t} />{t.status === null ? <span className="subtle" style={{ display: "block", marginTop: 4 }}>The engine does not report trunk status right now.</span> : t.qualify_frequency === 0 ? <span className="subtle" style={{ display: "block", marginTop: 4 }}>Qualify is off, so reachability is not checked.</span> : null}</dd>
+            <dt>Status</dt><dd><TrunkStatusBadge trunk={t} />{t.status?.registration ? <span className="subtle" style={{ display: "block", marginTop: 4 }}>Registration: <span className="mono">{t.status.registration}</span> (as the engine reports it)</span> : null}{t.status === null ? <span className="subtle" style={{ display: "block", marginTop: 4 }}>The engine does not report trunk status right now.</span> : t.qualify_frequency === 0 ? <span className="subtle" style={{ display: "block", marginTop: 4 }}>Qualify is off, so reachability is not checked.</span> : null}</dd>
             <dt>Engine name</dt><dd className="mono">trunk-{t.slug}</dd>
             <dt>Password</dt><dd>{t.has_password ? "Stored" : <span className="subtle">None</span>}</dd>
             <dt>Match addresses</dt><dd>{t.match_addresses.length ? t.match_addresses.map((a) => <span key={a} className="mono" style={{ display: "block" }}>{a}</span>) : <span className="subtle">{t.auth_mode === "ip" ? `Host (${t.host})` : "—"}</span>}</dd>

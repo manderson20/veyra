@@ -145,7 +145,7 @@ export function PortalCanvasPage() {
       <Canvas widgets={current.widgets} arranging={arranging} locked={locked}
         onChange={update}
         onRemove={(id) => update(removeWidget(current.widgets, id))}
-        render={(p) => <WidgetRenderer placed={p} extensions={extensions} boxes={boxList} />} />
+        render={(p) => <WidgetRenderer placed={p} extensions={extensions} boxes={boxList} announcement={saved.data?.announcement} />} />
       <Dialog open={adding} onClose={() => setAdding(false)} title="Add a widget" size="lg">
         <AddWidget extensions={extensions} boxes={boxList} onAdd={(key, instance) => {
           const m = widgetByKey(key);

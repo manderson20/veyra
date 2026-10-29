@@ -26,7 +26,17 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import Announcement, IvrMenu, MohClass, MohClassTrack, Organization, Prompt
+from veyra.core.models import (
+    Announcement,
+    CallQueue,
+    IvrMenu,
+    MohClass,
+    MohClassTrack,
+    Organization,
+    Prompt,
+    RecordingPolicy,
+)
+from veyra.core.models import Page as RecordedPage
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import audio, routing, sounds
@@ -155,19 +165,51 @@ def _org_for(
     return org
 
 
+# Everything that plays a recording from the library: (what, the row's name,
+# the recording columns). A recording in use cannot be deleted; before, the
+# columns set to NULL silently dropped it from queues, policies and pages.
+_USERS: tuple[tuple[str, Any, tuple[Any, ...]], ...] = (
+    ("IVR menus", IvrMenu.name, (IvrMenu.prompt_id, IvrMenu.invalid_prompt_id)),
+    ("announcements", Announcement.name, (Announcement.prompt_id,)),
+    (
+        "call queues",
+        CallQueue.name,
+        (CallQueue.announcement_prompt_id, CallQueue.periodic_prompt_id),
+    ),
+    ("recording policies", RecordingPolicy.name, (RecordingPolicy.announcement_prompt_id,)),
+    ("pages and bells", RecordedPage.name, (RecordedPage.audio_id,)),
+)
+
+
 def _uses(db: Session, ids: set[uuid.UUID]) -> dict[Any, int]:
     counts: dict[Any, int] = {}
     if not ids:
         return counts
-    for col in (
-        IvrMenu.prompt_id,
-        IvrMenu.invalid_prompt_id,
-        MohClassTrack.prompt_id,
-        Announcement.prompt_id,
-    ):
+    cols = [c for _, _, columns in _USERS for c in columns] + [MohClassTrack.prompt_id]
+    for col in cols:
         for pid, n in db.execute(select(col, func.count()).where(col.in_(ids)).group_by(col)):
             counts[pid] = counts.get(pid, 0) + n
     return counts
+
+
+def _users_of(db: Session, prompt_id: uuid.UUID) -> list[tuple[str, list[str]]]:
+    """What plays the recording: (kind, names), hold music sets included."""
+    out = []
+    for kind, name, columns in _USERS:
+        names = db.scalars(
+            select(name).where(or_(*(c == prompt_id for c in columns))).order_by(name)
+        ).all()
+        if names:
+            out.append((kind, list(names)))
+    sets = db.scalars(
+        select(MohClass.name)
+        .join(MohClassTrack, MohClassTrack.class_id == MohClass.id)
+        .where(MohClassTrack.prompt_id == prompt_id)
+        .order_by(MohClass.name)
+    ).all()
+    if sets:
+        out.append(("hold music sets", list(sets)))
+    return out
 
 
 def _outs(request: Request, db: Session, rows: list[Prompt]) -> list[PromptOut]:
@@ -747,45 +789,15 @@ def delete_prompt(
     ctx: RequestContext = Depends(request_context),
 ) -> Response:
     prompt = _get(db, principal, prompt_id, "ivr.write")
-    used = db.scalars(
-        select(IvrMenu.name)
-        .where(or_(IvrMenu.prompt_id == prompt.id, IvrMenu.invalid_prompt_id == prompt.id))
-        .order_by(IvrMenu.name)
-    ).all()
-    if used:
-        raise ProblemError(
-            409,
-            "Prompt in use",
-            f"These IVR menus play it: {', '.join(used)}.",
-            code="prompt_in_use",
-            errors=[{"field": "menus", "message": n} for n in used],
-        )
-    sets = db.scalars(
-        select(MohClass.name)
-        .join(MohClassTrack, MohClassTrack.class_id == MohClass.id)
-        .where(MohClassTrack.prompt_id == prompt.id)
-        .order_by(MohClass.name)
-    ).all()
-    if sets:
+    users = _users_of(db, prompt.id)
+    if users:
+        listing = "; ".join(f"{kind}: {', '.join(names)}" for kind, names in users)
         raise ProblemError(
             409,
             "Recording in use",
-            f"These hold music sets play it: {', '.join(sets)}.",
+            f"It is still played by {listing}. Choose another recording there first.",
             code="prompt_in_use",
-            errors=[{"field": "hold_music", "message": n} for n in sets],
-        )
-    announcements = db.scalars(
-        select(Announcement.name)
-        .where(Announcement.prompt_id == prompt.id)
-        .order_by(Announcement.name)
-    ).all()
-    if announcements:
-        raise ProblemError(
-            409,
-            "Recording in use",
-            f"These announcements play it: {', '.join(announcements)}.",
-            code="prompt_in_use",
-            errors=[{"field": "announcements", "message": n} for n in announcements],
+            errors=[{"field": kind, "message": n} for kind, names in users for n in names],
         )
     org = db.get(Organization, prompt.organization_id)
     path = prompt_path(prompts_dir(request), org.slug if org else "", prompt.slug)

@@ -210,7 +210,7 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
       {created ? (
         <div className="stack stack--sm">
           <PinReveal pin={created.pin} extension={boxName(created)} shared={created.shared} />
-          <p className="subtle">Deploy changes so the phone system learns about the box. Dial <span className="mono">*97</span> from the phone to record the greeting and listen to messages.</p>
+          <p className="subtle">Deploy changes so the phone system learns about the box. {created.shared ? <>Members dial <span className="mono">*98</span> and <span className="mono">{created.number}</span> to record the greeting and listen to messages.</> : <>Dial <span className="mono">*97</span> from the phone to record the greeting and listen to messages.</>}</p>
         </div>
       ) : (
         <form id="voicemail-box-form" className="stack stack--sm" onSubmit={submit}>

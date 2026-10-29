@@ -17,7 +17,7 @@ export function MyVoicemailCard() {
   const [keys, setKeys] = useState<MyVoicemail | null>(null);
   if (boxes.error || !boxes.data || boxes.data.length === 0) return null;
   return (
-    <Card title="Voicemail" subtitle="Your voicemail boxes. Dial *97 from your phone to record the greeting and listen to messages.">
+    <Card title="Voicemail" subtitle="Your voicemail boxes. Dial *97 from your phone for your own box, or *98 and the number for a shared inbox, to record greetings and listen to messages.">
       <ul className="list-plain">
         {boxes.data.map((b) => (
           <li key={b.id} className="list-row" style={{ paddingLeft: 0, paddingRight: 0 }}>

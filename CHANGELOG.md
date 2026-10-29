@@ -12,7 +12,18 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 No migration.
 
+### Added
+- **Recordings**: a **Delete** button (deletes the audio now instead of at its retention date, audited), and filters by organization, start date and **Show deleted**.
+- **Extended absence for many boxes** (Voicemail → **Extended absence…**): one away period, such as the summer break, for the boxes you pick, with or without taking messages.
+- The trunk page shows the engine's registration status word (for example *Rejected*), the queue **Agents** card shows who last changed each agent and when, outbound routes show which organization or site they are for, and classes of service show their supervisor settings.
+- The fax cover sheet has a **From** field (empty: your name).
+
 ### Fixed
+- **A recording in use can no longer be deleted.** Deleting a recording that a call queue, recording policy, recorded page or bell played silently removed it from them; now the delete is refused with the list of what uses it, and the Audio page's **Used by** counts all of them.
+- The My Phone **Announcement** widget shows the layout's current text for people who rearranged their own My Phone; before, they kept the text from when they saved.
+- The firewall page shows its Allow, Block, Lift, feed and settings controls only to people who may change the firewall.
+- The emergency route warning no longer counts extensions whose site has an emergency number; removing a route's time condition also clears its after-hours fax inbox.
+- Text after creating a shared inbox and on the account's Voicemail card says how to open a shared inbox (**\*98** and its number).
 - **A customized phone template now applies only to its own organization.** Before, customizing a model template (say Poly VVX 450) in one organization changed the files of that model's phones in every organization whose profile used the family, and other organizations saw it in their template list. A **Platform-wide** template still applies everywhere.
 - **Phone passwords in profiles and devices are no longer shown.** Secret template settings (such as the phone's administrator password) come back masked; leaving the dots in place keeps the saved value, typing replaces it.
 - **Editing a My Phone layout** (System → Portal layouts) opened the dialog empty, so saving could overwrite the layout with blanks. It now opens with the layout's own settings.

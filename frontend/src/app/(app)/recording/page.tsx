@@ -209,9 +209,17 @@ function Policies() {
 function Recordings() {
   const toast = useToast();
   const { can } = useSession();
+  const { organizations } = useOrganizationOptions();
   const [offset, setOffset] = useState(0);
+  const [org, setOrg] = useState("");
+  const [since, setSince] = useState("");
+  const [withDeleted, setWithDeleted] = useState(false);
   const [playing, setPlaying] = useState<CallRecordingItem | null>(null);
-  const list = useApiData<Page<CallRecordingItem>>("/recordings", { limit: LIMIT, offset });
+  const [removing, setRemoving] = useState<CallRecordingItem | null>(null);
+  const [busy, setBusy] = useState(false);
+  const list = useApiData<Page<CallRecordingItem>>("/recordings", {
+    limit: LIMIT, offset, organization_id: org || undefined, from: since ? new Date(`${since}T00:00:00`).toISOString() : undefined, include_deleted: withDeleted || undefined,
+  });
   const manage = can("recordings.manage");
   const hold = async (r: CallRecordingItem) => {
     try {
@@ -220,6 +228,20 @@ function Recordings() {
       list.reload();
     } catch (err) {
       toast.error("Not changed", errorMessage(err));
+    }
+  };
+  const remove = async () => {
+    if (!removing) return;
+    setBusy(true);
+    try {
+      await api.del(`/recordings/${removing.id}`);
+      toast.success("Recording deleted");
+      setRemoving(null);
+      list.reload();
+    } catch (err) {
+      toast.error("Not deleted", errorMessage(err));
+    } finally {
+      setBusy(false);
     }
   };
   const columns: Column<CallRecordingItem>[] = [
@@ -232,20 +254,31 @@ function Recordings() {
     {
       key: "actions", header: <span className="sr-only">Actions</span>, render: (r) => (
         <span className="row" style={{ gap: 4 }}>
-          <Button size="sm" icon="play" onClick={() => setPlaying(r)}>Listen</Button>
-          {manage ? <Button size="sm" onClick={() => hold(r)}>{r.held ? "Release" : "Hold"}</Button> : null}
+          {r.deleted_at ? <Badge tone="neutral">Deleted {formatDateTime(r.deleted_at)}</Badge> : <Button size="sm" icon="play" onClick={() => setPlaying(r)}>Listen</Button>}
+          {manage && !r.deleted_at ? <Button size="sm" onClick={() => hold(r)}>{r.held ? "Release" : "Hold"}</Button> : null}
+          {manage && !r.deleted_at && !r.held ? <Button size="sm" variant="ghost" onClick={() => setRemoving(r)}>Delete</Button> : null}
         </span>
       ),
     },
   ];
   return (
     <Card title="Recordings" subtitle="Every listening and download is written to the audit log." flush>
+      <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end", padding: "var(--space-3) var(--space-4)" }}>
+        {organizations.length > 1 ? (
+          <SelectField label="Organization" value={org} options={[{ value: "", label: "All" }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]} onChange={(e) => { setOrg(e.target.value); setOffset(0); }} />
+        ) : null}
+        <TextField label="From" type="date" value={since} onChange={(e) => { setSince(e.target.value); setOffset(0); }} />
+        <Checkbox label="Show deleted" checked={withDeleted} onChange={(e) => { setWithDeleted(e.target.checked); setOffset(0); }} />
+      </div>
       <DataTable columns={columns} rows={list.data?.items} rowKey={(r) => r.id} loading={list.loading} error={list.error} onRetry={list.reload}
         caption="Recordings" empty={<EmptyState icon="record" title="No recordings" compact>Recordings appear a minute after a recorded call ends.</EmptyState>}
         pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null} />
       <Dialog open={playing !== null} onClose={() => setPlaying(null)} title="Recording" description={playing ? `${formatDateTime(playing.started_at ?? playing.created_at)} · ${formatBytes(playing.size_bytes)}` : undefined}>
         {playing ? <RecordingPlayer id={playing.id} /> : null}
       </Dialog>
+      <ConfirmDialog open={!!removing} title="Delete this recording?" confirmLabel="Delete" tone="danger" busy={busy} onCancel={() => setRemoving(null)} onConfirm={remove}>
+        <p>The audio is removed now instead of at its retention date. The call stays in the call history. This is written to the audit log and cannot be undone.</p>
+      </ConfirmDialog>
     </Card>
   );
 }

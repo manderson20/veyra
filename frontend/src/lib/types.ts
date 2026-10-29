@@ -1422,6 +1422,8 @@ export interface PortalLayoutOut {
   template_id: string | null;
   template_name: string | null;
   locked_widgets: string[];
+  /** The layout template's current announcement text. */
+  announcement?: string | null;
 }
 export type PortalScope = "system" | "organization" | "building" | "department" | "role";
 export interface PortalTemplate {

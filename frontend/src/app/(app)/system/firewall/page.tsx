@@ -40,6 +40,7 @@ import type {
   Page,
 } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
+import { useSession } from "@/hooks/useSession";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 
@@ -129,6 +130,7 @@ function Overview({ status, onAddress }: { status: FirewallStatus; onAddress: (a
 // ---------------------------------------------------------------------- bans
 
 function Bans({ onChanged }: { onChanged: () => void }) {
+  const editable = useSession().can("firewall.write");
   const toast = useToast();
   const [active, setActive] = useState("true");
   const [offset, setOffset] = useState(0);
@@ -160,7 +162,7 @@ function Bans({ onChanged }: { onChanged: () => void }) {
           : <span className="nowrap">{formatDateTime(b.expires_at)}</span>,
     },
     {
-      key: "actions", header: <span className="sr-only">Actions</span>, render: (b) => !b.lifted_at && new Date(b.expires_at).getTime() > now ? (
+      key: "actions", header: <span className="sr-only">Actions</span>, render: (b) => editable && !b.lifted_at && new Date(b.expires_at).getTime() > now ? (
         <span className="row" style={{ gap: 4 }}>
           <Button size="sm" loading={busy === b.id} onClick={() => act(b, "lift")}>Lift</Button>
           <Button size="sm" variant={b.offence >= 3 ? "danger" : "secondary"} disabled={busy === b.id} onClick={() => act(b, "block")}>Block permanently</Button>
@@ -247,6 +249,7 @@ function RuleDialog({ open, onClose, onSaved, action }: { open: boolean; onClose
 }
 
 function Rules({ onChanged }: { onChanged: () => void }) {
+  const editable = useSession().can("firewall.write");
   const toast = useToast();
   const list = useApiData<FirewallRule[]>("/firewall/rules");
   const [adding, setAdding] = useState<"allow" | "block" | null>(null);
@@ -277,20 +280,20 @@ function Rules({ onChanged }: { onChanged: () => void }) {
     { key: "expires", header: "Expires", render: (r) => r.expires_at ? <span className="nowrap">{formatDateTime(r.expires_at)}</span> : "Never" },
     {
       key: "actions", header: <span className="sr-only">Actions</span>,
-      render: (r) => r.origin === "manual" ? <IconButton size="sm" icon="trash" label={`Remove ${r.cidr}`} onClick={() => setRemoving(r)} /> : null,
+      render: (r) => editable && r.origin === "manual" ? <IconButton size="sm" icon="trash" label={`Remove ${r.cidr}`} onClick={() => setRemoving(r)} /> : null,
     },
   ];
   const rows = list.data ?? [];
   return (
     <div className="stack">
       <Card title="Allow list" subtitle="Never banned or blocked. Entries marked This server, Local network and Trunk follow the configuration and are updated automatically."
-        actions={<Button icon="plus" onClick={() => setAdding("allow")}>Allow</Button>} flush>
+        actions={editable ? <Button icon="plus" onClick={() => setAdding("allow")}>Allow</Button> : null} flush>
         <DataTable columns={columns} rows={list.data ? rows.filter((r) => r.action === "allow") : undefined} rowKey={(r) => r.id}
           loading={list.loading} error={list.error} onRetry={list.reload} caption="Allow list"
           empty={<EmptyState icon="shield" title="Nothing allowed yet" compact>Local networks from the SIP settings and trunk addresses appear here once the firewall service runs.</EmptyState>} />
       </Card>
       <Card title="Block list" subtitle="Dropped before anything else, unless allowed."
-        actions={<Button icon="plus" variant="danger" onClick={() => setAdding("block")}>Block</Button>} flush>
+        actions={editable ? <Button icon="plus" variant="danger" onClick={() => setAdding("block")}>Block</Button> : null} flush>
         <DataTable columns={columns} rows={list.data ? rows.filter((r) => r.action === "block") : undefined} rowKey={(r) => r.id}
           loading={list.loading} error={list.error} onRetry={list.reload} caption="Block list"
           empty={<EmptyState icon="lock" title="Nothing blocked" compact />} />
@@ -391,6 +394,7 @@ function FeedDialog({ open, onClose, onSaved, feed }: { open: boolean; onClose: 
 }
 
 function Feeds() {
+  const editable = useSession().can("firewall.write");
   const toast = useToast();
   const list = useApiData<FirewallFeed[]>("/firewall/feeds");
   const [editing, setEditing] = useState<FirewallFeed | "new" | null>(null);
@@ -428,7 +432,7 @@ function Feeds() {
             : <span>{f.entry_count} entries <span className="subtle">· {formatRelative(f.last_fetched_at)}</span></span>,
     },
     {
-      key: "actions", header: <span className="sr-only">Actions</span>, render: (f) => (
+      key: "actions", header: <span className="sr-only">Actions</span>, render: (f) => !editable ? null : (
         <span className="row" style={{ gap: 4 }}>
           <IconButton size="sm" icon="refresh" label={`Fetch ${f.name} now`} onClick={() => refresh(f)} />
           <IconButton size="sm" icon="settings" label={`Edit ${f.name}`} onClick={() => setEditing(f)} />
@@ -439,7 +443,7 @@ function Feeds() {
   ];
   return (
     <Card title="Blocklist feeds" subtitle="Optional: CrowdSec decisions or public lists such as Spamhaus DROP, refreshed every 10 minutes."
-      actions={<Button icon="plus" onClick={() => setEditing("new")}>Add feed</Button>} flush>
+      actions={editable ? <Button icon="plus" onClick={() => setEditing("new")}>Add feed</Button> : null} flush>
       <DataTable columns={columns} rows={list.data} rowKey={(f) => f.id} loading={list.loading} error={list.error} onRetry={list.reload}
         caption="Blocklist feeds" empty={<EmptyState icon="download" title="No feeds" compact>Veyra&apos;s own bans work without any feed.</EmptyState>} />
       <FeedDialog open={editing !== null} feed={editing && editing !== "new" ? editing : undefined} onClose={() => setEditing(null)} onSaved={list.reload} />
@@ -452,6 +456,7 @@ function Feeds() {
 }
 
 function SettingsForm({ settings, status, onSaved }: { settings: FirewallSettings; status: FirewallStatus; onSaved: () => void }) {
+  const editable = useSession().can("firewall.write");
   const toast = useToast();
   const errors = useFormErrors();
   const [form, setForm] = useState(settings);
@@ -541,7 +546,7 @@ function SettingsForm({ settings, status, onSaved }: { settings: FirewallSetting
         <TextArea label="Networks" rows={3} value={nets} error={errors.fields.bootstrap_networks} placeholder="e.g. 10.20.30.0/24 (the staging or voice VLAN)" onChange={(e) => setNets(e.target.value)} />
       </Card>
       {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
-      <div className="row"><Button variant="primary" type="submit" loading={busy}>Save settings</Button></div>
+      {editable ? <div className="row"><Button variant="primary" type="submit" loading={busy}>Save settings</Button></div> : <p className="subtle">You can view these settings; changing them needs the firewall write permission.</p>}
       <ConfirmDialog open={confirmOn} title="Turn the firewall on?" confirmLabel="Turn on" busy={busy} onConfirm={save} onCancel={() => setConfirmOn(false)}>
         <p>Addresses that keep failing to sign in or register will be banned for a while. Check that the allow list holds your phones&apos; networks, your trunks and the networks you administer from; allowed addresses are never banned.</p>
       </ConfirmDialog>

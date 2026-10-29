@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
+import { BulkAbsenceDialog } from "@/components/voicemail/BulkAbsenceDialog";
 import { VoicemailBoxDialog } from "@/components/voicemail/VoicemailBoxDialog";
 import { VoicemailBoxPanel } from "@/components/voicemail/VoicemailBoxPanel";
 import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, PageHeader, Pagination, SearchInput, SelectField, type Column } from "@/components/ui";
@@ -24,6 +25,7 @@ export default function VoicemailPage() {
   const [createShared, setCreateShared] = useState(false);
   const [editing, setEditing] = useState<VoicemailBox | null>(null);
   const [changed, setChanged] = useState(0);
+  const [bulkAbsence, setBulkAbsence] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -74,12 +76,14 @@ export default function VoicemailPage() {
         description="One box per extension, plus shared inboxes with their own number that several phones watch: a PIN, the ring time before voicemail answers, and email delivery of new messages. Users record their greeting and listen to messages with *97 from the phone."
         actions={editable ? (
           <>
+            <Button onClick={() => setBulkAbsence(true)}>Extended absence…</Button>
             <Button icon="plus" onClick={() => setCreateShared(true)}>New shared inbox</Button>
             <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New voicemail box</Button>
           </>
         ) : null}
       />
       <PendingChanges refreshKey={changed + (list.data?.total ?? 0)} />
+      {bulkAbsence ? <BulkAbsenceDialog onClose={() => setBulkAbsence(false)} onDone={() => { setBulkAbsence(false); list.reload(); }} /> : null}
       {deliveryOff && can("system.settings.read") ? <Callout tone="warn" title="Email delivery is not configured">Messages stay in the boxes and no email is sent until an SMTP server is set up under Settings → Email delivery.</Callout> : null}
       <Card flush>
         <div className="table-toolbar">

@@ -36,6 +36,7 @@ from veyra.core.models import (
     OutboundRoute,
     OutboundRouteTrunk,
     SipTrunk,
+    Site,
     TimeCondition,
 )
 from veyra.core.pagination import Page, PageParams, page_params, paginate
@@ -994,7 +995,7 @@ def update_inbound(
         route.after_hours_ring_group_id = route.after_hours_queue_id = None
         route.after_hours_voicemail_box_id = None
         route.after_hours_announcement_id = route.after_hours_conference_id = None
-        route.after_hours_call_flow_id = None
+        route.after_hours_call_flow_id = route.after_hours_fax_inbox_id = None
     else:
         destinations.apply(
             route,
@@ -1248,14 +1249,20 @@ def _warnings(db: Session, outs: list[OutboundRouteOut]) -> list[str]:
     elif any(r.caller_id_number is None for r in emergency):
         # Without a route number, the extension's emergency caller ID or the
         # trunk default is presented (docs/TRUNKS_ROUTING.md §7).
+        # The extension's own number, else its site's, is presented first.
         missing = db.scalar(
-            select(func.count(Extension.id)).where(
-                Extension.is_enabled.is_(True), Extension.emergency_caller_id_number.is_(None)
+            select(func.count(Extension.id))
+            .outerjoin(Site, Site.id == Extension.site_id)
+            .where(
+                Extension.is_enabled.is_(True),
+                Extension.emergency_caller_id_number.is_(None),
+                Site.emergency_caller_id_number.is_(None),
             )
         )
         if missing:
             warnings.append(
-                f"{missing} enabled extension(s) have no emergency caller ID and an emergency "
+                f"{missing} enabled extension(s) have no emergency caller ID (on the extension "
+                "or its site) and an emergency "
                 "route has no caller ID number: the trunk's default number is presented for "
                 "their emergency calls."
             )

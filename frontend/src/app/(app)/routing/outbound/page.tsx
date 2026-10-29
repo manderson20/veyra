@@ -8,7 +8,7 @@ import { EMPTY_OUTBOUND_ROUTE, OutboundRouteFields, outboundRouteBody, outboundR
 import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, IconButton, PageHeader, useToast, type Column } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { moveItem } from "@/lib/routing";
-import type { OutboundRoute, OutboundRoutes, TrunkPage } from "@/lib/types";
+import type { OutboundRoute, OutboundRoutes, Page, Site, TrunkPage } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -34,6 +34,10 @@ export default function OutboundRoutesPage() {
   const { can } = useSession();
   const toast = useToast();
   const list = useApiData<OutboundRoutes>("/routing/outbound");
+  const { organizations } = useOrganizationOptions();
+  const sites = useApiData<Page<Site>>("/sites", { limit: 200 });
+  const orgName = (id: string | null) => (id ? organizations.find((o) => o.id === id)?.name ?? "One organization" : null);
+  const siteName = (id: string | null | undefined) => (id ? sites.data?.items.find((x) => x.id === id)?.name ?? "One site" : null);
   const [createOpen, setCreateOpen] = useState(false);
   const [moving, setMoving] = useState(false);
   const editable = can("trunks.write");
@@ -87,6 +91,12 @@ export default function OutboundRoutesPage() {
       ),
     },
     { key: "patterns", header: "Patterns", render: (r) => <span className="mono">{r.examples.join(", ")}</span> },
+    {
+      key: "for", header: "For", render: (r) => {
+        const parts = [orgName(r.organization_id), siteName(r.site_id)].filter(Boolean);
+        return parts.length ? <span>{parts.join(" · ")}</span> : <span className="subtle">{organizations.length > 1 ? "Every organization" : "Every phone"}</span>;
+      },
+    },
     { key: "trunks", header: "Trunks", render: (r) => <RouteTrunks route={r} /> },
     { key: "cid", header: "Caller ID", render: (r) => r.caller_id_number ? <span className="mono">{r.caller_id_number}</span> : <span className="subtle">From the extension</span> },
     { key: "enabled", header: "Enabled", render: (r) => <Badge tone={r.is_enabled ? "ok" : "neutral"}>{r.is_enabled ? "Enabled" : "Disabled"}</Badge> },
