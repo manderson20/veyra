@@ -4,7 +4,8 @@
 import { useRouter } from "next/navigation";
 import type { MouseEvent } from "react";
 import { Badge, Callout, Icon, PageHeader } from "@/components/ui";
-import { canSeeAdminGuides, guideBySlug } from "@/lib/help";
+import { canSeeAdminGuides } from "@/lib/help";
+import { guideText } from "@/lib/help-content";
 import { useSession } from "@/hooks/useSession";
 
 /** One guide: its text (built from docs/guides), when it was last reviewed,
@@ -12,7 +13,7 @@ import { useSession } from "@/hooks/useSession";
 export function GuideView({ slug }: { slug: string }) {
   const router = useRouter();
   const { session } = useSession();
-  const guide = guideBySlug(slug);
+  const guide = guideText(slug);
   if (!guide) return <Callout tone="warn" title="No such guide">It may have been renamed. See the list on the Help page.</Callout>;
   const forAdmins = guide.audience === "admin";
   const hidden = forAdmins && session && !canSeeAdminGuides(session);

@@ -4,7 +4,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Card, EmptyState, Icon, PageHeader, SearchInput } from "@/components/ui";
-import { canSeeAdminGuides, searchGuides, SECTIONS, visibleGuides, WIKI_URL } from "@/lib/help";
+import { canSeeAdminGuides, SECTIONS, visibleGuides, WIKI_URL } from "@/lib/help";
+import { searchGuides } from "@/lib/help-content";
 import { useSession } from "@/hooks/useSession";
 
 export default function HelpPage() {

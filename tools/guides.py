@@ -36,7 +36,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 GUIDES = ROOT / "docs" / "guides"
 OUTPUT = ROOT / "frontend" / "src" / "generated" / "guides.json"
+# The same without the text: what every page loads for its Help link.
+INDEX = ROOT / "frontend" / "src" / "generated" / "guides-index.json"
 APP = ROOT / "frontend" / "src" / "app" / "(app)"
+PUBLIC = ROOT / "frontend" / "src" / "app" / "(public)"
 CHANGELOG = ROOT / "CHANGELOG.md"
 REPO_URL = "https://github.com/manderson20/veyra"
 
@@ -194,13 +197,15 @@ def validate(guides: list[Guide], files: list[str] | None = None) -> None:
 def route_exists(page: str) -> bool:
     if page in ("/", "/help/"):
         return True
-    return (APP / page.strip("/") / "page.tsx").exists()
+    rel = page.strip("/")
+    return (APP / rel / "page.tsx").exists() or (PUBLIC / rel / "page.tsx").exists()
 
 
 # ----------------------------------------------------------------- rendering
 
 _INLINE = re.compile(
-    r"(?P<code>`[^`]+`)"
+    r"(?P<esc>\\[\\`*_{}\[\]()#+\-.!|<>])"
+    r"|(?P<code>`[^`]+`)"
     r"|(?P<link>\[(?P<text>[^\]]+)\]\((?P<href>[^)\s]+)\))"
     r"|(?P<bold>\*\*(?P<b>.+?)\*\*)"
     r"|(?P<em>(?<![\w*])\*(?P<i>[^*\s][^*]*?)\*(?![\w*]))"
@@ -235,7 +240,10 @@ def inline(text: str, guides: dict[str, Guide], target: str = "app") -> str:
     for m in _INLINE.finditer(text):
         before = text[pos : m.start()]
         out.append(html.escape(before, quote=False) if target == "app" else before)
-        if m.group("code"):
+        if m.group("esc"):
+            ch = m.group("esc")
+            out.append(html.escape(ch[1], quote=False) if target == "app" else ch)
+        elif m.group("code"):
             code = m.group("code")
             out.append(f"<code>{html.escape(code[1:-1])}</code>" if target == "app" else code)
         elif m.group("link"):
@@ -430,6 +438,15 @@ def build_text(guides: list[Guide]) -> str:
     return json.dumps(build_payload(guides), indent=1, ensure_ascii=False) + "\n"
 
 
+def index_text(guides: list[Guide]) -> str:
+    payload = build_payload(guides)
+    payload["guides"] = [
+        {k: v for k, v in g.items() if k not in ("html", "headings")}
+        for g in payload["guides"]  # type: ignore[attr-defined]
+    ]
+    return json.dumps(payload, indent=1, ensure_ascii=False) + "\n"
+
+
 def wiki_pages(guides: list[Guide], version: str, released: str | None) -> dict[str, str]:
     """File name → content for the wiki: one page per guide with a stamp
     saying which release it reflects, a Home index and a sidebar."""
@@ -561,18 +578,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(guides)} guides are valid.")
         return 0
     if args.cmd == "build":
-        text = build_text(guides)
+        outputs = {OUTPUT: build_text(guides), INDEX: index_text(guides)}
         if args.check:
-            current = OUTPUT.read_text() if OUTPUT.exists() else ""
-            if current != text:
-                print(
-                    f"{OUTPUT.relative_to(ROOT)} is out of date: run tools/guides.py build",
-                    file=sys.stderr,
-                )
-                return 1
+            for path, text in outputs.items():
+                current = path.read_text() if path.exists() else ""
+                if current != text:
+                    print(
+                        f"{path.relative_to(ROOT)} is out of date: run tools/guides.py build",
+                        file=sys.stderr,
+                    )
+                    return 1
             return 0
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT.write_text(text)
+        for path, text in outputs.items():
+            path.write_text(text)
         print(f"{len(guides)} guides → {OUTPUT.relative_to(ROOT)}")
         return 0
     if args.cmd == "wiki":

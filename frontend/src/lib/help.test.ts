@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
-import { canSeeAdminGuides, GUIDES, guidesForPath, searchGuides, visibleGuides } from "./help";
+import { canSeeAdminGuides, GUIDES, guidesForPath, visibleGuides } from "./help";
+import { searchGuides } from "./help-content";
 
 describe("help guides", () => {
   it("finds the guide for a page and the pages below it", () => {

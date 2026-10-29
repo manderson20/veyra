@@ -22,6 +22,7 @@ def test_repository_guides_are_valid_and_built():
     assert loaded
     guides.validate(loaded)
     assert guides.OUTPUT.read_text() == guides.build_text(loaded), "run tools/guides.py build"
+    assert guides.INDEX.read_text() == guides.index_text(loaded), "run tools/guides.py build"
 
 
 def _guide(tmp_path, name, front, body="Text."):
@@ -61,7 +62,7 @@ def test_validation_names_each_problem(tmp_path):
 
 
 def test_render_html_and_wiki(tmp_path):
-    body = """Intro with **bold**, *em*, `code <b>` and [a guide](guide:other#steps).
+    body = """Intro with **bold**, *em*, `code <b>`, dial \\*97 and [a guide](guide:other#steps).
 
 ## Steps
 
@@ -89,6 +90,7 @@ raw <tag>
     assert headings == [{"id": "steps", "title": "Steps"}]
     assert "<strong>bold</strong>" in html and "<em>em</em>" in html
     assert "<code>code &lt;b&gt;</code>" in html
+    assert "dial *97 and" in html
     assert '<a href="/help/other/#steps">a guide</a>' in html
     assert '<a href="/system/sign-in/">Sign-in</a>' in html
     assert "<li>Second continued line.<ul><li>nested one</li><li>nested two</li></ul></li>" in html

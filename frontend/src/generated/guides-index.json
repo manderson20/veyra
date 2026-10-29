@@ -1,0 +1,866 @@
+{
+ "sections": [
+  "Getting started",
+  "Phones and devices",
+  "Calls and call flows",
+  "Paging and bells",
+  "Voicemail and fax",
+  "Sign-in and security",
+  "Companion extension",
+  "Maintenance",
+  "Using Veyra"
+ ],
+ "wiki": "https://github.com/manderson20/veyra/wiki",
+ "guides": [
+  {
+   "slug": "install-veyra",
+   "title": "Install Veyra",
+   "summary": "Put Veyra on an Ubuntu server, open the setup wizard and create the first administrator.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Install-Veyra"
+  },
+  {
+   "slug": "first-steps",
+   "title": "First steps after installing Veyra",
+   "summary": "Finish the setup wizard, then set Veyra up in the order that gets the first phones ringing.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [],
+   "wiki": "https://github.com/manderson20/veyra/wiki/First-steps-after-installing-Veyra"
+  },
+  {
+   "slug": "dashboard",
+   "title": "The dashboard",
+   "summary": "What the dashboard shows about the server, the phone system and today's calls.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/The-dashboard"
+  },
+  {
+   "slug": "organizations-and-sites",
+   "title": "Organizations and sites",
+   "summary": "Set up your organization's defaults, and add its sites, buildings and departments.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/organizations/",
+    "/organizations/view/",
+    "/sites/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Organizations-and-sites"
+  },
+  {
+   "slug": "users-and-roles",
+   "title": "Add users and give them roles",
+   "summary": "Create accounts for the people who sign in to Veyra, give them roles, and help them when they are locked out.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/users/",
+    "/users/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Add-users-and-give-them-roles"
+  },
+  {
+   "slug": "extensions",
+   "title": "Add extensions",
+   "summary": "Create an extension for each phone, assign it to a person, and set its caller ID, location, voicemail and phone options.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/extensions/",
+    "/extensions/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Add-extensions"
+  },
+  {
+   "slug": "extension-templates",
+   "title": "Extension templates",
+   "summary": "Give many extensions the same settings at once, and lock the ones people should not change.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/extension-templates/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Extension-templates"
+  },
+  {
+   "slug": "feature-codes",
+   "title": "Feature codes people can dial",
+   "summary": "The star codes phones dial to forward calls, turn on Do Not Disturb, pick up calls and more, and how to change them.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/feature-codes/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Feature-codes-people-can-dial"
+  },
+  {
+   "slug": "settings",
+   "title": "Settings: email, sign-in policy and retention",
+   "summary": "Set up email delivery, the two-factor rule, how long data is kept, the installation key and multi-tenancy.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/settings/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Settings-email-sign-in-policy-and-retention"
+  },
+  {
+   "slug": "connect-phones-to-veyra",
+   "title": "Connect phones to Veyra",
+   "summary": "How a new phone finds this server, signs in for its configuration, and learns to trust Veyra's certificate.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/devices/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Connect-phones-to-Veyra"
+  },
+  {
+   "slug": "supported-phones",
+   "title": "Supported phones and adapters",
+   "summary": "Which phones, analog adapters and paging speakers Veyra can configure, and what to check before rolling them out.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/provisioning/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Supported-phones-and-adapters"
+  },
+  {
+   "slug": "add-a-phone",
+   "title": "Add a phone",
+   "summary": "Register a phone by its MAC address, give it a profile and extensions, and check that it picked up its configuration.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/devices/",
+    "/devices/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Add-a-phone"
+  },
+  {
+   "slug": "device-profiles",
+   "title": "Device profiles",
+   "summary": "Group phones that share a template, settings, keys, paging zones and firmware, for example one profile per building.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/device-profiles/",
+    "/device-profiles/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Device-profiles"
+  },
+  {
+   "slug": "phone-keys",
+   "title": "Phone keys",
+   "summary": "Set up the programmable keys on desk phones (lines, busy lamps, speed dials, paging, parking and more) and decide which keys users may change.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/device-profiles/view/",
+    "/devices/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Phone-keys"
+  },
+  {
+   "slug": "analog-adapters-and-fax",
+   "title": "Analog adapters and fax machines",
+   "summary": "Connect analog phones, door phones and fax machines through a Grandstream HT80x or HT81x adapter.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Analog-adapters-and-fax-machines"
+  },
+  {
+   "slug": "customize-provisioning-templates",
+   "title": "Customize a provisioning template",
+   "summary": "Change what Veyra writes into phones' configuration files with your own template, edited in the browser, previewed, exported and imported.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/provisioning/",
+    "/provisioning/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Customize-a-provisioning-template"
+  },
+  {
+   "slug": "provisioning-variables",
+   "title": "Provisioning variables",
+   "summary": "Define a value once, such as each building's all-call paging zone or a time server, and let every phone take the value for its site or profile.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/provisioning/variables/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Provisioning-variables"
+  },
+  {
+   "slug": "phone-firmware",
+   "title": "Phone firmware",
+   "summary": "Upload the vendor's firmware for your phones and let Veyra update them, per profile or per phone.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/firmware/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Phone-firmware"
+  },
+  {
+   "slug": "my-phone-layouts",
+   "title": "Set the My Phone layout for groups of users",
+   "summary": "Choose which widgets people see on My Phone by organization, building, department or role, and lock the ones they must keep.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/portal-layouts/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Set-the-My-Phone-layout-for-groups-of-users"
+  },
+  {
+   "slug": "see-registered-phones",
+   "title": "See which phones are registered",
+   "summary": "Check which phones are connected to Veyra right now, where they connect from, and whether the carriers' trunks are registered.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/registrations/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/See-which-phones-are-registered"
+  },
+  {
+   "slug": "connect-a-sip-trunk",
+   "title": "Connect a SIP trunk",
+   "summary": "Connect Veyra to your phone carrier so calls can reach and leave the building.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/trunks/",
+    "/trunks/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Connect-a-SIP-trunk"
+  },
+  {
+   "slug": "ring-groups",
+   "title": "Set up a ring group",
+   "summary": "Give a team one number that rings several phones at once or in turn, and decide where unanswered calls go.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/ring-groups/",
+    "/ring-groups/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Set-up-a-ring-group"
+  },
+  {
+   "slug": "route-incoming-calls",
+   "title": "Route incoming calls",
+   "summary": "Decide where each of your phone numbers (DIDs) rings, with a different destination outside business hours.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/routing/inbound/",
+    "/routing/inbound/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Route-incoming-calls"
+  },
+  {
+   "slug": "call-queues",
+   "title": "Set up a call queue",
+   "summary": "Let callers wait in line with music and announcements until an agent is free, and let agents log in and out.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/queues/",
+    "/queues/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Set-up-a-call-queue"
+  },
+  {
+   "slug": "pickup-groups",
+   "title": "Pick up a colleague's ringing phone",
+   "summary": "Let people answer a call ringing on a nearby phone with *8 or ** and the extension, and set who may do it.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/pickup-groups/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Pick-up-a-colleague-s-ringing-phone"
+  },
+  {
+   "slug": "route-outgoing-calls",
+   "title": "Route outgoing calls",
+   "summary": "Decide which dialled numbers go out to the carrier, through which trunks, and with which caller ID.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/routing/outbound/",
+    "/routing/outbound/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Route-outgoing-calls"
+  },
+  {
+   "slug": "business-hours-and-holidays",
+   "title": "Business hours and holidays",
+   "summary": "Set opening hours, holidays and closed days, so calls outside them go to a different destination.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/routing/time-conditions/",
+    "/routing/time-conditions/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Business-hours-and-holidays"
+  },
+  {
+   "slug": "call-parking",
+   "title": "Park calls",
+   "summary": "Set up a parking lot so a call can be put on hold at one phone and picked up from any other.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/parking/",
+    "/parking/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Park-calls"
+  },
+  {
+   "slug": "day-night-switches",
+   "title": "Day/night switches (call flows)",
+   "summary": "Give staff a switch, on the web or on a phone key, that sends calls to a second destination until it is switched back.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/routing/call-flows/",
+    "/routing/call-flows/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Day-night-switches-call-flows"
+  },
+  {
+   "slug": "dial-by-name",
+   "title": "Dial by name",
+   "summary": "Let callers reach people and offices by spelling a name on the keypad.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/name-directory/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Dial-by-name"
+  },
+  {
+   "slug": "conference-rooms",
+   "title": "Set up conference rooms",
+   "summary": "Create a dial-in meeting room with optional PINs, see who is in it, and mute, remove or end from the web.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/conferences/",
+    "/conferences/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Set-up-conference-rooms"
+  },
+  {
+   "slug": "phone-menus",
+   "title": "Build a phone menu",
+   "summary": "Greet callers with a recording, send each key to the right place, and play announcements before a call goes on.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/ivr/",
+    "/ivr/view/",
+    "/announcements/",
+    "/announcements/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Build-a-phone-menu"
+  },
+  {
+   "slug": "classes-of-service",
+   "title": "Who can call where (classes of service)",
+   "summary": "Limit what groups of phones may dial, such as local calls only for classrooms, while 911 always works.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/routing/classes-of-service/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Who-can-call-where-classes-of-service"
+  },
+  {
+   "slug": "block-callers",
+   "title": "Block callers",
+   "summary": "Refuse calls from unwanted numbers, and optionally from callers who hide their number.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/caller-blocks/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Block-callers"
+  },
+  {
+   "slug": "audio-and-hold-music",
+   "title": "Manage audio and hold music",
+   "summary": "Record prompts from a phone, upload audio, add Veyra's built-in sounds, and build hold music sets.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/prompts/",
+    "/hold-music/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Manage-audio-and-hold-music"
+  },
+  {
+   "slug": "emergency-calling",
+   "title": "Emergency calling (911)",
+   "summary": "Set up 911 so it dials directly, sends the right number and location, alerts people on site, and reaches the caller on a callback.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/emergency/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Emergency-calling-911"
+  },
+  {
+   "slug": "call-recording",
+   "title": "Record calls",
+   "summary": "Choose which calls are recorded and for how long, record a call on demand, and listen to recordings with every playback audited.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/recording/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Record-calls"
+  },
+  {
+   "slug": "live-calls",
+   "title": "Watch live calls",
+   "summary": "See the calls in progress, hang one up, record it, or listen in, whisper and join as a supervisor.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/calls/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Watch-live-calls"
+  },
+  {
+   "slug": "call-history-and-reports",
+   "title": "Call history and reports",
+   "summary": "Look up any call, export the history, build your own reports and have them emailed on a schedule.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/call-history/",
+    "/reports/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Call-history-and-reports"
+  },
+  {
+   "slug": "paging-zones",
+   "title": "Set up paging zones and overhead speakers",
+   "summary": "Group your overhead speakers and Poly phones into paging zones that anyone allowed can page by dialling a number.",
+   "audience": "admin",
+   "section": "Paging and bells",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/paging-zones/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Set-up-paging-zones-and-overhead-speakers"
+  },
+  {
+   "slug": "send-a-page",
+   "title": "Create and send pages",
+   "summary": "Combine paging zones into pages such as an all-call, give them a recording, and start them from a phone, from Veyra, from a bell or from another system.",
+   "audience": "admin",
+   "section": "Paging and bells",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/paging/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Create-and-send-pages"
+  },
+  {
+   "slug": "bell-schedules",
+   "title": "Ring bells from a calendar",
+   "summary": "Let a Google Calendar or any iCal calendar ring your school bells through the paging speakers.",
+   "audience": "admin",
+   "section": "Paging and bells",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/bells/",
+    "/calendars/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Ring-bells-from-a-calendar"
+  },
+  {
+   "slug": "and-clock-messages",
+   "title": "Show messages on AND clocks",
+   "summary": "Send text messages and alerts to Advanced Network Devices (AND) IP clocks and signs, now, later or with the bells.",
+   "audience": "admin",
+   "section": "Paging and bells",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Show-messages-on-AND-clocks"
+  },
+  {
+   "slug": "voicemail-boxes",
+   "title": "Manage voicemail boxes and shared inboxes",
+   "summary": "Give extensions a voicemail box, set PINs and email delivery, and create shared inboxes that several phones watch.",
+   "audience": "admin",
+   "section": "Voicemail and fax",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/voicemail/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Manage-voicemail-boxes-and-shared-inboxes"
+  },
+  {
+   "slug": "fax",
+   "title": "Set up fax",
+   "summary": "Receive faxes as PDFs by email, let staff send PDFs as faxes from My Phone, and connect fax machines through an analog adapter.",
+   "audience": "admin",
+   "section": "Voicemail and fax",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/fax/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Set-up-fax"
+  },
+  {
+   "slug": "single-sign-on",
+   "title": "Set up single sign-on",
+   "summary": "Let people sign in to Veyra with their Google Workspace, Microsoft 365 or other work account.",
+   "audience": "admin",
+   "section": "Sign-in and security",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/sign-in/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Set-up-single-sign-on"
+  },
+  {
+   "slug": "firewall",
+   "title": "Firewall and bans",
+   "summary": "Ban attackers automatically, keep your own phones and networks on the allow list so they are never locked out, and recover from the console.",
+   "audience": "admin",
+   "section": "Sign-in and security",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/firewall/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Firewall-and-bans"
+  },
+  {
+   "slug": "https-certificate",
+   "title": "Get a public HTTPS certificate (Let's Encrypt)",
+   "summary": "Get a free certificate that every browser trusts, so nobody has to install the Veyra certificate and passkeys and the Companion work.",
+   "audience": "admin",
+   "section": "Sign-in and security",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Get-a-public-HTTPS-certificate-Let-s-Encrypt"
+  },
+  {
+   "slug": "audit-log",
+   "title": "Audit log",
+   "summary": "Find out who changed what, who signed in, and which attempts were refused.",
+   "audience": "admin",
+   "section": "Sign-in and security",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/audit/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Audit-log"
+  },
+  {
+   "slug": "companion-rollout",
+   "title": "Roll out the Companion extension",
+   "summary": "Put the Veyra Companion in people's Chrome or Edge browsers by policy, with the server address filled in.",
+   "audience": "admin",
+   "section": "Companion extension",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/companion/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Roll-out-the-Companion-extension"
+  },
+  {
+   "slug": "companion-for-users",
+   "title": "Use the Companion extension",
+   "summary": "Call from your browser, see who is calling, look people up and listen to voicemail with the Veyra Companion.",
+   "audience": "user",
+   "section": "Companion extension",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/account/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Use-the-Companion-extension"
+  },
+  {
+   "slug": "updates",
+   "title": "Updates and maintenance windows",
+   "summary": "Install new Veyra releases and operating system updates, now or in a maintenance window, from the web page or the server console.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/updates/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Updates-and-maintenance-windows"
+  },
+  {
+   "slug": "backups",
+   "title": "Backups and restore",
+   "summary": "Schedule verified, encrypted backups, copy them off the server, and restore a server from one.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/backups/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Backups-and-restore"
+  },
+  {
+   "slug": "deploy-changes",
+   "title": "Deploy changes to the phone system",
+   "summary": "Send saved changes to the telephony engine, now or when calls have ended, and roll back to an earlier configuration.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/telephony/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Deploy-changes-to-the-phone-system"
+  },
+  {
+   "slug": "import-export",
+   "title": "Import and export with CSV files",
+   "summary": "Create or change many extensions, users, routes or groups at once with a spreadsheet, or move from FreePBX.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/import/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Import-and-export-with-CSV-files"
+  },
+  {
+   "slug": "health-alerts-diagnostics",
+   "title": "Health, alerts and diagnostics",
+   "summary": "See whether everything is running, get emailed when something breaks, and capture SIP traffic or read engine logs to find out why.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/health/",
+    "/system/alerts/",
+    "/system/diagnostics/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Health-alerts-and-diagnostics"
+  },
+  {
+   "slug": "high-availability",
+   "title": "High availability",
+   "summary": "Run Veyra on two servers so a standby can take over when the primary needs maintenance or fails.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/ha/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/High-availability"
+  },
+  {
+   "slug": "central-management",
+   "title": "Central management of several servers",
+   "summary": "Watch several Veyra servers from one console, give them shared policies, and send them update commands.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/central/",
+    "/system/central/instance/",
+    "/system/membership/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Central-management-of-several-servers"
+  },
+  {
+   "slug": "integrations",
+   "title": "Integrations: tokens and webhooks",
+   "summary": "Let other systems use Veyra with their own limited tokens, and tell other systems about calls, voicemail, pages and alerts with signed webhooks.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/integrations/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Integrations-tokens-and-webhooks"
+  },
+  {
+   "slug": "automation",
+   "title": "Automation rules",
+   "summary": "Make Veyra react by itself, such as emailing the office about a missed call or starting a page when a door controller calls in.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/automation/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Automation-rules"
+  },
+  {
+   "slug": "modules",
+   "title": "Modules",
+   "summary": "Add features to Veyra with signed modules from a catalog or a package file, and enable, update, roll back or remove them.",
+   "audience": "admin",
+   "section": "Maintenance",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/modules/",
+    "/modules/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Modules"
+  },
+  {
+   "slug": "my-phone",
+   "title": "Your phone at a glance: My Phone",
+   "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
+   "audience": "user",
+   "section": "Using Veyra",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/my-phone/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Your-phone-at-a-glance-My-Phone"
+  },
+  {
+   "slug": "your-voicemail",
+   "title": "Your voicemail",
+   "summary": "Listen to your messages from your phone or the browser, record your greetings, set an away message for the holidays, and choose your PIN.",
+   "audience": "user",
+   "section": "Using Veyra",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/my-phone/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Your-voicemail"
+  },
+  {
+   "slug": "account-security",
+   "title": "Your account and sign-in security",
+   "summary": "Change your password, set up a passkey or an authenticator app, keep your recovery codes, and sign out devices you no longer use.",
+   "audience": "user",
+   "section": "Using Veyra",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/account/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Your-account-and-sign-in-security"
+  }
+ ]
+}
