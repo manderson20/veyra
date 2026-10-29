@@ -359,6 +359,80 @@ def test_web_sso_refusals_and_account_creation(admin, provider):
     assert "users.write" not in perms
 
 
+def _test_sign_in(admin, provider: Provider, pid: str, **callback):
+    r = admin.post(f"/api/v1/identity-providers/{pid}/test-sign-in")
+    assert r.status_code == 200, r.text
+    started = r.json()
+    q = {k: v[0] for k, v in parse_qs(urlsplit(started["url"]).query).items()}
+    provider.nonce = q["nonce"]
+    assert q["prompt"] == "select_account"
+    status = admin.get(f"/api/v1/identity-providers/{pid}/test-sign-in/{started['request_id']}")
+    assert status.json() == {"status": "waiting", "result": None}
+    params = callback or {"code": "good-code"}
+    r = admin.get(
+        "/api/v1/auth/sso/callback", params={**params, "state": q["state"]}, follow_redirects=False
+    )
+    assert r.status_code == 200, r.text
+    assert f"/system/sign-in/setup/?provider={pid}&amp;test={started['request_id']}" in r.text
+    out = admin.get(f"/api/v1/identity-providers/{pid}/test-sign-in/{started['request_id']}")
+    assert out.json()["status"] == "done"
+    return out.json()["result"]
+
+
+def test_test_sign_in_signs_no_one_in(admin, provider):
+    # A disabled provider can be tried before anyone sees its button.
+    prov = _create_provider(admin, enabled=False)
+    pid = prov["id"]
+    admin_email = admin.get("/api/v1/auth/session").json()["user"]["email"]
+
+    r = _test_sign_in(admin, provider, pid)
+    assert r["ok"] and r["outcome"] == "refused" and r["reason"] == "no_account"
+    assert r["email"] == "alice@example.org"
+
+    alice = _make_user(admin, "alice@example.org")
+    r = _test_sign_in(admin, provider, pid)
+    assert r["outcome"] == "link" and r["account"] == "alice@example.org"
+    # Nothing was linked and the administrator is still the one signed in.
+    assert admin.get(f"/api/v1/users/{alice['id']}/identities").json() == []
+    assert admin.get("/api/v1/auth/session").json()["user"]["email"] == admin_email
+
+    provider.claims = {"email": "bob@example.org", "sub": "sub-bob"}
+    body = {
+        **prov,
+        "create_accounts": True,
+        "default_role_key": "technician",
+        "client_secret": None,
+    }
+    assert admin.put(f"/api/v1/identity-providers/{pid}", json=body).status_code == 200
+    r = _test_sign_in(admin, provider, pid)
+    assert r["outcome"] == "create" and "Technician" in r["message"]
+    with session_scope() as db:
+        assert db.query(User).filter_by(email="bob@example.org").count() == 0
+
+    # An outside Workspace proves the provider works but is refused.
+    provider.claims = {"hd": "other.org"}
+    r = _test_sign_in(admin, provider, pid)
+    assert r["ok"] and r["reason"] == "domain_not_allowed"
+    # A wrong secret or code fails the round trip.
+    provider.claims = {}
+    r = _test_sign_in(admin, provider, pid, code="bad-code")
+    assert not r["ok"] and r["reason"] == "token_exchange"
+    # The provider's own error comes back with its description.
+    r = _test_sign_in(
+        admin, provider, pid, error="invalid_client", error_description="AADSTS7000215: bad"
+    )
+    assert not r["ok"] and r["reason"] == "provider_error" and "AADSTS7000215" in r["detail"]
+
+    # Another provider's attempt, or a missing one, is not found.
+    other = _create_provider(admin, name="Second")
+    started = admin.post(f"/api/v1/identity-providers/{pid}/test-sign-in").json()
+    r = admin.get(f"/api/v1/identity-providers/{other['id']}/test-sign-in/{started['request_id']}")
+    assert r.status_code == 404
+    with session_scope() as db:
+        actions = [a.action for a in db.query(AuditEvent).all()]
+    assert actions.count("auth.sso.test") == 6 and "auth.sso.login" not in actions
+
+
 def test_companion_sso(admin, provider, app):
     app.state.settings.companion_dev_extension_ids = EXT_ID
     prov = _create_provider(admin)

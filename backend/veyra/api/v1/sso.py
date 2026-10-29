@@ -28,7 +28,7 @@ from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, recent_auth, request_context, require
 from veyra.core.errors import ProblemError, not_found
-from veyra.core.models import IdentityProvider, Organization, User, UserIdentity
+from veyra.core.models import IdentityProvider, Organization, SsoRequest, User, UserIdentity
 from veyra.core.models.base import utcnow
 from veyra.core.security import oidc
 from veyra.core.security.principal import Principal
@@ -41,6 +41,15 @@ router = APIRouter(tags=["single sign-on"])
 BROWSER_COOKIE = "veyra_sso"
 BROWSER_COOKIE_PATH = "/api/v1/auth/sso/"
 LOGIN_PATH = "/login/"
+# Where a test sign-in from the setup wizard lands (§1.8).
+TEST_RESULT_PATH = "/system/sign-in/setup/"
+PROVIDER_ERRORS = {
+    "login_required",
+    "interaction_required",
+    "consent_required",
+    "account_selection_required",
+    "access_denied",
+}
 
 
 _limiter: SlidingWindowLimiter | None = None
@@ -131,6 +140,17 @@ class ProviderTestOut(BaseModel):
     message: str
     authorization_endpoint: str | None = None
     keys: int = 0
+
+
+class TestSignInOut(BaseModel):
+    request_id: uuid.UUID
+    url: str
+
+
+class TestSignInResult(BaseModel):
+    # waiting: not back from the provider yet; expired: never came back.
+    status: Literal["waiting", "done", "expired"]
+    result: dict[str, object] | None = None
 
 
 class PolicyIO(BaseModel):
@@ -323,6 +343,7 @@ def sso_callback(
     code: str | None = Query(None, max_length=4096),
     state: str | None = Query(None, max_length=200),
     error: str | None = Query(None, max_length=200),
+    error_description: str | None = Query(None, max_length=2000),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     ctx: RequestContext = Depends(request_context),
@@ -348,19 +369,12 @@ def sso_callback(
         resp.delete_cookie(BROWSER_COOKIE, path=BROWSER_COOKIE_PATH)
         return resp
 
-    if error:
-        reason = (
-            error
-            if error
-            in {
-                "login_required",
-                "interaction_required",
-                "consent_required",
-                "account_selection_required",
-                "access_denied",
-            }
-            else "provider_error"
+    if req.client == "test":
+        return _finish_test(
+            request, db, settings, ctx, provider, req, code, error, error_description
         )
+    if error:
+        reason = error if error in PROVIDER_ERRORS else "provider_error"
         return fail(
             reason,
             "Sign-in was cancelled or needs your input."
@@ -409,6 +423,93 @@ def sso_callback(
     db.commit()
     response = _continue_page(req.next_path or "/")
     auth_api._set_cookies(response, settings, token, csrf)
+    response.delete_cookie(BROWSER_COOKIE, path=BROWSER_COOKIE_PATH)
+    return response
+
+
+def _test_result_path(provider: IdentityProvider, req: SsoRequest) -> str:
+    return f"{TEST_RESULT_PATH}?{urlencode({'provider': provider.id, 'test': req.id})}"
+
+
+def _finish_test(
+    request: Request,
+    db: Session,
+    settings: Settings,
+    ctx: RequestContext,
+    provider: IdentityProvider,
+    req: SsoRequest,
+    code: str | None,
+    error: str | None,
+    error_description: str | None,
+) -> Response:
+    """A test sign-in (§1.8) checks everything a real one does, then records
+    which account would be used instead of signing anyone in. It also works
+    while the provider is disabled, so it can be tried before people see it."""
+    if req.test_result is not None:  # already answered: show it again
+        return _continue_page(_test_result_path(provider, req))
+    result: dict[str, object]
+    if error:
+        detail = (error_description or "").strip()[:500]
+        result = {
+            "ok": False,
+            "outcome": "failed",
+            "reason": error if error in PROVIDER_ERRORS else "provider_error",
+            "message": "The sign-in was cancelled."
+            if error == "access_denied"
+            else f"{provider.name} returned the error {error!r}.",
+            "detail": detail or None,
+        }
+    elif not code:
+        result = {
+            "ok": False,
+            "outcome": "failed",
+            "reason": "no_code",
+            "message": "The provider did not complete the sign-in.",
+        }
+    else:
+        try:
+            secret = installation_key(request).decrypt(
+                provider.client_secret_enc, sso.SECRET_PURPOSE
+            )
+            claims = sso.verify(
+                db,
+                provider,
+                req,
+                code=code,
+                base_url=base_url(request, settings),
+                browser_token=request.cookies.get(BROWSER_COOKIE),
+                client_secret=secret,
+            )
+            result = sso.preview(db, provider, claims)
+        except sso.SsoFailure as e:
+            # A refused domain still proves the provider works.
+            domain = e.reason == "domain_not_allowed"
+            result = {
+                "ok": domain,
+                "outcome": "refused" if domain else "failed",
+                "reason": e.reason,
+                "email": e.email,
+                "message": e.message,
+            }
+    req.used_at = req.used_at or utcnow()
+    req.test_result = result
+    audit.record(
+        db,
+        action="auth.sso.test",
+        outcome="success" if result["ok"] else "failure",
+        actor_label=str(result.get("email") or "unknown"),
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        target_type="identity_provider",
+        target_id=provider.id,
+        details={
+            "provider": provider.name,
+            "outcome": result["outcome"],
+            "reason": result.get("reason"),
+        },
+    )
+    db.commit()
+    response = _continue_page(_test_result_path(provider, req))
     response.delete_cookie(BROWSER_COOKIE, path=BROWSER_COOKIE_PATH)
     return response
 
@@ -655,6 +756,72 @@ def test_provider(
         authorization_endpoint=str(doc.get("authorization_endpoint")),
         keys=len(jwks.get("keys", [])),
     )
+
+
+@router.post(
+    "/identity-providers/{provider_id}/test-sign-in",
+    response_model=TestSignInOut,
+    summary="Start a test sign-in that signs no one in",
+)
+def start_test_sign_in(
+    provider_id: uuid.UUID,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    principal: Principal = Depends(require("sso.write")),
+    ctx: RequestContext = Depends(request_context),
+) -> TestSignInOut:
+    p = _provider(db, provider_id)
+    try:
+        started = sso.start(
+            db,
+            p,
+            base_url=base_url(request, settings),
+            client="test",
+            next_path=None,
+            redirect_uri=None,
+            client_challenge=None,
+            login_hint=None,
+            silent=False,
+            ip=ctx.ip,
+        )
+    except oidc.OidcError as e:
+        db.rollback()
+        raise ProblemError(502, "Provider unavailable", str(e), code="provider_unavailable") from e
+    db.commit()
+    if started.browser_token:
+        response.set_cookie(
+            BROWSER_COOKIE,
+            started.browser_token,
+            max_age=int(sso.REQUEST_TTL.total_seconds()),
+            httponly=True,
+            secure=settings.cookie_secure,
+            samesite="lax",
+            path=BROWSER_COOKIE_PATH,
+        )
+    return TestSignInOut(request_id=started.request_id, url=started.url)
+
+
+@router.get(
+    "/identity-providers/{provider_id}/test-sign-in/{request_id}",
+    response_model=TestSignInResult,
+    summary="The result of a test sign-in",
+)
+def test_sign_in_result(
+    provider_id: uuid.UUID,
+    request_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require("sso.write")),
+) -> TestSignInResult:
+    req = db.get(SsoRequest, request_id)
+    if req is None or req.provider_id != provider_id or req.client != "test":
+        raise not_found("Test sign-in")
+    if req.test_result is not None:
+        return TestSignInResult(status="done", result=req.test_result)
+    if req.used_at is not None or req.expires_at < utcnow():
+        return TestSignInResult(status="expired")
+    return TestSignInResult(status="waiting")
 
 
 # ----------------------------------------------------------------- account links

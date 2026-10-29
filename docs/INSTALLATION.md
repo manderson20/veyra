@@ -205,17 +205,19 @@ from the Module Manager; Asterisk is never restarted by it.
 
 ### Single sign-on
 
-System → Sign-in adds Google Workspace, Microsoft Entra ID or any OpenID
-Connect provider ([INTEGRATIONS.md](INTEGRATIONS.md) §1). The provider needs
-one redirect address, shown in the *Add provider* dialog:
+System → Sign-in → **Set up a provider** walks through adding Google
+Workspace, Microsoft Entra ID or any OpenID Connect provider, step by step,
+and ends with a test sign-in before the button is turned on
+([INTEGRATIONS.md](INTEGRATIONS.md) §1, §1.8). The provider needs one
+redirect address, shown in the setup:
 `https://<server>/api/v1/auth/sso/callback` (built from `VEYRA_PUBLIC_HOST`
 when it is set, otherwise from the address the browser used). For Google:
 
 1. Google Cloud console → APIs & Services → Credentials → *Create OAuth
    client ID*, type *Web application*; add the redirect address under
    *Authorized redirect URIs*. On the consent screen choose *Internal*.
-2. Enter the client ID, the secret and your e-mail domain in Veyra, then
-   *Test*.
+2. Enter the client ID, the secret and your e-mail domain in Veyra, then try
+   the test sign-in and turn the provider on.
 3. For silent Companion sign-in on managed Chromebooks: Admin console →
    Security → API controls → App access control → *Trusted* for this OAuth
    client, and add `"ssoProvider": "<provider id>"` to the extension policy

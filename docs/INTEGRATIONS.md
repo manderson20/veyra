@@ -23,7 +23,9 @@ RING_GROUPS_QUEUES.md §1 promised for this milestone.
 
 ### 1.1 Providers
 
-An administrator adds an **identity provider** under System → Sign-in:
+An administrator adds an **identity provider** under System → Sign-in with
+**Set up a provider**, a guided setup (§1.8); Edit on an existing provider
+opens a dialog with the same fields:
 
 | Field | Notes |
 |---|---|
@@ -38,8 +40,8 @@ An administrator adds an **identity provider** under System → Sign-in:
 | Enabled | The provider stays saved while it is off. |
 
 The redirect URI that the administrator enters in the provider's console is
-the same for every provider and is shown in the *Add provider* dialog before
-anything is saved: `https://<host>/api/v1/auth/sso/callback` (the state
+the same for every provider and is shown in the setup's console step (and in
+the edit dialog) before anything is saved: `https://<host>/api/v1/auth/sso/callback` (the state
 names the attempt and therefore the provider). `<host>` is
 `VEYRA_PUBLIC_HOST` when it is set, otherwise the address the browser used.
 
@@ -159,9 +161,42 @@ gets the steps.
 
 `identity_providers` (configuration, encrypted secret, discovery cache),
 `user_identities` (provider, subject, e-mail at link time, last used), and
-`sso_requests` (state, nonce, verifier, client, redirect, expiry, used).
+`sso_requests` (state, nonce, verifier, client, redirect, expiry, used, and
+for a test sign-in its result).
 The worker removes expired requests. Provider access and refresh tokens are
 **not** kept: Veyra only needs the identity, once.
+
+### 1.8 Guided setup and test sign-in (0.27.43)
+
+System → Sign-in → **Set up a provider** (`/system/sign-in/setup/`) walks
+through five steps: choose Google Workspace, Microsoft Entra ID or another
+provider; register Veyra in that provider's console (exact, provider-specific
+steps with the redirect address to copy; for Microsoft the secret's *Value*
+and its expiry); enter the credentials and allowed domains; choose who can
+sign in (account creation and its role); then test and turn on. The provider
+is saved **disabled**, so its button appears on the sign-in page only when
+the administrator turns it on at the end. **Test** on a provider's row opens
+the same last step.
+
+The last step checks discovery and the key set (`POST
+/identity-providers/{id}/test`) and offers a **test sign-in**:
+
+* `POST /identity-providers/{id}/test-sign-in` (`sso.write`) starts an
+  attempt with client `test`, bound to the browser by the same cookie as a
+  web sign-in, and returns the provider's authorization URL and the attempt's
+  id. It works while the provider is disabled.
+* The callback runs every check of a real sign-in (state, browser, code
+  exchange with the secret and PKCE, ID token signature and claims, allowed
+  domain), then records on the attempt what `resolve_user` *would* do —
+  `linked`, `link` (an existing account by e-mail), `create` (with the
+  role), or `refused` (`no_account`, `recovery_admin`, `inactive`,
+  `domain_not_allowed`) — or why it `failed` (with the provider's
+  `error_description`, which carries Entra's AADSTS codes). Nobody is signed
+  in, linked or created; the event is audited as `auth.sso.test`. The
+  browser returns to the setup page with `?provider=…&test=…`.
+* `GET /identity-providers/{id}/test-sign-in/{attempt}` (`sso.write`) returns
+  `waiting`, `done` with the result, or `expired`. A replayed callback shows
+  the stored result again.
 
 ## 2. Integration tokens
 

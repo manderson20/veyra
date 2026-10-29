@@ -8,6 +8,17 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.43
+
+Migration 0070 (a column for test sign-in results).
+
+### Added
+- **Guided single sign-on setup** (#335): System → Sign-in → **Set up a provider** walks through connecting Google Workspace, Microsoft Entra ID or another OpenID Connect provider in five steps — choose the provider, register Veyra in its console (exact steps for each, with links, the redirect address to copy, and for Microsoft where to find the tenant ID and the secret's *Value*), enter the credentials, choose who can sign in, then test and turn on. The provider is saved turned off, so people only see its button once you turn it on.
+- **Test sign-in**: from the last step (or **Test** on a provider's row) you sign in through the provider exactly as people will, and Veyra shows which account it would use — already linked, linked by e-mail on first use, or created with its role — or why it would be refused, with a hint for the usual mistakes (wrong secret, redirect address, domain, no account). It signs no one in and changes nothing, and works before the provider is turned on.
+
+### Changed
+- The Sign-in page's **Add provider** button is now **Set up a provider**; the setup notes card moved into the guided setup. Edit still opens the dialog.
+
 ## 0.27.42 — 2026-10-29
 
 No migration.

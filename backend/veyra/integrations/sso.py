@@ -38,7 +38,9 @@ REQUEST_TTL = timedelta(minutes=10)
 CODE_TTL = timedelta(seconds=60)
 METADATA_TTL = timedelta(hours=24)
 KINDS = ("google", "microsoft", "oidc")
-CLIENTS = ("web", "companion")
+CLIENTS = ("web", "companion", "test")
+# Clients whose attempt is bound to the browser that started it.
+BROWSER_CLIENTS = ("web", "test")
 
 
 class SsoPolicy(BaseModel):
@@ -47,16 +49,18 @@ class SsoPolicy(BaseModel):
 
 
 class SsoFailure(Exception):
-    def __init__(self, reason: str, message: str) -> None:
+    def __init__(self, reason: str, message: str, email: str | None = None) -> None:
         super().__init__(message)
         self.reason = reason
         self.message = message
+        self.email = email
 
 
 @dataclass
 class Started:
     url: str
     browser_token: str | None
+    request_id: uuid.UUID
 
 
 def load_policy(db: Session) -> SsoPolicy:
@@ -177,11 +181,12 @@ def start(
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(24)
     verifier = oidc.new_verifier()
-    browser = secrets.token_urlsafe(32) if client == "web" else None
+    browser = secrets.token_urlsafe(32) if client in BROWSER_CLIENTS else None
     now = utcnow()
+    request_id = uuid.uuid4()
     db.add(
         SsoRequest(
-            id=uuid.uuid4(),
+            id=request_id,
             provider_id=provider.id,
             state_hash=tokens.digest(state),
             browser_hash=tokens.digest(browser) if browser else None,
@@ -204,7 +209,7 @@ def start(
         extra["login_hint"] = login_hint
     if silent:
         extra["prompt"] = "none"
-    elif provider.kind == "google" and client == "web":
+    elif provider.kind == "google" and client in BROWSER_CLIENTS:
         extra["prompt"] = "select_account"
     url = oidc.authorization_url(
         doc,
@@ -216,7 +221,7 @@ def start(
         extra=extra,
     )
     db.flush()
-    return Started(url=url, browser_token=browser)
+    return Started(url=url, browser_token=browser, request_id=request_id)
 
 
 def pending_request(db: Session, state: str) -> SsoRequest | None:
@@ -233,11 +238,34 @@ def finish(
     browser_token: str | None,
     client_secret: str,
 ) -> tuple[User, oidc.IdClaims]:
+    claims = verify(
+        db,
+        provider,
+        req,
+        code=code,
+        base_url=base_url,
+        browser_token=browser_token,
+        client_secret=client_secret,
+    )
+    return resolve_user(db, provider, claims), claims
+
+
+def verify(
+    db: Session,
+    provider: IdentityProvider,
+    req: SsoRequest,
+    *,
+    code: str,
+    base_url: str,
+    browser_token: str | None,
+    client_secret: str,
+) -> oidc.IdClaims:
+    """Spend the attempt, exchange the code and check the ID token and its domain."""
     now = utcnow()
     if req.used_at is not None or req.expires_at < now:
         raise SsoFailure("expired_request", "This sign-in link has expired. Start again.")
     req.used_at = now
-    if req.client == "web" and (
+    if req.client in BROWSER_CLIENTS and (
         not browser_token
         or not req.browser_hash
         or not tokens.matches(browser_token, req.browser_hash)
@@ -263,10 +291,84 @@ def finish(
         raise SsoFailure(e.reason, str(e)) from e
     if not oidc.domain_allowed(claims, provider.allowed_domains, kind=provider.kind):
         raise SsoFailure(
-            "domain_not_allowed", f"{claims.email} is not allowed to sign in to Veyra."
+            "domain_not_allowed",
+            f"{claims.email} is not allowed to sign in to Veyra.",
+            email=claims.email,
         )
-    user = resolve_user(db, provider, claims)
-    return user, claims
+    return claims
+
+
+ROLE_LABELS = {
+    "standard_user": "Standard User",
+    "read_only": "Read-Only User",
+    "technician": "Technician",
+    "site_admin": "Site Administrator",
+    "org_admin": "Organization Administrator",
+}
+
+
+def preview(db: Session, provider: IdentityProvider, claims: oidc.IdClaims) -> dict[str, Any]:
+    """What ``resolve_user`` would do for these claims, without linking,
+    creating or signing in anyone (the setup wizard's test sign-in)."""
+    result: dict[str, Any] = {"ok": True, "email": claims.email, "name": claims.name}
+
+    def refused(reason: str, message: str, account: User | None = None) -> dict[str, Any]:
+        return {
+            **result,
+            "outcome": "refused",
+            "reason": reason,
+            "account": account.email if account else None,
+            "message": message,
+        }
+
+    link = db.scalar(
+        select(UserIdentity).where(
+            UserIdentity.provider_id == provider.id, UserIdentity.subject == claims.subject
+        )
+    )
+    user = db.get(User, link.user_id) if link is not None else None
+    if user is None:
+        user = db.scalar(select(User).where(User.email == claims.email))
+    if user is not None and user.auth_source == "integration":
+        return refused("no_account", f"There is no Veyra account for {claims.email}.")
+    if user is None:
+        if not provider.create_accounts:
+            return refused(
+                "no_account",
+                f"There is no Veyra account for {claims.email} and account creation is off. "
+                "Add the user first, or turn on account creation.",
+            )
+        role = ROLE_LABELS.get(provider.default_role_key, provider.default_role_key)
+        return {
+            **result,
+            "outcome": "create",
+            "account": None,
+            "message": f"A Veyra account will be created for {claims.email} with the role "
+            f"{role} the first time they sign in.",
+        }
+    if user.is_recovery_admin:
+        return refused(
+            "recovery_admin",
+            "This is the recovery administrator, which always signs in with a password. "
+            "Test with another account.",
+            user,
+        )
+    if not user.is_active:
+        return refused("inactive", f"The Veyra account {user.email} is disabled.", user)
+    if link is not None:
+        return {
+            **result,
+            "outcome": "linked",
+            "account": user.email,
+            "message": f"Already linked to the Veyra account {user.email}.",
+        }
+    return {
+        **result,
+        "outcome": "link",
+        "account": user.email,
+        "message": f"Matches the Veyra account {user.email}; it is linked the first time "
+        "they sign in.",
+    }
 
 
 def resolve_user(db: Session, provider: IdentityProvider, claims: oidc.IdClaims) -> User:

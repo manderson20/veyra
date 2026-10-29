@@ -2887,6 +2887,16 @@ export interface ProviderTestOut {
   keys: number;
 }
 
+export interface TestSignInOut {
+  request_id: string;
+  url: string;
+}
+
+export interface TestSignInResult {
+  status: "waiting" | "done" | "expired";
+  result: Record<string, unknown> | null;
+}
+
 export interface UserIdentityOut {
   id: string;
   provider_id: string;

@@ -70,7 +70,7 @@ class SsoRequest(UUIDPrimaryKey, Base):
     browser_hash: Mapped[str | None] = mapped_column(String(64))
     nonce: Mapped[str] = mapped_column(String(100))
     code_verifier: Mapped[str] = mapped_column(String(128))
-    client: Mapped[str] = mapped_column(String(16))  # web | companion
+    client: Mapped[str] = mapped_column(String(16))  # web | companion | test
     next_path: Mapped[str | None] = mapped_column(String(500))
     # Companion: where to send the one-time code and the extension's PKCE challenge.
     redirect_uri: Mapped[str | None] = mapped_column(String(500))
@@ -84,6 +84,8 @@ class SsoRequest(UUIDPrimaryKey, Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ip_address: Mapped[str | None] = mapped_column(String(64))
+    # A test sign-in from the setup wizard (§1.8): what would have happened.
+    test_result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class Integration(UUIDPrimaryKey, Timestamps, Base):
