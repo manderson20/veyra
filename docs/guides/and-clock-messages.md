@@ -5,6 +5,7 @@ audience: admin
 section: Paging and bells
 order: 40
 reviewed: 0.27.44
+checked: 2026-10-29
 covers:
   - modules/veyra-and-clocks/module.toml
   - modules/veyra-and-clocks/README.md

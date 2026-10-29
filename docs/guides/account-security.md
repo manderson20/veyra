@@ -4,7 +4,7 @@ summary: Change your password, set up a passkey or an authenticator app, keep yo
 audience: user
 section: Using Veyra
 order: 30
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /account/
 covers:
@@ -27,7 +27,7 @@ The **Profile** card shows your name, email address, how you sign in, whether tw
 
 ## Change your password
 
-> **Note:** If you sign in with **Sign in with Google** or **Microsoft**, you have no separate Veyra password: change your password with Google or Microsoft instead.
+> **Note:** If you sign in with Google, Microsoft or single sign-on, you have no separate Veyra password: the page shows a **Password** card saying so instead of **Change password**. Change your password with Google, Microsoft or your organization instead.
 
 In **Change password**:
 
@@ -75,7 +75,7 @@ At the second step of signing in, you may tick **Trust this browser for … days
 
 ## Active sessions
 
-**Active sessions** lists everywhere you are signed in, with the **Device**, when you **Signed in**, when you were **Last active**, and when the session **Expires**. Sessions end after 12 hours, or after 60 minutes without activity.
+**Active sessions** lists everywhere you are signed in, with the **Device**, when you **Signed in**, when you were **Last active**, and when the session **Expires**. A session ends after a set time, and sooner when it is not used.
 
 - **Sign out** ends one session, for example on a shared computer you forgot to sign out of.
 - **Sign out other sessions** ends all of them except the one you are using.

@@ -4,7 +4,7 @@ summary: Set up your organization's defaults, and add its sites, buildings and d
 audience: admin
 section: Getting started
 order: 30
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /organizations/
   - /organizations/view/
@@ -54,7 +54,7 @@ The organization page also has:
 
 1. Open [Directory → Sites](app:/sites/) and choose **New site**.
 2. Enter the **Name**, for example *Main Campus*.
-3. **Time zone:** leave it empty to use the organization's. Otherwise type the name exactly as in the time zone list, such as `America/Chicago`.
+3. **Time zone:** leave it on **The organization's** to use the organization's time zone, or choose one from the list, such as *America/Chicago*.
 4. **Emergency caller ID number:** the number registered for this building with your carrier for emergency calls. It is the default for the site's extensions on 911 calls.
 5. Fill in the address: **Street**, **City**, **State or region**, **Postal code** and **Country** (two letters, such as *US*).
 6. Choose **Create site**.
@@ -79,10 +79,9 @@ You then place each extension in a building on the extension's **General** tab, 
 
 One Veyra server can serve several organizations, for example a district and a neighboring town, with their phones kept apart. This needs **multi-tenancy**, which you turn on under [System → Settings](app:/settings/). See [Settings: email, sign-in policy and retention](guide:settings).
 
-With multi-tenancy on, choose **New organization** on the Organizations page and enter the **Name**, **Short name** and **Time zone**, then **Create organization**.
+With multi-tenancy on, choose **New organization** on the Organizations page (while multi-tenancy is off and one organization exists, the button is greyed out) and enter the **Name**, **Short name** and **Time zone**, then **Create organization**.
 
 ## If something doesn't work
 
-- **"Multi-tenancy is off" when creating an organization:** turn on multi-tenancy first.
+- **New organization is greyed out:** multi-tenancy is off; turn it on first.
 - **A warning says "Several organizations without isolation":** two organizations are active but multi-tenancy is off, so their phones can reach each other. Turn multi-tenancy on.
-- **A time zone is refused:** use the exact name, such as `America/New_York`, not an abbreviation such as *EST*.

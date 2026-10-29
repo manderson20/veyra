@@ -4,7 +4,7 @@ summary: Let a Google Calendar or any iCal calendar ring your school bells throu
 audience: admin
 section: Paging and bells
 order: 30
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /bells/
   - /calendars/
@@ -17,7 +17,7 @@ covers:
   - backend/veyra/bells/*
 ---
 
-Veyra rings bells from a calendar you already keep. You put the bell times in a calendar (for example a Google Calendar called *Bell schedule*, with an event for each period). Veyra checks the calendar every few minutes, and when an event starts it plays a recorded page, such as a school bell, into the paging zones.
+Veyra rings bells from a calendar you already keep. You put the bell times in a calendar (for example a Google Calendar called *Bell schedule*, with an event for each period). Veyra checks the calendar every few minutes, and when an event starts (or ends, or both, as you choose) it plays a recorded page, such as a school bell, into the paging zones.
 
 Changing the schedule then means editing the calendar: a late-start day, an assembly schedule or a holiday is just different events.
 
@@ -73,7 +73,7 @@ Under [Telephony → Bell Schedules](app:/bells/):
 
 3. Choose **Create schedule**.
 
-Each event rings once. Veyra checks for due bells every few seconds.
+Each event rings once at each time chosen under **Ring**. Veyra checks for due bells every few seconds.
 
 ## Check it
 

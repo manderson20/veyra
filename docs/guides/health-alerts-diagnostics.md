@@ -5,6 +5,7 @@ audience: admin
 section: Maintenance
 order: 50
 reviewed: 0.27.44
+checked: 2026-10-29
 pages:
   - /system/health/
   - /system/alerts/

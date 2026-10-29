@@ -4,7 +4,7 @@ summary: Set up the programmable keys on desk phones (lines, busy lamps, speed d
 audience: admin
 section: Phones and devices
 order: 40
-reviewed: 0.27.44
+reviewed: 0.27.45
 checked: 2026-10-29
 pages:
   - /device-profiles/view/
@@ -25,7 +25,7 @@ Most desk phones have a row of buttons with a small light next to each one. Veyr
 4. Use the up and down arrows to change the order, and the bin to remove a key.
 5. Choose **Save changes**.
 
-The first key in the list is the phone's first programmable key. Line 1 always has a key of its own on Poly phones, so you do not need to add it there. A profile can have up to 48 keys. A phone with fewer buttons uses the first ones (some phones show the rest on extra pages).
+The first key in the list is the phone's first programmable key. The phone's own line always comes first with a key of its own, so you do not need to add it; add more lines, BLF, speed dial, paging and other keys here. A profile can have up to 48 keys. A phone with fewer buttons uses the first ones (some phones show the rest on extra pages).
 
 ## Key types
 

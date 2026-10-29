@@ -5,6 +5,7 @@ audience: admin
 section: Phones and devices
 order: 30
 reviewed: 0.27.44
+checked: 2026-10-29
 pages:
   - /device-profiles/
   - /device-profiles/view/

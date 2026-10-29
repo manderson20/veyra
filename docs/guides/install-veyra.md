@@ -4,7 +4,7 @@ summary: Put Veyra on an Ubuntu server, open the setup wizard and create the fir
 audience: admin
 section: Getting started
 order: 5
-reviewed: 0.27.44
+reviewed: 0.27.45
 covers:
   - installer/install.sh
   - installer/preflight.sh
@@ -75,6 +75,8 @@ Things the installer never does: change SSH settings, change firewall rules, rem
 5. **Installation:** an **Installation name** (for example *District Phone System*) and the **Time zone**.
 6. **Numbering plan:** the **Extension length** and the **First extension** and **Last extension**. You can widen it later.
 7. **Review**, then **Finish setup**. You are signed in.
+
+The wizard also lists, on the left, what is set up after it, each with where to find it (*After setup: System → Backups*, for example): SIP and media addresses, outside lines, email delivery, backups, updates and high availability. Once you are signed in, **Help** in the top bar has a guide for each, starting with [First steps after installing Veyra](guide:first-steps).
 
 ## Certificates
 

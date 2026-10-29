@@ -4,7 +4,7 @@ summary: What the dashboard shows about the server, the phone system and today's
 audience: admin
 section: Getting started
 order: 20
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /
 covers:
@@ -37,11 +37,11 @@ Depending on what is set up, more cards follow:
 - **Calls: internal vs external:** calls between your phones against calls through your carrier.
 - **Phones online:** phones that are registered against phones the engine knows but cannot reach.
 
-Choose **1h**, **6h**, **24h** or **7d** above a graph for the time range. If a graph says *Not available yet*, the telephony engine is not reporting.
+Choose **1h**, **6h**, **24h** or **7d** above a graph for the time range. If a graph says *Not available*, the telephony engine is not reporting.
 
 ## Calls, cluster and updates
 
-- **Calls and registrations:** the number of active calls and registered extensions right now.
+- **Calls and registrations:** the number of active calls and registered extensions right now, and the **SIP trunks**: how many of them are up (for example *2 of 2 up*; choose it to open the trunks page), *None set up*, or the number with *(status unknown)* when the engine cannot say.
 - **Cluster and updates:** whether this is a standalone server or a cluster, the database role, and whether updates are available. Choose the update line to go to the Updates page.
 
 ## Today and recent activity
@@ -53,5 +53,5 @@ Choose **1h**, **6h**, **24h** or **7d** above a graph for the time range. If a 
 ## If something doesn't work
 
 - **The telephony engine card is red:** open System → Telephony Engine to see what the engine reports.
-- **Graphs say *Not available yet*:** the engine is not running or not reachable. Check the telephony engine card first.
-- **Calls and registrations shows *Not available yet* to an organization administrator:** with multi-tenancy on, these counts cover every organization, so only platform administrators see them.
+- **Graphs say *Not available*:** the engine is not running or not reachable. Check the telephony engine card first.
+- **Calls and registrations shows *Not available* to an organization administrator** (*These counts cover the whole server.*): with multi-tenancy on, these counts cover every organization, so only platform administrators see them. *The telephony engine is not answering.* means the engine is not running or not reachable.

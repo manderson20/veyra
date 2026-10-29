@@ -5,6 +5,7 @@ audience: admin
 section: Getting started
 order: 60
 reviewed: 0.27.44
+checked: 2026-10-29
 pages:
   - /feature-codes/
 covers:

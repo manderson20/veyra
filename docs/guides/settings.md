@@ -4,7 +4,7 @@ summary: Set up email delivery, the two-factor rule, how long data is kept, the 
 audience: admin
 section: Getting started
 order: 70
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /settings/
 covers:
@@ -25,9 +25,11 @@ covers:
 
 The **HTTPS certificate** card and the Companion settings on the same page have their own guides.
 
+The **Elsewhere** card points to settings kept on other pages: SIP and media addresses on **System → Telephony Engine**, backups on **System → Backups**, single sign-on on **System → Sign-in**, and the Companion rollout on **System → Companion rollout**.
+
 ## Email delivery
 
-Veyra sends email through your mail server: voicemail notifications, password reset links, alerts and other messages. Until this is set up, nothing is emailed.
+Veyra sends all its email through your mail server: voicemail and fax, password reset links, alerts, reports, and update and emergency notices. Until this is set up, nothing is emailed; with **Send email** off, Veyra sends no email at all and voicemail stays in the boxes.
 
 1. Switch on **Send email**.
 2. Enter the **SMTP server** (for example `smtp.office365.com` or `smtp-relay.gmail.com`) and the **Port**.

@@ -4,7 +4,7 @@ summary: Give extensions a voicemail box, set PINs and email delivery, and creat
 audience: admin
 section: Voicemail and fax
 order: 10
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /voicemail/
 covers:
@@ -60,7 +60,7 @@ Each message can be up to 3 minutes long, and greetings up to 60 seconds.
 
 ## Reset a PIN
 
-Open the box and choose **Reset PIN**. A new random PIN is shown once. The old PIN stops working at the next deployment. Users can also choose their own PIN on their account page.
+Open the box and choose **Reset PIN**. A new random PIN is shown once. The old PIN stops working at the next deployment. Users can also choose their own PIN on their account page, except for a shared inbox, whose PIN only an administrator resets here.
 
 ## Shared inboxes
 
@@ -72,7 +72,7 @@ A shared inbox has its own number and is not tied to one phone. Callers reach it
 4. Set the **PIN** and an **Email address for new messages**, for example a shared office mailbox.
 5. Choose **Create box**, note the PIN, and deploy the changes.
 
-From a phone, members open the inbox with `*98`: enter the inbox's number, then its PIN.
+From a phone, members open the inbox with `*98`: enter the inbox's number, then its PIN. Dialling the inbox's number itself leaves a message.
 
 > **Tip:** Point an inbound route or a phone-menu key at the shared inbox, for example *press 1 to report an absence*.
 
@@ -80,7 +80,7 @@ From a phone, members open the inbox with `*98`: enter the inbox's number, then 
 
 **Messages** on a box's row opens its messages and greetings, as the user sees them:
 
-- **Messages**: play, **Move** to another folder, **Forward** a copy to another box, **Email** it to an address (with the option to delete it from the box once sent), or **Delete** it. Folders are *New*, *Old*, *Work*, *Family*, *Friends* and *Urgent*.
+- **Messages**: play, **Move** to another folder, **Forward** a copy to another box, **Email** it to an address (it stays in the box unless you tick **Delete it from the voicemail box once the email is sent**), or **Delete** it. Folders are *New*, *Old*, *Work*, *Family*, *Friends* and *Urgent*.
 - **Greetings**: play, **Upload** or **Record** in the browser, or **Remove** each greeting: *Unavailable*, *Busy*, *Name*, *Temporary*, *Extended absence* and *After hours*. Below them is the box's **Extended absence** (see [Your voicemail](guide:your-voicemail)).
 
 Listening to a message and every change are written to the audit log.

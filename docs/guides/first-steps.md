@@ -4,7 +4,7 @@ summary: Finish the setup wizard, then set Veyra up in the order that gets the f
 audience: admin
 section: Getting started
 order: 10
-reviewed: 0.27.44
+reviewed: 0.27.45
 covers:
   - frontend/src/app/(public)/setup/*
   - backend/veyra/api/v1/setup.py
@@ -29,7 +29,7 @@ Open the server's address in a browser. As long as nobody has set Veyra up, it s
 5. **Numbering plan.** Choose the **Extension length** (3 to 6 digits) and the **First extension** and **Last extension**. The default is 4 digits from 1000 to 7999. Extensions never start with 0 (operator), 9 (outside line), 911 or 933 (emergency).
 6. **Review.** Check the details and choose **Finish setup**. You are signed in and land on the dashboard.
 
-> **Note:** The wizard lists more steps on the left marked *Coming later*, such as SIP settings, email delivery and backups. Most of these already exist in Veyra; you set them up after the wizard, as described below.
+> **Note:** The wizard also lists, on the left, what you set up after it and where: *SIP and media addresses* (System → Telephony Engine), *Outside lines* (Telephony → SIP Trunks), *Email delivery* (System → Settings), *Backups* (System → Backups), *Update preferences* (System → Updates) and *High availability (optional)* (System → High Availability), each marked *After setup:* with its place. The order is described below.
 
 ## 2. Set up your second factor
 

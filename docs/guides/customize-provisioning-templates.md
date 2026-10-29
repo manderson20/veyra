@@ -4,7 +4,7 @@ summary: Change what Veyra writes into phones' configuration files with your own
 audience: admin
 section: Phones and devices
 order: 60
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /provisioning/
   - /provisioning/view/
@@ -54,7 +54,7 @@ Open the local template and go to the **Edit** tab.
 
 **Template card**
 
-- **Name** and **Version** (required). The version is a number like `0.1.1`.
+- **Name** and **Version** (required). The version is a number like `0.1.1`. Raise it when you change the template; the previous version is replaced, not kept.
 - **Models:** the model names this template serves, separated by commas. A family has no models of its own.
 - **Status:** **Experimental**, **Stable (verified on hardware)** or **Deprecated**.
 - **Description.**

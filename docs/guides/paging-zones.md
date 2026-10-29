@@ -4,7 +4,7 @@ summary: Group your overhead speakers and Poly phones into paging zones that any
 audience: admin
 section: Paging and bells
 order: 10
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /paging-zones/
 covers:
@@ -54,7 +54,7 @@ Zones are listed under [Telephony → Paging Zones](app:/paging-zones/).
 | **Enabled** | A disabled zone is left out of the phones' paging groups. |
 
 3. Choose **Create zone**.
-4. Use **Deploy changes** in the top bar so the phone system learns the zone's number.
+4. A *Changes not yet deployed* note appears on the page. Use **Deploy changes** in the top bar so the phone system learns the zone's number. Phones get the zone itself at their next provisioning check.
 
 ## Who may page a zone
 

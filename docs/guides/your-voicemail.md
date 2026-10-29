@@ -4,7 +4,7 @@ summary: Listen to your messages from your phone or the browser, record your gre
 audience: user
 section: Using Veyra
 order: 20
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /my-phone/
 covers:
@@ -42,7 +42,7 @@ On [My Phone](app:/my-phone/), the **Voicemail** widget has two tabs.
 - **Call me** rings your desk phone and plays the message there, useful in a shared office.
 - **Move** puts it in another folder. Moving a new message to *Old* marks it as heard on the phone too.
 - **Forward** sends a copy to a colleague's box.
-- **Email** sends it to your email address with the recording attached. **Delete it from the voicemail box once the email is sent** is ticked by default; untick it to keep a copy in the box.
+- **Email** sends it to your email address with the recording attached. The message stays in the box unless you tick **Delete it from the voicemail box once the email is sent**.
 - **Delete** removes it.
 
 **Greetings** lists your greetings, each **Recorded** by you or **Standard** (the phone system's own):
@@ -81,7 +81,7 @@ On [your account page](app:/account/), the **Voicemail** card shows where your n
 
 ## Shared inboxes
 
-If you watch a shared inbox, such as an attendance line, it appears as another **Voicemail** widget on My Phone (or add one with **Arrange → Add widget**), and your message lamp also lights for it. From a phone, dial **\*98** and enter the inbox's number and PIN.
+If you watch a shared inbox, such as an attendance line, it appears as another **Voicemail** widget on My Phone (or add one with **Arrange → Add widget**), and your message lamp also lights for it. From a phone, dial **\*98** and enter the inbox's number and PIN. Your account page shows no **Change PIN** or **Greeting keys** for a shared inbox: its administrator sets those.
 
 ## If something doesn't work
 
