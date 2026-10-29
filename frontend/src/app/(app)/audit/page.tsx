@@ -13,8 +13,10 @@ import {
   Pagination,
   SearchInput,
   SelectField,
+  TextField,
   type Column,
 } from "@/components/ui";
+import { API_BASE } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import type { AuditEvent, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -25,6 +27,8 @@ export default function AuditPage() {
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [outcome, setOutcome] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
 
@@ -36,7 +40,14 @@ export default function AuditPage() {
     return () => window.clearTimeout(t);
   }, [q]);
 
-  const list = useApiData<Page<AuditEvent>>("/audit", { q: debounced, outcome, limit: LIMIT, offset });
+  // Dates are whole local days: from the start of "from" to the end of "to".
+  const range = {
+    from: from ? new Date(`${from}T00:00:00`).toISOString() : undefined,
+    to: to ? new Date(new Date(`${to}T00:00:00`).getTime() + 86_400_000).toISOString() : undefined,
+  };
+  const filters = { q: debounced || undefined, outcome: outcome || undefined, ...range };
+  const list = useApiData<Page<AuditEvent>>("/audit", { ...filters, limit: LIMIT, offset });
+  const exportHref = `${API_BASE}/audit/export.csv?${new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== undefined) as [string, string][])}`;
   const columns: Column<AuditEvent>[] = [
     { key: "when", header: "Time", render: (e) => <span className="nowrap">{formatDateTime(e.occurred_at)}</span> },
     { key: "action", header: "Action", render: (e) => <span className="mono">{e.action}</span> },
@@ -47,7 +58,8 @@ export default function AuditPage() {
 
   return (
     <div className="stack">
-      <PageHeader title="Audit log" description="An append-only record of administrative actions, sign-ins and denied attempts." />
+      <PageHeader title="Audit log" description="An append-only record of administrative actions, sign-ins and denied attempts."
+        actions={<a className="btn btn--secondary" href={exportHref} download>Export CSV</a>} />
       <Card flush>
         <div className="table-toolbar">
           <SearchInput value={q} onChange={setQ} placeholder="Search action or actor" label="Search audit log" />
@@ -56,6 +68,8 @@ export default function AuditPage() {
               options={[{ value: "success", label: "Success" }, { value: "failure", label: "Failure" }, { value: "denied", label: "Denied" }]}
               onChange={(e) => { setOutcome(e.target.value); setOffset(0); }} />
           </div>
+          <TextField label={<span className="sr-only">From</span>} type="date" value={from} onChange={(e) => { setFrom(e.target.value); setOffset(0); }} />
+          <TextField label={<span className="sr-only">To</span>} type="date" value={to} min={from || undefined} onChange={(e) => { setTo(e.target.value); setOffset(0); }} />
         </div>
         <DataTable columns={columns} rows={list.data?.items} rowKey={(e) => String(e.id)} loading={list.loading} error={list.error} onRetry={list.reload}
           caption="Audit events" onRowClick={setSelected} rowLabel={(e) => `Details for ${e.action}`}

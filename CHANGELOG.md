@@ -25,6 +25,9 @@ No migration.
 - **New extension** offers the organization's extension templates and, with many users, a search for the user.
 - Supervisors with more than one extension choose which phone rings on Active calls (**Supervise from**).
 - A site's emergency settings can play a **recorded page** when an emergency call is made there, and the responder list shows the site's extensions first.
+- **Audit log**: a date range and **Export CSV** (the same filters; up to 100,000 events).
+- Integration tokens can be given **metrics.read** to scrape the Prometheus metrics (`/api/v1/metrics`); being server-wide, only a platform administrator can grant it, and it gives nothing else.
+- Speed dial, BLF and intercom keys accept numbers typed with spaces, dashes or brackets (`+1 (573) 555-0100`), as users' own keys already did; the hint for each key's value shows under the field instead of only on hover.
 
 ### Fixed
 - **A recording in use can no longer be deleted.** Deleting a recording that a call queue, recording policy, recorded page or bell played silently removed it from them; now the delete is refused with the list of what uses it, and the Audio page's **Used by** counts all of them.

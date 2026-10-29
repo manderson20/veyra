@@ -82,6 +82,7 @@ def test_templates_resolve_by_scope_and_lock_widgets(admin, app):
         "template_id": None,
         "template_name": None,
         "locked_widgets": [],
+        "announcement": None,
     }
     # Organization template, then a building one with a locked announcement: the building wins.
     r = admin.post(
@@ -107,6 +108,13 @@ def test_templates_resolve_by_scope_and_lock_widgets(admin, app):
     assert out["source"] == "template" and out["template_name"] == "North building"
     assert out["locked_widgets"] == ["announce"]
     assert [w["key"] for w in out["layout"]["tabs"][0]["widgets"]] == ["announce", "phone"]
+    # A user's own arrangement still shows the template's current announcement.
+    assert pat.put(L, json={"layout": _layout("announce", "phone")}).status_code == 200
+    changed = _layout("announce", "phone")
+    changed["tabs"][0]["widgets"][0]["settings"] = {"text": "Fire drill at 10:00"}
+    assert admin.patch(f"{T}/{north['id']}", json={"layout": changed}).status_code == 200
+    mine = pat.get(L).json()
+    assert mine["source"] == "user" and mine["announcement"] == "Fire drill at 10:00"
     # A role template outranks the building's.
     r = admin.post(
         T,

@@ -8,7 +8,7 @@ import re
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -84,6 +84,15 @@ class LineKey(BaseModel):
         if any(ord(c) < 32 for c in v):
             raise ValueError("contains control characters")
         return v or None
+
+    @model_validator(mode="after")
+    def _number(self) -> LineKey:
+        # Numbers may be typed as "+1 (573) 555-0100", as on My Phone.
+        if self.type in ("blf", "speed_dial", "intercom", "presence") and not REF_RE.match(
+            self.value.strip()
+        ):
+            self.value = re.sub(r"[\s().-]", "", self.value)
+        return self
 
     @field_validator("value")
     @classmethod

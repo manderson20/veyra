@@ -909,3 +909,32 @@ def test_generated_voicemail_conf_has_externnotify():
 
     out = generator._voicemail({}, {}, "/opt/veyra/current/installer/bin/veyra-mailqueue")
     assert "externnotify=/opt/veyra/current/installer/bin/veyra-vmnotify" in out.content
+
+
+def test_metrics_scope_is_server_wide_and_platform_only(admin, app):
+    from fastapi.testclient import TestClient
+    from test_api_rbac import make_user
+
+    org = _org(admin)
+    r = admin.post(
+        "/api/v1/integrations",
+        json={"organization_id": org["id"], "name": "Prometheus", "scopes": ["metrics.read"]},
+    )
+    assert r.status_code == 201, r.text
+    hdr = {"Authorization": f"Bearer {r.json()['token']}"}
+    _signed_out(admin)
+    r = admin.get("/api/v1/metrics", headers=hdr)
+    assert r.status_code == 200 and "veyra_" in r.text
+    # Nothing else comes with it.
+    assert admin.get("/api/v1/users", headers=hdr).status_code == 403
+    assert admin.get("/api/v1/system/info", headers=hdr).status_code in (401, 403)
+    login(admin, ADMIN_EMAIL, ADMIN_PASSWORD)
+    # An organization administrator can neither see nor grant it.
+    make_user(admin, "orgadmin@example.org", org["id"], role="org_admin")
+    c = login(TestClient(app, base_url="http://veyra.test"), "orgadmin@example.org", ADMIN_PASSWORD)
+    assert "metrics.read" not in {s["key"] for s in c.get("/api/v1/integrations/scopes").json()}
+    r = c.post(
+        "/api/v1/integrations",
+        json={"organization_id": org["id"], "name": "Sneaky", "scopes": ["metrics.read"]},
+    )
+    assert r.status_code == 403

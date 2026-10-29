@@ -42,7 +42,7 @@ export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys
           ) : k.type === "dnd" || k.type === "transfer" ? (
             <span className="subtle" style={{ alignSelf: "center" }}>{k.type === "dnd" ? "Toggles Do Not Disturb on this phone; lit while it is on." : "Not every phone has a transfer key; where it has none the preview says so and the phone's softkey does it."}</span>
           ) : VALUE_HINT[k.type] ? (
-            <TextField label={<span className="sr-only">Key {i + 1} value</span>} disabled={disabled} value={k.value} placeholder={VALUE_HINT[k.type]!.placeholder} title={VALUE_HINT[k.type]!.help} style={{ width: 200 }} onChange={(e) => update(i, { value: e.target.value.trim() })} />
+            <TextField label={<span className="sr-only">Key {i + 1} value</span>} disabled={disabled} value={k.value} placeholder={VALUE_HINT[k.type]!.placeholder} help={VALUE_HINT[k.type]!.help} style={{ width: 200 }} onChange={(e) => update(i, { value: e.target.value.trim() })} />
           ) : k.type === "page" ? (
             <span className="row" style={{ gap: 6 }}>
               <SelectField label={<span className="sr-only">Zone</span>} value={k.value.startsWith("$") ? "$" : k.value} disabled={disabled} placeholder="Choose a zone"

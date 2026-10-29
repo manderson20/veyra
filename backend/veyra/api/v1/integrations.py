@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, recent_auth, request_context, require, require_in_org
-from veyra.core.errors import ProblemError, conflict, not_found
+from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.models import ApiToken, Integration, Organization
 from veyra.core.models.base import utcnow
 from veyra.core.security import api_tokens
@@ -116,9 +116,18 @@ def _check_expiry(expires_at: datetime | None) -> None:
         )
 
 
+def _check_server_scopes(principal: Principal, scopes: list[str]) -> None:
+    if set(scopes) & integration_tokens.SERVER_SCOPES and not principal.is_platform_admin:
+        raise forbidden("Only a platform administrator can grant server-wide scopes.")
+
+
 @router.get("/scopes", response_model=list[ScopeOut], summary="What an integration may be allowed")
 def scopes(principal: Principal = Depends(require(READ))) -> list[ScopeOut]:
-    return [ScopeOut(key=k, description=d) for k, d in integration_tokens.SCOPES.items()]
+    return [
+        ScopeOut(key=k, description=d)
+        for k, d in integration_tokens.SCOPES.items()
+        if k not in integration_tokens.SERVER_SCOPES or principal.is_platform_admin
+    ]
 
 
 @router.get("", response_model=list[IntegrationOut], summary="Integrations")
@@ -150,6 +159,7 @@ def create_integration(
     ctx: RequestContext = Depends(request_context),
 ) -> IntegrationTokenOut:
     require_in_org(principal, WRITE, body.organization_id)
+    _check_server_scopes(principal, body.scopes)
     if db.get(Organization, body.organization_id) is None:
         raise not_found("Organization")
     _check_expiry(body.expires_at)
@@ -202,6 +212,7 @@ def update_integration(
 ) -> IntegrationOut:
     i = _get(db, principal, integration_id, WRITE)
     _check_expiry(body.expires_at)
+    _check_server_scopes(principal, body.scopes)
     i.name = body.name
     i.scopes = body.scopes
     i.allowed_networks = body.allowed_networks

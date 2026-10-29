@@ -38,7 +38,11 @@ SCOPES: dict[str, str] = {
     "calls.history.export": "Export the call history as CSV",
     "directory.read": "Read the directory",
     "reports.read": "Run saved reports",
+    "metrics.read": "Read the Prometheus metrics (server-wide; platform administrators only)",
 }
+# Scopes about the whole server rather than the integration's organization:
+# only a platform administrator may grant them, and they get a platform grant.
+SERVER_SCOPES = frozenset({"metrics.read"})
 
 
 def check_networks(values: list[str]) -> list[str]:
@@ -169,18 +173,28 @@ def by_token(db: Session, token: ApiToken) -> Integration | None:
 
 def principal_for(integration: Integration, token: ApiToken) -> Principal:
     scopes = frozenset(s for s in integration.scopes if s in SCOPES)
+    grants = [
+        Grant(
+            scope_type="organization",
+            organization_id=integration.organization_id,
+            site_id=None,
+            permissions=scopes - SERVER_SCOPES,
+        )
+    ]
+    if scopes & SERVER_SCOPES:
+        grants.append(
+            Grant(
+                scope_type="platform",
+                organization_id=None,
+                site_id=None,
+                permissions=scopes & SERVER_SCOPES,
+            )
+        )
     return Principal(
         user_id=integration.service_user_id,
         email=f"Integration: {integration.name}",
         display_name=integration.name,
-        grants=[
-            Grant(
-                scope_type="organization",
-                organization_id=integration.organization_id,
-                site_id=None,
-                permissions=scopes,
-            )
-        ],
+        grants=grants,
         token_scopes=scopes,
         token_id=token.id,
     )
