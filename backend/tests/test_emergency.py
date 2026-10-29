@@ -258,6 +258,13 @@ def test_emergency_api(admin, app):
         f"/api/v1/emergency/sites/{site['id']}", json={"recipients": {"extensions": ["9999"]}}
     )
     assert r.status_code == 422
+    # A page must belong to the site's organization; an unknown one is refused.
+    r = admin.put(
+        f"/api/v1/emergency/sites/{site['id']}",
+        json={"recipients": {"page_id": str(uuid.uuid4())}},
+    )
+    assert r.status_code == 422 and "organization" in r.text
+    assert admin.get(f"/api/v1/emergency/sites/{site['id']}").json()["organization_id"]
     # A notification test records a test call and the notification date.
     r = admin.post(f"/api/v1/emergency/sites/{site['id']}/test-notification")
     assert r.status_code == 200 and r.json()["ok"] and r.json()["call"]["kind"] == "test"

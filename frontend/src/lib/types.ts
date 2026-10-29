@@ -3555,6 +3555,7 @@ export interface EmergencyCallRow {
 export interface EmergencySiteDetail {
   id: string;
   name: string;
+  organization_id: string;
   readiness: { ready: boolean; checks: EmergencyCheck[]; extensions: number };
   settings: EmergencySettings;
   calls: EmergencyCallRow[];

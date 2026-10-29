@@ -73,11 +73,11 @@ On each trunk the emergency route uses, set **Maximum channels** to the number o
 At [System → Emergency Calling](app:/system/emergency/), choose **Open** on a site. (Changing these settings needs the emergency-calling management permission.)
 
 - **This address is registered with the carrier's E911 service for the ELIN above**: tick it once the carrier has confirmed. Your name and the date are recorded.
-- **Responder extension**: the phone that rings when the 911 center calls back and Veyra cannot tell who made the call, or the callback window has passed. The list shows the site's own extensions (all extensions when none belongs to the site).
+- **Responder extension**: the phone that rings when the 911 center calls back and Veyra cannot tell who made the call, or the callback window has passed. The list shows the site's own extensions (all of the organization's extensions when none belongs to the site).
 - **Callback window (minutes)**: how long after a 911 call a call to the site's emergency number rings the phone that dialled 911 (1 to 1440, 30 by default).
 - **Notify by email**: one address per line. Email must be set up first, in the **Email delivery** card under System → Settings.
 - **Ring these extensions**: extension numbers, separated by commas (up to 20). These phones ring when someone dials 911, show the caller's extension as the name, and hear it read out.
-- **Play a recorded page**: a recorded page (see [Send a page](guide:send-a-page)) played into its zones when someone at this site dials 911, for example an alert on the front office speakers. Only pages with a recording are listed; **No page** plays nothing.
+- **Play a recorded page**: a recorded page (see [Send a page](guide:send-a-page)) played into its zones when someone at this site dials 911, for example an alert on the front office speakers. Only pages of the site's organization that have a recording are listed; **No page** plays nothing.
 - **Send the emergency.call webhook**: for your own systems, through the webhooks set up in Veyra.
 
 Choose **Save**, then **Deploy changes** in the top bar if it appears (the responder and callback window are part of the phone system's configuration).

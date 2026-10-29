@@ -33,7 +33,7 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
   const toast = useToast();
   const manage = can("emergency.manage");
   const detail = useApiData<EmergencySiteDetail>(siteId ? `/emergency/sites/${siteId}` : null);
-  const extensions = useApiData<Page<Extension>>(siteId ? "/extensions" : null, { limit: 500 });
+  const extensions = useApiData<Page<Extension>>(detail.data ? "/extensions" : null, { organization_id: detail.data?.organization_id, limit: 500 });
   const [attested, setAttested] = useState(false);
   const [responder, setResponder] = useState("");
   const [minutes, setMinutes] = useState("30");
@@ -41,7 +41,7 @@ function SiteDialog({ siteId, onClose, onChanged }: { siteId: string | null; onC
   const [phones, setPhones] = useState("");
   const [webhook, setWebhook] = useState(true);
   const [pageId, setPageId] = useState("");
-  const pages = useApiData<Page<PagingPage>>(siteId ? "/pages" : null, { limit: 200 });
+  const pages = useApiData<Page<PagingPage>>(detail.data ? "/pages" : null, { organization_id: detail.data?.organization_id, limit: 200 });
   const [testResult, setTestResult] = useState("");
   const [busy, setBusy] = useState(false);
   useOnChange(detail.data, (d) => {

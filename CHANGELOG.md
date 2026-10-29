@@ -34,6 +34,7 @@ No migration.
 - The My Phone **Announcement** widget shows the layout's current text for people who rearranged their own My Phone; before, they kept the text from when they saved.
 - The firewall page shows its Allow, Block, Lift, feed and settings controls only to people who may change the firewall.
 - The emergency route warning no longer counts extensions whose site has an emergency number; removing a route's time condition also clears its after-hours fax inbox.
+- An emergency site's notification page must belong to the site's organization (it could be another organization's), and the site dialog lists only that organization's pages and extensions.
 - Text after creating a shared inbox and on the account's Voicemail card says how to open a shared inbox (**\*98** and its number).
 - **A customized phone template now applies only to its own organization.** Before, customizing a model template (say Poly VVX 450) in one organization changed the files of that model's phones in every organization whose profile used the family, and other organizations saw it in their template list. A **Platform-wide** template still applies everywhere.
 - **Phone passwords in profiles and devices are no longer shown.** Secret template settings (such as the phone's administrator password) come back masked; leaving the dots in place keeps the saved value, typing replaces it.

@@ -21,7 +21,7 @@ from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError
-from veyra.core.models import EmergencyCall, Extension, Site
+from veyra.core.models import EmergencyCall, Extension, Page, Site
 from veyra.core.models.base import utcnow
 from veyra.core.security.principal import Principal
 from veyra.emergency import service
@@ -109,6 +109,7 @@ def site_detail(
     return {
         "id": str(site.id),
         "name": site.name,
+        "organization_id": str(site.organization_id),
         "readiness": service.readiness(db, site),
         "settings": _settings_out(db, site),
         "calls": [_call_out(c) for c in calls],
@@ -168,6 +169,12 @@ def put_site(
             ):
                 raise ProblemError(
                     422, "Validation failed", f"No extension {n} in this organization."
+                )
+        if body.recipients.page_id is not None:
+            page = db.get(Page, body.recipients.page_id)
+            if page is None or page.organization_id != site.organization_id:
+                raise ProblemError(
+                    422, "Validation failed", "The page is not in this site's organization."
                 )
         rec = body.recipients.model_dump(mode="json")
         rec["page_id"] = str(body.recipients.page_id) if body.recipients.page_id else None
