@@ -40,7 +40,7 @@ Then register phones against it on the Devices page (see [Add a phone](guide:add
 
 ## Settings
 
-Once you choose a template, the **Settings** heading lists the settings that template offers, such as the SIP transport, how often the phone checks for changes, an administrator password for the phone's own menus, or the screen saver. Each field shows the template's default greyed; leave it empty to keep the default. Yes/no settings are tick boxes. The name under each field (for example `polling_hour`) is the setting's name in the template.
+Once you choose a template, the **Settings** heading lists the settings that template offers, such as the SIP transport, how often the phone checks for changes, an administrator password for the phone's own menus, or the screen saver. Each field shows the template's default greyed; leave it empty to keep the default. Yes/no settings are tick boxes. A password setting is never shown again once saved: the field shows dots, and typing replaces it. The name under each field (for example `polling_hour`) is the setting's name in the template.
 
 What the settings mean depends on the template. You can read their descriptions and defaults on the template's **Variables** tab under [Provisioning → Templates](app:/provisioning/).
 

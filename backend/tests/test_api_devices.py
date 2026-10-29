@@ -8,6 +8,8 @@ from conftest import ADMIN_PASSWORD, login
 from fastapi.testclient import TestClient
 from test_api_rbac import make_org, make_user
 
+from veyra.core.db import session_scope
+
 SITES = "/api/v1/sites"
 ZONES = "/api/v1/paging-zones"
 PROFILES = "/api/v1/device-profiles"
@@ -415,3 +417,55 @@ def test_template_editor_customize_save_and_delete(admin):
         assert admin.delete(f"{base}/{child}").status_code == 204, child
     assert admin.delete(f"{base}/local.poly.vvx").status_code == 204
     assert admin.get(f"{base}/local.poly.vvx").status_code == 404
+
+
+def test_local_template_serves_only_its_organization(admin, app):
+    """A template customized in one organization must not change the phones
+    of another (multi-tenancy)."""
+    org_a = _org(admin)["id"]
+    org_b = make_org(admin, "otherdistrict")
+    base = "/api/v1/provisioning/templates"
+    r = admin.post(
+        f"{base}/poly.vvx.411/customize",
+        json={"key": "local.a.vvx411", "name": "A's 411", "organization_id": org_a},
+    )
+    assert r.status_code == 201, r.text
+    a = _profile(admin, org_a, name="A phones")
+    b = _profile(admin, org_b, name="B phones")
+    assert a["models"]["VVX 411"] == "local.a.vvx411"
+    assert b["models"]["VVX 411"] == "poly.vvx.411"
+    # B cannot point a profile at A's template, and does not see it listed.
+    r = admin.post(
+        PROFILES,
+        json={"organization_id": org_b, "name": "x", "template_key": "local.a.vvx411"},
+    )
+    assert r.status_code == 422 and "not found" in r.text
+    make_user(admin, "b-admin@example.org", org_b, role="org_admin")
+    b_admin = login(
+        TestClient(app, base_url="http://veyra.test"), "b-admin@example.org", ADMIN_PASSWORD
+    )
+    keys = {x["key"] for x in b_admin.get(base).json()["items"]}
+    assert "poly.vvx.411" in keys and "local.a.vvx411" not in keys
+
+
+def test_secret_template_values_are_never_returned(admin):
+    from veyra.core.models import DeviceProfile
+    from veyra.provisioning.variables import MASK
+
+    org = _org(admin)["id"]
+    p = _profile(admin, org, name="Secret VVX", values={"admin_password": "Sup3r-Secret"})
+    assert p["values"]["admin_password"] == MASK
+    # Sending the mask back (an unchanged form) keeps the stored password.
+    r = admin.patch(f"{PROFILES}/{p['id']}", json={"values": {"admin_password": MASK}})
+    assert r.status_code == 200, r.text
+    with session_scope() as db:
+        assert db.get(DeviceProfile, p["id"]).values["admin_password"] == "Sup3r-Secret"
+    r = admin.patch(f"{PROFILES}/{p['id']}", json={"values": {"admin_password": "N3w-Secret"}})
+    with session_scope() as db:
+        assert db.get(DeviceProfile, p["id"]).values["admin_password"] == "N3w-Secret"
+    listed = {x["id"]: x for x in admin.get(PROFILES).json()["items"]}
+    assert listed[p["id"]]["values"]["admin_password"] == MASK
+    # Clearing it removes it.
+    admin.patch(f"{PROFILES}/{p['id']}", json={"values": {}})
+    with session_scope() as db:
+        assert "admin_password" not in db.get(DeviceProfile, p["id"]).values

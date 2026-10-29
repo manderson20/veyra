@@ -197,7 +197,7 @@ def _outs(request: Request, db: Session, rows: list[DeviceProfile]) -> list[Prof
                 for model in sorted(
                     {m for x in catalog.records.values() for m in x.manifest.template.models}
                 ):
-                    found = common.model_templates(catalog, t.key, model)
+                    found = common.model_templates(catalog, t.key, model, r.organization_id)
                     if found:
                         models[model] = found[0]
                 if not models:
@@ -237,7 +237,9 @@ def _outs(request: Request, db: Session, rows: list[DeviceProfile]) -> list[Prof
                 template_abstract=rec.manifest.template.abstract if rec else None,
                 manufacturer=rec.manifest.template.manufacturer if rec else None,
                 models=models,
-                values=dict(r.values),
+                values=common.masked(
+                    dict(r.values), common.sensitive_names(catalog, r.template_key)
+                ),
                 keys=[LineKey.model_validate(k) for k in r.keys],
                 paging=paging,
                 firmware=(
@@ -363,7 +365,7 @@ def create_profile(
     if org is None:
         raise not_found("Organization")
     catalog = catalog_for(request, db)
-    resolved = common.resolve_template(catalog, body.template_key, "template_key")
+    resolved = common.resolve_template(catalog, body.template_key, "template_key", org.id)
     values = common.check_values(resolved, body.values, "values")
     common.check_keys(db, org.id, body.keys, "keys")
     common.check_site(db, org.id, body.site_id)
@@ -424,13 +426,15 @@ def update_profile(
     details: dict[str, Any] = {}
     catalog = catalog_for(request, db)
     template_key = changes.get("template_key") or profile.template_key
-    resolved = common.resolve_template(catalog, template_key, "template_key")
+    resolved = common.resolve_template(
+        catalog, template_key, "template_key", profile.organization_id
+    )
     if template_key != profile.template_key:
         details["template_key"] = {"from": profile.template_key, "to": template_key}
         profile.template_key = template_key
     if "values" in changes or "template_key" in changes:
         values = common.check_values(
-            resolved, changes.get("values", profile.values) or {}, "values"
+            resolved, changes.get("values", profile.values) or {}, "values", profile.values
         )
         if values != profile.values:
             profile.values = values

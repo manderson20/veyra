@@ -59,7 +59,12 @@ def _catalog(request: Request, db: Session) -> TemplateCatalog:
     for row in db.scalars(select(ProvisioningTemplate)):
         try:
             catalog.add(
-                TemplateRecord(parse_template_manifest(row.manifest), row.source, dict(row.files))
+                TemplateRecord(
+                    parse_template_manifest(row.manifest),
+                    row.source,
+                    dict(row.files),
+                    organization_id=row.organization_id,
+                )
             )
         except TemplateError as e:
             catalog.load_errors[f"db:{row.template_key}"] = e.errors
@@ -121,8 +126,14 @@ def list_templates(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     catalog = _catalog(request, db)
+    # Another organization's local templates are not listed.
+    orgs = principal.organization_ids_with("provisioning.read")
     items = sorted(
-        (_summary(r) for r in catalog.records.values()),
+        (
+            _summary(r)
+            for r in catalog.records.values()
+            if orgs is None or r.organization_id is None or r.organization_id in orgs
+        ),
         key=lambda s: (s["manufacturer"], s["abstract"], s["name"]),
     )
     for item in items:

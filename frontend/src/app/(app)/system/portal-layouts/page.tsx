@@ -44,7 +44,10 @@ export default function PortalLayoutsPage() {
           onRowClick={editable ? (t) => setEditing(t) : undefined} rowLabel={(t) => `Edit ${t.name}`}
           empty={<EmptyState icon="dashboard" title="No layouts yet">Users see the built-in arrangement until you make one. A layout named for the whole organization is the usual start.</EmptyState>} />
       </Card>
-      <TemplateDialog template={editing} isPlatform={!!session?.is_platform_admin} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.reload(); }} />
+      {/* A fresh dialog per layout: its fields start from that layout. */}
+      {editing !== null ? (
+        <TemplateDialog key={editing === "new" ? "new" : editing.id} template={editing} isPlatform={!!session?.is_platform_admin} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.reload(); }} />
+      ) : null}
     </div>
   );
 }
@@ -56,7 +59,9 @@ function TemplateDialog({ template, isPlatform, onClose, onSaved }: { template: 
   const t = template && template !== "new" ? template : null;
   const [name, setName] = useState(t?.name ?? "");
   const [description, setDescription] = useState(t?.description ?? "");
-  const [org, setOrg] = useState(t?.organization_id ?? organizations[0]?.id ?? "");
+  const [orgChoice, setOrg] = useState(t?.organization_id ?? "");
+  // Until one is chosen, the first organization (the list loads after the dialog opens).
+  const org = orgChoice || organizations[0]?.id || "";
   const [scope, setScope] = useState<PortalScope>(t?.scope ?? "organization");
   const [ref, setRef] = useState(t?.scope_ref ?? "");
   const [priority, setPriority] = useState(String(t?.priority ?? 0));

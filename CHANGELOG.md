@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.45
+
+No migration.
+
+### Fixed
+- **A customized phone template now applies only to its own organization.** Before, customizing a model template (say Poly VVX 450) in one organization changed the files of that model's phones in every organization whose profile used the family, and other organizations saw it in their template list. A **Platform-wide** template still applies everywhere.
+- **Phone passwords in profiles and devices are no longer shown.** Secret template settings (such as the phone's administrator password) come back masked; leaving the dots in place keeps the saved value, typing replaces it.
+- **Editing a My Phone layout** (System → Portal layouts) opened the dialog empty, so saving could overwrite the layout with blanks. It now opens with the layout's own settings.
+- Yes/no setting overrides on a phone's page are a choice (**As the profile**, **Yes**, **No**) instead of a text box where a typo silently meant no.
+
 ## 0.27.44 — 2026-10-29
 
 No migration.

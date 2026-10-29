@@ -10,6 +10,8 @@ Help pages built into Veyra and for the GitHub wiki.
                                write the wiki pages into OUT
     guides.py stale            list guides whose features changed after the
                                guide was last reviewed (exit 1 when any)
+    guides.py review SLUG…     record that guides were checked and are still
+                               right (sets ``checked:`` to today)
     guides.py coverage         list web pages no guide covers
 
 A guide declares the code it describes (``covers``). When a commit changes
@@ -31,6 +33,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -564,6 +567,8 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--version")
     sub.add_parser("check")
     sub.add_parser("stale")
+    rv = sub.add_parser("review")
+    rv.add_argument("slugs", nargs="+")
     sub.add_parser("coverage")
     args = ap.parse_args(argv)
 
@@ -576,6 +581,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "check":
         print(f"{len(guides)} guides are valid.")
+        return 0
+    if args.cmd == "review":
+        today = datetime.now(UTC).date().isoformat()
+        by_slug = {g.slug: g for g in guides}
+        for slug in args.slugs:
+            g = by_slug.get(slug)
+            if g is None:
+                print(f"no guide {slug!r}", file=sys.stderr)
+                return 2
+            text = g.path.read_text()
+            head, body = text[4:].split("\n---\n", 1)
+            lines = [ln for ln in head.splitlines() if not ln.startswith("checked:")]
+            at = next(i for i, ln in enumerate(lines) if ln.startswith("reviewed:")) + 1
+            lines.insert(at, f"checked: {today}")
+            g.path.write_text("---\n" + "\n".join(lines) + "\n---\n" + body)
+            print(f"{g.path.relative_to(ROOT)}: checked {today}")
         return 0
     if args.cmd == "build":
         outputs = {OUTPUT: build_text(guides), INDEX: index_text(guides)}

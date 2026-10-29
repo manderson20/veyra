@@ -46,7 +46,7 @@ The copy starts at version 0.1.0, marked experimental, with nothing changed: eac
 
 If you customize a **family** (base template), Veyra also makes a local model template under your copy for each model of the family. Point a profile at your family copy to use them.
 
-> **Warning:** When a phone's profile points at a family, Veyra uses a local model template in that family before the official one. So customizing a model template, such as Poly VVX 450, changes the files of every VVX 450 whose profile uses the Poly VVX family, in every organization, as soon as you save. Profiles that point at the official model template directly keep it.
+> **Warning:** When a phone's profile points at a family, Veyra uses a local model template in that family before the official one. So customizing a model template, such as Poly VVX 450, changes the files of every VVX 450 whose profile uses the Poly VVX family as soon as you save — in the template's organization only, or in every organization for a **Platform-wide** template. Other organizations neither use nor see an organization's local templates. Profiles that point at the official model template directly keep it.
 
 ## Edit a local template
 

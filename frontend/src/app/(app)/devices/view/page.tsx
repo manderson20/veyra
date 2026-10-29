@@ -188,7 +188,15 @@ function DeviceView() {
                 <h3 className="field__label" style={{ marginTop: 8 }}>Setting overrides <span className="subtle">(blank = the profile&apos;s value)</span></h3>
                 {errors.fields.values ? <p className="field__error">{errors.fields.values}</p> : null}
                 <div className="form-grid">
-                  {variables.map((v) => (
+                  {variables.map((v) => v.type === "boolean" ? (
+                    <SelectField key={v.name} label={v.description || v.name} disabled={!editable} value={draft.values[v.name] ?? ""}
+                      options={[
+                        { value: "", label: `As the profile (${yesNo(selectedProfile?.values[v.name] ?? options.template?.defaults[v.name])})` },
+                        { value: "true", label: "Yes" },
+                        { value: "false", label: "No" },
+                      ]}
+                      help={<span className="mono">{v.name}</span>} onChange={(e) => set({ values: { ...draft.values, [v.name]: e.target.value } })} />
+                  ) : (
                     <TextField key={v.name} label={v.description || v.name} disabled={!editable} type={v.sensitive ? "password" : v.type === "integer" ? "number" : "text"} autoComplete="off"
                       value={draft.values[v.name] ?? ""} placeholder={selectedProfile?.values[v.name] !== undefined ? `Profile: ${String(selectedProfile.values[v.name])}` : options.template?.defaults[v.name] !== undefined ? `Default: ${String(options.template.defaults[v.name])}` : ""}
                       help={<span className="mono">{v.name}</span>} onChange={(e) => set({ values: { ...draft.values, [v.name]: e.target.value } })} />
@@ -265,6 +273,12 @@ function DeviceView() {
       </ConfirmDialog>
     </div>
   );
+}
+
+/** A yes/no value as the profile or template has it. */
+function yesNo(value: unknown): string {
+  const v = String(value ?? "").toLowerCase();
+  return v === "true" ? "yes" : v === "false" ? "no" : "not set";
 }
 
 export default function Page() {

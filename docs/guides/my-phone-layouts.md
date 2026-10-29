@@ -5,6 +5,7 @@ audience: admin
 section: Phones and devices
 order: 80
 reviewed: 0.27.44
+checked: 2026-10-29
 pages:
   - /system/portal-layouts/
 covers:

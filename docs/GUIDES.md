@@ -65,8 +65,9 @@ that code after the guide's own last commit, the guide is **stale**:
 
 * With every change to a feature, run `stale` and review each guide it
   lists against the change: update the text and set `reviewed:` to the
-  version that ships the change. A guide that is still right gets just the
-  `reviewed:` bump — that commit records the review.
+  version that ships the change. A guide that is still right gets
+  `python3 tools/guides.py review <name>…`, which records `checked:` with
+  today's date — that commit records the review.
 * `release.sh` refuses to release while a guide is stale, and CI on `main`
   fails the same way, so the wiki and the Help pages never fall behind a
   release.

@@ -24,6 +24,7 @@ from veyra.core.models import (
 )
 from veyra.provisioning.renderer import ResolvedTemplate, TemplateCatalog, coerce_one
 from veyra.provisioning.spec import TemplateError
+from veyra.provisioning.variables import MASK
 
 MAX_KEYS = 48
 MAX_LINES = 8
@@ -172,21 +173,58 @@ def check_toggle_target(
             raise validation(field, f"key {i}: the time condition {tc.name} has no override code")
 
 
-def resolve_template(catalog: TemplateCatalog, key: str, field: str) -> ResolvedTemplate:
+def resolve_template(
+    catalog: TemplateCatalog,
+    key: str,
+    field: str,
+    organization_id: uuid.UUID | None = None,
+) -> ResolvedTemplate:
+    """The template for a profile of ``organization_id``; another
+    organization's local template does not exist for it."""
+    rec = catalog.records.get(key)
+    if rec is not None and rec.organization_id not in (None, organization_id):
+        raise validation(field, f"template {key!r} not found")
     try:
         return catalog.resolve(key)
     except TemplateError as e:
         raise validation(field, str(e)) from e
 
 
-def check_values(resolved: ResolvedTemplate, values: dict[str, Any], field: str) -> dict[str, Any]:
+def sensitive_names(catalog: TemplateCatalog, key: str | None) -> set[str]:
+    """The template's secret variables (an admin password, say), whose values
+    the API never returns."""
+    if not key:
+        return set()
+    try:
+        resolved = catalog.resolve(key)
+    except TemplateError:
+        return set()
+    return {n for n, v in resolved.variables.items() if v.sensitive}
+
+
+def masked(values: dict[str, Any], secret: set[str]) -> dict[str, Any]:
+    """Values for the interface: a secret that is set shows as the mask."""
+    return {k: (MASK if k in secret and v not in (None, "") else v) for k, v in values.items()}
+
+
+def check_values(
+    resolved: ResolvedTemplate,
+    values: dict[str, Any],
+    field: str,
+    existing: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Provided values only (a profile need not fill every required variable:
-    lines come from the device); sensitive core values cannot be stored."""
+    lines come from the device); sensitive core values cannot be stored. A
+    secret sent back as the mask keeps its stored value."""
     out: dict[str, Any] = {}
     for name, raw in values.items():
         var = resolved.variables.get(name)
         if var is None:
             raise validation(field, f"unknown variable {name!r}")
+        if raw == MASK and var.sensitive:
+            if existing and existing.get(name) not in (None, ""):
+                out[name] = existing[name]
+            continue
         if name == "sip_password":
             raise validation(field, "the SIP secret comes from the extension")
         if raw is None or raw == "":
@@ -216,13 +254,21 @@ def check_firmware(db: Session, image_id: uuid.UUID | None, manufacturer: str | 
         raise validation("firmware_image_id", f"this image is for {image.manufacturer} devices")
 
 
-def model_templates(catalog: TemplateCatalog, family_key: str, model: str) -> list[str]:
+def model_templates(
+    catalog: TemplateCatalog,
+    family_key: str,
+    model: str,
+    organization_id: uuid.UUID | None = None,
+) -> list[str]:
     """Concrete templates under ``family_key`` (itself included) that support
-    ``model``; local templates first, then the closest descendants."""
+    ``model``; local templates first, then the closest descendants. A local
+    template made in one organization serves only that organization."""
     matches: list[tuple[int, int, str]] = []
     for rec in catalog.records.values():
         t = rec.manifest.template
         if t.abstract or model not in t.models:
+            continue
+        if rec.organization_id is not None and rec.organization_id != organization_id:
             continue
         depth = 0
         cur: str | None = t.key

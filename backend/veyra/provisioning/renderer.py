@@ -13,6 +13,8 @@ Security properties:
 
 from __future__ import annotations
 
+import uuid
+
 import hashlib
 import re
 from collections.abc import Mapping
@@ -63,6 +65,9 @@ class TemplateRecord:
     manifest: TemplateManifest
     source: str  # official | community | local
     sources: dict[str, str] = field(default_factory=dict)  # relative path -> template text
+    # A local template's organization: it serves only that organization's
+    # phones (None: the whole installation; official templates are None).
+    organization_id: uuid.UUID | None = None
 
     @property
     def key(self) -> str:

@@ -55,7 +55,7 @@ Here you change everything from the registration form (except the location), and
 
 - **Extra lines:** **Add line** gives the phone a second, third… extension, up to 8 lines in all. Each extension can appear only once on a phone. On an analog adapter, each line is one phone port (see [Analog adapters and fax machines](guide:analog-adapters-and-fax)).
 - **Firmware override:** a firmware image for this phone only. Left on **From the profile**, the phone gets the profile's firmware. See [Phone firmware](guide:phone-firmware).
-- **Setting overrides:** the template's settings for this phone only. A blank field keeps the profile's value, which is shown greyed in the field. A yes/no setting is typed here as `true` or `false`.
+- **Setting overrides:** the template's settings for this phone only. A blank field keeps the profile's value, which is shown greyed in the field. A yes/no setting offers **As the profile**, **Yes** or **No**.
 - **Enabled:** a disabled phone is refused its configuration until you turn it back on.
 
 Choose **Save changes**. The phone takes the change at its next check, or right away if you choose **Reprovision**.

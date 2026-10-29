@@ -324,7 +324,9 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
             if rec is None:
                 problems.append(f"Template {profile.template_key} of the profile is missing.")
             elif rec.manifest.template.abstract:
-                found = common.model_templates(catalog, profile.template_key, r.model)
+                found = common.model_templates(
+                    catalog, profile.template_key, r.model, r.organization_id
+                )
                 if found:
                     template_key = found[0]
                 else:
@@ -398,7 +400,10 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
                 lines=lines,
                 keys=[LineKey.model_validate(k) for k in r.keys] if r.keys is not None else None,
                 user_keys=r.user_keys,
-                values=dict(r.values),
+                values=common.masked(
+                    dict(r.values),
+                    common.sensitive_names(catalog, profile.template_key if profile else None),
+                ),
                 firmware=fw_ref,
                 firmware_reported=r.firmware_reported,
                 firmware_state=fw_state,
@@ -447,14 +452,18 @@ def _check_extensions(
 
 
 def _check_values(
-    request: Request, db: Session, profile: DeviceProfile | None, values: dict[str, Any]
+    request: Request,
+    db: Session,
+    profile: DeviceProfile | None,
+    values: dict[str, Any],
+    existing: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not values:
         return {}
     if profile is None:
         raise common.validation("values", "choose a profile before overriding values")
     resolved = common.resolve_template(catalog_for(request, db), profile.template_key, "profile_id")
-    return common.check_values(resolved, values, "values")
+    return common.check_values(resolved, values, "values", existing)
 
 
 def _record(
@@ -907,7 +916,9 @@ def update_device(
             device.keys = dumped_keys
             details["keys"] = len(dumped_keys) if dumped_keys is not None else None
     if "values" in changes or ("profile_id" in changes and device.values):
-        values = _check_values(request, db, profile, changes.get("values", device.values) or {})
+        values = _check_values(
+            request, db, profile, changes.get("values", device.values) or {}, device.values
+        )
         if values != device.values:
             device.values = values
             details["values"] = sorted(values)
