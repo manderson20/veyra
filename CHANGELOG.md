@@ -19,6 +19,8 @@ No migration.
 - **Guides on the GitHub wiki**: the same guides are published to the project wiki at every release, each page stamped with the release it reflects and its date.
 - **Guides kept current**: each guide names the parts of Veyra it describes; when one of them changes, the guide must be reviewed before the next release (docs/GUIDES.md).
 
+- **Roll back a module**: the Module Manager shows **Roll back** when the previous version of a module is kept, with the version it goes back to. Before, this was only possible through the API.
+
 ### Changed
 - Settings → **Companion extension deployment** is now a short summary with a button to the rollout guide.
 

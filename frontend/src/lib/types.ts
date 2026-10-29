@@ -724,6 +724,8 @@ export interface ModuleInfo {
   health: { status: HealthStatus; message: string } | null;
   last_error: string | null;
   restart_required: boolean;
+  /** The version "Roll back" goes back to, when the store keeps one. */
+  previous_version: string | null;
 }
 
 export interface ModuleList {

@@ -16,6 +16,7 @@ from veyra.core.deps import RequestContext, current_principal, request_context, 
 from veyra.core.errors import ProblemError
 from veyra.core.models import InstalledModule
 from veyra.core.security.principal import Principal
+from veyra.modules import catalog
 from veyra.modules.manager import ModuleError, ModuleManager
 from veyra.version import MODULE_API_VERSION
 
@@ -34,8 +35,20 @@ class UninstallIn(BaseModel):
     )
 
 
+def _previous_version(store: catalog.Store, row: InstalledModule | None) -> str | None:
+    """The version "Roll back" would go back to, when one is kept."""
+    if row is None or row.state == "removed" or store.active_dir(row.module_id) is None:
+        return None
+    previous = store.previous(row.module_id)
+    return previous[1].module.version if previous else None
+
+
 def _describe(
-    row: InstalledModule | None, cand: Any, mgr: ModuleManager, db: Session
+    row: InstalledModule | None,
+    cand: Any,
+    mgr: ModuleManager,
+    db: Session,
+    store: catalog.Store,
 ) -> dict[str, Any]:
     manifest = cand.manifest if cand and cand.manifest else None
     m = manifest.model_dump(mode="json") if manifest else (row.manifest if row else None)
@@ -73,11 +86,13 @@ def _describe(
         "health": {"status": health.status, "message": health.message} if health else None,
         "last_error": row.last_error if row else None,
         "restart_required": bool(row and row.module_id in mgr.restart_required),
+        "previous_version": _previous_version(store, row),
     }
 
 
 @router.get("", summary="Installed and available modules")
 def list_modules(
+    request: Request,
     principal: Principal = Depends(require("modules.read")),
     db: Session = Depends(get_db),
     mgr: ModuleManager = Depends(manager),
@@ -85,9 +100,10 @@ def list_modules(
     discovered = mgr.discover()
     rows = {r.module_id: r for r in db.scalars(select(InstalledModule))}
     ids = sorted(set(discovered) | set(rows))
+    store = _store(request)
     return {
         "module_api_version": MODULE_API_VERSION,
-        "items": [_describe(rows.get(i), discovered.get(i), mgr, db) for i in ids],
+        "items": [_describe(rows.get(i), discovered.get(i), mgr, db, store) for i in ids],
     }
 
 
@@ -108,6 +124,7 @@ def ui_extensions(
 @router.get("/{module_id}", summary="Module details")
 def get_module(
     module_id: str,
+    request: Request,
     principal: Principal = Depends(require("modules.read")),
     db: Session = Depends(get_db),
     mgr: ModuleManager = Depends(manager),
@@ -116,7 +133,11 @@ def get_module(
     cand = mgr.discover().get(module_id)
     if row is None and cand is None:
         raise ProblemError(404, "Not found", "Module not found.", code="not_found")
-    return _describe(row, cand, mgr, db)
+    return _describe(row, cand, mgr, db, _store(request))
+
+
+def _store(request: Request) -> catalog.Store:
+    return catalog.Store(request.app.state.settings.module_store_dir)
 
 
 def _lifecycle(

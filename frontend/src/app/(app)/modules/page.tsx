@@ -27,13 +27,14 @@ import type { ModuleInfo, ModuleList } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
 
-type Action = "install" | "enable" | "disable" | "update" | "uninstall";
+type Action = "install" | "enable" | "disable" | "update" | "rollback" | "uninstall";
 
 const ACTION_META: Record<Action, { label: string; verb: string; tone: "primary" | "danger" }> = {
   install: { label: "Install", verb: "installed", tone: "primary" },
   enable: { label: "Enable", verb: "enabled", tone: "primary" },
   disable: { label: "Disable", verb: "disabled", tone: "danger" },
   update: { label: "Apply update", verb: "updated", tone: "primary" },
+  rollback: { label: "Roll back", verb: "rolled back", tone: "danger" },
   uninstall: { label: "Uninstall", verb: "uninstalled", tone: "danger" },
 };
 
@@ -43,6 +44,7 @@ function actionsFor(m: ModuleInfo): Action[] {
   if (m.state === "installed" || m.state === "disabled" || m.state === "failed") out.push("enable");
   if (m.state === "enabled") out.push("disable");
   if (m.update_available) out.push("update");
+  if (m.previous_version && m.state !== "removed") out.push("rollback");
   if (m.state === "installed" || m.state === "disabled" || m.state === "failed" || m.state === "removed") out.push("uninstall");
   return out;
 }
@@ -132,6 +134,7 @@ export default function ModulesPage() {
         {pending?.action === "enable" ? <p>The module&apos;s features and navigation become available to users with its permissions.</p> : null}
         {pending?.action === "disable" ? <p>The module stops serving requests. Its data and settings are kept.</p> : null}
         {pending?.action === "update" ? <p>Database migrations for version {pending.module.available_version} run now. The new code runs after Veyra&apos;s services restart (the button appears above).</p> : null}
+        {pending?.action === "rollback" ? <p>Version {pending.module.previous_version} becomes active again, replacing {pending.module.installed_version}. It runs after Veyra&apos;s services restart (the button appears above). A version that changed the module&apos;s database cannot be rolled back.</p> : null}
         {pending?.action === "uninstall" ? (
           <>
             <p>By default the module&apos;s data is kept so it can be reinstalled later.</p>

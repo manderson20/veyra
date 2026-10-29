@@ -147,6 +147,10 @@ def test_install_update_rollback_and_settings(admin, app, tmp_path, served):
     )
     store = catalog.Store(app.state.settings.module_store_dir)
     assert store.previous(MOD)[1].module.version == "0.2.0"
+    # The module list offers the version a roll back goes to.
+    assert admin.get(f"/api/v1/modules/{MOD}").json()["previous_version"] == "0.2.0"
+    listed = {m["module_id"]: m for m in admin.get("/api/v1/modules").json()["items"]}
+    assert listed[MOD]["previous_version"] == "0.2.0"
 
     r = admin.post(f"/api/v1/modules/{MOD}/rollback")
     assert r.status_code == 200 and r.json()["version"] == "0.2.0"
