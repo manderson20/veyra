@@ -1,0 +1,44 @@
+name: Wiki
+
+# Publishes the help guides (docs/guides, docs/GUIDES.md) to the GitHub
+# wiki at every release, each page stamped with the release it reflects.
+# The wiki is generated: edits made there are overwritten.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish the guides
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      - name: Build the wiki pages
+        run: |
+          version="${TAG#v}"
+          python3 tools/guides.py wiki "$RUNNER_TEMP/pages" ${version:+--version "$version"}
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" "$RUNNER_TEMP/wiki"
+          cd "$RUNNER_TEMP/wiki"
+          git rm -q --ignore-unmatch -- '*.md'
+          cp "$RUNNER_TEMP"/pages/*.md .
+          git add -A
+          if git diff --cached --quiet; then echo "Wiki already current."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "Guides for ${TAG:-$(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)}"
+          git push -q

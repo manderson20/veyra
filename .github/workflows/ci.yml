@@ -99,6 +99,20 @@ jobs:
       - name: Build
         run: npm run build
 
+  guides:
+    name: Help guides
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Guides are valid and the built copy is current
+        run: python3 tools/guides.py build --check
+      - name: Every guide was reviewed after the features it covers changed
+        run: python3 tools/guides.py stale
+      - name: Pages without a guide (information)
+        run: python3 tools/guides.py coverage
+
   installer:
     name: Installer scripts
     runs-on: ubuntu-24.04

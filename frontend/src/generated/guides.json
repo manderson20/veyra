@@ -1,0 +1,136 @@
+{
+ "sections": [
+  "Getting started",
+  "Phones and devices",
+  "Calls and call flows",
+  "Paging and bells",
+  "Voicemail and fax",
+  "Sign-in and security",
+  "Companion extension",
+  "Maintenance",
+  "Using Veyra"
+ ],
+ "wiki": "https://github.com/manderson20/veyra/wiki",
+ "guides": [
+  {
+   "slug": "single-sign-on",
+   "title": "Set up single sign-on",
+   "summary": "Let people sign in to Veyra with their Google Workspace, Microsoft 365 or other work account.",
+   "audience": "admin",
+   "section": "Sign-in and security",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/sign-in/"
+   ],
+   "headings": [
+    {
+     "id": "before-you-start",
+     "title": "Before you start"
+    },
+    {
+     "id": "1-choose-the-provider",
+     "title": "1. Choose the provider"
+    },
+    {
+     "id": "2-register-veyra-with-the-provider",
+     "title": "2. Register Veyra with the provider"
+    },
+    {
+     "id": "3-enter-the-credentials",
+     "title": "3. Enter the credentials"
+    },
+    {
+     "id": "4-choose-who-can-sign-in",
+     "title": "4. Choose who can sign in"
+    },
+    {
+     "id": "5-test-and-turn-on",
+     "title": "5. Test and turn on"
+    },
+    {
+     "id": "good-to-know",
+     "title": "Good to know"
+    }
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Set-up-single-sign-on",
+   "html": "<p>With single sign-on, people sign in to Veyra, and to the <a href=\"/help/companion-for-users/\">Companion extension</a>, with the account their school or company already gives them. There is no separate Veyra password to remember. Veyra checks the provider's signature on every sign-in and keeps no access to the account.</p>\n<p>Veyra works with <strong>Google Workspace</strong>, <strong>Microsoft Entra ID</strong> (Microsoft 365) and any other <strong>OpenID Connect</strong> provider, such as Okta, Keycloak or Authentik.</p>\n<p>Open <a href=\"/system/sign-in/\">System → Sign-in</a> and choose <strong>Set up a provider</strong>. The guided setup has five steps.</p>\n<h2 id=\"before-you-start\">Before you start</h2>\n<ul><li>You need to be an administrator in Veyra who can manage sign-in.</li><li>You need administrator access to your provider: a Google Workspace super administrator, or a Microsoft Entra Application Administrator.</li><li>Keep the Veyra setup open in one tab and the provider's console in another.</li></ul>\n<h2 id=\"1-choose-the-provider\">1. Choose the provider</h2>\n<p>Pick the kind of account people already have.</p>\n<h2 id=\"2-register-veyra-with-the-provider\">2. Register Veyra with the provider</h2>\n<p>The guide shows the exact steps for your provider, with links into its console. It also shows the <strong>redirect address</strong> to copy, which is unique to this server.</p>\n<ul><li><strong>Google:</strong> in the Google Cloud console, create an <strong>Internal</strong> app and a <strong>Web application</strong> OAuth client. Paste the redirect address under <em>Authorized redirect URIs</em>. Copy the client ID and the client secret right away, because Google shows the secret only once.</li><li><strong>Microsoft:</strong> in the Entra admin center, create a <strong>single-tenant</strong> app registration. Paste the redirect address as a <strong>Web</strong> redirect URI. Note the <strong>Application (client) ID</strong> and the <strong>Directory (tenant) ID</strong>, then create a client secret and copy its <strong>Value</strong>, not its <em>Secret ID</em>.</li></ul>\n<div class=\"help-note help-note--important\">Microsoft client secrets expire after at most 24 months. Put a reminder in your calendar to create a new one and enter it in Veyra (<strong>Edit</strong> on the Sign-in page) before it runs out. Otherwise single sign-on stops working.</div>\n<h2 id=\"3-enter-the-credentials\">3. Enter the credentials</h2>\n<p>Paste the client ID and secret (and, for Microsoft, the tenant ID). Then fill in:</p>\n<ul><li><strong>Allowed e-mail domains:</strong> only accounts with these addresses can sign in, for example <code>example.org</code>. Personal Gmail and Outlook accounts are always refused.</li><li><strong>Button name:</strong> the text people see, as in <em>Sign in with Google</em>.</li></ul>\n<p>The secret is stored encrypted and is never shown again.</p>\n<h2 id=\"4-choose-who-can-sign-in\">4. Choose who can sign in</h2>\n<p>People who already have a Veyra account with the same e-mail address are linked to it the first time they sign in.</p>\n<ul><li><strong>Create accounts on first sign-in</strong> off: only people who already have a Veyra account can sign in.</li><li>On: anyone in the allowed domains gets an account the first time, with the role you choose (usually <em>Standard user</em>, which gives access to their own phone and voicemail).</li></ul>\n<p><strong>Save and test</strong> saves the provider turned <strong>off</strong>, so nobody sees its button yet.</p>\n<h2 id=\"5-test-and-turn-on\">5. Test and turn on</h2>\n<ol><li>Veyra first checks that it can reach the provider.</li><li>Choose <strong>Test sign-in</strong> and sign in with a real account, exactly as people will. Veyra shows which account the sign-in would use, or why it would be refused, with a hint for the usual mistakes (wrong secret, redirect address, domain). The test signs no one in and changes nothing.</li><li>When the test works, choose <strong>Turn on the sign-in button</strong>. The button now appears on the Veyra sign-in page.</li></ol>\n<p>You can test again at any time with <strong>Test</strong> on the provider's row.</p>\n<h2 id=\"good-to-know\">Good to know</h2>\n<ul><li>The <strong>recovery administrator</strong> created at installation always signs in with a password, so you can never be locked out by a provider problem.</li><li>To let the Companion sign in by itself on managed Chromebooks, see <a href=\"/help/companion-rollout/\">Roll out the Companion extension</a>.</li></ul>"
+  },
+  {
+   "slug": "companion-rollout",
+   "title": "Roll out the Companion extension",
+   "summary": "Put the Veyra Companion in people's Chrome or Edge browsers by policy, with the server address filled in.",
+   "audience": "admin",
+   "section": "Companion extension",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/system/companion/"
+   ],
+   "headings": [
+    {
+     "id": "before-you-start",
+     "title": "Before you start"
+    },
+    {
+     "id": "1-choose-where-the-browsers-are-managed",
+     "title": "1. Choose where the browsers are managed"
+    },
+    {
+     "id": "2-make-the-browsers-trust-this-server",
+     "title": "2. Make the browsers trust this server"
+    },
+    {
+     "id": "3-choose-how-people-sign-in",
+     "title": "3. Choose how people sign in"
+    },
+    {
+     "id": "4-push-the-extension",
+     "title": "4. Push the extension"
+    },
+    {
+     "id": "5-check-that-it-worked",
+     "title": "5. Check that it worked"
+    }
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Roll-out-the-Companion-extension",
+   "html": "<p>The Veyra Companion is a browser extension for Chrome and Edge. People use it to call any number from their desk phone with one click, look people up, see who is calling and listen to voicemail. See <a href=\"/help/companion-for-users/\">Use the Companion extension</a> for what it does for them.</p>\n<p>This guide is for the administrator who installs it for everyone. The same steps are in Veyra at <a href=\"/system/companion/\">System → Companion rollout</a>, with this server's values filled in and buttons to copy them.</p>\n<h2 id=\"before-you-start\">Before you start</h2>\n<ul><li>You need to be a platform administrator in Veyra.</li><li>You need administrator access to whatever manages the browsers: the Google Admin console, Group Policy, or Intune.</li><li>Try everything on one test computer or Chromebook first, in a test group or organizational unit.</li></ul>\n<h2 id=\"1-choose-where-the-browsers-are-managed\">1. Choose where the browsers are managed</h2>\n<table><thead><tr><th>Option</th><th>Use it for</th></tr></thead><tbody><tr><td><strong>Google Admin console</strong></td><td>Chromebooks, and Chrome on Windows or Mac enrolled in Chrome Browser Cloud Management</td></tr><tr><td><strong>Windows: Group Policy or Intune</strong></td><td>Chrome and Edge on computers joined to Active Directory, or joined to Microsoft Entra and managed by Intune</td></tr><tr><td><strong>People install it themselves</strong></td><td>Browsers nobody manages</td></tr></tbody></table>\n<p>If you have several kinds of computers, go through the guide once for each.</p>\n<div class=\"help-note help-note--important\">Chrome and Edge install extensions from outside their stores only on managed computers. On a computer nobody manages, the browser ignores the policy and the person has to load the extension by hand.</div>\n<h2 id=\"2-make-the-browsers-trust-this-server\">2. Make the browsers trust this server</h2>\n<p>The extension talks to Veyra over HTTPS. Unlike a person, it cannot click past a certificate warning.</p>\n<ul><li><strong>If Veyra has a public certificate</strong> for the address people use (for example from Let's Encrypt, under <a href=\"/settings/\">Settings → HTTPS certificate</a>), every browser already trusts it. The guide in Veyra says <em>Nothing to do</em> and you can go on.</li><li><strong>Otherwise</strong> Veyra uses a certificate signed by its own certificate authority. Download the <strong>Veyra CA certificate</strong> from the guide and push it to the browsers first:<ul><li><strong>Google Admin console:</strong> Devices → Networks → Certificates → <strong>Add certificate</strong>. Upload <code>veyra-ca.crt</code> and tick <strong>Chromebook</strong> and <strong>Chrome browser</strong> under <em>Certificate authority</em>.</li><li><strong>Group Policy:</strong> Computer Configuration → Policies → Windows Settings → Security Settings → Public Key Policies → <strong>Trusted Root Certification Authorities</strong> → Import.</li><li><strong>Intune:</strong> Devices → Configuration → Create → Windows 10 and later → Templates → <strong>Trusted certificate</strong>. Use the destination store <em>Computer certificate store - Root</em>.</li></ul></li></ul>\n<p>To check, open the Veyra address on the test computer. There should be no warning.</p>\n<div class=\"help-note help-note--tip\">A public certificate is often easier than pushing the Veyra CA. Nothing has to be installed on any computer, and phones keep using the Veyra CA as before.</div>\n<h2 id=\"3-choose-how-people-sign-in\">3. Choose how people sign in</h2>\n<ul><li><strong>E-mail and password:</strong> people sign in with their Veyra account and their second factor if they have one.</li><li><strong>Single sign-on:</strong> if you have set up <a href=\"/help/single-sign-on/\">single sign-on</a>, choose the provider. The extension then shows a <em>Sign in with Google</em> (or Microsoft) button. On managed Chromebooks it signs in by itself, once Veyra's OAuth client is marked <strong>Trusted</strong> in the Google Admin console (Security → Access and data control → API controls → Manage third-party app access).</li></ul>\n<h2 id=\"4-push-the-extension\">4. Push the extension</h2>\n<p>The guide shows three values: the <strong>extension ID</strong>, the <strong>update URL</strong>, and the <strong>install line</strong> (the two joined with a semicolon).</p>\n<p><strong>Google Admin console</strong></p>\n<ol><li>Devices → Chrome → Apps &amp; extensions → <strong>Users &amp; browsers</strong>, and pick the organizational unit.</li><li>The yellow <strong>+</strong> button → <strong>Add Chrome app or extension by ID</strong> → <strong>From a custom URL</strong>. Paste the extension ID and the update URL.</li><li>Set <strong>Installation policy</strong> to <strong>Force install + pin to browser toolbar</strong>.</li><li>Under <strong>Policy for extensions</strong>, paste the policy the guide shows, for example <code>{&quot;serverUrl&quot;: &quot;https://pbx.example.org&quot;}</code>. People then only sign in.</li><li><strong>Save.</strong></li></ol>\n<p><strong>Group Policy</strong> (after the Chrome and Edge administrative templates are installed)</p>\n<ol><li>Chrome: Computer Configuration → Policies → Administrative Templates → Google → Google Chrome → Extensions → <strong>Configure the list of force-installed apps and extensions</strong>. Add the install line.</li><li>Edge: … → Microsoft Edge → Extensions → <strong>Control which extensions are installed silently</strong>. Add the same install line.</li><li>To fill in the server address, add the values from the guide's <strong>registry file</strong> under Preferences → Windows Settings → Registry.</li></ol>\n<p><strong>Intune</strong></p>\n<ol><li>Devices → Configuration → Create → Windows 10 and later → <strong>Settings catalog</strong>.</li><li>Add Edge's <em>Control which extensions are installed silently</em> and Chrome's <em>Configure the list of force-installed apps and extensions</em>, each with the install line.</li><li>To fill in the server address, deploy the guide's registry file with a script.</li></ol>\n<p><strong>People install it themselves:</strong> send them <a href=\"/help/companion-for-users/\">Use the Companion extension</a>. It has the steps for loading the extension by hand from their account page.</p>\n<p>Every Veyra update re-signs the extension with the same key. The ID stays the same, and pushed browsers fetch new versions by themselves.</p>\n<h2 id=\"5-check-that-it-worked\">5. Check that it worked</h2>\n<p>The last step of the guide counts the people signed in to the Companion and shows each recent sign-in with its device. Choose <strong>Check again</strong> after signing in on the test computer.</p>\n<p>If nobody shows up:</p>\n<ol><li>On the test computer, open <code>chrome://policy</code> (Edge: <code>edge://policy</code>) and choose <strong>Reload policies</strong>. Look for <strong>ExtensionInstallForcelist</strong>. If it is missing, the policy has not reached the browser yet. Check the group or organizational unit.</li><li>Open <code>chrome://extensions</code>. The Veyra Companion should be listed as <em>installed by your administrator</em>. If the policy is there but the extension is not, the browser could not download it. Check step 2 (the certificate), and check that the computer can reach the Veyra address.</li><li>Click the Veyra icon and sign in.</li></ol>"
+  },
+  {
+   "slug": "companion-for-users",
+   "title": "Use the Companion extension",
+   "summary": "Call from your browser, see who is calling, look people up and listen to voicemail with the Veyra Companion.",
+   "audience": "user",
+   "section": "Companion extension",
+   "reviewed": "0.27.44",
+   "reviewed_date": null,
+   "pages": [
+    "/account/"
+   ],
+   "headings": [
+    {
+     "id": "getting-it",
+     "title": "Getting it"
+    },
+    {
+     "id": "signing-in",
+     "title": "Signing in"
+    },
+    {
+     "id": "making-a-call",
+     "title": "Making a call"
+    },
+    {
+     "id": "settings",
+     "title": "Settings"
+    },
+    {
+     "id": "if-something-doesn-t-work",
+     "title": "If something doesn't work"
+    }
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Use-the-Companion-extension",
+   "html": "<p>The Veyra Companion is a small extension for Chrome and Edge. It puts your phone next to your browser:</p>\n<ul><li><strong>Call any number with one click.</strong> Your desk phone rings first. Pick it up, and Veyra then places the call.</li><li><strong>See who is calling</strong>, in a notification, with <strong>Call back</strong> for missed calls.</li><li><strong>Look people up</strong> in the directory and call them.</li><li><strong>Listen to voicemail</strong> and see your recent calls.</li><li><strong>Call a number you see on a web page.</strong> Select it, right-click, and choose <em>Call … with Veyra</em>.</li></ul>\n<h2 id=\"getting-it\">Getting it</h2>\n<p>Your school or company may already have installed it for you. Look for the Veyra icon in the browser toolbar, or in the puzzle-piece menu. If it is there, skip to <em>Signing in</em>.</p>\n<p>If it is not there:</p>\n<ol><li>In Veyra, open <a href=\"/account/\">your account</a> and find <strong>Connected apps → Get the Veyra Companion extension</strong>.</li><li>Try <strong>Add to Chrome</strong> first. If the browser refuses, download <strong>veyra-companion.zip</strong> and unzip it into a folder you keep. Don't delete the folder afterwards: the browser loads the extension from it.</li><li>Type <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>) in the address bar. Turn on <strong>Developer mode</strong> (top right), choose <strong>Load unpacked</strong> (top left) and pick the unzipped folder.</li><li>Pin the Veyra icon from the puzzle-piece menu so it is always visible.</li></ol>\n<div class=\"help-note help-note--note\">An extension installed this way does not update itself. When your administrator tells you there is a new version, download the zip again and replace the folder's contents.</div>\n<h2 id=\"signing-in\">Signing in</h2>\n<ol><li>Click the Veyra icon.</li><li>If the server address is not filled in already, enter the address you use for Veyra, for example <code>https://pbx.example.org</code>.</li><li>Sign in with your Veyra e-mail and password and your authenticator code. If there is a <strong>Sign in with Google</strong> (or Microsoft) button, use that instead.</li></ol>\n<p>The Companion stays signed in while you use it, and signs out after 30 days without use. Every browser you sign in from is listed on <a href=\"/account/\">your account</a> under <strong>Connected apps</strong>. You can sign it out from there, for example if you lose a laptop.</p>\n<h2 id=\"making-a-call\">Making a call</h2>\n<ul><li>Type a number in the Companion and choose <strong>Call</strong>, or pick someone from your favourites, the directory or your recent calls.</li><li>Your desk phone rings. Pick it up and the call goes out. Outside numbers get the outside-line prefix automatically.</li><li>If you have more than one extension, choose which phone should ring.</li></ul>\n<h2 id=\"settings\">Settings</h2>\n<p>Right-click the Veyra icon and choose <strong>Options</strong> for:</p>\n<ul><li>the outside-line prefix,</li><li>which notifications you get,</li><li><strong>Handle phone links</strong>, so clicking a <code>tel:</code> link on a web page calls through Veyra instead of opening another app,</li><li>your speed dials.</li></ul>\n<p>Settings are saved to your Veyra account, so they follow you to another computer.</p>\n<h2 id=\"if-something-doesn-t-work\">If something doesn't work</h2>\n<ul><li><strong>\"Cannot reach the server\" or a certificate error:</strong> the computer does not trust the Veyra server's certificate. Ask your administrator. They can fix it for everyone.</li><li><strong>The phone does not ring:</strong> check on <a href=\"/my-phone/\">My Phone</a> that the phone is registered and that Do Not Disturb is off.</li></ul>"
+  }
+ ]
+}

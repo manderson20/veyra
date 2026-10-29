@@ -16,6 +16,7 @@ import { useSession } from "@/hooks/useSession";
 import { ApplyChanges } from "./ApplyChanges";
 import { UpdateAvailable } from "./UpdateAvailable";
 import { GlobalSearch } from "./GlobalSearch";
+import { HelpButton } from "./HelpButton";
 import { CentralNotice } from "./CentralNotice";
 import { StandbyBanner } from "./StandbyBanner";
 import { MfaNag } from "./MfaNag";
@@ -99,6 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="topbar__spacer" />
           <UpdateAvailable />
           <ApplyChanges />
+          <HelpButton />
           <ThemeToggle />
           <UserMenu />
         </header>

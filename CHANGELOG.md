@@ -15,6 +15,10 @@ No migration.
 ### Added
 - **Companion rollout guide**: System → **Companion rollout** walks through putting the Companion extension in people's browsers in five steps — where the browsers are managed (Google Admin console, Windows Group Policy or Intune for Chrome and Edge, or people install it themselves); making the browsers trust the server (nothing to do with a public certificate, otherwise how to push the Veyra CA certificate, with the download); how people sign in (password or single sign-on, with silent sign-in on managed Chromebooks); pushing the extension (the values to copy, exact console steps, and a registry file for Chrome and Edge on Windows); and a check that shows who has signed in to the Companion and from which device, with what to look at when nobody has.
 
+- **Help built into Veyra**: a **Help** link in the top bar opens the guide for the page you are on (**How do I…?**), or the list of guides, with search. Each guide says which Veyra release it was last reviewed for. Administrators see the setup guides; everyone sees the guides for users. First guides: setting up single sign-on, rolling out the Companion extension, and using the Companion.
+- **Guides on the GitHub wiki**: the same guides are published to the project wiki at every release, each page stamped with the release it reflects and its date.
+- **Guides kept current**: each guide names the parts of Veyra it describes; when one of them changes, the guide must be reviewed before the next release (docs/GUIDES.md).
+
 ### Changed
 - Settings → **Companion extension deployment** is now a short summary with a button to the rollout guide.
 
