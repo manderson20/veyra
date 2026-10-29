@@ -1,0 +1,19 @@
+spec_version = 2
+features = ["multi_line", "hotline", "voicemail_mwi", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "fax"]
+
+[template]
+key = "grandstream.ht81x"
+name = "Grandstream HT812 / HT814 / HT818"
+version = "0.1.0"
+manufacturer = "Grandstream"
+models = ["HT812", "HT814", "HT818", "HT812V2", "HT814V2", "HT818V2"]
+parent = "grandstream.ata"
+parent_version = "0.1.0"
+firmware = "HT81x/HT818 1.0.65.3 or HT81x v2 1.0.15.2 and later"
+status = "experimental"
+description = "Grandstream HT812 (two FXS ports), HT814 (four) and HT818 (eight), first and second generation: the ports share SIP profile 1 (profile 2 carries the fax machine (T.38) ports), each with its own credentials, line n on port n. Not yet verified on hardware."
+
+[[files]]
+name = "cfg{mac}.xml"
+source = "cfg.xml.j2"
+format = "xml"

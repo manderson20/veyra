@@ -47,6 +47,9 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # Intercom (docs/CALL_FEATURES.md §3.6): may other phones make this one
     # answer on speaker? default | allow | deny; default = the organization's.
     intercom: Mapped[str] = mapped_column(String(8), default="default", server_default="default")
+    # A fax machine on an ATA port (docs/PROVISIONING_BREADTH.md §4.4): offer
+    # T.38 to it, so fax relays end to end with a T.38 trunk.
+    fax_t38: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Class of service (docs/CALL_FEATURES.md §3.8); none: everything allowed.
     class_of_service_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("classes_of_service.id", ondelete="SET NULL", use_alter=True)

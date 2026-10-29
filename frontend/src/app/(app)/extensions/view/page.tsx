@@ -67,6 +67,7 @@ function ExtensionView() {
   const [outCidNumber, setOutCidNumber] = useState("");
   const [outCidName, setOutCidName] = useState("");
   const [intercom, setIntercom] = useState("default");
+  const [faxT38, setFaxT38] = useState(false);
   const [cos, setCos] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [maxReg, setMaxReg] = useState("");
@@ -101,6 +102,7 @@ function ExtensionView() {
       setOutCidNumber(x.outbound_caller_id_number ?? "");
       setOutCidName(x.outbound_caller_id_name ?? "");
       setIntercom(x.intercom ?? "default");
+      setFaxT38(x.fax_t38 ?? false);
       setCos(x.class_of_service_id ?? "");
       setTemplateId(x.template_id ?? "");
       setMaxReg(x.max_registrations ? String(x.max_registrations) : "");
@@ -115,7 +117,7 @@ function ExtensionView() {
   if (ext.error) return <ErrorState title="Could not load extension" error={ext.error} onRetry={ext.reload} />;
   if (!ext.data) return <LoadingState />;
   const x = ext.data;
-  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || cos !== (x.class_of_service_id ?? "") || templateId !== (x.template_id ?? "") || maxReg !== (x.max_registrations ? String(x.max_registrations) : "") || hotline !== (x.hotline_target ?? "") || hotlineDelay !== String(x.hotline_delay ?? 0) || enabled !== x.is_enabled || !samePlace(place, placeOf(x));
+  const dirty = number !== x.number || name !== x.display_name || userId !== (x.user_id ?? "") || cidName !== (x.caller_id_name ?? "") || cidNumber !== (x.caller_id_number ?? "") || emergencyCid !== (x.emergency_caller_id_number ?? "") || outCidNumber !== (x.outbound_caller_id_number ?? "") || outCidName !== (x.outbound_caller_id_name ?? "") || intercom !== (x.intercom ?? "default") || faxT38 !== (x.fax_t38 ?? false) || cos !== (x.class_of_service_id ?? "") || templateId !== (x.template_id ?? "") || maxReg !== (x.max_registrations ? String(x.max_registrations) : "") || hotline !== (x.hotline_target ?? "") || hotlineDelay !== String(x.hotline_delay ?? 0) || enabled !== x.is_enabled || !samePlace(place, placeOf(x));
   const orgUsers = (users.data?.items ?? []).filter((u) => u.home_organization_id === x.organization_id && (u.is_active || u.id === x.user_id));
 
   const save = async (e: FormEvent) => {
@@ -134,6 +136,7 @@ function ExtensionView() {
         outbound_caller_id_number: outCidNumber.trim() || null,
         outbound_caller_id_name: outCidName.trim() || null,
         intercom,
+        fax_t38: faxT38,
         class_of_service_id: cos || null,
         ...(templateId !== (x.template_id ?? "") ? { template_id: templateId || null } : {}),
         max_registrations: maxReg.trim() ? Number(maxReg) : null,
@@ -323,10 +326,12 @@ function ExtensionView() {
                 onChange={(e) => setMaxReg(e.target.value.replace(/\D/g, "").slice(0, 2))} />
               <div className="form-grid">
                 <TextField label="Hotline number" inputMode="tel" disabled={!editable} value={hotline} error={errors.fields.hotline_target} placeholder="None"
-                  help="Lifting the handset dials this number: elevator, lobby, vestibule and emergency phones. Reaches provisioned Poly and Yealink phones at their next check-in." onChange={(e) => setHotline(e.target.value)} />
+                  help="Lifting the handset dials this number: elevator, lobby, vestibule and emergency phones. Reaches provisioned phones and ATAs at their next check-in." onChange={(e) => setHotline(e.target.value)} />
                 <TextField label="Warm-line delay (seconds)" type="number" min={0} max={10} disabled={!editable || !hotline.trim()} value={hotlineDelay} error={errors.fields.hotline_delay}
-                  help="0: dials at once. Otherwise the phone waits this long for a digit first (Yealink; Poly dials at once)." onChange={(e) => setHotlineDelay(e.target.value)} />
+                  help="0: dials at once. Otherwise the phone waits this long for a digit first (Yealink, Grandstream; Poly dials at once)." onChange={(e) => setHotlineDelay(e.target.value)} />
               </div>
+              <Switch label="Fax machine (T.38)" disabled={!editable} checked={faxT38} onChange={(e) => setFaxT38(e.target.checked)}
+                description="For a fax machine on an ATA port: Veyra offers T.38 to it, so faxes relay end to end over a trunk with T.38 on. Off: the fax travels as audio (G.711), which works with any trunk. Set the ATA's fax mode to match. Needs a deployment." />
               {saveBar}
             </form>
           </Card>

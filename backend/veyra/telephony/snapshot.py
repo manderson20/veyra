@@ -493,6 +493,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 or (site_ecid.get(e.site_id) if e.site_id else None),
                 "outbound_caller_id_number": e.outbound_caller_id_number,
                 "outbound_caller_id_name": e.outbound_caller_id_name,
+                "fax_t38": e.fax_t38,
                 # Ring time (docs/CALL_FEATURES.md §3.3); None: the box's or the default.
                 "ring_seconds": ring_seconds.get(e.id),
                 "follow_me": follow_me.get(e.id),

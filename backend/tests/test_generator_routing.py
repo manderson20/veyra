@@ -266,6 +266,14 @@ def test_extension_emergency_caller_id_is_an_endpoint_variable():
         generator.generate(snap)
 
 
+def test_fax_extension_offers_t38():
+    snap = _snapshot()
+    snap["extensions"][0]["fax_t38"] = True
+    content = _files(snap)["pjsip.endpoints.conf"].content
+    assert "t38_udptl=yes" in content and "t38_udptl_ec=redundancy" in content
+    assert "t38_udptl" not in _files(_snapshot())["pjsip.endpoints.conf"].content
+
+
 def test_outbound_route_without_usable_trunks_fails_cleanly():
     files = _files(_snapshot(outbound_routes=[_route(trunks=["missing"])]))
     ctx = _section(files["extensions.conf"].content, "veyra-out-local")

@@ -206,6 +206,8 @@ def _line(
         # in seconds makes it a warm line (0: at once).
         "hotline": ext.hotline_target or None,
         "hotline_delay": int(ext.hotline_delay or 0),
+        # A fax machine on an ATA port: the ATA uses T.38 (PROVISIONING_BREADTH.md §4.4).
+        "fax_t38": bool(ext.fax_t38),
     }
 
 
@@ -773,6 +775,9 @@ def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]
         "label": str(values.get("display_name") or "Sample Phone"),
         "voicemail": True,
         "voicemail_number": VOICEMAIL_NUMBER,
+        "hotline": None,
+        "hotline_delay": 0,
+        "fax_t38": False,
     }
     host = str(values.get("sip_server") or "pbx.example.invalid")
     return {

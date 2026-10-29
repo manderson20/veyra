@@ -10,14 +10,17 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased — 0.27.43
 
-Migration 0070 (a column for test sign-in results).
+Migration 0070 (a column for test sign-in results, and the extension's fax machine setting).
 
 ### Added
 - **Guided single sign-on setup** (#335): System → Sign-in → **Set up a provider** walks through connecting Google Workspace, Microsoft Entra ID or another OpenID Connect provider in five steps — choose the provider, register Veyra in its console (exact steps for each, with links, the redirect address to copy, and for Microsoft where to find the tenant ID and the secret's *Value*), enter the credentials, choose who can sign in, then test and turn on. The provider is saved turned off, so people only see its button once you turn it on.
 - **Test sign-in**: from the last step (or **Test** on a provider's row) you sign in through the provider exactly as people will, and Veyra shows which account it would use — already linked, linked by e-mail on first use, or created with its role — or why it would be refused, with a hint for the usual mistakes (wrong secret, redirect address, domain, no account). It signs no one in and changes nothing, and works before the provider is turned on.
+- **Grandstream ATAs** (#37): official templates for the HT801 and HT802 (`grandstream.ht80x`) and the HT812, HT814 and HT818 (`grandstream.ht81x`), first and second generation: one extension per analog port (line 1 on port 1), voicemail indication (stutter tone and lamp), hotline and warm line for door, elevator and emergency phones, time and daylight saving, VLAN, firmware, the daily provisioning check with the device credential and the Veyra CA. The ATA's own star codes are turned off so *69, *72, *78 and the other feature codes reach Veyra. Experimental until checked on hardware.
+- **Fax machines on ATAs** (#37): an extension's new **Fax machine (T.38)** switch (extension page, Phones tab) offers T.38 to it, so a fax relays end to end over a trunk with T.38 on; the ATA template puts that port in T.38 and every other port in G.711 pass-through, which works with any trunk. The `fax_mode` template variable can force one mode for every port. Needs a deployment.
 
 ### Changed
 - The Sign-in page's **Add provider** button is now **Set up a provider**; the setup notes card moved into the guided setup. Edit still opens the dialog.
+- The hotline help on the extension page now says it reaches every provisioned phone and ATA, not only Poly and Yealink.
 
 ## 0.27.42 — 2026-10-29
 

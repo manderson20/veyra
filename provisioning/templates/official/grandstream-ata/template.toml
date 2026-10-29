@@ -1,0 +1,82 @@
+spec_version = 2
+features = ["multi_line", "hotline", "voicemail_mwi", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "fax"]
+
+[template]
+key = "grandstream.ata"
+name = "Grandstream ATA (common settings)"
+version = "0.1.0"
+manufacturer = "Grandstream"
+abstract = true
+firmware = "HT80x 1.0.65.3, HT80x v2 1.0.15.2, HT81x/HT818 1.0.65.3, HT81x v2 1.0.15.2 and later"
+status = "experimental"
+description = """
+Shared configuration for Grandstream HT80x and HT81x analog telephone
+adapters, as P-value XML (cfg{mac}.xml): one extension per FXS port, in the
+order of the device's lines (port 1 = line 1). Each port's fax mode follows
+its extension: a fax machine (T.38) extension gets T.38, every other port
+G.711 pass-through, unless fax_mode forces one. The ATA's own star codes
+are off, so *69, *72, *78 and the other codes reach Veyra. Voicemail
+indication (stutter tone and visual MWI), hotline, time and DST as a POSIX
+rule, VLAN, firmware, the daily provisioning check with the device
+credential and the Veyra CA. P-values from Grandstream's configuration
+templates (docs/PROVISIONING_BREADTH.md §4.4). Not yet verified on
+hardware."""
+
+[[files]]
+name = "cfg{mac}.xml"
+source = "cfg.xml.j2"
+format = "xml"
+
+[[variables]]
+name = "sip_transport"
+description = "SIP transport for the registrations (same values as the Poly, Yealink and Grandstream phone families)"
+default = "UDPOnly"
+pattern = "^(UDPOnly|TCPOnly|TLS|DNSnaptr)$"
+
+[[variables]]
+name = "registration_expires"
+type = "integer"
+description = "Registration interval in seconds (Grandstream counts minutes; rounded down, at least one)"
+default = 300
+
+[[variables]]
+name = "fax_mode"
+description = "auto: T.38 on ports whose extension is a fax machine (T.38), pass-through elsewhere; passthrough: G.711 on every port; t38: T.38 on every port"
+default = "auto"
+pattern = "^(auto|passthrough|t38)$"
+
+[[variables]]
+name = "local_call_features"
+type = "boolean"
+description = "Let the ATA answer its own star codes (*69, *72, *78…) instead of sending them to Veyra"
+default = false
+
+[[variables]]
+name = "admin_password"
+description = "Web administrator password (blank keeps the one on the sticker)"
+sensitive = true
+max_length = 30
+
+[[variables]]
+name = "polling_hour"
+type = "integer"
+description = "Hour (0-23) at which the ATA checks for new configuration every day"
+default = 3
+
+[[variables]]
+name = "install_ca"
+type = "boolean"
+description = "Install the Veyra CA as a trusted certificate (needed before validating the server certificate)"
+default = true
+
+[[variables]]
+name = "validate_server_certificate"
+type = "boolean"
+description = "Refuse a provisioning server whose certificate the ATA does not trust (turn on once the CA is installed)"
+default = false
+
+[[variables]]
+name = "dhcp_override"
+type = "boolean"
+description = "Let DHCP options 43/66/160 replace the provisioning server set here (off keeps the ATA on Veyra over HTTPS)"
+default = false

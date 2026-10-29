@@ -174,7 +174,7 @@ DEVICE_PROVISIONING.md), the same key list. Families and their files:
 |---|---|---|---|
 | `yealink.t4x.base` | T43U, T46U, T48U, T53, T54W, T57W, T31P/T33G (T3x) | `y000000000000.cfg` (common) is **not** used; per MAC `{mac}.cfg` with `account.N.*`, `linekey.N.*`, `features.*`, `local_time.*`, `auto_provision.*`, `multicast.*` | key types via `linekey.N.type` (13 speed dial, 16 BLF, 10 park, 5 intercom, 27 DND…); phonebook remote URL (§5) |
 | `grandstream.grp.base` | GRP2612/13/14/15/16, GXP2130/2135/2140/2160/2170 | `cfg{mac}.xml` (P-values) | keys as `P323`-style per-key mode/value; multicast paging listen addresses `P2900`…; LDAP/phonebook XML |
-| `grandstream.ht8xx` (ATA) | HT801, HT802, HT812, HT814 | `cfg{mac}.xml` | fax pass-through guidance: G.711, no VAD, jitter buffer fixed, T.38 on when the trunk has `fax_t38` (USER_PORTAL.md §9); `fax_mode` variable |
+| `grandstream.ata` (ATA, built: §4.4) | HT801, HT802, HT812, HT814, HT818 (and v2) | `cfg{mac}.xml` | one extension per port; fax pass-through (G.711, no VAD) or T.38 per port from the extension; `fax_mode` variable |
 | `algo.8xxx` | 8180 G2, 8186, 8188, 8301 | `algop{mac}.conf` key=value | SIP account for the page extension, multicast listen (RTP or Poly group), ring/page tones, relay |
 | `cyberdata.speaker` | SIP speaker, paging adapter, outdoor horn | `{mac}.xml` autoprovision | SIP account, multicast listen, nightringer |
 | `poly.edge.base`, `poly.ccx.base` | Edge E220/E350/E450, CCX 400/500/600 | same UCS XML as VVX with model `model_settings` | Edge: `lineKey` counts, pages of keys; CCX: no paging groups (CCX lacks PTT), softkeys |
@@ -284,6 +284,53 @@ on. P-values come from Grandstream's own configuration templates
 `parse_user_agent` reads Grandstream's `… Model HW GRP2614 … SW 1.0.15.8 …`
 for the device's model and firmware. Unverified on hardware like the other
 families (§7).
+
+### 4.4 Grandstream ATAs and fax (issue #37)
+
+*Built 2026-10-29 (0.27.43).* `grandstream.ata` (abstract) with
+`grandstream.ht80x` (HT801, HT802 and their v2) and `grandstream.ht81x`
+(HT812, HT814, HT818 and their v2). One P-value XML file per ATA,
+`cfg{mac}.xml`, as for the phones (§4.3). P-values from Grandstream's
+configuration templates (HT80x 1.0.65.3, HT80x v2 1.0.15.2, HT81x and HT818
+1.0.65.3, HT81x v2 1.0.15.2); first and second generation share them.
+
+* **Ports.** Line *n* of the device is FXS port *n*; lines past the model's
+  ports (1, 2, 2, 4, 8) are skipped with a comment. On the HT80x each port
+  is its own account (port 1: P271, P47, P35/P36/P34, P3…; port 2: P401,
+  P747, P735/P736/P734, P703…). On the HT81x the ports share a SIP
+  *profile* (server, transport, codecs, fax) and carry their own
+  credentials (P4060+n user, P4090+n authentication ID, P4120+n password,
+  P4180+n name, P4150+n profile, P4595+n enabled, P4210+n off-hook auto
+  dial); ports without an extension are disabled.
+* **Fax.** Each port's fax mode follows its extension. An extension marked
+  **Fax machine (T.38)** (extension page, Phones tab; `fax_t38`) gets
+  `t38_udptl` on its PJSIP endpoint, and its port is set to T.38 (P228/P710
+  = 0); every other port is G.711 pass-through (= 1). The ATA re-INVITEs
+  when it hears the fax tone (P4416/P4417). On the HT81x the T.38 ports use
+  profile 2 and the rest profile 1, which is why the two profiles are
+  filled alike. `fax_mode` (`auto`, `passthrough`, `t38`) forces one mode
+  for every port. Codecs G.711 µ-law, A-law first, silence suppression off.
+  How a call goes: pass-through works with any trunk (Asterisk carries the
+  audio); T.38 relays end to end when the trunk has T.38 on (USER_PORTAL.md
+  §9), and falls back to audio when either side declines.
+* **Feature codes.** The ATA's own star codes (*Local Call Features*,
+  P191/P751) are off so every code reaches Veyra (`local_call_features`
+  turns them back on).
+* **Voicemail.** MWI subscription when the extension has a mailbox
+  (P99/P709) and visual MWI (P855/P869) for phones with a lamp; the analog
+  phone hears stutter dial tone.
+* **Door, elevator and emergency phones.** The extension's **Hotline
+  number** becomes the port's off-hook auto dial (P71/P771, HT81x P4210+n)
+  with the warm-line delay (P4045/P4046; on the HT81x one delay for the
+  profile, the first hotline port's). Give such an extension its site so
+  emergency calls carry the right location (TRUNKS_ROUTING.md §7), and a
+  class of service that allows only what the phone needs.
+* **Provisioning, time, trust.** As the phones (§4.3) except where the ATA
+  differs: daily check P22296 = 2 at `polling_hour` (P285); the Veyra CA as
+  trusted CA A (P2386, P8502 = 2); no phone book, keys, paging or intercom.
+
+Unverified on hardware like the other families (§7;
+PROVISIONING_HARDWARE_CHECKS.md has the ATA steps, fax included).
 
 ### 4.2 Hotline and warm-line phones (issue #168)
 

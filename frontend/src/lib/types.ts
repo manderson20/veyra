@@ -360,6 +360,8 @@ export interface Extension {
   dnd?: boolean;
   /** Intercom (CALL_FEATURES.md §3.6): may other phones make this one answer on speaker? */
   intercom?: "default" | "allow" | "deny" | string;
+  /** A fax machine on an ATA port: T.38 offered to it (PROVISIONING_BREADTH.md §4.4). */
+  fax_t38?: boolean;
   /** Class of service (CALL_FEATURES.md §3.8); null: everything allowed. */
   class_of_service_id?: string | null;
   class_of_service_name?: string | null;

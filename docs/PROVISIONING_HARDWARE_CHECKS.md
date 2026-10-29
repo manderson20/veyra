@@ -63,6 +63,31 @@ family's templates to `stable` in the next release.
 - The GXP's first keys are *line keys* with their own key codes: check a BLF
   and a speed dial placed on keys 1–3 work as well as on later keys.
 
+## Grandstream ATAs (HT801/HT802, HT812/HT814/HT818)
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | Point the ATA at Veyra (web interface → Maintenance → Upgrade and Provisioning, as for the phones below, or DHCP option 66) | Provisioning → Requests shows `cfg<mac>.xml` with `ok` |
+| 2 | After the reboot: Status page | Each port with an extension registered (HT81x: profile 1, and profile 2 when a port is a fax machine (T.38)); ports without an extension disabled |
+| 3 | Analog phone on port 1: call another extension, then dial `*97` | The call connects; voicemail answers (feature codes reach Veyra, not the ATA) |
+| 4 | Leave a voicemail for the port's extension | Stutter dial tone, and the lamp on a phone with visual MWI |
+| 5 | Extension with a hotline number: lift the handset | Dials the hotline after the warm-line delay |
+| 6 | Fax machine on a port whose extension is **not** a fax machine (T.38): send a fax to a fax number through the trunk, and receive one | Both arrive (G.711 pass-through); the port's fax mode is *Pass Through* |
+| 7 | Turn on **Fax machine (T.38)** on that extension, deploy, check-sync the ATA; with the trunk's T.38 on, send and receive a fax | Both arrive; `pjsip show channel` shows T.38 (udptl) on both legs |
+| 8 | Same with the trunk's T.38 off | Both still arrive (Asterisk declines T.38; the ATA stays on G.711) |
+
+### Grandstream ATA notes
+
+- The ATA's own star codes (*Local Call Features*) are off, so `*69`,
+  `*72`, `*78` and the rest go to Veyra; turn them back on with
+  `local_call_features` only if a site relies on the ATA's codes.
+- Fax lines: plug the fax machine straight into the ATA (no splitter), keep
+  ECM on in the fax machine, and check the result report. A failed G.711 fax
+  usually means jitter or packet loss on the path; T.38 end to end (step 7)
+  is the fix where the carrier supports it.
+- Line 3 and later on an HT802 (or lines past the HT812/HT814's ports) are
+  not configured; the file says so in a comment.
+
 ## Algo speakers, horns and adapters
 
 | # | Step | Expected |

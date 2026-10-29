@@ -785,6 +785,13 @@ def _endpoints(
         # puts on hold (docs/PAGING_RECORDINGS.md §3.2).
         moh_class = (org_moh or {}).get(org)
         moh = [f"moh_suggest={_check_section(moh_class, 'hold music class')}"] if moh_class else []
+        # A fax machine on an ATA port (docs/PROVISIONING_BREADTH.md §4.4):
+        # T.38 offered to it, audio (G.711) fax when it declines.
+        fax = (
+            ["t38_udptl=yes", "t38_udptl_ec=redundancy", "t38_udptl_nat=yes"]
+            if ext.get("fax_t38")
+            else []
+        )
         lines += [
             f"; {org} {number}",
             f"[{name}](veyra-endpoint)",
@@ -802,6 +809,7 @@ def _endpoints(
             *emergency_cid,
             *outbound_cid,
             *moh,
+            *fax,
             *mwi,
             *(["mwi_subscribe_replaces_unsolicited=yes"] if mwi else []),
             *pickup,

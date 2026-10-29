@@ -409,6 +409,13 @@ trunk: the organization's outbound routes decide, T.38 is a trunk flag
 (`fax_t38` → `t38_udptl=yes`). `faxdetect` on voice DIDs stays P2.
 Verify checks `fax-tools`, `fax-engine`, `fax-dir`.
 
+A physical fax machine on an ATA port is an ordinary extension, not this
+service: its calls go through the routes like voice calls. Marking the
+extension **Fax machine (T.38)** (`fax_t38` → `t38_udptl=yes` on its
+endpoint) lets T.38 run end to end with a T.38 trunk; otherwise the fax
+travels as G.711 audio. The Grandstream ATA template sets the port to match
+(PROVISIONING_BREADTH.md §4.4).
+
 ## 10. The portal canvas and templates (#78)
 
 Owner requirement (2026-10-18): users arrange, resize, add and hide the

@@ -142,6 +142,8 @@ class ExtensionIn(BaseModel):
     outbound_caller_id_name: str | None = Field(None, max_length=80)
     # Intercom (docs/CALL_FEATURES.md §3.6): default (the organization's), allow, deny.
     intercom: str = Field("default", pattern=r"^(default|allow|deny)$")
+    # A fax machine on an ATA port: T.38 offered to it (PROVISIONING_BREADTH.md §4.4).
+    fax_t38: bool = False
     # Class of service (docs/CALL_FEATURES.md §3.8); none: everything allowed.
     class_of_service_id: uuid.UUID | None = None
     # Phones that may register at once (docs/EXTENSIONS.md §1); None: as many
@@ -203,6 +205,7 @@ class ExtensionPatch(BaseModel):
     outbound_caller_id_number: str | None = Field(None, max_length=32)
     outbound_caller_id_name: str | None = Field(None, max_length=80)
     intercom: str | None = Field(None, pattern=r"^(default|allow|deny)$")
+    fax_t38: bool | None = None
     class_of_service_id: uuid.UUID | None = None
     # Phones that may register at once (docs/EXTENSIONS.md §1); None: as many
     # as are provisioned with the extension, at least one.
@@ -390,6 +393,7 @@ class ExtensionOut(BaseModel):
     outbound_caller_id_name: str | None = None
     # Intercom (docs/CALL_FEATURES.md §3.6): default | allow | deny.
     intercom: str = "default"
+    fax_t38: bool = False
     # Class of service (docs/CALL_FEATURES.md §3.8); none: everything allowed.
     class_of_service_id: uuid.UUID | None = None
     class_of_service_name: str | None = None
@@ -611,6 +615,7 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                 outbound_caller_id_number=r.outbound_caller_id_number,
                 outbound_caller_id_name=r.outbound_caller_id_name,
                 intercom=r.intercom,
+                fax_t38=r.fax_t38,
                 class_of_service_id=r.class_of_service_id,
                 class_of_service_name=(
                     classes.get(r.class_of_service_id) if r.class_of_service_id else None
@@ -889,6 +894,7 @@ def create_extension(
         outbound_caller_id_number=body.outbound_caller_id_number,
         outbound_caller_id_name=body.outbound_caller_id_name,
         intercom=body.intercom,
+        fax_t38=body.fax_t38,
         class_of_service_id=body.class_of_service_id,
         max_registrations=body.max_registrations,
         site_id=site_id,
@@ -1018,6 +1024,7 @@ def update_extension(
         "outbound_caller_id_number",
         "outbound_caller_id_name",
         "intercom",
+        "fax_t38",
         "class_of_service_id",
         "max_registrations",
         "site_id",

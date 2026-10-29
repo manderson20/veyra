@@ -323,6 +323,16 @@ def test_outbound_caller_id_must_be_a_did_or_allowed(admin, app):
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "outbound_caller_id_name"
 
 
+def test_fax_machine_extension_is_stored_and_deployed(admin, app):
+    ext = _create(admin, _org(admin)["id"], "1009", name="Office fax")
+    assert ext["fax_t38"] is False
+    r = admin.patch(f"{EXT}/{ext['id']}", json={"fax_t38": True})
+    assert r.status_code == 200 and r.json()["fax_t38"] is True
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    assert snap["extensions"][0]["fax_t38"] is True
+
+
 def test_emergency_caller_id_is_validated_stored_and_deployed(admin, app, tmp_path):
     a = _org(admin)["id"]
     r = admin.post(
