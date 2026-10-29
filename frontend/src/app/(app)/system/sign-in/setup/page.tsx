@@ -55,7 +55,7 @@ function ConsoleSteps({ kind, uri }: { kind: Kind; uri: string | undefined }) {
           <li>Choose <strong>Create</strong>. Copy the <strong>Client ID</strong> and the <strong>Client secret</strong> now: Google shows the secret only once (you can also download the JSON file).</li>
         </ol>
         <Callout tone="info" title="No extra scopes are needed">Veyra asks only for the person&apos;s name and e-mail address (openid, email, profile), which need no verification by Google.</Callout>
-        <Callout tone="neutral" title="Later, for the Companion on managed Chromebooks">To let the Companion sign in without a click, mark this client as <strong>Trusted</strong> in the Google Admin console (Security → Access and data control → API controls → Manage third-party app access) and set <span className="mono">ssoProvider</span> in the Companion policy (Settings → Companion deployment).</Callout>
+        <Callout tone="neutral" title="Later, for the Companion on managed Chromebooks">To let the Companion sign in without a click, mark this client as <strong>Trusted</strong> in the Google Admin console (Security → Access and data control → API controls → Manage third-party app access) and choose it in the sign-in step of System → <a href="/system/companion/">Companion rollout</a>.</Callout>
       </>
     );
   }

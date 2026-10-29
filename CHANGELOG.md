@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.44
+
+No migration.
+
+### Added
+- **Companion rollout guide**: System → **Companion rollout** walks through putting the Companion extension in people's browsers in five steps — where the browsers are managed (Google Admin console, Windows Group Policy or Intune for Chrome and Edge, or people install it themselves); making the browsers trust the server (nothing to do with a public certificate, otherwise how to push the Veyra CA certificate, with the download); how people sign in (password or single sign-on, with silent sign-in on managed Chromebooks); pushing the extension (the values to copy, exact console steps, and a registry file for Chrome and Edge on Windows); and a check that shows who has signed in to the Companion and from which device, with what to look at when nobody has.
+
+### Changed
+- Settings → **Companion extension deployment** is now a short summary with a button to the rollout guide.
+
 ## 0.27.43 — 2026-10-29
 
 Migration 0070 (a column for test sign-in results, and the extension's fax machine setting).

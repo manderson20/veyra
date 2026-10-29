@@ -119,6 +119,20 @@ export interface CompanionInfo {
   install_sources_pattern: string | null;
 }
 
+/** What the Companion rollout guide needs (System → Companion rollout). */
+export interface CompanionRollout {
+  info: CompanionInfo;
+  host: string;
+  origin: string;
+  certificate: { kind: "public" | "veyra"; names: string[]; issuer: string | null; not_after: string | null };
+  ca_url: string;
+  adoption: {
+    users: number;
+    active_7d: number;
+    recent: { email: string; display_name: string; device: string; created_at: string; last_used_at: string | null }[];
+  };
+}
+
 /** A scoped bearer token (Companion extension), ADR 0015. */
 export interface ApiToken {
   id: string;

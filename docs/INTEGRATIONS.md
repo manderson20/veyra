@@ -443,8 +443,8 @@ GET               /webhooks/events                    the catalog, including mod
     dialog with event checkboxes grouped as in §3.2, the secret shown once,
     "Send test", and a deliveries drawer with redeliver.
 * **Companion**: "Sign in with Google" in the popup, and silent sign-in when
-  managed storage sets `ssoProvider`. The Companion deployment card
-  (Settings) shows the new policy key.
+  managed storage sets `ssoProvider`. The Companion rollout guide
+  (System → Companion rollout) adds the key to the policy it shows.
 
 ## 7. Installer
 

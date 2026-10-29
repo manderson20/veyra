@@ -112,6 +112,7 @@ export const NAV: NavSection[] = [
     { label: "Alerts", href: "/system/alerts/", icon: "alert", permissions: ["alerts.read"], group: "Status" },
     { label: "Firewall", href: "/system/firewall/", icon: "shield", permissions: ["firewall.read"], group: "Security" },
     { label: "Sign-in", href: "/system/sign-in/", icon: "key", permissions: ["sso.read"], group: "Security" },
+    { label: "Companion rollout", href: "/system/companion/", icon: "external", permissions: ["system.settings.read"], group: "Platform" },
     { label: "Automation", href: "/system/automation/", icon: "activity", permissions: ["webhooks.read"], group: "Platform" },
     { label: "Integrations", href: "/system/integrations/", icon: "external", permissions: ["integrations.read", "webhooks.read"], group: "Platform" },
     { label: "Central console", href: "/system/central/", icon: "server", permissions: ["central.read"], group: "Platform" },

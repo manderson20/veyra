@@ -187,15 +187,44 @@ pushed by browser policy. Veyra supports the policy route out of the box:
   Omaha-style update manifest at `/api/v1/companion/update.xml`, built from
   the request's host name, so managed browsers fetch new versions after
   every Veyra upgrade.
-* Settings → *Companion extension deployment* (platform administrators)
-  shows the extension ID, the update URL, the install-source pattern and
-  the policy JSON, with the Google Admin Console steps: Devices → Chrome →
-  Apps & extensions → Users & browsers → add by ID *from a custom URL* →
-  **Force install**; under *Policy for extensions* the JSON
-  `{"serverUrl": "https://<server>"}` preloads and locks the server
-  address (the extension reads `chrome.storage.managed`, schema in
-  `managed-schema.json`; `dialPrefix` can be preset too). Users then only
-  sign in.
+* **System → Companion rollout** (platform administrators; also linked
+  from the *Companion extension deployment* card in Settings) is a guide
+  in five steps:
+  1. *Where browsers are managed*: Google Admin console (Chromebooks, and
+     Chrome enrolled in Chrome Browser Cloud Management), Windows Group
+     Policy or Intune (Chrome and Edge), or people install it themselves.
+  2. *Trust this server*: with a public certificate covering the host name
+     (Let's Encrypt, PUBLIC_CERTIFICATES.md) nothing is needed; otherwise
+     the Veyra CA (`/downloads/veyra-ca.crt`) is pushed first — Admin
+     console Devices → Networks → Certificates, a GPO's Trusted Root
+     Certification Authorities, or an Intune *Trusted certificate*
+     profile — because an extension cannot click through a certificate
+     warning.
+  3. *How people sign in*: e-mail and password, or a single sign-on
+     provider (`ssoProvider` in the policy; silent on managed Chromebooks
+     when the OAuth client is trusted in the Admin console).
+  4. *Push the extension*: the extension ID, the update URL and the
+     `ID;URL` install line, with the Admin console steps (add by ID *from
+     a custom URL* → **Force install + pin**, the JSON
+     `{"serverUrl": "https://<server>", "ssoProvider": "…"}` under *Policy
+     for extensions*), the Group Policy and Intune settings
+     (*Configure the list of force-installed apps and extensions*, Edge's
+     *Control which extensions are installed silently*), and a `.reg`
+     file that force-installs it in Chrome and Edge and writes the policy
+     under `…\3rdparty\extensions\<id>\policy`. Off-store force-install
+     works only on domain-joined, Intune-managed or CBCM-enrolled
+     computers. The extension reads `chrome.storage.managed` (schema in
+     `managed-schema.json`; `dialPrefix` can be preset too); users then
+     only sign in. For unmanaged browsers: load unpacked from the zip, and
+     the `ExtensionInstallSources` pattern for the *Add to Chrome* button.
+  5. *Check it worked*: how many people are signed in to the Companion and
+     used it in the last 7 days, the latest sign-ins (person, device,
+     when), and what to look at in `chrome://policy` and
+     `chrome://extensions` when nobody shows up.
+
+  `GET /api/v1/companion/rollout` (`system.settings.read`) returns the
+  package info, whether the public certificate covers the request's host,
+  and the active Companion tokens.
 * The account page's *Add to Chrome* button links to the signed package; it
   works when the Admin Console lists the server under *Extension install
   sources* (`ExtensionInstallSources`), otherwise the browser refuses

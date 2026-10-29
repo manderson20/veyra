@@ -1,37 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { Badge, Callout, Card, ErrorState, LoadingState, useToast } from "@/components/ui";
-import type { CompanionInfo, SsoProviderPublic } from "@/lib/types";
+import { CopyButton } from "@/components/common/CopyButton";
+import { Badge, Callout, Card, ErrorState, LinkButton, LoadingState } from "@/components/ui";
+import type { CompanionInfo } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
 /**
- * What an administrator needs to push the Companion extension to managed
- * browsers (Google Admin Console, Chrome and Edge policies): the stable
- * extension ID, the update manifest, the policy that preloads the server, and
- * the install-source pattern that lets users click "Add to Chrome" themselves.
+ * The Companion package on this server, and the way into the rollout guide
+ * (System → Companion rollout) that walks through pushing it to managed
+ * browsers.
  */
 export function CompanionDeploymentCard() {
   const info = useApiData<CompanionInfo>("/companion/info");
-  const providers = useApiData<SsoProviderPublic[]>("/auth/sso/providers");
-  const toast = useToast();
-  const copy = async (label: string, value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(`${label} copied`);
-    } catch {
-      toast.error("Could not copy", "Select the text and copy it by hand.");
-    }
-  };
   const d = info.data;
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://…";
-  // With a sign-in provider, the extension signs in through it by itself
-  // (silently on managed Chrome: docs/INTEGRATIONS.md §1.6).
-  const sso = providers.data?.[0];
-  const policy = JSON.stringify(sso ? { serverUrl: origin, ssoProvider: sso.id } : { serverUrl: origin }, null, 2);
 
   return (
-    <Card title="Companion extension deployment" subtitle="Push the Veyra Companion to users' browsers without anyone installing it by hand.">
+    <Card title="Companion extension deployment" subtitle="Push the Veyra Companion to people's browsers so nobody installs it by hand." actions={<LinkButton href="/system/companion/" variant="primary" size="sm">Open the rollout guide</LinkButton>}>
       {info.loading ? <LoadingState /> : null}
       {info.error ? <ErrorState error={info.error} onRetry={info.reload} /> : null}
       {d && !d.extension_id ? (
@@ -41,47 +26,14 @@ export function CompanionDeploymentCard() {
         </Callout>
       ) : null}
       {d?.extension_id ? (
-        <div className="stack">
-          <dl className="dl">
-            <dt>Extension</dt>
-            <dd className="row" style={{ gap: 8 }}>
-              {d.name} <Badge tone="neutral">{d.version}</Badge>
-            </dd>
-            <dt>Extension ID</dt>
-            <dd>
-              <code className="mono">{d.extension_id}</code>{" "}
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => void copy("Extension ID", d.extension_id ?? "")}>Copy</button>
-            </dd>
-            <dt>Update URL</dt>
-            <dd>
-              <code className="mono">{d.update_url}</code>{" "}
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => void copy("Update URL", d.update_url ?? "")}>Copy</button>
-            </dd>
-            <dt>Install-source pattern</dt>
-            <dd>
-              <code className="mono">{d.install_sources_pattern}</code>{" "}
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => void copy("Pattern", d.install_sources_pattern ?? "")}>Copy</button>
-            </dd>
-            <dt>Policy for extensions</dt>
-            <dd>
-              <pre className="mono" style={{ margin: 0, whiteSpace: "pre-wrap" }}>{policy}</pre>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => void copy("Policy", policy)}>Copy</button>
-            </dd>
-          </dl>
-          <details>
-            <summary style={{ cursor: "pointer" }}><strong>Google Admin Console steps</strong></summary>
-            <ol className="stack" style={{ marginTop: 12, paddingLeft: 20, gap: 6 }}>
-              <li>Devices → Chrome → Apps &amp; extensions → Users &amp; browsers; pick the organizational unit.</li>
-              <li>Click the + button → <em>Add Chrome app or extension by ID</em> → <em>From a custom URL</em>; paste the Extension ID and the Update URL.</li>
-              <li>Set the installation policy to <em>Force install</em> (or <em>Force install + pin to toolbar</em>). The extension then appears for every user in that unit, with the server&apos;s host permission granted.</li>
-              <li>Under <em>Policy for extensions</em> paste the JSON above, so the server address is preloaded and locked; users only sign in.{sso ? <> With <span className="mono">ssoProvider</span> set, the extension signs in with {sso.name} by itself on a managed Chromebook (mark Veyra&apos;s OAuth client as trusted: System → Sign-in).</> : null}</li>
-              <li>Optional: to let users click <em>Add to Chrome</em> from their account page instead, add the install-source pattern under Chrome → Settings → Users &amp; browsers → <em>Extension install sources</em> (policy ExtensionInstallSources).</li>
-            </ol>
-            <p className="subtle">
-              Each Veyra upgrade re-signs the package with the same key, so the ID stays the same and managed browsers pick up the new version from the Update URL within hours. The browser must trust this server&apos;s certificate.
-            </p>
-          </details>
-        </div>
+        <dl className="dl">
+          <dt>Extension</dt>
+          <dd className="row" style={{ gap: 8 }}>{d.name} <Badge tone="neutral">{d.version}</Badge></dd>
+          <dt>Extension ID</dt>
+          <dd className="row" style={{ gap: 6 }}><code className="mono">{d.extension_id}</code><CopyButton text={d.extension_id} /></dd>
+          <dt>Update URL</dt>
+          <dd className="row" style={{ gap: 6, flexWrap: "wrap" }}><code className="mono" style={{ wordBreak: "break-all" }}>{d.update_url}</code><CopyButton text={d.update_url ?? ""} /></dd>
+        </dl>
       ) : null}
     </Card>
   );

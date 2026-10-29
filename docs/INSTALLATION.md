@@ -221,7 +221,7 @@ when it is set, otherwise from the address the browser used). For Google:
 3. For silent Companion sign-in on managed Chromebooks: Admin console →
    Security → API controls → App access control → *Trusted* for this OAuth
    client, and add `"ssoProvider": "<provider id>"` to the extension policy
-   (Settings → Companion deployment shows the JSON).
+   (System → Companion rollout, sign-in step).
 
 The recovery administrator always signs in with a password; with *Require
 single sign-on* on, linked accounts cannot.
