@@ -3,6 +3,7 @@
 """The help guides (docs/guides/*.md, docs/GUIDES.md): one source for the
 Help pages built into Veyra and for the GitHub wiki.
 
+    guides.py check            only validate the guides
     guides.py build            write frontend/src/generated/guides.json
     guides.py build --check    fail when that file is out of date
     guides.py wiki OUT [--version V]
@@ -524,6 +525,8 @@ def uncovered_pages(guides: list[Guide]) -> list[str]:
     for page in sorted(APP.rglob("page.tsx")):
         route = "/" + str(page.parent.relative_to(APP)).replace("\\", "/").strip(".") + "/"
         route = route.replace("//", "/")
+        if route.startswith("/help/"):
+            continue
         if not any(route == c or (c != "/" and route.startswith(c)) for c in covered):
             pages.append(route)
     return pages
@@ -542,6 +545,7 @@ def main(argv: list[str] | None = None) -> int:
     w = sub.add_parser("wiki")
     w.add_argument("out", type=Path)
     w.add_argument("--version")
+    sub.add_parser("check")
     sub.add_parser("stale")
     sub.add_parser("coverage")
     args = ap.parse_args(argv)
@@ -553,6 +557,9 @@ def main(argv: list[str] | None = None) -> int:
         print(e, file=sys.stderr)
         return 2
 
+    if args.cmd == "check":
+        print(f"{len(guides)} guides are valid.")
+        return 0
     if args.cmd == "build":
         text = build_text(guides)
         if args.check:
