@@ -4,7 +4,7 @@ summary: Decide where each of your phone numbers (DIDs) rings, with a different 
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.44
+reviewed: 0.27.45
 checked: 2026-10-29
 pages:
   - /routing/inbound/
@@ -65,7 +65,7 @@ Inbound routes are at [Telephony → Inbound Routes](app:/routing/inbound/). You
 
 ## Business hours
 
-With a **Time condition**, calls during the open hours go to the **Destination**, and calls at any other time, and on holidays, go to the **After-hours destination**. The list shows the time condition and the closed-hours destination for each route.
+With a **Time condition**, calls during the open hours go to the **Destination**, and calls at any other time, and on holidays, go to the **After-hours destination**. The list shows each route's destination by name, with its kind (such as *IVR menu* or *Ring group*) underneath, and the time condition and closed-hours destination.
 
 To open or close early for a day (a snow day, an assembly), use the time condition's **Force open** or **Force closed** instead of editing the route. See [Business hours and holidays](guide:business-hours-and-holidays).
 

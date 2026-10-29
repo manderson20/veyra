@@ -79,9 +79,8 @@ The **Insert a Veyra variable** panel next to the box lists everything you can u
 
 - **This template's values:** its variables.
 - **Device**, **Organization**, **Lines**, **Keys**, **Paging**, **Paging zones**, **Server**, **Features:** what Veyra knows about the phone. Lines, keys and paging zones are lists: first insert the loop at the top of the section, then the entries inside it.
+- **Provisioning variables:** the [provisioning variables](guide:provisioning-variables) defined under Provisioning → Variables, inserted as `{{ vars.name }}`. Each phone gets the value of its site, its organization or the installation.
 - **Snippets:** common patterns, such as *Only when set*, *Yes/no as 1/0* and *Override a block*.
-
-[Provisioning variables](guide:provisioning-variables) are written `{{ vars.name }}`. The panel does not list them; type them yourself.
 
 Choose **Save template**. Veyra checks the template first. If something is wrong, **The template did not validate** lists the problems and nothing is saved. Phones using the template get the change at their next check.
 

@@ -4,7 +4,7 @@ summary: See the calls in progress, hang one up, record it, or listen in, whispe
 audience: admin
 section: Calls and call flows
 order: 90
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /calls/
 covers:
@@ -50,7 +50,7 @@ A supervisor can hear a call without being heard, coach the staff member without
 
 1. Find the call and open **Supervise…** next to it.
 2. Choose **Listen**, **Whisper to the user** or **Join the call**.
-3. Your own desk phone rings (the first enabled extension assigned to you). Answer it:
+3. Your own desk phone rings: the first enabled extension assigned to you. If you have several extensions, pick the phone that should ring in **Supervise from** above the list first. Answer it:
    - **Listen**: you hear both sides; nobody hears you.
    - **Whisper to the user**: the staff member hears you, the caller does not.
    - **Join the call**: both sides hear you.

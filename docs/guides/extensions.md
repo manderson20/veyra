@@ -4,7 +4,7 @@ summary: Create an extension for each phone, assign it to a person, and set its 
 audience: admin
 section: Getting started
 order: 50
-reviewed: 0.27.44
+reviewed: 0.27.45
 checked: 2026-10-29
 pages:
   - /extensions/
@@ -39,7 +39,8 @@ The extensions are under **Telephony → Extensions**.
 1. Open [Telephony → Extensions](app:/extensions/) and choose **New extension**.
 2. The **Extension number** is already filled in with the next free number. Type another, or choose **Suggest next free**.
 3. Enter a **Name**, for example *Front Office* or *Jane Doe*.
-4. Pick the **Assigned user (optional)**, or leave it at **Shared phone (no user)**. Only active users of the same organization are listed. Picking a user fills in the name if it is empty.
+4. Pick the **Assigned user (optional)**, or leave it at **Shared phone (no user)**. Only active users of the same organization are listed. Picking a user fills in the name if it is empty. When there are many users, type part of a name or email in **Find a user** to narrow the list.
+   - **Template (optional):** shown once the organization has an [extension template](guide:extension-templates). The template's settings apply to the new extension, and the settings it locks stay as the template has them. Leave **No template** for none.
 5. If you like, fill in the **Caller ID name** and **Caller ID number** that colleagues see. They default to the name and the extension number.
 6. **Emergency caller ID number:** the building's number registered for emergency calls. Leave it empty to use the site's or the emergency route's number.
 7. Choose the **Site**, **Building**, **Location (dispatchable)** (such as *Room 101, first floor*) and **Department**. The site and building decide the address given on emergency calls; the location tells responders the room.

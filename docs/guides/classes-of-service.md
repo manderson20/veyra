@@ -4,7 +4,7 @@ summary: Limit what groups of phones may dial, such as local calls only for clas
 audience: admin
 section: Calls and call flows
 order: 60
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /routing/classes-of-service/
 covers:
@@ -56,7 +56,7 @@ The office phones could simply have no class at all.
 
 Open an extension under [Extensions](app:/extensions/) and choose its **Class of service**, or set the class on an extension template so new extensions get it. Save and deploy.
 
-The **Extensions** column of the list shows how many extensions are in each class.
+The **Also** column of the list shows what differs from the defaults: **No outside forwards**, **No outside follow-me**, **No intercom**, **No fax**, **Supervisor codes**, **Never monitored**, and the limit of outside calls. The **Extensions** column shows how many extensions are in each class.
 
 ## What people notice
 

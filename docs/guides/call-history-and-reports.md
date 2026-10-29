@@ -4,7 +4,7 @@ summary: Look up any call, export the history, build your own reports and have t
 audience: admin
 section: Calls and call flows
 order: 100
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /call-history/
   - /reports/
@@ -35,7 +35,7 @@ Veyra keeps a record of every call: who called whom, who answered, how long it r
 
 1. Open [Telephony → Call History](app:/call-history/).
 2. Choose the period: **Last 24 hours**, **Last 7 days**, **Last 30 days**, **Last 90 days**, or **Custom range** with two dates.
-3. Narrow it down with the search box (a number, a name or an extension), **All directions** (*Internal*, *Inbound*, *Outbound*) and **All outcomes**:
+3. Narrow it down with the search box (a number, a name or an extension), **All directions** (*Internal*, *Inbound*, *Outbound*), **Any length** (**Talked 30 s or more**, **Talked 1 min or more**, **Talked 5 min or more**, **Talked 15 min or more**), **Recorded or not** (**Recorded**, **Not recorded**) and **All outcomes**:
 
 | Outcome | Means |
 |---|---|
@@ -52,7 +52,7 @@ Veyra keeps a record of every call: who called whom, who answered, how long it r
 
 Calls appear a few seconds after they end. The relative periods are fixed when the page opens; **Refresh** brings them up to now.
 
-**Export CSV** downloads the calls that match the current filters, up to 100,000 rows.
+**Export CSV** downloads the calls that match the current filters, all of them (talk time and recording included), up to 100,000 rows.
 
 Veyra keeps the call history for 400 days by default. A platform administrator can change that under [Settings](app:/settings/), in the **Retention** card.
 

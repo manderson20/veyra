@@ -4,7 +4,7 @@ summary: Find out who changed what, who signed in, and which attempts were refus
 audience: admin
 section: Sign-in and security
 order: 50
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /audit/
 covers:
@@ -30,6 +30,11 @@ The newest events are first, 50 per page. Each row shows:
 
 - **Search action or actor:** type part of an action (such as `firewall` or `backup`) or a person's name or email.
 - The outcome filter shows only **Success**, **Failure** or **Denied** events. **Denied** and **Failure** together are a quick way to spot someone trying things they should not.
+- The two date fields, **From** and **To**, limit the list to whole days: from the start of the first day to the end of the last. Leave either empty for no limit.
+
+## Export the list
+
+Choose **Export CSV** at the top of the page. The file holds the events that match the search, outcome and dates you set, newest first, up to 100,000 events. Each row has the time, actor, organization, action, target, outcome, IP address, request ID and details.
 
 ## See the details
 

@@ -82,8 +82,8 @@
    "summary": "Create an extension for each phone, assign it to a person, and set its caller ID, location, voicemail and phone options.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/extensions/",
     "/extensions/view/"
@@ -161,8 +161,8 @@
    "summary": "Register a phone by its MAC address, give it a profile and extensions, and check that it picked up its configuration.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/devices/",
     "/devices/view/"
@@ -241,8 +241,8 @@
    "summary": "Upload the vendor's firmware for your phones and let Veyra update them, per profile or per phone.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/firmware/"
    ],
@@ -280,8 +280,8 @@
    "summary": "Connect Veyra to your phone carrier so calls can reach and leave the building.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/trunks/",
     "/trunks/view/"
@@ -308,8 +308,8 @@
    "summary": "Decide where each of your phone numbers (DIDs) rings, with a different destination outside business hours.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/routing/inbound/",
     "/routing/inbound/view/"
@@ -322,8 +322,8 @@
    "summary": "Let callers wait in line with music and announcements until an agent is free, and let agents log in and out.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/queues/",
     "/queues/view/"
@@ -349,8 +349,8 @@
    "summary": "Decide which dialled numbers go out to the carrier, through which trunks, and with which caller ID.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/routing/outbound/",
     "/routing/outbound/view/"
@@ -448,8 +448,8 @@
    "summary": "Limit what groups of phones may dial, such as local calls only for classrooms, while 911 always works.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/routing/classes-of-service/"
    ],
@@ -474,8 +474,8 @@
    "summary": "Record prompts from a phone, upload audio, add Veyra's built-in sounds, and build hold music sets.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/prompts/",
     "/hold-music/"
@@ -488,8 +488,8 @@
    "summary": "Set up 911 so it dials directly, sends the right number and location, alerts people on site, and reaches the caller on a callback.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/system/emergency/"
    ],
@@ -501,8 +501,8 @@
    "summary": "Choose which calls are recorded and for how long, record a call on demand, and listen to recordings with every playback audited.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/recording/"
    ],
@@ -514,8 +514,8 @@
    "summary": "See the calls in progress, hang one up, record it, or listen in, whisper and join as a supervisor.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/calls/"
    ],
@@ -527,8 +527,8 @@
    "summary": "Look up any call, export the history, build your own reports and have them emailed on a schedule.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/call-history/",
     "/reports/"
@@ -631,8 +631,8 @@
    "summary": "Ban attackers automatically, keep your own phones and networks on the allow list so they are never locked out, and recover from the console.",
    "audience": "admin",
    "section": "Sign-in and security",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/system/firewall/"
    ],
@@ -655,8 +655,8 @@
    "summary": "Find out who changed what, who signed in, and which attempts were refused.",
    "audience": "admin",
    "section": "Sign-in and security",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/audit/"
    ],
@@ -720,8 +720,8 @@
    "summary": "Send saved changes to the telephony engine, now or when calls have ended, and roll back to an earlier configuration.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/system/telephony/"
    ],
@@ -789,8 +789,8 @@
    "summary": "Let other systems use Veyra with their own limited tokens, and tell other systems about calls, voicemail, pages and alerts with signed webhooks.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/system/integrations/"
    ],
@@ -829,8 +829,8 @@
    "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.45",
+   "reviewed_date": null,
    "pages": [
     "/my-phone/"
    ],

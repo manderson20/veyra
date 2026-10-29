@@ -4,7 +4,7 @@ summary: Register a phone by its MAC address, give it a profile and extensions, 
 audience: admin
 section: Phones and devices
 order: 20
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /devices/
   - /devices/view/
@@ -34,7 +34,7 @@ Veyra knows each phone by its **MAC address**, the hardware address printed on t
    - **Device profile:** the profile with the settings and keys for this phone. Without a profile, nothing is sent to the phone.
    - **Extension (line 1):** the extension the phone registers as. Without it, the phone gets its configuration but does not register.
    - **Site:** leave it on **From the profile** to use the profile's site. The site sets the phone's time zone.
-   - **Location (dispatchable):** the floor and room, used for emergency calls from this phone. It wins over the extension's location. You can set it only here, when you register the phone.
+   - **Location (dispatchable):** the floor and room, used for emergency calls from this phone. It wins over the extension's location. You can change it later on the phone's page.
 3. Choose **Register phone**.
 
 The phone gets its configuration the next time it checks in. To make it check now, restart it, or use **Reprovision** on its page (see below).
@@ -51,11 +51,13 @@ Click a phone in the list to open it. The list can be searched by label, MAC add
 
 ### Settings tab
 
-Here you change everything from the registration form (except the location), and also:
+Here you change everything from the registration form, and also:
+
+- **Building:** the building the phone is in. The list shows the buildings of the phone's site; **No building** leaves it unset.
 
 - **Extra lines:** **Add line** gives the phone a second, third… extension, up to 8 lines in all. Each extension can appear only once on a phone. On an analog adapter, each line is one phone port (see [Analog adapters and fax machines](guide:analog-adapters-and-fax)).
 - **Firmware override:** a firmware image for this phone only. Left on **From the profile**, the phone gets the profile's firmware. See [Phone firmware](guide:phone-firmware).
-- **Setting overrides:** the template's settings for this phone only. A blank field keeps the profile's value, which is shown greyed in the field. A yes/no setting offers **As the profile**, **Yes** or **No**.
+- **Setting overrides:** the template's settings for this phone only. A blank field keeps the profile's value, which is shown greyed in the field. A yes/no setting is a list: **As the profile** (which shows the profile's value), **Yes** or **No**. Secret settings, such as passwords, are shown as dots.
 - **Enabled:** a disabled phone is refused its configuration until you turn it back on.
 
 Choose **Save changes**. The phone takes the change at its next check, or right away if you choose **Reprovision**.

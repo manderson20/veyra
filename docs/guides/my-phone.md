@@ -4,7 +4,7 @@ summary: Turn on Do Not Disturb, forward your calls, check voicemail, call peopl
 audience: user
 section: Using Veyra
 order: 10
-reviewed: 0.27.44
+reviewed: 0.27.45
 checked: 2026-10-29
 pages:
   - /my-phone/
@@ -96,7 +96,7 @@ The **Fax** widget sends a PDF as a fax, no fax machine needed.
 1. Choose **Send a fax**.
 2. Enter the **Fax number**.
 3. Choose the **PDF to send**: up to 20 MB and 50 pages.
-4. Tick **Add a cover sheet** to add a first page with **To**, **Subject** and a **Note**.
+4. Tick **Add a cover sheet** to add a first page with **To**, **From** (left empty, it shows your name), **Subject** and a **Note**.
 5. Choose **Send fax**.
 
 **Your faxes** lists what you sent with its state (**Waiting**, **Dialling**, **Sending**, **Sent**, **Failed**). You are emailed when a fax is delivered or fails. You can **Cancel** a fax still waiting and **Retry** a failed one.

@@ -33,7 +33,7 @@ The first key in the list is the phone's first programmable key. The phone's own
 |---|---|---|
 | **Line** | A line number, 1 to 8 | Shows one of the phone's lines (extensions). |
 | **BLF (watch a phone or group)** | An extension or ring group number | The light shows when that number is busy or ringing. Press it to call, or to pick up a call ringing there. |
-| **Speed dial** | A number | Calls the number. Digits, `*`, `#` and `+` only, with no spaces or dashes. |
+| **Speed dial** | A number | Calls the number. You can type it with spaces, dashes or brackets, such as `+1 (573) 555-0100`; Veyra keeps only the digits, `*`, `#` and `+`. |
 | **Page a zone** | A paging zone | Pages the zone. Choose **From a variable (per building)…** to use a provisioning variable such as `$all_call` instead, so each building pages its own zone. |
 | **User's choice (set from My Phone)** | Nothing | An open slot the phone's user fills (see below). |
 | **Voicemail** | A line number, or nothing for line 1 | Calls voicemail. The light shows waiting messages. |
@@ -44,7 +44,7 @@ The first key in the list is the phone's first programmable key. The phone's own
 | **Transfer** | Nothing | Transfers the current call. Not every phone has a transfer key: where it has none, the preview says so and the phone's own soft key does it. |
 | **Presence of a colleague** | An extension number | Lit while the colleague is busy or in a meeting, blinking while away, off when available. Press it to call them. |
 
-Hover over the value field of the voicemail, intercom, presence, park and toggle types to see a hint.
+For the voicemail, intercom, presence, park and toggle types, a hint under the value field says what to enter. For speed dial, BLF, intercom and presence keys, spaces, dashes and brackets in the number are removed when you save.
 
 Parking lots, call flows, time conditions and queues are referred to by their short name (slug), as shown on their own pages. Veyra checks each one when you save. A time condition needs an override code before a toggle key can switch it.
 
@@ -70,7 +70,7 @@ From now on this phone ignores changes to the profile's keys. Untick the box and
 
 Veyra checks every key when you save and names the key that is wrong:
 
-- *key 3: enter a number to dial or watch.* A BLF, speed dial, intercom or presence key needs digits only (also `*`, `#`, `+`), without spaces.
+- *key 3: enter a number to dial or watch.* A BLF, speed dial, intercom or presence key needs a number: digits, `*`, `#` and `+` (spaces, dashes and brackets are removed).
 - *a line key names a line number 1-8.*
 - *paging zone … not found*, *parking lot … not found*, *call flow … not found*, *queue … not found*. Check the short name on that item's page.
 - *the time condition … has no override code.* Give the time condition an override code first.

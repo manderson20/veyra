@@ -85,6 +85,19 @@ From a phone, members open the inbox with `*98`: enter the inbox's number, then 
 
 Listening to a message and every change are written to the audit log.
 
+## Extended absence for many boxes
+
+For a break when nobody answers, such as the summer, set one absence for many boxes at once:
+
+1. Choose **Extended absence…** at the top of the page.
+2. Leave **Extended absence on** switched on.
+3. Set the **First day** (empty: from now) and the **Last day** (empty: until it is turned off). After the last day it turns itself off.
+4. Tick **Take no messages while away** if callers should hear the greeting and then be hung up on, without leaving a message.
+5. Pick the boxes: tick them one by one, or narrow the list with **Organization** or **Find a box** and choose **Pick all … shown**.
+6. Choose **Set for … boxes**.
+
+Callers hear each box's *Extended absence* greeting (or its *Temporary* greeting) for these dates. It takes effect at once; no deployment is needed. To end it early, open the dialog again, switch **Extended absence on** off, pick the boxes and choose **Turn off for …**.
+
 ## Delete a box
 
 Open the box and choose **Delete box**. Routes and phone-menu keys that point at it must be changed first. Then deploy the changes.

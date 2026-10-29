@@ -4,7 +4,7 @@ summary: Send saved changes to the telephony engine, now or when calls have ende
 audience: admin
 section: Maintenance
 order: 30
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /system/telephony/
 covers:
@@ -40,7 +40,7 @@ The button is greyed out when the telephony engine is not running.
 
 - the changed files with the lines added and removed (files with passwords show *contains credentials; diff hidden*),
 - **All files in this revision**,
-- **Deploy** to send it to the engine, or **Discard** to throw it away.
+- **Deploy** to send it to the engine now, **When no calls are active** to wait until no call is up (for up to 30 minutes) and then send it, or **Discard** to throw it away.
 
 File contents are shown to platform administrators only.
 
@@ -53,7 +53,7 @@ Veyra checks the generated configuration first. A revision with problems shows *
 Every deployed revision is kept. To go back to an earlier configuration:
 
 1. On [System → Telephony Engine](app:/system/telephony/), choose **View** on the older revision (it shows **Superseded**).
-2. Choose **Roll back to this revision**.
+2. Choose **Roll back to this revision**. Or choose **When no calls are active** to roll back once the calls have ended.
 
 The newer revision is marked **Rolled back**. The database is not changed, so the top bar shows **Deploy changes** again until you fix or undo the change in Veyra; deploying then sends the database's current state.
 

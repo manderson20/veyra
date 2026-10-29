@@ -4,7 +4,7 @@ summary: Let callers wait in line with music and announcements until an agent is
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.44
+reviewed: 0.27.45
 checked: 2026-10-29
 pages:
   - /queues/
@@ -92,7 +92,7 @@ Dynamic agents (those with **Logs in** ticked) are only in the queue while logge
 | `*46` and the queue number | Pause or resume in that queue only |
 | `*47` and the queue number | Hear how many callers are waiting |
 
-**From the web**: the **Agents** card on the queue's page lists the dynamic agents as **Logged in**, **Paused** or **Logged out**. Use **Log in** / **Log out** and **Pause** / **Resume** to change an agent, for example when someone forgot to log out before going home. Every change is written to the audit log.
+**From the web**: the **Agents** card on the queue's page lists the dynamic agents as **Logged in**, **Paused** or **Logged out**. Next to the state it shows when it last changed and who changed it: a person's name for a change made on the web, or *phone* when the agent used a code. Use **Log in** / **Log out** and **Pause** / **Resume** to change an agent, for example when someone forgot to log out before going home. Every change is written to the audit log.
 
 Agents who are always in the queue (**Logs in** not ticked) cannot be logged out or paused.
 

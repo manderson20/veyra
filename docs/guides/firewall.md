@@ -4,7 +4,7 @@ summary: Ban attackers automatically, keep your own phones and networks on the a
 audience: admin
 section: Sign-in and security
 order: 30
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /system/firewall/
 covers:
@@ -16,6 +16,8 @@ covers:
 A phone system that can be reached from the internet is attacked within hours: robots try extension numbers and passwords to make expensive calls. Veyra's firewall watches for that and bans the addresses that misbehave.
 
 The firewall is **off** after installation. Open [System → Firewall](app:/system/firewall/).
+
+Anyone who may view the firewall sees its bans, events, lists and settings. Only people who may also change it (the permission *Change firewall rules, bans and settings*) see **Allow**, **Block**, **Lift**, **Block permanently**, **Add feed**, the feed and list buttons, and **Save settings**. Without it, the **Settings** tab says *You can view these settings; changing them needs the firewall write permission.*
 
 ## How it works
 

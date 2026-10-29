@@ -4,7 +4,7 @@ summary: Record prompts from a phone, upload audio, add Veyra's built-in sounds,
 audience: admin
 section: Calls and call flows
 order: 70
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /prompts/
   - /hold-music/
@@ -50,7 +50,7 @@ The **Built-in sounds** card lists bells, chimes, attention tones and hold music
 
 Choose **Edit** next to a recording to change its **Name** or **Description**, or to **Replace the audio** with a new file. The new audio plays at once wherever the recording is used; menus and announcements keep pointing at it, and no deployment is needed for the replaced sound.
 
-A recording that a menu, an announcement or a hold music set uses cannot be deleted; the **Used by** column shows how many use it. Change those first.
+A recording that something still plays cannot be deleted: an IVR menu, an announcement, a call queue (its join or periodic announcement), a recording policy's announcement, a recorded page or bell, or a hold music set. The **Used by** column shows how many use it. If you try, the message lists each one by name; choose another recording there first.
 
 > **Tip:** to change a greeting that was recorded from a phone, record the new one with `*95`, name it, choose it as the menu's **Menu prompt** (or the announcement's **Recording to play**) and deploy.
 

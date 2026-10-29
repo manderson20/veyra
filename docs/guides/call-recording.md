@@ -4,7 +4,7 @@ summary: Choose which calls are recorded and for how long, record a call on dema
 audience: admin
 section: Calls and call flows
 order: 80
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /recording/
 covers:
@@ -27,7 +27,7 @@ Veyra records nothing until you say so. A *recording policy* says which calls of
 | Change what calls are recorded | Add, change and remove policies | Organization administrators |
 | Listen to and download call recordings | The **Recordings** tab, for the whole organization | Organization administrators |
 | Listen to recordings of your own calls | The **Recordings** tab, for calls of their own extensions | Nobody |
-| Hold, release and delete call recordings | **Hold** and **Release** | Organization administrators |
+| Hold, release and delete call recordings | **Hold**, **Release** and **Delete** | Organization administrators |
 | Start and stop recording a call in progress | **Record** on Active Calls | Organization and site administrators |
 
 Users can also be allowed to play recordings of their own calls on My Phone: on the organization's page under [Directory → Organizations](app:/organizations/), switch on **Users may play recordings of their own calls**.
@@ -65,8 +65,9 @@ Conference rooms with **Record the conference** on are recorded as well; they ap
 
 ## Listen to recordings
 
-1. Open the **Recordings** tab. Each recording shows the call's time, direction, **From**, **To**, **Length** and **Deleted on** (its retention date, or *Held*).
-2. Choose **Listen**. The player plays the recording in the browser; **Download** saves the file (Ogg Opus audio).
+1. Open the **Recordings** tab. To narrow the list, choose an **Organization** (when you manage several) or a **From** date (recordings of calls on or after that day).
+2. Each recording shows the call's time, direction, **From**, **To**, **Length** and **Deleted on** (its retention date, or *Held*).
+3. Choose **Listen**. The player plays the recording in the browser; **Download** saves the file (Ogg Opus audio).
 
 Recordings appear about a minute after a recorded call ends. You can also open a call in [Call History](app:/call-history/) and play its recording there.
 
@@ -75,6 +76,12 @@ Every listening and download is written to the audit log with who did it.
 ## Keep a recording past its retention date
 
 When a recording is needed for an investigation or a complaint, choose **Hold**. A held recording is not deleted until someone chooses **Release**; after that it is deleted at its retention date like any other.
+
+## Delete a recording
+
+To remove a recording before its retention date, choose **Delete** on its row and confirm. The audio is removed at once and cannot be brought back; the call stays in the call history, and the deletion is written to the audit log. A held recording has no **Delete** button: choose **Release** first.
+
+Tick **Show deleted** to list deleted recordings too. They show *Deleted* with the date instead of **Listen**.
 
 ## When it does not work
 

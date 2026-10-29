@@ -4,7 +4,7 @@ summary: Upload the vendor's firmware for your phones and let Veyra update them,
 audience: admin
 section: Phones and devices
 order: 80
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /firmware/
 covers:
@@ -22,13 +22,15 @@ If you assign nothing, Veyra leaves the phones' firmware alone.
 2. Open [Provisioning → Firmware](app:/firmware/) and choose **Upload firmware**.
 3. Fill in:
    - **File:** the firmware file, up to 512 MB. Its name may contain only letters, digits, `.`, `_` and `-`. Do not rename it.
-   - **Manufacturer** (required): spelled as in the template list: `Poly`, `Yealink`, `Grandstream` or `Algo`. Profiles only offer images whose manufacturer matches their template's.
+   - **Manufacturer** (required): pick it from the list, which shows the manufacturers Veyra has templates for. Profiles only offer images whose manufacturer matches their template's.
    - **Version** (required): the version number, for example `6.4.5.1234`. Type it exactly as the phone reports it, so Veyra can tell whether the phone is up to date.
    - **Models:** the models it is for, separated by commas, for example `VVX 411, VVX 450`. Leave it empty when the file fits every model of the manufacturer.
    - **Notes:** for your own records.
 4. Choose **Upload**.
 
 The list shows each image with its file name, models, size, the start of its SHA-256 checksum (to compare with the vendor's), who uploaded it, and how many profiles and phones it is assigned to.
+
+**Edit** on a row changes the image's **Models** and **Notes**. To change the file, manufacturer or version, upload it again and delete the old image.
 
 ## Roll it out
 
@@ -54,7 +56,7 @@ The bin on a row works only when no profile or phone uses the image. Phones that
 
 ## If something doesn't work
 
-- **The image is not offered in a profile or on a phone.** Its **Manufacturer** does not match the template's manufacturer. Upload it again with the right spelling, then delete the old one.
+- **The image is not offered in a profile or on a phone.** Its **Manufacturer** does not match the template's manufacturer. Upload it again with the right manufacturer, then delete the old one.
 - **"… is already uploaded."** The same manufacturer, version and file name exist already.
 - **"Update pending" stays.** The phone has not checked in since, or the version you typed differs from what the phone reports. Compare **Running** with **Assigned**; if the phone runs the right firmware but the text differs, upload the image again with the version as the phone shows it.
 - **The phone does not update.** Check that the file is the right one for the model. Some phones refuse firmware for another model, or a jump over several major versions; the vendor's release notes say which steps are needed.

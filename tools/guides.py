@@ -583,7 +583,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(guides)} guides are valid.")
         return 0
     if args.cmd == "review":
-        today = datetime.now(UTC).date().isoformat()
+        # Date and time, so a second review on the same day still changes the file.
+        today = datetime.now(UTC).strftime("%Y-%m-%dT%H:%MZ")
         by_slug = {g.slug: g for g in guides}
         for slug in args.slugs:
             g = by_slug.get(slug)

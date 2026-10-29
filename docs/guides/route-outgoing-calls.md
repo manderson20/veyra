@@ -4,7 +4,7 @@ summary: Decide which dialled numbers go out to the carrier, through which trunk
 audience: admin
 section: Calls and call flows
 order: 30
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /routing/outbound/
   - /routing/outbound/view/
@@ -33,6 +33,8 @@ Outbound routes are at [Telephony → Outbound Routes](app:/routing/outbound/). 
 - Extensions always win over outbound patterns, so a pattern can never take over an internal number.
 
 Use the arrows in the **Order** column to move a route up or down. Deploy afterwards.
+
+The **For** column shows whose phones may use each route: an organization, a site (emergency routes), or both. **Every organization** (or **Every phone** with one organization) means the route is not limited.
 
 ## Dial patterns
 
@@ -75,6 +77,7 @@ A route can have up to 50 patterns. Two patterns in one route may not be the sam
    - **Caller ID number** (optional): see below.
    - **Used by** (only shown when there are several organizations): **All organizations**, or one. A route of one organization is never used by the others' phones.
    - **Emergency route**: only for 911 and similar numbers.
+   - **For the phones of** (emergency routes only): **Every site**, or one site. A route bound to a site is tried first for that site's phones and hands other phones to the next emergency route.
    - **Dial patterns**: at least one. **Add pattern** adds a row.
    - **Trunks**: choose a trunk and **Add trunk**. Add a second trunk as a backup if you have one, and order them with the arrows. At least one trunk is required.
    - **Description** and **Enabled**.
@@ -85,7 +88,7 @@ A route can have up to 50 patterns. Two patterns in one route may not be the sam
 
 The number the called person sees is chosen in this order:
 
-1. On an emergency route: the extension's emergency caller ID (see [Emergency calling (911)](guide:emergency-calling)).
+1. On an emergency route: the extension's emergency caller ID, or else its site's (see [Emergency calling (911)](guide:emergency-calling)).
 2. The route's **Caller ID number**, if **Always send this caller ID** is ticked.
 3. The extension's own **Outbound caller ID number** (set on the extension's page).
 4. The route's **Caller ID number**.
@@ -101,7 +104,7 @@ The **Caller ID** column shows **From the extension** when the route has no numb
 Veyra checks the routes and lists problems under **Check these routes**:
 
 - **No enabled emergency route**: 911 dialled from a phone will not reach a carrier. Fix this first.
-- **Extensions with no emergency caller ID**: see [Emergency calling (911)](guide:emergency-calling).
+- **Extensions with no emergency caller ID**: enabled extensions with no emergency caller ID of their own or on their site, while an emergency route has no caller ID number. The trunk's default number is sent for their emergency calls. See [Emergency calling (911)](guide:emergency-calling).
 - **Route … has no enabled trunk**: its calls will fail. A disabled trunk is shown struck through in the **Trunks** column.
 
 ## Who may use which route

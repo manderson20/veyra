@@ -4,7 +4,7 @@ summary: Let other systems use Veyra with their own limited tokens, and tell oth
 audience: admin
 section: Maintenance
 order: 80
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /system/integrations/
 covers:
@@ -44,8 +44,11 @@ For "when this happens, do that" inside Veyra itself, without writing code, see 
    | Export the call history as CSV | `calls.history.export` |
    | Read the directory | `directory.read` |
    | Run saved reports | `reports.read` |
+   | Read the Prometheus metrics (server-wide; platform administrators only) | `metrics.read` |
 
    Tokens can never change Veyra's settings.
+
+   `metrics.read` lets a monitoring system such as Prometheus read the server's metrics at `/api/v1/metrics`. The metrics are about the whole server, not one organization, so only platform administrators see this choice and can grant it.
 5. Optionally limit it with **Only from these addresses (optional)** (addresses or networks; empty allows any), and set when it **Expires (optional)**.
 6. Choose **Create token** and **copy the token now**: Veyra keeps only a fingerprint and cannot show it again.
 

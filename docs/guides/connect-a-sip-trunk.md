@@ -4,7 +4,7 @@ summary: Connect Veyra to your phone carrier so calls can reach and leave the bu
 audience: admin
 section: Calls and call flows
 order: 10
-reviewed: 0.27.44
+reviewed: 0.27.45
 pages:
   - /trunks/
   - /trunks/view/
@@ -110,6 +110,8 @@ The **Status** column (and the badge at the top of the trunk's page) refreshes e
 | **Offline** | The carrier does not answer Veyra's checks |
 | **Unknown** | The trunk has not been deployed yet, the check is off, or the phone system does not report status right now |
 | **Disabled** | The trunk is turned off |
+
+On the trunk's page, the **Information** card also shows **Registration:** with the word the phone system reports for the registration (for example `Registered` or `Rejected`). Quote it when you ask the carrier for help.
 
 A registration trunk with no stored password shows a **No password** warning.
 
