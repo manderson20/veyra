@@ -19,7 +19,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [],
    "headings": [
     {
@@ -69,7 +69,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [],
    "headings": [
     {
@@ -103,7 +103,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/"
    ],
@@ -143,7 +143,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/organizations/",
     "/organizations/view/",
@@ -185,7 +185,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/users/",
     "/users/view/"
@@ -222,7 +222,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/extensions/",
     "/extensions/view/"
@@ -263,7 +263,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/extension-templates/"
    ],
@@ -303,7 +303,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/feature-codes/"
    ],
@@ -339,7 +339,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/settings/"
    ],
@@ -379,7 +379,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/devices/"
    ],
@@ -415,7 +415,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/provisioning/"
    ],
@@ -459,7 +459,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/devices/",
     "/devices/view/"
@@ -500,7 +500,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/device-profiles/",
     "/device-profiles/view/"
@@ -545,7 +545,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/device-profiles/view/",
     "/devices/view/"
@@ -582,7 +582,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [],
    "headings": [
     {
@@ -616,7 +616,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/provisioning/",
     "/provisioning/view/"
@@ -661,7 +661,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/provisioning/variables/"
    ],
@@ -705,7 +705,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/firmware/"
    ],
@@ -741,7 +741,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/portal-layouts/"
    ],
@@ -777,7 +777,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/registrations/"
    ],
@@ -805,7 +805,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/trunks/",
     "/trunks/view/"
@@ -854,7 +854,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/ring-groups/",
     "/ring-groups/view/"
@@ -899,7 +899,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/routing/inbound/",
     "/routing/inbound/view/"
@@ -940,7 +940,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/queues/",
     "/queues/view/"
@@ -993,7 +993,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/pickup-groups/"
    ],
@@ -1025,7 +1025,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/routing/outbound/",
     "/routing/outbound/view/"
@@ -1070,7 +1070,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/routing/time-conditions/",
     "/routing/time-conditions/view/"
@@ -1111,7 +1111,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/parking/",
     "/parking/view/"
@@ -1148,7 +1148,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/routing/call-flows/",
     "/routing/call-flows/view/"
@@ -1181,7 +1181,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/name-directory/"
    ],
@@ -1209,7 +1209,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/conferences/",
     "/conferences/view/"
@@ -1250,7 +1250,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/ivr/",
     "/ivr/view/",
@@ -1297,7 +1297,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/routing/classes-of-service/"
    ],
@@ -1333,7 +1333,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/caller-blocks/"
    ],
@@ -1373,7 +1373,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/prompts/",
     "/hold-music/"
@@ -1414,7 +1414,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/emergency/"
    ],
@@ -1462,7 +1462,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/recording/"
    ],
@@ -1506,7 +1506,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/calls/"
    ],
@@ -1546,7 +1546,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/call-history/",
     "/reports/"
@@ -1587,7 +1587,7 @@
    "audience": "admin",
    "section": "Paging and bells",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/paging-zones/"
    ],
@@ -1635,7 +1635,7 @@
    "audience": "admin",
    "section": "Paging and bells",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/paging/"
    ],
@@ -1675,7 +1675,7 @@
    "audience": "admin",
    "section": "Paging and bells",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/bells/",
     "/calendars/"
@@ -1716,7 +1716,7 @@
    "audience": "admin",
    "section": "Paging and bells",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [],
    "headings": [
     {
@@ -1758,7 +1758,7 @@
    "audience": "admin",
    "section": "Voicemail and fax",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/voicemail/"
    ],
@@ -1806,7 +1806,7 @@
    "audience": "admin",
    "section": "Voicemail and fax",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/fax/"
    ],
@@ -1846,7 +1846,7 @@
    "audience": "admin",
    "section": "Sign-in and security",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/sign-in/"
    ],
@@ -1890,7 +1890,7 @@
    "audience": "admin",
    "section": "Sign-in and security",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/firewall/"
    ],
@@ -1950,7 +1950,7 @@
    "audience": "admin",
    "section": "Sign-in and security",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [],
    "headings": [
     {
@@ -1992,7 +1992,7 @@
    "audience": "admin",
    "section": "Sign-in and security",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/audit/"
    ],
@@ -2028,7 +2028,7 @@
    "audience": "admin",
    "section": "Companion extension",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/companion/"
    ],
@@ -2068,7 +2068,7 @@
    "audience": "user",
    "section": "Companion extension",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/account/"
    ],
@@ -2104,7 +2104,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/updates/"
    ],
@@ -2156,7 +2156,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/backups/"
    ],
@@ -2204,7 +2204,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/telephony/"
    ],
@@ -2252,7 +2252,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/import/"
    ],
@@ -2288,7 +2288,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/health/",
     "/system/alerts/",
@@ -2322,7 +2322,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/ha/"
    ],
@@ -2378,7 +2378,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/central/",
     "/system/central/instance/",
@@ -2428,7 +2428,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/integrations/"
    ],
@@ -2452,7 +2452,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/system/automation/"
    ],
@@ -2480,7 +2480,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/modules/",
     "/modules/view/"
@@ -2521,7 +2521,7 @@
    "audience": "user",
    "section": "Using Veyra",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/my-phone/"
    ],
@@ -2581,7 +2581,7 @@
    "audience": "user",
    "section": "Using Veyra",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/my-phone/"
    ],
@@ -2625,7 +2625,7 @@
    "audience": "user",
    "section": "Using Veyra",
    "reviewed": "0.27.44",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-29",
    "pages": [
     "/account/"
    ],
