@@ -4,7 +4,7 @@ summary: Look up any call, export the history, build your own reports and have t
 audience: admin
 section: Calls and call flows
 order: 100
-reviewed: 0.27.45
+reviewed: 0.27.50
 pages:
   - /call-history/
   - /reports/

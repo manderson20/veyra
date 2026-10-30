@@ -4,7 +4,7 @@ summary: Choose which calls are recorded and for how long, record a call on dema
 audience: admin
 section: Calls and call flows
 order: 80
-reviewed: 0.27.45
+reviewed: 0.27.50
 pages:
   - /recording/
 covers:
@@ -13,6 +13,7 @@ covers:
   - frontend/src/components/calls/PickList.tsx
   - backend/veyra/api/v1/recording.py
   - backend/veyra/reporting/recordings.py
+  - backend/veyra/reporting/recording_export.py
 ---
 
 Veyra records nothing until you say so. A *recording policy* says which calls of an organization are recorded, what callers hear first, and how long the recordings are kept. Recordings can also be started during a single call. Every time someone listens to or downloads a recording, it is written to the audit log.
@@ -27,6 +28,7 @@ Veyra records nothing until you say so. A *recording policy* says which calls of
 | Change what calls are recorded | Add, change and remove policies | Organization administrators |
 | Listen to and download call recordings | The **Recordings** tab, for the whole organization | Organization administrators |
 | Listen to recordings of your own calls | The **Recordings** tab, for calls of their own extensions | Nobody |
+| Download many recordings at once with a spreadsheet of the calls | **Export** on the **Recordings** tab | Organization administrators |
 | Hold, release and delete call recordings | **Hold**, **Release** and **Delete** | Organization administrators |
 | Start and stop recording a call in progress | **Record** on Active Calls | Organization and site administrators |
 
@@ -65,13 +67,31 @@ Conference rooms with **Record the conference** on are recorded as well; they ap
 
 ## Listen to recordings
 
-1. Open the **Recordings** tab. To narrow the list, choose an **Organization** (when you manage several) or a **From** date (recordings of calls on or after that day).
+1. Open the **Recordings** tab. To narrow the list, choose an **Organization** (when you manage several), a **From** and **To** date, a **Direction**, or a **Number or name**.
 2. Each recording shows the call's time, direction, **From**, **To**, **Length** and **Deleted on** (its retention date, or *Held*).
-3. Choose **Listen**. The player plays the recording in the browser; **Download** saves the file (Ogg Opus audio).
+3. Choose **Listen**. The player plays the recording in the browser; **Download MP3** saves a file any audio player opens, named with the call's date, time, direction and numbers.
 
 Recordings appear about a minute after a recorded call ends. You can also open a call in [Call History](app:/call-history/) and play its recording there.
 
 Every listening and download is written to the audit log with who did it.
+
+## Export recordings
+
+Use this for a records request, or to keep recordings outside Veyra.
+
+1. On the **Recordings** tab, set the filters so the list shows what you need.
+2. Choose **Export**. The window shows how many recordings match and about how large the file is.
+3. Choose the **Audio format**. **MP3** plays in any audio player. **Ogg Opus** is the stored file, which is smaller and faster to export but does not open in every player.
+4. Choose **Download ZIP**.
+
+The ZIP holds one audio file per recording, named like `2026-10-30_1432_inbound_5551234_to_1001.mp3` in the organization's time zone, and `recordings.csv`, which opens in a spreadsheet. Each row names its file and gives the call's times, direction, outcome, numbers, caller name, dialled number, who answered, trunk, queue or ring group, ring and talk seconds, policy, organization and whether it is held.
+
+- One export holds at most 2000 recordings or 20 GB; for more, export one date range at a time.
+- Exported files are **not encrypted**, unlike the recordings on the server, and the retention dates and audit log no longer apply to them. Keep them somewhere appropriate.
+- The export is written to the audit log with who did it and which recordings it held.
+- If a recording could not be read, its row in `recordings.csv` says so in the **status** column. Check that column after a records request.
+
+The Call History CSV has a `recording_ref` column, which matches `recording_ref` in `recordings.csv`.
 
 ## Keep a recording past its retention date
 
@@ -87,5 +107,5 @@ Tick **Show deleted** to list deleted recordings too. They show *Deleted* with t
 
 - **No recordings appear**: check the policy is enabled, covers the call's direction and the phones or numbers involved, and that you deployed after adding it.
 - **The policy shows a note**: read it; a policy with no direction or nothing chosen records nothing.
-- **The browser cannot play the recording**: use **Download** and play the file in a media player such as VLC.
+- **The browser cannot play the recording**: use **Download MP3**.
 - **`*1` gives an error tone**: the phone's class of service does not allow on-demand recording.

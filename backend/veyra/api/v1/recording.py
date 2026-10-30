@@ -10,8 +10,9 @@ from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,11 +33,13 @@ from veyra.core.models import (
     Prompt,
     RecordingPolicy,
     RingGroup,
+    SipTrunk,
 )
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.crypto import try_load_installation_key
 from veyra.core.security.principal import Principal
+from veyra.reporting import recording_export as export
 from veyra.reporting import recordings as files
 
 router = APIRouter(tags=["recording"])
@@ -46,6 +49,12 @@ P_WRITE = "recording_policies.write"
 R_READ = "recordings.read"
 R_OWN = "recordings.read_own"
 R_MANAGE = "recordings.manage"
+R_EXPORT = "recordings.export"
+# One download: past this, the page asks for a narrower range.
+EXPORT_MAX_RECORDINGS = 2000
+EXPORT_MAX_BYTES = 20 * 1024**3
+# Opus at 16 kbit/s becomes MP3 at 32 kbit/s.
+MP3_SIZE_FACTOR = 2
 
 
 # ------------------------------------------------------------------ policies
@@ -441,28 +450,278 @@ def _require_listen(principal: Principal) -> None:
         raise forbidden()
 
 
+def _filtered(
+    stmt: Any,
+    organization_id: uuid.UUID | None,
+    since: datetime | None,
+    until: datetime | None,
+    direction: str | None,
+    q: str | None,
+) -> Any:
+    if organization_id:
+        stmt = stmt.where(CallRecording.organization_id == organization_id)
+    if since:
+        stmt = stmt.where(CallRecording.created_at >= since)
+    if until:
+        stmt = stmt.where(CallRecording.created_at <= until)
+    if direction or q:
+        calls = select(CallRecord.id)
+        if direction:
+            calls = calls.where(CallRecord.direction == direction)
+        if q:
+            like = f"%{q.strip()}%"
+            calls = calls.where(
+                or_(
+                    CallRecord.from_number.ilike(like),
+                    CallRecord.from_name.ilike(like),
+                    CallRecord.to_number.ilike(like),
+                )
+            )
+        stmt = stmt.where(CallRecording.call_id.in_(calls))
+    return stmt
+
+
 @router.get("/recordings", response_model=Page[RecordingOut], summary="Call recordings")
 def list_recordings(
     organization_id: uuid.UUID | None = None,
     call_id: uuid.UUID | None = None,
     include_deleted: bool = False,
     since: datetime | None = Query(None, alias="from"),
+    until: datetime | None = Query(None, alias="to"),
+    direction: Literal["internal", "inbound", "outbound"] | None = None,
+    q: str | None = Query(None, max_length=100),
     page: PageParams = Depends(page_params),
     principal: Principal = Depends(current_principal),
     db: Session = Depends(get_db),
 ) -> Page[RecordingOut]:
     _require_listen(principal)
-    stmt = _visible(principal).order_by(CallRecording.created_at.desc())
-    if organization_id:
-        stmt = stmt.where(CallRecording.organization_id == organization_id)
+    stmt = _filtered(
+        _visible(principal).order_by(CallRecording.created_at.desc()),
+        organization_id,
+        since,
+        until,
+        direction,
+        q,
+    )
     if call_id:
         stmt = stmt.where(CallRecording.call_id == call_id)
     if not include_deleted:
         stmt = stmt.where(CallRecording.deleted_at.is_(None))
-    if since:
-        stmt = stmt.where(CallRecording.created_at >= since)
     rows, total = paginate(db, stmt, page)
     return Page(items=_rec_outs(db, rows), total=total, limit=page.limit, offset=page.offset)
+
+
+def _exportable(principal: Principal) -> Any:
+    """What the caller may both listen to and export, organization-wide: the
+    read_own permission never reaches an export."""
+    stmt = select(CallRecording).where(CallRecording.deleted_at.is_(None))
+    for perm in (R_READ, R_EXPORT):
+        orgs = principal.organization_ids_with(perm)
+        if orgs is not None:
+            stmt = stmt.where(CallRecording.organization_id.in_(orgs or {uuid.UUID(int=0)}))
+    return stmt
+
+
+class ExportSummaryOut(BaseModel):
+    count: int
+    size_bytes: int
+    max_recordings: int = EXPORT_MAX_RECORDINGS
+    max_bytes: int = EXPORT_MAX_BYTES
+    # Too much for one download.
+    too_large: bool
+
+
+def _export_size(db: Session, stmt: Any, audio_format: str) -> tuple[int, int]:
+    sub = stmt.subquery()
+    count, size = db.execute(
+        select(func.count(), func.coalesce(func.sum(sub.c.size_bytes), 0))
+    ).one()
+    return int(count), int(size) * (MP3_SIZE_FACTOR if audio_format == "mp3" else 1)
+
+
+@router.get(
+    "/recordings/export/summary",
+    response_model=ExportSummaryOut,
+    summary="How much an export would hold",
+)
+def export_summary(
+    organization_id: uuid.UUID | None = None,
+    since: datetime | None = Query(None, alias="from"),
+    until: datetime | None = Query(None, alias="to"),
+    direction: Literal["internal", "inbound", "outbound"] | None = None,
+    q: str | None = Query(None, max_length=100),
+    audio_format: Literal["mp3", "ogg"] = Query("mp3", alias="format"),
+    principal: Principal = Depends(require(R_EXPORT)),
+    db: Session = Depends(get_db),
+) -> ExportSummaryOut:
+    stmt = _filtered(_exportable(principal), organization_id, since, until, direction, q)
+    count, size = _export_size(db, stmt, audio_format)
+    return ExportSummaryOut(
+        count=count,
+        size_bytes=size,
+        too_large=count > EXPORT_MAX_RECORDINGS or size > EXPORT_MAX_BYTES,
+    )
+
+
+def _iso(value: datetime | None) -> str:
+    return value.isoformat() if value else ""
+
+
+def _manifest_rows(
+    db: Session, rows: list[CallRecording], audio_format: str
+) -> list[dict[str, Any]]:
+    outs = {o.id: o for o in _rec_outs(db, rows)}
+    calls = {
+        c.id: c
+        for c in db.scalars(
+            select(CallRecord).where(CallRecord.id.in_({r.call_id for r in rows if r.call_id}))
+        )
+    }
+    exts = {
+        e.id: e
+        for e in db.scalars(
+            select(Extension).where(
+                Extension.id.in_(
+                    {c.answered_extension_id for c in calls.values() if c.answered_extension_id}
+                )
+            )
+        )
+    }
+    trunks = {
+        t.id: t.name
+        for t in db.scalars(
+            select(SipTrunk).where(
+                SipTrunk.id.in_({c.trunk_id for c in calls.values() if c.trunk_id})
+            )
+        )
+    }
+    orgs = {
+        o.id: o
+        for o in db.scalars(
+            select(Organization).where(
+                Organization.id.in_({r.organization_id for r in rows if r.organization_id})
+            )
+        )
+    }
+    several = len({r.organization_id for r in rows}) > 1
+    taken: set[str] = set()
+    out = []
+    for r in rows:
+        o, c, org = outs[r.id], calls.get(r.call_id or uuid.UUID(int=0)), None
+        if r.organization_id:
+            org = orgs.get(r.organization_id)
+        stem = export.file_stem(
+            o.started_at,
+            export.zone(org.timezone if org else None),
+            direction=o.direction,
+            from_number=o.from_number,
+            to_number=o.to_number,
+            conference=o.conference_name,
+            ref=r.ref,
+        )
+        if several:
+            stem = f"{org.slug if org else '_unknown'}/{stem}"
+        answered = exts.get(c.answered_extension_id) if c and c.answered_extension_id else None
+        out.append(
+            {
+                "file": export.unique_name(stem, audio_format, taken),
+                "status": "ok",
+                "started_at": _iso(o.started_at),
+                "answered_at": _iso(c.answered_at) if c else "",
+                "ended_at": _iso(c.ended_at) if c else "",
+                "direction": o.direction,
+                "outcome": c.outcome if c else "",
+                "from_number": o.from_number,
+                "from_name": o.from_name,
+                "to_number": o.to_number,
+                "did": c.did if c else "",
+                "answered_by": f"{answered.number} {answered.display_name}" if answered else "",
+                "trunk": trunks.get(c.trunk_id) if c and c.trunk_id else "",
+                "queue": c.queue if c else "",
+                "ring_group": c.ring_group if c else "",
+                "ring_seconds": c.ring_seconds if c else "",
+                "talk_seconds": c.talk_seconds if c else "",
+                "recording_seconds": r.duration_seconds,
+                "conference": o.conference_name,
+                "policy": o.policy_name,
+                "organization": org.name if org else "",
+                "held": "yes" if r.held else "no",
+                "delete_after": _iso(r.delete_after),
+                "recording_ref": r.ref,
+                "recording_id": str(r.id),
+                "call_id": str(r.call_id) if r.call_id else "",
+            }
+        )
+    return out
+
+
+@router.get("/recordings/export.zip", summary="Download recordings with a spreadsheet (audited)")
+def export_recordings(
+    request: Request,
+    organization_id: uuid.UUID | None = None,
+    since: datetime | None = Query(None, alias="from"),
+    until: datetime | None = Query(None, alias="to"),
+    direction: Literal["internal", "inbound", "outbound"] | None = None,
+    q: str | None = Query(None, max_length=100),
+    audio_format: Literal["mp3", "ogg"] = Query("mp3", alias="format"),
+    principal: Principal = Depends(require(R_EXPORT)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> StreamingResponse:
+    stmt = _filtered(_exportable(principal), organization_id, since, until, direction, q)
+    count, size = _export_size(db, stmt, audio_format)
+    if count == 0:
+        raise ProblemError(404, "Nothing to export", "No recordings match.", code="nothing")
+    if count > EXPORT_MAX_RECORDINGS or size > EXPORT_MAX_BYTES:
+        raise ProblemError(
+            422,
+            "Too much for one download",
+            f"{count} recordings match; export at most {EXPORT_MAX_RECORDINGS} recordings or "
+            f"{EXPORT_MAX_BYTES // 1024**3} GB at a time. Choose a narrower date range.",
+            code="export_too_large",
+        )
+    rows = list(db.scalars(stmt.order_by(CallRecording.created_at)))
+    manifest = _manifest_rows(db, rows, audio_format)
+    recording_ids = [str(r.id) for r in rows]
+    # The stream outlives this session; a detached row keeps what was loaded.
+    for r in rows:
+        db.expunge(r)
+    _audit(
+        db,
+        ctx,
+        principal,
+        "recording.export",
+        "recording",
+        None,
+        organization_id,
+        {
+            "count": count,
+            "format": audio_format,
+            "from": _iso(since),
+            "to": _iso(until),
+            "direction": direction,
+            "q": q,
+            "recording_ids": recording_ids,
+        },
+    )
+    db.commit()
+    settings = request.app.state.settings
+    key = try_load_installation_key(settings)
+    stamp = utcnow().strftime("%Y%m%d-%H%M")
+    return StreamingResponse(
+        export.stream_zip(
+            zip(manifest, rows, strict=True),
+            lambda rec: files.audio_of(settings.recordings_dir, rec, key),
+            audio_format == "mp3",
+        ),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="recordings-{stamp}.zip"',
+            "Cache-Control": "private, no-store",
+            # Straight to the browser: a long export must not fill nginx's disk.
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _recording(db: Session, principal: Principal, rec_id: uuid.UUID) -> CallRecording:
@@ -514,6 +773,7 @@ def recording_audio(
     rec_id: uuid.UUID,
     request: Request,
     download: bool = False,
+    audio_format: Literal["mp3", "ogg"] = Query("ogg", alias="format"),
     principal: Principal = Depends(current_principal),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
@@ -537,7 +797,24 @@ def recording_audio(
             {"call_id": str(rec.call_id) if rec.call_id else None},
         )
         db.commit()
-    return audio_response(request, data, f"recording-{rec.ref}.ogg" if download else None)
+    if not download:
+        return audio_response(request, data, None)
+    row = _manifest_rows(db, [rec], audio_format)[0]
+    if audio_format == "mp3":
+        converted = export.to_mp3(data)
+        if converted is None:
+            raise ProblemError(
+                503, "Cannot convert", "Could not make an MP3 of this recording.", code="no_mp3"
+            )
+        return Response(
+            converted,
+            media_type="audio/mpeg",
+            headers={
+                "Cache-Control": "private, no-store",
+                "Content-Disposition": f'attachment; filename="{row["file"]}"',
+            },
+        )
+    return audio_response(request, data, row["file"])
 
 
 class HoldIn(BaseModel):

@@ -74,6 +74,7 @@ class CallOut(BaseModel):
     talk_seconds: int
     leg_count: int
     recorded: bool
+    recording_ref: str | None = None
     in_progress: bool
     # On the user's own history: the other party's name from their contacts.
     contact_name: str | None = None
@@ -150,6 +151,7 @@ def _outs(db: Session, rows: list[CallRecord]) -> list[CallOut]:
             talk_seconds=r.talk_seconds,
             leg_count=r.leg_count,
             recorded=bool(r.recording_ref),
+            recording_ref=r.recording_ref,
             in_progress=not r.is_final,
         )
         for r in rows
@@ -269,6 +271,7 @@ CSV_COLUMNS = (
     "organization",
     "legs",
     "recorded",
+    "recording_ref",
 )
 
 
@@ -390,6 +393,7 @@ def _csv_lines(outs: list[CallOut]) -> Iterator[str]:
                 c.organization_name or "",
                 c.leg_count,
                 "yes" if c.recorded else "no",
+                c.recording_ref or "",
             ]
         )
         yield buf.getvalue()

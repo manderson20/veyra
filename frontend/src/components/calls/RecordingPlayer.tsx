@@ -13,7 +13,7 @@ export function RecordingPlayer({ id }: { id: string }) {
       <audio controls preload="none" src={src} style={{ width: "100%" }}>
         Your browser cannot play Ogg Opus audio; download the file instead.
       </audio>
-      <div><a className={buttonClass("secondary", "sm")} href={`${src}?download=true`} download><Icon name="download" size={14} /> Download</a></div>
+      <div><a className={buttonClass("secondary", "sm")} href={`${src}?download=true&format=mp3`} download><Icon name="download" size={14} /> Download MP3</a></div>
       <p className="subtle" style={{ margin: 0 }}>Listening and downloading are written to the audit log.</p>
     </div>
   );

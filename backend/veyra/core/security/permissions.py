@@ -263,6 +263,11 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         "Listen to recordings of your own calls",
     ),
     PermissionDef(
+        "recordings.export",
+        "Download many recordings at once with a spreadsheet of the calls (audited)",
+        default_roles=("org_admin",),
+    ),
+    PermissionDef(
         "recordings.manage",
         "Hold, release and delete call recordings",
         default_roles=("org_admin",),

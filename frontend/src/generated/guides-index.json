@@ -68,8 +68,8 @@
    "summary": "Create accounts for the people who sign in to Veyra, give them roles, and help them when they are locked out.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.50",
+   "reviewed_date": null,
    "pages": [
     "/users/",
     "/users/view/"
@@ -501,8 +501,8 @@
    "summary": "Choose which calls are recorded and for how long, record a call on demand, and listen to recordings with every playback audited.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.50",
+   "reviewed_date": null,
    "pages": [
     "/recording/"
    ],
@@ -527,8 +527,8 @@
    "summary": "Look up any call, export the history, build your own reports and have them emailed on a schedule.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.50",
+   "reviewed_date": null,
    "pages": [
     "/call-history/",
     "/reports/"

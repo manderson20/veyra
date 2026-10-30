@@ -17,6 +17,7 @@ import {
   EmptyState,
   IconButton,
   PageHeader,
+  Icon,
   Pagination,
   SelectField,
   Switch,
@@ -26,7 +27,8 @@ import {
   useToast,
   type Column,
 } from "@/components/ui";
-import { api, errorMessage } from "@/lib/api";
+import { buttonClass } from "@/components/ui/Button";
+import { API_BASE, api, errorMessage } from "@/lib/api";
 import { formatBytes, formatDateTime } from "@/lib/format";
 import type {
   CallQueue,
@@ -206,6 +208,26 @@ function Policies() {
   );
 }
 
+/** The ZIP of what the filters show: audio with readable names and a spreadsheet of the calls. */
+function RecordingExportDialog({ filters, onClose }: { filters: Record<string, string | undefined>; onClose: () => void }) {
+  const [format, setFormat] = useState("mp3");
+  const summary = useApiData<{ count: number; size_bytes: number; too_large: boolean; max_recordings: number; max_bytes: number }>("/recordings/export/summary", { ...filters, format });
+  const query = new URLSearchParams(Object.entries({ ...filters, format }).filter((e): e is [string, string] => !!e[1])).toString();
+  const s = summary.data;
+  const ready = s && s.count > 0 && !s.too_large;
+  return (
+    <Dialog open onClose={onClose} title="Export recordings" description="The recordings the filters on this page show, in a ZIP file with a spreadsheet of their calls. Deleted recordings are left out."
+      footer={<><Button onClick={onClose}>Cancel</Button>{ready ? <a className={buttonClass("primary", "md")} href={`${API_BASE}/recordings/export.zip?${query}`} download onClick={onClose}><Icon name="download" size={14} /> Download ZIP</a> : null}</>}>
+      <div className="stack stack--sm">
+        <SelectField label="Audio format" value={format} options={[{ value: "mp3", label: "MP3: plays in any audio player" }, { value: "ogg", label: "Ogg Opus: the stored file, smaller and faster" }]} onChange={(e) => setFormat(e.target.value)} />
+        {summary.error ? <Callout tone="danger">{errorMessage(summary.error)}</Callout> : !s ? <p className="subtle">Counting…</p> : s.count === 0 ? <Callout tone="info">No recordings match these filters.</Callout> : s.too_large ? (
+          <Callout tone="warn" title="Too much for one download">{s.count} recordings, about {formatBytes(s.size_bytes)}. One export holds at most {s.max_recordings} recordings or {formatBytes(s.max_bytes)}. Choose a narrower date range.</Callout>
+        ) : <p>{s.count} recording{s.count === 1 ? "" : "s"}, about {formatBytes(s.size_bytes)}. The export is written to the audit log, with the recordings it holds.</p>}
+      </div>
+    </Dialog>
+  );
+}
+
 function Recordings() {
   const toast = useToast();
   const { can } = useSession();
@@ -213,13 +235,22 @@ function Recordings() {
   const [offset, setOffset] = useState(0);
   const [org, setOrg] = useState("");
   const [since, setSince] = useState("");
+  const [until, setUntil] = useState("");
+  const [direction, setDirection] = useState("");
+  const [number, setNumber] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [withDeleted, setWithDeleted] = useState(false);
   const [playing, setPlaying] = useState<CallRecordingItem | null>(null);
   const [removing, setRemoving] = useState<CallRecordingItem | null>(null);
   const [busy, setBusy] = useState(false);
-  const list = useApiData<Page<CallRecordingItem>>("/recordings", {
-    limit: LIMIT, offset, organization_id: org || undefined, from: since ? new Date(`${since}T00:00:00`).toISOString() : undefined, include_deleted: withDeleted || undefined,
-  });
+  const filters = {
+    organization_id: org || undefined,
+    from: since ? new Date(`${since}T00:00:00`).toISOString() : undefined,
+    to: until ? new Date(`${until}T23:59:59.999`).toISOString() : undefined,
+    direction: direction || undefined,
+    q: number.trim() || undefined,
+  };
+  const list = useApiData<Page<CallRecordingItem>>("/recordings", { limit: LIMIT, offset, ...filters, include_deleted: withDeleted || undefined });
   const manage = can("recordings.manage");
   const hold = async (r: CallRecordingItem) => {
     try {
@@ -262,12 +293,16 @@ function Recordings() {
     },
   ];
   return (
-    <Card title="Recordings" subtitle="Every listening and download is written to the audit log." flush>
+    <Card title="Recordings" subtitle="Every listening and download is written to the audit log." flush
+      actions={can("recordings.export") ? <Button icon="download" onClick={() => setExporting(true)}>Export</Button> : null}>
       <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end", padding: "var(--space-3) var(--space-4)" }}>
         {organizations.length > 1 ? (
           <SelectField label="Organization" value={org} options={[{ value: "", label: "All" }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]} onChange={(e) => { setOrg(e.target.value); setOffset(0); }} />
         ) : null}
         <TextField label="From" type="date" value={since} onChange={(e) => { setSince(e.target.value); setOffset(0); }} />
+        <TextField label="To" type="date" value={until} onChange={(e) => { setUntil(e.target.value); setOffset(0); }} />
+        <SelectField label="Direction" value={direction} options={[{ value: "", label: "All" }, { value: "inbound", label: "Inbound" }, { value: "outbound", label: "Outbound" }, { value: "internal", label: "Internal" }]} onChange={(e) => { setDirection(e.target.value); setOffset(0); }} />
+        <TextField label="Number or name" value={number} maxLength={100} onChange={(e) => { setNumber(e.target.value); setOffset(0); }} />
         <Checkbox label="Show deleted" checked={withDeleted} onChange={(e) => { setWithDeleted(e.target.checked); setOffset(0); }} />
       </div>
       <DataTable columns={columns} rows={list.data?.items} rowKey={(r) => r.id} loading={list.loading} error={list.error} onRetry={list.reload}
@@ -276,6 +311,7 @@ function Recordings() {
       <Dialog open={playing !== null} onClose={() => setPlaying(null)} title="Recording" description={playing ? `${formatDateTime(playing.started_at ?? playing.created_at)} · ${formatBytes(playing.size_bytes)}` : undefined}>
         {playing ? <RecordingPlayer id={playing.id} /> : null}
       </Dialog>
+      {exporting ? <RecordingExportDialog filters={filters} onClose={() => setExporting(false)} /> : null}
       <ConfirmDialog open={!!removing} title="Delete this recording?" confirmLabel="Delete" tone="danger" busy={busy} onCancel={() => setRemoving(null)} onConfirm={remove}>
         <p>The audio is removed now instead of at its retention date. The call stays in the call history. This is written to the audit log and cannot be undone.</p>
       </ConfirmDialog>

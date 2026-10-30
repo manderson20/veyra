@@ -3,9 +3,13 @@
 the worker's conversion and retention, and the API (validation, audited
 playback, hold and delete)."""
 
+import csv
+import io
 import shutil
+import uuid
 import wave
-from datetime import timedelta
+import zipfile
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
@@ -15,9 +19,10 @@ from test_api_routing import INBOUND, OUTBOUND, _ext, _fake, _org, _trunk
 from test_call_history import line
 
 from veyra.core.db import session_scope
-from veyra.core.models import AuditEvent, CallRecord, CallRecording, User
+from veyra.core.models import AuditEvent, CallRecord, CallRecording, Organization, User
 from veyra.core.models.base import utcnow
 from veyra.reporting import cdr, recordings
+from veyra.reporting import recording_export as export
 
 POL = "/api/v1/recording-policies"
 REC = "/api/v1/recordings"
@@ -360,3 +365,140 @@ def test_recordings_are_encrypted_at_rest(admin, app):
         rec = db.get(CallRecording, rec_id)
         assert recordings.audio_of(rec_dir, rec, new) == audio.content
         assert recordings.audio_of(rec_dir, rec, key) is None
+
+
+def _exportable_recording(tmp_dir, ref, **call):
+    """A real Ogg file with its call, as the worker leaves them."""
+    now = utcnow()
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    wav = tmp_dir / f"{ref}.wav"
+    _wav(wav)
+    with session_scope() as db:
+        org = db.scalars(select(Organization)).first()
+        c = CallRecord(
+            id=uuid.uuid4(),
+            linkedid=ref,
+            organization_id=org.id,
+            direction="inbound",
+            outcome="answered",
+            started_at=call.pop("started_at", now),
+            ring_seconds=3,
+            talk_seconds=20,
+            recording_ref=ref,
+            **call,
+        )
+        db.add(c)
+        db.flush()
+        rel = f"{org.slug}/{ref}.ogg"
+        recordings.convert(wav, tmp_dir / rel)
+        r = CallRecording(
+            id=uuid.uuid4(),
+            ref=ref,
+            organization_id=org.id,
+            call_id=c.id,
+            path=rel,
+            size_bytes=(tmp_dir / rel).stat().st_size,
+            duration_seconds=2,
+            created_at=now,
+        )
+        db.add(r)
+        return str(r.id)
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg")
+def test_export_zip(admin, app):
+    _org(admin)
+    rec_dir = app.state.settings.recordings_dir
+    when = datetime(2026, 10, 30, 19, 32, tzinfo=UTC)
+    a = _exportable_recording(
+        rec_dir,
+        "exp-a",
+        started_at=when,
+        from_number="5551234",
+        from_name="=HYPERLINK(evil)",
+        to_number="1001",
+    )
+    _exportable_recording(
+        rec_dir, "exp-b", started_at=when, from_number="5551234", to_number="1001"
+    )
+    gone = _exportable_recording(rec_dir, "exp-c", started_at=when, from_number="77", to_number="1")
+    with session_scope() as db:
+        rec = db.get(CallRecording, uuid.UUID(gone))
+        (rec_dir / rec.path).unlink()
+    assert admin.get(f"{REC}/export/summary").json()["count"] == 3
+    r = admin.get(f"{REC}/export.zip")
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/zip"
+    assert r.headers["x-accel-buffering"] == "no"
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    assert z.testzip() is None
+    names = z.namelist()
+    # Same minute and numbers: the name stays unique; the time is the organization's.
+    mp3s = sorted(n for n in names if n.endswith(".mp3"))
+    assert len(mp3s) == 2 and mp3s[0].endswith("_inbound_5551234_to_1001.mp3")
+    assert mp3s[1].endswith("_inbound_5551234_to_1001_2.mp3")
+    assert z.read(mp3s[0])[:3] in (b"ID3", b"\xff\xfb", b"\xff\xf3", b"\xff\xf2")
+    rows = list(csv.DictReader(io.StringIO(z.read("recordings.csv").decode("utf-8-sig"))))
+    assert len(rows) == 3
+    by_id = {x["recording_id"]: x for x in rows}
+    assert by_id[a]["from_name"] == "'=HYPERLINK(evil)" and by_id[a]["talk_seconds"] == "20"
+    assert by_id[a]["file"] in names and by_id[a]["status"] == "ok"
+    assert by_id[gone]["file"] == "" and by_id[gone]["status"] == "missing or unreadable"
+    with session_scope() as db:
+        ev = db.scalars(select(AuditEvent).where(AuditEvent.action == "recording.export")).one()
+        assert ev.details["count"] == 3 and a in ev.details["recording_ids"]
+    # The original audio, filters and a single readable download.
+    r = admin.get(f"{REC}/export.zip", params={"format": "ogg", "q": "77"})
+    assert r.status_code == 200
+    assert zipfile.ZipFile(io.BytesIO(r.content)).namelist() == ["recordings.csv"]
+    assert admin.get(f"{REC}/export.zip", params={"q": "nomatch"}).status_code == 404
+    one = admin.get(f"{REC}/{a}/audio", params={"download": True, "format": "mp3"})
+    assert one.headers["content-type"] == "audio/mpeg"
+    assert "_inbound_5551234_to_1001" in one.headers["content-disposition"]
+
+
+def test_export_limits_and_permission(admin, app, monkeypatch):
+    from veyra.api.v1 import recording as api
+
+    org = _org(admin)
+    _exportable_recording(
+        app.state.settings.recordings_dir, "lim-a", from_number="1", to_number="2"
+    )
+    monkeypatch.setattr(api, "EXPORT_MAX_RECORDINGS", 0)
+    r = admin.get(f"{REC}/export.zip")
+    assert r.status_code == 422 and r.json()["code"] == "export_too_large"
+    monkeypatch.undo()
+    # An ordinary user does not reach the export.
+    user = admin.post(
+        "/api/v1/users",
+        json={
+            "email": "nurse2@example.org",
+            "display_name": "Nurse",
+            "password": ADMIN_PASSWORD,
+            "home_organization_id": org["id"],
+        },
+    ).json()
+    with session_scope() as db:
+        db.get(User, user["id"]).must_change_password = False
+    nurse = login(
+        TestClient(app, base_url="http://veyra.test"), "nurse2@example.org", ADMIN_PASSWORD
+    )
+    assert nurse.get(f"{REC}/export.zip").status_code == 403
+    assert nurse.get(f"{REC}/export/summary").status_code == 403
+
+
+def test_file_names_cannot_escape():
+    tz = export.zone("America/Chicago")
+    when = datetime(2026, 10, 30, 19, 32, tzinfo=UTC)
+    stem = export.file_stem(
+        when,
+        tz,
+        direction="inbound",
+        from_number="../../etc",
+        to_number='a"b',
+        conference=None,
+        ref="x",
+    )
+    assert stem == "2026-10-30_1432_inbound_etc_to_a-b"
+    assert export.safe_cell("+15551234") == "+15551234"
+    assert export.safe_cell("+cmd") == "'+cmd"

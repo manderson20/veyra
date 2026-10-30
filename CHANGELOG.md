@@ -8,6 +8,18 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.50
+
+No migration.
+
+### Added
+- **Export call recordings**: Telephony → Call Recording → Recordings → **Export** downloads the recordings the filters show as a ZIP: audio as MP3 (or the stored Ogg Opus) named with the call's date, time, direction and numbers, plus `recordings.csv` with the call details of each. New permission *Download many recordings at once*, given to organization administrators. Each export is written to the audit log with the recordings it held. Exported files are not encrypted.
+- The Recordings list can be filtered by end date, direction, and number or name.
+
+### Changed
+- **Download** on a recording now saves an MP3 with a readable name, which plays in any audio player.
+- The Call History CSV has a `recording_ref` column that matches the export's spreadsheet.
+
 ## 0.27.49 — 2026-10-30
 
 Migration 0073. Deploy changes once after updating.

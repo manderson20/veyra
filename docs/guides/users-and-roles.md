@@ -4,7 +4,7 @@ summary: Create accounts for the people who sign in to Veyra, give them roles, a
 audience: admin
 section: Getting started
 order: 40
-reviewed: 0.27.44
+reviewed: 0.27.50
 checked: 2026-10-29
 pages:
   - /users/
