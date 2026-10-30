@@ -185,7 +185,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.52",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/users/",
     "/users/view/"
