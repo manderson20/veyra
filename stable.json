@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 64,
+  "sequence": 65,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.48",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Google Drive backup destination.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "fd9492c883",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.48/veyra-0.27.48.tar.gz",
+        "sha256": "17afb30eb81cfa720f680169c2f983084529af12ba285c37bbb044b47102741d",
+        "size": 9399391
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1091,6 +1108,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-30T15:46:20+00:00",
-  "expires_at": "2027-01-28T15:46:20+00:00"
+  "generated_at": "2026-10-30T17:14:18+00:00",
+  "expires_at": "2027-01-28T17:14:18+00:00"
 }
