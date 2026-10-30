@@ -136,7 +136,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.55",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/devices/",
     "/provisioning/requests/"
@@ -150,7 +150,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.55",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/provisioning/"
    ],
@@ -216,7 +216,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.55",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/provisioning/",
     "/provisioning/view/"
