@@ -155,14 +155,19 @@ served for its name.
 
 - **Backups.** `/etc/veyra` is already backed up, so the certbot account,
   the certificate and the encrypted settings come back on restore.
-- **High availability (not finished).** The public name should be the HA
-  service name. Renewal runs only on the primary. Today the HA file sync
-  copies `/etc/veyra/tls`, so `public.crt` and `public.key` reach the
-  standby. It does not copy `nginx-public-name.conf` or `/etc/veyra/acme`,
-  and it does not reload NGINX, so after a switchover the new primary
-  serves the Veyra certificate for the public name until *Get the
-  certificate* runs there. Adding those files and the reload to the sync
-  stays open on #43.
+- **High availability.** The public name should be the HA service name.
+  Renewal runs only on the primary. The HA file sync copies `/etc/veyra/tls`
+  and `/etc/veyra/acme` (the request and credentials), but not certbot's own
+  tree under `acme/certbot`, which relies on symlinks the sync skips. After
+  each sync the standby's agent works out the rest from the certificate
+  (`veyra/ha/public_cert.py`): the name file, the NGINX reload, Asterisk's
+  copies and `certificate.json`. So after a switchover the new primary serves
+  the public certificate and its worker renews it. That first renewal has no
+  certbot history on this node, so it requests a new certificate and registers
+  a new account, rather than renewing the old one. A former primary keeps its
+  older certbot tree; if it becomes primary again, certbot may report "not due"
+  from it, and the certificate synced from the peer stays in service until the
+  renewal date.
 
 ## 9. Out of scope
 

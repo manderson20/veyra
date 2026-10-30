@@ -30,7 +30,7 @@ from typing import Any
 
 from veyra import __version__
 from veyra.central import protocol
-from veyra.ha import certs, join, peer, postgres, rules, sequences, sync
+from veyra.ha import certs, join, peer, postgres, public_cert, rules, sequences, sync
 from veyra.ha.client import SOCKET_PATH
 from veyra.ha.postgres import Result, Runner
 from veyra.ha.rules import PeerHealth
@@ -577,6 +577,7 @@ class Agent:
                 st.last_error = ""
                 st.backlog = 0
                 st.last_success_at = now_iso()
+                public_cert.apply(self.paths.config_dir, self.system)
         except (peer.PeerError, AgentError, OSError, KeyError, ValueError) as e:
             st.last_error = str(e)[:300]
         self.state.save_sync(st)

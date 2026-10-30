@@ -35,10 +35,14 @@ DATA_ROOTS = (
     "updates",
 )
 RECORDINGS_ROOT = "recordings"
-CONFIG_ROOTS = ("secrets", "tls", "trust")
+CONFIG_ROOTS = ("secrets", "tls", "trust", "acme")
 VOICEMAIL_ROOT = "/var/spool/asterisk/voicemail"
 # Files the standby must never take from the primary: its own identity.
 NEVER_SYNC = ("secrets/node.key",)
+# certbot's own tree relies on symlinks, which the sync skips: half a copy would
+# confuse it. The request and credentials are enough; a new primary's first
+# renewal gets a certificate from them (docs/PUBLIC_CERTIFICATES.md §8).
+NEVER_SYNC_UNDER = ("acme/certbot/",)
 
 
 @dataclass(frozen=True)
@@ -111,7 +115,11 @@ def _names(st: os.stat_result) -> tuple[str, str]:
 
 
 def excluded(logical: str) -> bool:
-    return any(logical == f"etc/{n}" for n in NEVER_SYNC) or logical.endswith(TEMP_SUFFIX)
+    return (
+        any(logical == f"etc/{n}" for n in NEVER_SYNC)
+        or any(logical.startswith(f"etc/{n}") for n in NEVER_SYNC_UNDER)
+        or logical.endswith(TEMP_SUFFIX)
+    )
 
 
 _excluded = excluded

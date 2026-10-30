@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.47
+
+No migration.
+
+### Fixed
+- **Let's Encrypt with high availability** (#43): the standby now takes over the public certificate fully. After a switchover the new primary serves it for the public name, the SIP TLS transport can present it, and it keeps renewing. Before, the new primary served the Veyra certificate until someone pressed **Get the certificate**, and the certificate would not renew there.
+
 ## 0.27.46 — 2026-10-30
 
 Migration 0071 (adds a column for the new destination). The web server's settings change (the update applies them).
