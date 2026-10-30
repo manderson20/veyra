@@ -19,7 +19,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [],
    "headings": [
     {
@@ -69,7 +69,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [],
    "headings": [
     {
@@ -103,7 +103,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/"
    ],
@@ -143,7 +143,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/organizations/",
     "/organizations/view/",
@@ -222,7 +222,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/extensions/",
     "/extensions/view/"
@@ -339,7 +339,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/settings/"
    ],
@@ -459,7 +459,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/devices/",
     "/devices/view/"
@@ -545,7 +545,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/device-profiles/view/",
     "/devices/view/"
@@ -616,7 +616,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/provisioning/",
     "/provisioning/view/"
@@ -705,7 +705,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/firmware/"
    ],
@@ -805,7 +805,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/trunks/",
     "/trunks/view/"
@@ -899,7 +899,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/routing/inbound/",
     "/routing/inbound/view/"
@@ -940,7 +940,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/queues/",
     "/queues/view/"
@@ -1025,7 +1025,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/routing/outbound/",
     "/routing/outbound/view/"
@@ -1297,7 +1297,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/routing/classes-of-service/"
    ],
@@ -1373,7 +1373,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/prompts/",
     "/hold-music/"
@@ -1414,7 +1414,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/system/emergency/"
    ],
@@ -1462,7 +1462,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/recording/"
    ],
@@ -1510,7 +1510,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/calls/"
    ],
@@ -1550,7 +1550,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/call-history/",
     "/reports/"
@@ -1591,7 +1591,7 @@
    "audience": "admin",
    "section": "Paging and bells",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/paging-zones/"
    ],
@@ -1679,7 +1679,7 @@
    "audience": "admin",
    "section": "Paging and bells",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/bells/",
     "/calendars/"
@@ -1762,7 +1762,7 @@
    "audience": "admin",
    "section": "Voicemail and fax",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/voicemail/"
    ],
@@ -1898,7 +1898,7 @@
    "audience": "admin",
    "section": "Sign-in and security",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/system/firewall/"
    ],
@@ -2000,7 +2000,7 @@
    "audience": "admin",
    "section": "Sign-in and security",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/audit/"
    ],
@@ -2216,7 +2216,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/system/telephony/"
    ],
@@ -2440,7 +2440,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/system/integrations/"
    ],
@@ -2533,7 +2533,7 @@
    "audience": "user",
    "section": "Using Veyra",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/my-phone/"
    ],
@@ -2593,7 +2593,7 @@
    "audience": "user",
    "section": "Using Veyra",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/my-phone/"
    ],
@@ -2637,7 +2637,7 @@
    "audience": "user",
    "section": "Using Veyra",
    "reviewed": "0.27.45",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/account/"
    ],
