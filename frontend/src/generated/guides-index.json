@@ -254,8 +254,8 @@
    "summary": "Choose which widgets people see on My Phone by organization, building, department or role, and lock the ones they must keep.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.49",
+   "reviewed_date": null,
    "pages": [
     "/system/portal-layouts/"
    ],
@@ -308,8 +308,8 @@
    "summary": "Decide where each of your phone numbers (DIDs) rings, with a different destination outside business hours.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.49",
+   "reviewed_date": null,
    "pages": [
     "/routing/inbound/",
     "/routing/inbound/view/"
@@ -349,8 +349,8 @@
    "summary": "Decide which dialled numbers go out to the carrier, through which trunks, and with which caller ID.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.49",
+   "reviewed_date": null,
    "pages": [
     "/routing/outbound/",
     "/routing/outbound/view/"
@@ -363,8 +363,8 @@
    "summary": "Set opening hours, holidays and closed days, so calls outside them go to a different destination.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.46",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.49",
+   "reviewed_date": null,
    "pages": [
     "/routing/time-conditions/",
     "/routing/time-conditions/view/"
@@ -418,8 +418,8 @@
    "summary": "Create a dial-in meeting room with optional PINs, see who is in it, and mute, remove or end from the web.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.49",
+   "reviewed_date": null,
    "pages": [
     "/conferences/",
     "/conferences/view/"
@@ -829,8 +829,8 @@
    "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.49",
+   "reviewed_date": null,
    "pages": [
     "/my-phone/"
    ],

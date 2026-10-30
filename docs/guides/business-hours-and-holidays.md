@@ -4,7 +4,7 @@ summary: Set opening hours, holidays and closed days, so calls outside them go t
 audience: admin
 section: Calls and call flows
 order: 40
-reviewed: 0.27.46
+reviewed: 0.27.49
 checked: 2026-10-30T15:10Z
 pages:
   - /routing/time-conditions/

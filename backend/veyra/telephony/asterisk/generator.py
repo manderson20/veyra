@@ -3934,6 +3934,8 @@ def _conference_contexts(rooms: list[dict[str, Any]]) -> list[str]:
         ]
         if user_pin or admin_pin:
             lines += [
+                # Invited from the web (#96): whoever invited them vouches.
+                ' same => n,GotoIf($["${VEYRA_CONF_INVITED}"="1"]?join)',
                 " same => n,Set(VEYRA_CONF_TRIES=0)",
                 " same => n(pin),Read(VEYRA_PIN,conf-getpin,10,,1,10)",
             ]
@@ -3996,13 +3998,11 @@ def _confbridge(
             f"max_members={limit}" if limit else "; max_members: no limit",
             "record_conference=" + ("yes" if r.get("record") else "no"),
         ]
-        if r.get("record"):
-            lines += [
-                # ConfBridge appends the timestamp and ".wav" itself.
-                f"record_file={recordings_dir}/{DEFAULT_CONFERENCES_SUBDIR}/{org}--{slug}",
-                "record_file_timestamp=yes",
-            ]
         lines += [
+            # Also for a room recorded only when started from the web (#96).
+            # ConfBridge appends the timestamp and ".wav" itself.
+            f"record_file={recordings_dir}/{DEFAULT_CONFERENCES_SUBDIR}/{org}--{slug}",
+            "record_file_timestamp=yes",
             "language=en",
             f"[{user}]",
             "type=user",

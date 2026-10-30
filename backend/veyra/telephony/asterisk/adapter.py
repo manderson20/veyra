@@ -619,7 +619,15 @@ class AsteriskAdapter(TelephonyAdapter):
             }
             for r in parse_confbridge_users(out)
         ]
-        return {"locked": summary["locked"].lower().startswith("y"), "participants": participants}
+        # The recorder is a channel of its own, CBRec/<room>-<8 hex digits>.
+        ok, out = cli.run("core show channels concise")
+        recorder = f"CBRec/{name}-"
+        recording = ok and any(line.startswith(recorder) for line in out.splitlines())
+        return {
+            "locked": summary["locked"].lower().startswith("y"),
+            "recording": recording,
+            "participants": participants,
+        }
 
     def conference_action(self, room: str, action: str, channel: str | None = None) -> None:
         name = _check_conference(room)
@@ -634,10 +642,19 @@ class AsteriskAdapter(TelephonyAdapter):
             command = f"confbridge {action} {name}"
         elif action == "end":
             command = f"confbridge kick {name} all"
+        elif action in ("record_start", "record_stop"):
+            command = f"confbridge record {action.split('_')[1]} {name}"
         else:
             raise ValueError(f"unknown conference action {action!r}")
         ok, out = cli.run(command)
-        if not ok or "No conference bridge named" in out or "No participant named" in out:
+        refusals = (
+            "No conference bridge named",
+            "No participant named",
+            "already being recorded",
+            "Could not start recording",
+            "could not be stopped",
+        )
+        if not ok or any(r in out for r in refusals):
             raise EngineUnavailable(out[:200] or "the engine refused the command")
 
     # --- configuration ------------------------------------------------------

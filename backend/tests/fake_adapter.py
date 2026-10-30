@@ -243,7 +243,11 @@ class FakeAdapter(TelephonyAdapter):
         return (
             None
             if live is None
-            else {"locked": live["locked"], "participants": [dict(p) for p in live["participants"]]}
+            else {
+                "locked": live["locked"],
+                "recording": live.get("recording", False),
+                "participants": [dict(p) for p in live["participants"]],
+            }
         )
 
     def conference_action(self, room: str, action: str, channel: str | None = None) -> None:
@@ -263,6 +267,8 @@ class FakeAdapter(TelephonyAdapter):
             live["participants"] = [p for p in people if p["channel"] != channel]
         elif action in ("lock", "unlock"):
             live["locked"] = action == "lock"
+        elif action in ("record_start", "record_stop"):
+            live["recording"] = action == "record_start"
         elif action == "end":
             self.conferences.pop(room)
 

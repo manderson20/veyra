@@ -4,6 +4,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { ConferenceFields, EMPTY_CONFERENCE, conferenceBody, conferenceDraft, conferenceValid, type ConferenceDraft } from "@/components/callflow/ConferenceFields";
+import { ConferenceOwnersCard } from "@/components/conferences/ConferenceOwnersCard";
 import { LiveConference } from "@/components/conferences/LiveConference";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { Badge, Button, Callout, Card, ConfirmDialog, ErrorState, LoadingState, PageHeader, useToast } from "@/components/ui";
@@ -99,6 +100,7 @@ function ConferenceView() {
         </Card>
         <div className="stack">
           <LiveConference roomId={c.id} editable={editable} />
+          <ConferenceOwnersCard room={c} editable={editable} onSaved={item.setData} />
           <Card title="In the room" subtitle="Keys participants can press.">
             <dl className="dl">
               <dt>*1</dt><dd>Mute or unmute yourself</dd>

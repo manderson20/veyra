@@ -4,7 +4,7 @@ summary: Decide which dialled numbers go out to the carrier, through which trunk
 audience: admin
 section: Calls and call flows
 order: 30
-reviewed: 0.27.45
+reviewed: 0.27.49
 checked: 2026-10-30T15:10Z
 pages:
   - /routing/outbound/

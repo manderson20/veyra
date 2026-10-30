@@ -206,6 +206,9 @@ def test_conference_pin_variants_and_confbridge_file():
     both = _context(dp, "veyra-conf-both")
     assert "Read(VEYRA_PIN,conf-getpin,10,,1,10)" in both
     assert 'GotoIf($["${VEYRA_PIN}"="9876"]?admin)' in both
+    # Invited from the web (#96): no PIN, and only in a room that has one.
+    assert 'GotoIf($["${VEYRA_CONF_INVITED}"="1"]?join)' in both
+    assert "VEYRA_CONF_INVITED" not in _context(dp, "veyra-conf-open")
     assert 'GotoIf($["${VEYRA_PIN}"="1234"]?join)' in both
     assert "GotoIf($[${VEYRA_CONF_TRIES} >= 3]?bye)" in both
     assert "Set(VEYRA_CONF_PROFILE=veyra-conf-both-admin)" in both
@@ -222,6 +225,10 @@ def test_conference_pin_variants_and_confbridge_file():
     assert "max_members=8" in bridge and "record_conference=yes" in bridge
     assert "record_file=/var/lib/veyra/recordings/conferences/example--both" in bridge
     assert "record_file_timestamp=yes" in bridge
+    # A room not recorded automatically can still be recorded from the web (#96).
+    assert "record_file=/var/lib/veyra/recordings/conferences/example--open" in _context(
+        cb, "veyra-conf-open-bridge"
+    )
     user = _context(cb, "veyra-conf-both-user")
     assert "wait_marked=yes" in user and "announce_join_leave=yes" in user
     admin_profile = _context(cb, "veyra-conf-admin-admin")

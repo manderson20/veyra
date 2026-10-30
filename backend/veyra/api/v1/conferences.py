@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,14 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import conflict, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import ConferenceRoom
+from veyra.core.models import (
+    ClassOfService,
+    ConferenceRoom,
+    ConferenceRoomOwner,
+    Extension,
+    Organization,
+    OutboundRoute,
+)
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
@@ -123,11 +130,24 @@ class ConferenceOut(BaseModel):
     problems: list[str]
     # Routes, menus, groups and announcements that point at the room.
     in_use_by: int
+    # Extensions whose users control the room from My Phone (issue #96).
+    owners: list[uuid.UUID]
     created_at: datetime
     updated_at: datetime
 
 
 # ----------------------------------------------------------------- helpers
+
+
+def _owners(db: Session, room_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[uuid.UUID]]:
+    out: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for room_id, extension_id in db.execute(
+        select(ConferenceRoomOwner.room_id, ConferenceRoomOwner.extension_id).where(
+            ConferenceRoomOwner.room_id.in_(room_ids)
+        )
+    ):
+        out.setdefault(room_id, []).append(extension_id)
+    return out
 
 
 def _outs(db: Session, rows: list[ConferenceRoom]) -> list[ConferenceOut]:
@@ -136,6 +156,7 @@ def _outs(db: Session, rows: list[ConferenceRoom]) -> list[ConferenceOut]:
     orgs = helpers.org_names(db, {r.organization_id for r in rows})
     moh_names = hold_music.set_names(db, {r.moh_class_id for r in rows if r.moh_class_id})
     uses = destinations.count_uses(db, "conference", {r.id for r in rows})
+    owners = _owners(db, {r.id for r in rows})
     out = []
     for r in rows:
         problems = []
@@ -165,6 +186,7 @@ def _outs(db: Session, rows: list[ConferenceRoom]) -> list[ConferenceOut]:
                 is_enabled=r.is_enabled,
                 problems=problems,
                 in_use_by=uses.get(r.id, 0),
+                owners=owners.get(r.id, []),
                 created_at=r.created_at,
                 updated_at=r.updated_at,
             )
@@ -441,12 +463,23 @@ class LiveParticipantOut(BaseModel):
 class LiveOut(BaseModel):
     running: bool
     locked: bool = False
+    recording: bool = False
+    # The room is set to record every meeting: this cannot be stopped live.
+    always_recorded: bool = False
     participants: list[LiveParticipantOut] = Field(default_factory=list)
 
 
 class LiveActionIn(BaseModel):
-    action: str = Field(pattern="^(mute|unmute|kick|mute_all|unmute_all|lock|unlock|end)$")
+    action: str = Field(
+        pattern="^(mute|unmute|kick|mute_all|unmute_all|lock|unlock|end"
+        "|record_start|record_stop|invite)$"
+    )
     channel: str | None = Field(None, max_length=160)
+    number: str | None = Field(None, max_length=40)
+
+
+class OwnersIn(BaseModel):
+    extension_ids: list[uuid.UUID] = Field(default_factory=list, max_length=64)
 
 
 def _engine_room(db: Session, room: ConferenceRoom) -> str:
@@ -455,7 +488,7 @@ def _engine_room(db: Session, room: ConferenceRoom) -> str:
     return tenancy.names_of(db, room.organization_id).conference(room.slug)
 
 
-def _live(request: Request, db: Session, room: ConferenceRoom) -> LiveOut:
+def live_state(request: Request, db: Session, room: ConferenceRoom) -> LiveOut:
     from veyra.core.errors import ProblemError
     from veyra.telephony.adapter import EngineUnavailable, NotSupported
 
@@ -466,41 +499,109 @@ def _live(request: Request, db: Session, room: ConferenceRoom) -> LiveOut:
     except EngineUnavailable as e:
         raise ProblemError(503, "Engine unavailable", str(e), code="engine_unavailable") from e
     if live is None:
-        return LiveOut(running=False)
-    return LiveOut(running=True, **live)
+        return LiveOut(running=False, always_recorded=room.record)
+    return LiveOut(running=True, always_recorded=room.record, **live)
 
 
-@router.get("/{room_id}/live", response_model=LiveOut, summary="Who is in the room now")
-def live_room(
-    room_id: uuid.UUID,
+def _is_emergency_number(db: Session, org_id: uuid.UUID, number: str) -> bool:
+    routes = db.scalars(
+        select(OutboundRoute).where(
+            OutboundRoute.is_emergency.is_(True),
+            OutboundRoute.is_enabled.is_(True),
+            or_(OutboundRoute.organization_id.is_(None), OutboundRoute.organization_id == org_id),
+        )
+    )
+    return any(
+        routing.pattern_matches(p.get("prefix") or "", p.get("match") or "", number)
+        for route in routes
+        for p in route.patterns or []
+    )
+
+
+def _invite(
     request: Request,
-    principal: Principal = Depends(require(READ)),
-    db: Session = Depends(get_db),
-) -> LiveOut:
-    return _live(request, db, _get(db, principal, room_id, READ))
+    db: Session,
+    room: ConferenceRoom,
+    raw_number: str | None,
+    inviter: Extension | None,
+) -> str:
+    """Ring ``raw_number``; when it answers, it joins the room without the PIN.
+    The call obeys the inviter's class of service, as their own call would."""
+    from veyra.core import tenancy
+    from veyra.core.errors import ProblemError
+    from veyra.fax.service import normalize_number
+
+    number = normalize_number(raw_number or "")
+    if not number:
+        raise validation("number", "enter digits only (a leading + is allowed)")
+    if not room.is_enabled:
+        raise conflict("This conference room is disabled.", "conference_disabled")
+    if _is_emergency_number(db, room.organization_id, number):
+        # In a conference the emergency service would get the wrong caller ID
+        # and location: such a call must come from a phone.
+        raise ProblemError(
+            422,
+            "Emergency number",
+            "An emergency number cannot be invited to a conference. Call it from a phone.",
+            code="emergency_number",
+        )
+    names = tenancy.names_of(db, room.organization_id)
+    local = db.scalar(
+        select(Extension.id).where(
+            Extension.organization_id == room.organization_id, Extension.number == number
+        )
+    )
+    org = db.get(Organization, room.organization_id)
+    variables = {"VEYRA_CONF_INVITED": "1", "__VEYRA_ORG": org.slug if org else ""}
+    if inviter is not None and inviter.class_of_service_id:
+        cos = db.get(ClassOfService, inviter.class_of_service_id)
+        if cos is not None:
+            variables["__VEYRA_COS"] = cos.slug
+    if inviter is not None and inviter.outbound_caller_id_number:
+        variables["__VEYRA_OUT_CID"] = inviter.outbound_caller_id_number
+    label = re.sub(r'["<>\\]', "", room.name)
+    return str(
+        request.app.state.telephony.originate_channel(
+            f"Local/{number}@{names.internal if local else names.outbound}/n",
+            "s",
+            context=names.conference(room.slug),
+            caller_id=f'"{label}" <{room.number}>',
+            timeout=45,
+            variables=variables,
+        )
+    )
 
 
-@router.post("/{room_id}/live", response_model=LiveOut, summary="Mute, kick, lock or end")
-def live_action(
-    room_id: uuid.UUID,
+def perform_action(
+    request: Request,
+    db: Session,
+    room: ConferenceRoom,
     body: LiveActionIn,
-    request: Request,
-    principal: Principal = Depends(require(WRITE)),
-    db: Session = Depends(get_db),
-    ctx: RequestContext = Depends(request_context),
+    principal: Principal,
+    ctx: RequestContext,
+    inviter: Extension | None,
 ) -> LiveOut:
     from veyra.core.errors import ProblemError
     from veyra.telephony.adapter import EngineUnavailable, NotSupported
 
-    room = _get(db, principal, room_id, WRITE)
     if body.action in ("mute", "unmute", "kick"):
-        current = _live(request, db, room)
+        current = live_state(request, db, room)
         if body.channel not in {p.channel for p in current.participants}:
             raise not_found("Participant")
-    try:
-        request.app.state.telephony.conference_action(
-            _engine_room(db, room), body.action, body.channel
+    if body.action == "record_stop" and room.record:
+        raise conflict(
+            "This room records every meeting. Change that in the room's settings.",
+            "always_recorded",
         )
+    details: dict[str, Any] = {"channel": body.channel} if body.channel else {}
+    try:
+        if body.action == "invite":
+            details = {"number": (body.number or "").strip()}
+            details["channel"] = _invite(request, db, room, body.number, inviter)
+        else:
+            request.app.state.telephony.conference_action(
+                _engine_room(db, room), body.action, body.channel
+            )
     except NotSupported as e:
         raise ProblemError(409, "Not available", str(e), code="not_available") from e
     except (EngineUnavailable, ValueError) as e:
@@ -512,7 +613,67 @@ def live_action(
         f"conference.live_{body.action}",
         target_type="conference_room",
         target=room,
-        details={"channel": body.channel} if body.channel else {},
+        details=details,
     )
     db.commit()
-    return _live(request, db, room)
+    return live_state(request, db, room)
+
+
+@router.get("/{room_id}/live", response_model=LiveOut, summary="Who is in the room now")
+def live_room(
+    room_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> LiveOut:
+    return live_state(request, db, _get(db, principal, room_id, READ))
+
+
+@router.post("/{room_id}/live", response_model=LiveOut, summary="Control a running room")
+def live_action(
+    room_id: uuid.UUID,
+    body: LiveActionIn,
+    request: Request,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> LiveOut:
+    room = _get(db, principal, room_id, WRITE)
+    # An administrator's own phone in this organization, if any, sets the
+    # class of service of an invitation.
+    inviter = db.scalar(
+        select(Extension)
+        .where(
+            Extension.user_id == principal.user_id,
+            Extension.organization_id == room.organization_id,
+            Extension.is_enabled.is_(True),
+        )
+        .order_by(Extension.number)
+    )
+    return perform_action(request, db, room, body, principal, ctx, inviter)
+
+
+@router.put("/{room_id}/owners", response_model=ConferenceOut, summary="Set the room's owners")
+def set_owners(
+    room_id: uuid.UUID,
+    body: OwnersIn,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> ConferenceOut:
+    room = _get(db, principal, room_id, WRITE)
+    helpers.load_members(db, room.organization_id, body.extension_ids, "extension_ids")
+    db.execute(delete(ConferenceRoomOwner).where(ConferenceRoomOwner.room_id == room.id))
+    db.add_all(ConferenceRoomOwner(room_id=room.id, extension_id=e) for e in body.extension_ids)
+    db.flush()
+    helpers.record(
+        db,
+        ctx,
+        principal,
+        "conference.owners",
+        target_type="conference_room",
+        target=room,
+        details={"owners": [str(e) for e in body.extension_ids]},
+    )
+    db.commit()
+    return _outs(db, [room])[0]

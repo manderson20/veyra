@@ -127,6 +127,23 @@ def exten_for(prefix: str, match: str) -> str:
     return "_" + s if _PATTERN_CHARS & set(s) else s
 
 
+def pattern_matches(prefix: str, match: str, number: str) -> bool:
+    """Whether ``number`` is dialled by this route pattern, read as Asterisk
+    reads it: X, Z, N, [ranges], and a trailing . or !."""
+    out = ""
+    i, s = 0, prefix + match
+    while i < len(s):
+        c = s[i].upper()
+        if c == "[":
+            end = s.index("]", i)
+            out += s[i : end + 1]
+            i = end + 1
+            continue
+        out += {"X": "[0-9]", "Z": "[1-9]", "N": "[2-9]", ".": ".+", "!": ".*"}.get(c, re.escape(c))
+        i += 1
+    return re.fullmatch(out, number) is not None
+
+
 # ----------------------------------------------------------------- time conditions
 
 

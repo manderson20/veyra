@@ -4,8 +4,8 @@ summary: Choose which widgets people see on My Phone by organization, building, 
 audience: admin
 section: Phones and devices
 order: 80
-reviewed: 0.27.44
-checked: 2026-10-29
+reviewed: 0.27.49
+checked: 2026-10-30
 pages:
   - /system/portal-layouts/
 covers:
@@ -39,7 +39,7 @@ A user gets the nearest one, in that order: a role's layout wins over a departme
 2. Enter a **Name** and, if you like, a **Description**.
 3. Choose **Applies to**, the **Organization**, and the **Building**, **Department** or **Role** when the scope needs one. These cannot be changed later.
 4. Arrange the widgets:
-   - The layout starts from the built-in arrangement. Add a widget with its button above the canvas (**My phone**, **Presence**, **Voicemail**, **Recent calls**, **Contacts**, **Colleagues**, **Phone keys**, **Fax**, **Codes you can dial**, **Announcement**).
+   - The layout starts from the built-in arrangement. Add a widget with its button above the canvas (**My phone**, **Presence**, **Voicemail**, **Recent calls**, **Contacts**, **Colleagues**, **Phone keys**, **Fax**, **Conference**, **Codes you can dial**, **Announcement**).
    - Drag a widget by its title bar, resize it from the corner, and remove it with its **×**.
    - Add a tab with **Tab** (up to 8), rename the current tab in the box beside it, and remove it with the bin icon.
 5. For each widget users must keep, turn on **Users cannot remove it**.

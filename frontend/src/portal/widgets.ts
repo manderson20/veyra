@@ -30,6 +30,7 @@ export const WIDGETS: WidgetManifest[] = [
   { key: "colleagues", title: "Colleagues", description: "Who is available, on a call or away.", icon: "users", defaultSize: { w: 6, h: 10 }, minSize: { w: 4, h: 6 }, needs: null },
   { key: "keys", title: "Phone keys", description: "Your phones' keys: the locked ones and the slots you may set.", icon: "keypad", defaultSize: { w: 12, h: 8 }, minSize: { w: 6, h: 5 }, needs: null },
   { key: "fax", title: "Fax", description: "Send a PDF as a fax and follow your faxes.", icon: "file", defaultSize: { w: 6, h: 10 }, minSize: { w: 4, h: 7 }, needs: null },
+  { key: "conference", title: "Conference", description: "Who is in the rooms you own, with mute, invite and recording.", icon: "group", defaultSize: { w: 6, h: 10 }, minSize: { w: 4, h: 7 }, needs: null },
   { key: "codes", title: "Codes you can dial", description: "Feature codes available from your phone.", icon: "keypad", defaultSize: { w: 6, h: 6 }, minSize: { w: 4, h: 4 }, needs: null },
   { key: "announce", title: "Announcement", description: "A note from your administrators, shown to everyone (locked by the template).", icon: "megaphone", defaultSize: { w: 12, h: 3 }, minSize: { w: 4, h: 2 }, needs: null, lockable: true },
 ];

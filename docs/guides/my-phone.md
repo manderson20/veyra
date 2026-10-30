@@ -4,8 +4,8 @@ summary: Turn on Do Not Disturb, forward your calls, check voicemail, call peopl
 audience: user
 section: Using Veyra
 order: 10
-reviewed: 0.27.45
-checked: 2026-10-29
+reviewed: 0.27.49
+checked: 2026-10-30
 pages:
   - /my-phone/
 covers:
@@ -90,6 +90,8 @@ Names from your contacts are shown on your calls and voicemail.
 Enter a **Label on the key** and choose **Save key**. The phone picks up the change within a minute. **Clear** empties the key.
 
 ## Send a fax
+
+The **Conference** widget lists the conference rooms your phone owns: who is in each one, with mute, remove, lock, end, recording and **Invite a number**. An administrator makes your phone an owner on the room's page.
 
 The **Fax** widget sends a PDF as a fax, no fax machine needed.
 

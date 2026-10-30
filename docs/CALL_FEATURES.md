@@ -648,8 +648,34 @@ everyone else** (non-administrators), **Unmute all**, **Lock/Unlock** and
 channel?}` (`groups.write`, audited `conference.live_<action>`). The
 Asterisk adapter reads `confbridge list` / `confbridge list <room>` and sends
 `confbridge mute|unmute|kick|lock|unlock` through the console (rows parsed
-by pattern; channel names validated). Not yet: a My Phone conference widget
-for room owners, start/stop recording from the page, inviting a number.
+by pattern; channel names validated).
+
+Added in 0.27.49 (migration `0073`):
+
+- **Recording**: `record_start` / `record_stop` send `confbridge record
+  start|stop <room>`; every bridge profile now carries `record_file`, so the
+  file is named and stored like an automatic recording. `recording` in the
+  live state comes from the recorder channel `CBRec/<room>-…` in `core show
+  channels concise`. A room with `record` on refuses `record_stop` (`409
+  always_recorded`): `always_recorded` in the state tells the page.
+- **Inviting a number**: `{action: "invite", number}` originates
+  `Local/<number>@<phone or outbound context>/n` into the room's context with
+  `VEYRA_CONF_INVITED=1`, which skips the PIN; the person joins as a
+  participant. An organization's extension goes through the phone context,
+  anything else through the outbound routes, under the class of service of
+  the inviter's extension (an administrator with no phone in the organization
+  has none). Numbers matching an enabled emergency route are refused (`422
+  emergency_number`): the service would get the wrong caller ID and location.
+- **Room owners**: table `conference_room_owners` (`room_id`, `extension_id`),
+  set with `PUT /conferences/{id}/owners {extension_ids}` (`groups.write`,
+  audited `conference.owners`, no deployment). The users of those enabled
+  extensions get `GET /me/conferences` and `GET/POST
+  /me/conferences/{id}/live` (same actions and audit, invitation under the
+  owning extension's class of service) and the **Conference** widget on
+  My Phone. Anyone else gets 404.
+
+Not yet: push updates instead of the 5-second refresh (#111), scheduled
+conferences and invitations by email.
 
 ### 4.4 Destination kinds
 

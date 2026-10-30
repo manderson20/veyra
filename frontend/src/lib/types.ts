@@ -1648,6 +1648,7 @@ export interface ConferenceRoom {
   is_enabled: boolean;
   problems: string[];
   in_use_by: number;
+  owners: string[];
   created_at: string;
   updated_at: string;
 }

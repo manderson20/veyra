@@ -218,6 +218,19 @@ class ConferenceRoom(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class ConferenceRoomOwner(Base):
+    """Extensions whose users control the room from My Phone (issue #96)."""
+
+    __tablename__ = "conference_room_owners"
+
+    room_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="CASCADE"), primary_key=True
+    )
+    extension_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("extensions.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+
+
 class ParkingLot(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     """A parking lot (docs/CALL_FEATURES.md §4.7): a park extension and a range
     of slots in the organization's number space, a timeout that returns the

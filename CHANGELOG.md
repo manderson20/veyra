@@ -8,6 +8,14 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.49
+
+Migration 0073. Deploy changes once after updating.
+
+### Added
+- **Conference rooms, live** (#96): the room's page can now **start and stop recording** and **invite a number**: it rings an extension or outside number, who joins without the PIN when they answer. The call follows your phone's class of service, and emergency numbers are refused. A room set to record every meeting cannot be stopped from the page.
+- **Room owners and the Conference widget** (#96): name the phones that own a room, and their users get that room's live controls in a new **Conference** widget on My Phone, with no administrator permission.
+
 ## 0.27.48 — 2026-10-30
 
 No migration.

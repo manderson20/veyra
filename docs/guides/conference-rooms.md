@@ -4,15 +4,16 @@ summary: Create a dial-in meeting room with optional PINs, see who is in it, and
 audience: admin
 section: Calls and call flows
 order: 50
-reviewed: 0.27.44
-checked: 2026-10-29
+reviewed: 0.27.49
+checked: 2026-10-30
 pages:
   - /conferences/
   - /conferences/view/
 covers:
   - frontend/src/app/(app)/conferences/*
   - frontend/src/components/callflow/ConferenceFields.tsx
-  - frontend/src/components/conferences/LiveConference.tsx
+  - frontend/src/components/conferences/*
+  - frontend/src/components/portal/ConferenceCard.tsx
   - backend/veyra/api/v1/conferences.py
 ---
 
@@ -67,11 +68,20 @@ While a meeting is going on, the **Live** card on the room's page lists everyone
 - **Lock** the room so nobody else can join, and **Unlock** it.
 - **End** the meeting: everyone in the room is disconnected (you confirm with **End for everyone**).
 
+- **Start recording** and **Stop recording**: a *Recording* badge shows while it runs, and the recording appears under [Call Recording](app:/recording/) a few minutes after it stops. A room with **Record the conference** on always records, so it has no stop button. After you update Veyra, deploy changes once before recording a room this way.
+- **Invite a number**: enter an extension or outside number and choose **Call**. When they answer they join the room without the PIN, as a participant. The call follows the class of service of your own phone, so a number your phone may not dial is not reached. Emergency numbers are refused.
+
 Each of these actions is written to the audit log. They apply at once and need no deployment.
+
+## Let someone run their own room
+
+In **Room owners** on the room's page, add the phones of the people who run this room and choose **Save owners**. This applies at once. Those people add the **Conference** widget on [My Phone](app:/my-phone/) and get the same live controls for their rooms, including invitations, without any administrator permission.
 
 ## When it does not work
 
 - **Callers are asked for a PIN you did not expect**: the room has a participant PIN. Remove it or share it.
 - **Everyone hears music and nobody can talk**: **Participants wait until an administrator joins** is on and nobody has joined with the administrator PIN.
 - **The Live card says the engine is unavailable**: the telephony engine is not running or cannot report rooms. Check [System → Telephony Engine](app:/system/telephony/).
+- **An invited person hears a PIN prompt**: changes have not been deployed since the update. Choose **Deploy changes**.
+- **An invited number never rings**: the number has no outbound route, or your phone's class of service does not allow it.
 - **Deleting a room**: routes, menus, groups and announcements that point at it must be changed first.
