@@ -92,6 +92,7 @@ class Announcement(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     destination_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    destination_custom_context: Mapped[str | None] = mapped_column(String(64))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -151,6 +152,7 @@ class CallFlow(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     normal_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    normal_custom_context: Mapped[str | None] = mapped_column(String(64))
     override_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
     )
@@ -178,6 +180,7 @@ class CallFlow(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     override_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    override_custom_context: Mapped[str | None] = mapped_column(String(64))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -268,6 +271,7 @@ class ParkingLot(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     timeout_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    timeout_custom_context: Mapped[str | None] = mapped_column(String(64))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -330,3 +334,4 @@ class CallerBlockPolicy(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     destination_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    destination_custom_context: Mapped[str | None] = mapped_column(String(64))

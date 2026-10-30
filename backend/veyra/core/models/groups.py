@@ -44,6 +44,7 @@ class _Failover:
     failover_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    failover_custom_context: Mapped[str | None] = mapped_column(String(64))
 
 
 class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):

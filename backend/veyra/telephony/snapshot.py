@@ -402,6 +402,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         conference_slug={r.id: r.slug for r in rooms},
         call_flow_slug={f.id: f.slug for f in flows},
         fax_inbox_slug={i.id: i.slug for i in inboxes},
+        custom_contexts=custom_dialplan.entry_contexts(custom_dialplan.load(db)["text"]),
     )
     voicemail = _voicemail_ivr(
         db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues, rooms
@@ -712,6 +713,7 @@ class Targets:
         conference_slug: dict[Any, str] | None = None,
         call_flow_slug: dict[Any, str] | None = None,
         fax_inbox_slug: dict[Any, str] | None = None,
+        custom_contexts: list[str] | None = None,
     ) -> None:
         self.number_of = number_of
         self.box_numbers = box_numbers
@@ -724,6 +726,7 @@ class Targets:
         self.conference_slug = conference_slug if conference_slug is not None else {}
         self.call_flow_slug = call_flow_slug if call_flow_slug is not None else {}
         self.fax_inbox_slug = fax_inbox_slug if fax_inbox_slug is not None else {}
+        self.custom_contexts = custom_contexts if custom_contexts is not None else []
 
     def dest(self, obj: Any, prefix: str) -> dict[str, Any]:
         """The engine-neutral form of the destination stored in
@@ -746,6 +749,11 @@ class Targets:
         if kind == "call_flow":
             slug = self.call_flow_slug.get(getattr(obj, f"{prefix}_call_flow_id", None))
             return {"type": "call_flow", "call_flow": slug} if slug else {"type": "missing"}
+        if kind == "custom":
+            context = getattr(obj, f"{prefix}_custom_context", None)
+            if context in self.custom_contexts:
+                return {"type": "custom", "context": context}
+            return {"type": "missing"}
         if kind == "fax":
             slug = self.fax_inbox_slug.get(getattr(obj, f"{prefix}_fax_inbox_id", None))
             return {"type": "fax", "fax_inbox": slug} if slug else {"type": "missing"}

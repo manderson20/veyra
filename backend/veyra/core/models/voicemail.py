@@ -163,6 +163,7 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     timeout_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    timeout_custom_context: Mapped[str | None] = mapped_column(String(64))
     invalid_type: Mapped[str] = mapped_column(String(16), default="hangup")
     invalid_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
@@ -191,6 +192,7 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     invalid_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    invalid_custom_context: Mapped[str | None] = mapped_column(String(64))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -231,6 +233,7 @@ class IvrEntry(Base):
     destination_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    destination_custom_context: Mapped[str | None] = mapped_column(String(64))
 
 
 class MohClass(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

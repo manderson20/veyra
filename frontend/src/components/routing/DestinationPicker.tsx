@@ -3,6 +3,7 @@
 
 import { SelectField } from "@/components/ui";
 import { DESTINATION_LABELS, emptyDestination, type DestinationDraft } from "@/lib/routing";
+import { useSession } from "@/hooks/useSession";
 import type { Announcement, CallFlow, CallQueue, ConferenceRoom, Destination, DestinationType, Extension, IvrMenu, Page, RingGroup, VoicemailBox, FaxInbox } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
@@ -17,6 +18,7 @@ export interface DestinationOptions {
   conferences: ConferenceRoom[];
   callFlows: CallFlow[];
   faxInboxes: FaxInbox[];
+  customContexts: string[];
   loading: boolean;
 }
 
@@ -31,6 +33,9 @@ export function useDestinationOptions(organizationId: string | null | undefined)
   const conferences = useApiData<Page<ConferenceRoom>>(org ? "/conferences" : null, { organization_id: org, limit: 200 });
   const callFlows = useApiData<Page<CallFlow>>(org ? "/call-flows" : null, { organization_id: org, limit: 200 });
   const faxInboxes = useApiData<Page<FaxInbox>>(org ? "/fax/inboxes" : null, { organization_id: org, limit: 200 });
+  // Choosing custom dialplan takes the same permission as writing it.
+  const { can } = useSession();
+  const custom = useApiData<{ entry_contexts: string[] }>(org && can("system.settings.write") ? "/telephony/custom-dialplan" : null);
   return {
     extensions: extensions.data?.items ?? [],
     boxes: boxes.data?.items ?? [],
@@ -41,6 +46,7 @@ export function useDestinationOptions(organizationId: string | null | undefined)
     conferences: conferences.data?.items ?? [],
     callFlows: callFlows.data?.items ?? [],
     faxInboxes: faxInboxes.data?.items ?? [],
+    customContexts: custom.data?.entry_contexts ?? [],
     loading: extensions.loading || boxes.loading || menus.loading || ringGroups.loading || queues.loading || announcements.loading || conferences.loading || callFlows.loading || faxInboxes.loading,
   };
 }
@@ -67,7 +73,7 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
   exclude?: string;
   idBase?: string;
 }) {
-  const kinds: DestinationType[] = ["extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", "announcement", "conference", "call_flow", "fax", "directory", ...(allowHangup ? ["hangup" as const] : [])];
+  const kinds: DestinationType[] = ["extension", "voicemail", "voicemail_box", "ivr", "ring_group", "queue", "announcement", "conference", "call_flow", "fax", "custom", "directory", ...(allowHangup ? ["hangup" as const] : [])];
   const withCurrent = (opts: { value: string; label: string }[], value: string, fallback: string) =>
     value && !opts.some((o) => o.value === value) ? [...opts, { value, label: current?.label ?? fallback }] : opts;
   const targetId = idBase ? `${idBase}-target` : undefined;
@@ -160,13 +166,22 @@ export function DestinationPicker({ label, draft, onChange, options, current, er
         help={opts.length === 0 && !options.loading ? "Create one under Telephony → Fax." : undefined}
         onChange={(e) => onChange({ ...draft, fax_inbox_id: e.target.value })} />
     );
+  } else if (draft.type === "custom") {
+    const opts = options.customContexts.map((c) => ({ value: c, label: c }));
+    targetField = (
+      <SelectField id={targetId} label={srLabel("custom context")} required={required} disabled={disabled} value={draft.custom_context} error={error}
+        placeholder={options.loading ? "Loading…" : opts.length ? "Choose a context" : "No contexts with an s extension"}
+        options={withCurrent(opts, draft.custom_context, "Removed context")}
+        help={opts.length === 0 && !options.loading ? "Write them under System → Telephony Engine → Custom dialplan." : undefined}
+        onChange={(e) => onChange({ ...draft, custom_context: e.target.value })} />
+    );
   } else if (draft.type === "directory") {
     targetField = <p className="field__help" style={{ margin: 0 }}>Callers spell a name on the keypad and reach the matching extension (extensions with a voicemail box are listed).</p>;
   }
   return (
     <div className="form-grid">
       <SelectField id={idBase ? `${idBase}-type` : undefined} label={label} required={required} disabled={disabled} value={draft.type}
-        options={kinds.map((k) => ({ value: k, label: DESTINATION_LABELS[k] }))}
+        options={kinds.filter((k) => k !== "custom" || options.customContexts.length > 0 || draft.type === "custom").map((k) => ({ value: k, label: DESTINATION_LABELS[k] }))}
         help={current?.missing ? "The saved target no longer exists or is disabled; choose a new one." : undefined}
         onChange={(e) => onChange(emptyDestination(e.target.value as DestinationType))} />
       {targetField}

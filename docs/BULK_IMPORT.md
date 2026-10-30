@@ -27,7 +27,7 @@ template, checks a file (dry run) and imports it.
 | `ivr_menus` | `name` | description, prompt (a recording of the audio library, by name; a missing one is a note, not an error), timeout_seconds, max_retries, allow_direct_dial, keys (`1=extension:1001; 2=ring_group:6000; *=hangup`, the full list), timeout and invalid (`type:target`), enabled |
 | `time_conditions` | `name` | description, timezone, hours (`mon-fri 08:00-16:00; sat 09:00-12:00`, open hours), holidays (closed: `12-25; 11-23..11-27`) |
 | `users` | `email` | display_name, enabled, roles (organization-scope role keys, added, never removed), password (temporary; empty for a new user: they set one with "Forgot password") |
-| `inbound_routes` | `did` (with `trunk` when given) | trunk (by name), description, destination and after_hours as `type:target` — `extension:1001`, `voicemail:1001`, `voicemail_box:1900`, `ivr:<name>`, `ring_group:<number or name>`, `queue:…`, `announcement:…`, `conference:…`, `call_flow:…`, `fax:…`, `directory` — time_condition (by name), caller_id_prefix, enabled |
+| `inbound_routes` | `did` (with `trunk` when given) | trunk (by name), description, destination and after_hours as `type:target` — `extension:1001`, `voicemail:1001`, `custom:custom-night` (platform administrators), `voicemail_box:1900`, `ivr:<name>`, `ring_group:<number or name>`, `queue:…`, `announcement:…`, `conference:…`, `call_flow:…`, `fax:…`, `directory` — time_condition (by name), caller_id_prefix, enabled |
 | `shared_inboxes` | `number` | name, members (extension numbers), email, attach_audio, delete_after_email, ring_seconds, enabled |
 
 Import users before the extensions that name them.

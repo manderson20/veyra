@@ -32,6 +32,18 @@ their command and file arguments: send calls to a Veyra queue or feature with
 
 ## 3. Reaching it
 
-Calls enter through a **Custom** destination. (Being built; until it ships the
-contexts load but no call reaches them, except by `Goto` from another custom
-context.)
+Calls enter through the **Custom** destination (`type: custom`,
+`custom_context`; migration 0071 adds `<prefix>_custom_context` to every
+destination holder; in the bulk files, `custom:custom-night`). It sends the
+call to `<context>,s,1`, so only contexts with an `s` extension are offered.
+
+* **Choosing one takes `system.settings.write`**, the same as writing the code,
+  because custom dialplan can dial out past classes of service. An
+  organization's administrator may keep a context a platform administrator has
+  already used in that organization, so editing that route or menu still works.
+  "Already used" is read on a separate connection, from committed rows only:
+  the request's own flushed change must not count.
+* A context in use cannot be removed or lose its `s` extension (409, naming what
+  uses it). If it goes anyway, the destination shows as missing and the caller
+  hears congestion, like any other missing target.
+* Contexts are installation-wide, not per organization.

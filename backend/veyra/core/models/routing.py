@@ -146,6 +146,7 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     destination_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    destination_custom_context: Mapped[str | None] = mapped_column(String(64))
     time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("time_conditions.id", ondelete="RESTRICT")
     )
@@ -177,6 +178,7 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     after_hours_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
+    after_hours_custom_context: Mapped[str | None] = mapped_column(String(64))
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 

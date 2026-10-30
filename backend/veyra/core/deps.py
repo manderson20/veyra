@@ -128,6 +128,14 @@ def current_principal(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> Principal:
+    principal = _resolve_principal(request, db, settings)
+    # For checks deep in a request that only have the session (custom dialplan
+    # destinations); absent outside a request, where they refuse.
+    db.info["principal"] = principal
+    return principal
+
+
+def _resolve_principal(request: Request, db: Session, settings: Settings) -> Principal:
     bearer = bearer_token(request)
     if bearer is not None:
         return _token_principal(request, db, settings, bearer)

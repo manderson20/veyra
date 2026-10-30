@@ -28,6 +28,7 @@ from veyra.core.models import (
     RingGroup,
     VoicemailBox,
 )
+from veyra.telephony import custom_dialplan
 
 DestinationType = Literal[
     "extension",
@@ -40,6 +41,7 @@ DestinationType = Literal[
     "conference",
     "call_flow",
     "fax",
+    "custom",
     "directory",
     "hangup",
 ]
@@ -55,6 +57,7 @@ TARGET_FIELDS: dict[str, str] = {
     "conference": "conference_id",
     "call_flow": "call_flow_id",
     "fax": "fax_inbox_id",
+    "custom": "custom_context",
 }
 # Kinds that need no target row: the dial-by-name directory of the
 # organization, and hanging up.
@@ -69,10 +72,12 @@ ID_FIELDS = (
     "conference_id",
     "call_flow_id",
     "fax_inbox_id",
+    "custom_context",
 )
 # A reference as stored: (type, extension_id, ivr_id, ring_group_id, queue_id,
-# voicemail_box_id, announcement_id, conference_id, call_flow_id, fax_inbox_id).
-Ref = tuple[str | None, Any, Any, Any, Any, Any, Any, Any, Any, Any]
+# voicemail_box_id, announcement_id, conference_id, call_flow_id, fax_inbox_id,
+# custom_context).
+Ref = tuple[str | None, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]
 
 
 def validation(field: str, message: str) -> ProblemError:
@@ -96,6 +101,7 @@ class DestinationIn(BaseModel):
     conference_id: uuid.UUID | None = None
     call_flow_id: uuid.UUID | None = None
     fax_inbox_id: uuid.UUID | None = None
+    custom_context: str | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> DestinationIn:
@@ -117,6 +123,7 @@ class DestinationIn(BaseModel):
             self.conference_id,
             self.call_flow_id,
             self.fax_inbox_id,
+            self.custom_context,
         )
 
 
@@ -131,6 +138,7 @@ class DestinationOut(BaseModel):
     conference_id: uuid.UUID | None = None
     call_flow_id: uuid.UUID | None = None
     fax_inbox_id: uuid.UUID | None = None
+    custom_context: str | None = None
     # Human form: "2214 — Front Office", "Voicemail of 2214 (Front Office)",
     # "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)",
     # "Announcement: Closed today", "Conference: Board room (2500)",
@@ -153,6 +161,7 @@ def ref_of(obj: Any, prefix: str) -> Ref:
         getattr(obj, f"{prefix}_conference_id", None),
         getattr(obj, f"{prefix}_call_flow_id", None),
         getattr(obj, f"{prefix}_fax_inbox_id", None),
+        getattr(obj, f"{prefix}_custom_context", None),
     )
 
 
@@ -171,7 +180,7 @@ def has_target(ref: Ref) -> bool:
 
 
 def as_input(ref: Ref) -> dict[str, Any]:
-    kind, ext, ivr, rg, q, box, ann, conf, flow, fax = ref
+    kind, ext, ivr, rg, q, box, ann, conf, flow, fax, custom = ref
     return {
         "type": kind or "extension",
         "extension_id": ext,
@@ -183,7 +192,26 @@ def as_input(ref: Ref) -> dict[str, Any]:
         "conference_id": conf,
         "call_flow_id": flow,
         "fax_inbox_id": fax,
+        "custom_context": custom,
     }
+
+
+def _check_custom(db: Session, organization_id: uuid.UUID, dest: DestinationIn, field: str) -> None:
+    """Sending calls into custom dialplan takes the same permission as writing
+    it: it can dial out past classes of service. An organization may keep a
+    context a platform administrator already gave it, so editing the menu or
+    route that uses it still works."""
+    context = dest.custom_context
+    if not context:
+        raise validation(field, "choose the custom context")
+    text = custom_dialplan.load(db)["text"]
+    if context not in custom_dialplan.entry_contexts(text):
+        raise validation(field, f"{context} is not in the custom dialplan, or has no s extension")
+    principal = db.info.get("principal")
+    if principal is not None and principal.has_any_scope("system.settings.write"):
+        return
+    if not _custom_used_by_org(db, organization_id, context):
+        raise validation(field, "only a platform administrator can choose custom dialplan")
 
 
 def check_destination(
@@ -217,6 +245,9 @@ def check_destination(
             raise validation(field, "announcement not found in this organization")
         if not ann.is_enabled:
             raise validation(field, f"the announcement {ann.name} is disabled")
+        return
+    if dest.type == "custom":
+        _check_custom(db, organization_id, dest, field)
         return
     if dest.type == "fax":
         if dest.fax_inbox_id is None:
@@ -318,6 +349,7 @@ class Resolver:
         self.call_flows: dict[uuid.UUID, CallFlow] = {}
         self.fax_inboxes: dict[uuid.UUID, FaxInbox] = {}
         self._loaded: set[uuid.UUID] = set()
+        self._custom: set[str] | None = None
 
     def load(self, refs: list[Ref]) -> None:
         full = refs
@@ -387,8 +419,23 @@ class Resolver:
         conference_id: Any = None,
         call_flow_id: Any = None,
         fax_inbox_id: Any = None,
+        custom_context: Any = None,
     ) -> DestinationOut:
         kind = kind or "extension"
+        if kind == "custom":
+            if self._custom is None:
+                self._custom = set(
+                    custom_dialplan.entry_contexts(custom_dialplan.load(self.db)["text"])
+                )
+            ok = custom_context in self._custom
+            return DestinationOut(
+                type="custom",
+                extension_id=None,
+                ivr_id=None,
+                custom_context=custom_context,
+                label=f"Custom dialplan: {custom_context}" if custom_context else None,
+                missing=not ok,
+            )
         if kind == "fax":
             inbox = self.fax_inboxes.get(fax_inbox_id) if fax_inbox_id else None
             ok = inbox is not None and inbox.is_enabled
@@ -579,6 +626,54 @@ def _holders() -> list[tuple[Any, str, str]]:
         (CallFlow, "normal", "call flow"),
         (CallFlow, "override", "call flow"),
     ]
+
+
+def _custom_holders() -> list[tuple[Any, str, str]]:
+    from veyra.core.models import CallerBlockPolicy, ParkingLot
+
+    return [
+        *_holders(),
+        (ParkingLot, "timeout", "parking lot"),
+        (CallerBlockPolicy, "destination", "caller block policy"),
+    ]
+
+
+def _custom_used_by_org(db: Session, organization_id: uuid.UUID, context: str) -> bool:
+    from veyra.core.models import IvrEntry, IvrMenu
+
+    # On its own connection: this request may have flushed the very change
+    # being checked, and only what is committed counts as already given.
+    with Session(db.get_bind().engine) as committed:
+        for model, prefix, _ in _custom_holders():
+            stmt = select(model).where(
+                getattr(model, f"{prefix}_custom_context") == context,
+                getattr(model, f"{prefix}_type") == "custom",
+            )
+            if model is IvrEntry:
+                stmt = stmt.join(IvrMenu, IvrMenu.id == IvrEntry.menu_id).where(
+                    IvrMenu.organization_id == organization_id
+                )
+            else:
+                stmt = stmt.where(model.organization_id == organization_id)
+            if committed.execute(stmt.limit(1)).first() is not None:
+                return True
+    return False
+
+
+def custom_uses(db: Session, contexts: set[str]) -> list[str]:
+    """What sends calls to these custom contexts, for refusing their removal."""
+    found: list[str] = []
+    for model, prefix, label in _custom_holders():
+        col = getattr(model, f"{prefix}_custom_context")
+        rows = db.scalars(
+            select(model).where(col.in_(contexts), getattr(model, f"{prefix}_type") == "custom")
+        )
+        for row in rows:
+            name = getattr(row, "did", None) or getattr(row, "name", None) or ""
+            what = f"{label} {name}".strip()
+            if what not in found:
+                found.append(what)
+    return found
 
 
 def count_uses(db: Session, kind: str, ids: set[uuid.UUID]) -> dict[Any, int]:

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from veyra.api.v1 import destinations
 from veyra.api.v1.schemas import MessageOut
 from veyra.configmgmt import service
 from veyra.configmgmt.revisions import RevisionState, artifacts_to_files_safe, diff
@@ -201,6 +202,8 @@ class CustomDialplan(BaseModel):
 
 class CustomDialplanOut(CustomDialplan):
     contexts: list[str]
+    # Those a Custom destination can send calls to (they have an s extension).
+    entry_contexts: list[str]
     blocked_applications: list[str]
     blocked_functions: list[str]
 
@@ -209,6 +212,7 @@ def _custom_out(text: str) -> CustomDialplanOut:
     return CustomDialplanOut(
         text=text,
         contexts=custom_dialplan.contexts(text),
+        entry_contexts=custom_dialplan.entry_contexts(text),
         blocked_applications=list(custom_dialplan.BLOCKED_APPLICATIONS),
         blocked_functions=list(custom_dialplan.BLOCKED_FUNCTIONS),
     )
@@ -239,6 +243,13 @@ def put_custom_dialplan(
             errors=[{"field": "text", "message": p} for p in wrong],
         )
     before = custom_dialplan.load(db)["text"]
+    gone = set(custom_dialplan.entry_contexts(before)) - set(
+        custom_dialplan.entry_contexts(body.text)
+    )
+    if gone:
+        users = destinations.custom_uses(db, gone)
+        if users:
+            raise destinations.in_use_error("Custom context in use", "custom_context_in_use", users)
     if before != body.text:
         custom_dialplan.save(db, body.text, updated_by=principal.user_id)
         service.mark_changed(db, by=principal.label, what="telephony.custom_dialplan_update")

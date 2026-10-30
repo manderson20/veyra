@@ -38,8 +38,8 @@ describe("routing helpers", () => {
   });
 
   it("normalizes destinations for the API", () => {
-    const none = { ring_group_id: null, queue_id: null, voicemail_box_id: null, announcement_id: null, conference_id: null, call_flow_id: null, fax_inbox_id: null };
-    const extra = { announcement_id: null, conference_id: null, call_flow_id: null, fax_inbox_id: null };
+    const none = { ring_group_id: null, queue_id: null, voicemail_box_id: null, announcement_id: null, conference_id: null, call_flow_id: null, fax_inbox_id: null, custom_context: null };
+    const extra = { announcement_id: null, conference_id: null, call_flow_id: null, fax_inbox_id: null, custom_context: null };
     const d = (over: Partial<DestinationDraft>): DestinationDraft => ({ ...EMPTY_DESTINATION, ...over });
     expect(destinationBody(d({ type: "extension", extension_id: "e1", ivr_id: "m1" }))).toEqual({ type: "extension", extension_id: "e1", ivr_id: null, ...none });
     expect(destinationBody(d({ type: "voicemail", extension_id: "e1" }))).toEqual({ type: "voicemail", extension_id: "e1", ivr_id: null, ...none });
@@ -49,9 +49,9 @@ describe("routing helpers", () => {
     expect(destinationBody(d({ type: "voicemail_box", voicemail_box_id: "b1", extension_id: "e1" }))).toEqual({ type: "voicemail_box", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: null, voicemail_box_id: "b1", ...extra });
     expect(destinationBody(d({ type: "hangup", extension_id: "e1", ivr_id: "m1" }))).toEqual({ type: "hangup", extension_id: null, ivr_id: null, ...none });
     // Milestone 19 kinds: announcement and conference carry a target, the directory none.
-    expect(destinationBody(d({ type: "announcement", announcement_id: "a1", extension_id: "e1" }))).toEqual({ type: "announcement", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: null, voicemail_box_id: null, announcement_id: "a1", conference_id: null, call_flow_id: null, fax_inbox_id: null });
-    expect(destinationBody(d({ type: "conference", conference_id: "c1", announcement_id: "a1" }))).toEqual({ type: "conference", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: null, voicemail_box_id: null, announcement_id: null, conference_id: "c1", call_flow_id: null, fax_inbox_id: null });
-    expect(destinationBody(d({ type: "call_flow", call_flow_id: "f1", conference_id: "c1" }))).toEqual({ type: "call_flow", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: null, voicemail_box_id: null, announcement_id: null, conference_id: null, call_flow_id: "f1", fax_inbox_id: null });
+    expect(destinationBody(d({ type: "announcement", announcement_id: "a1", extension_id: "e1" }))).toEqual({ type: "announcement", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: null, voicemail_box_id: null, announcement_id: "a1", conference_id: null, call_flow_id: null, fax_inbox_id: null, custom_context: null });
+    expect(destinationBody(d({ type: "conference", conference_id: "c1", announcement_id: "a1" }))).toEqual({ type: "conference", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: null, voicemail_box_id: null, announcement_id: null, conference_id: "c1", call_flow_id: null, fax_inbox_id: null, custom_context: null });
+    expect(destinationBody(d({ type: "call_flow", call_flow_id: "f1", conference_id: "c1" }))).toEqual({ type: "call_flow", extension_id: null, ivr_id: null, ring_group_id: null, queue_id: null, voicemail_box_id: null, announcement_id: null, conference_id: null, call_flow_id: "f1", fax_inbox_id: null, custom_context: null });
     expect(destinationBody(d({ type: "directory", extension_id: "e1" }))).toEqual({ type: "directory", extension_id: null, ivr_id: null, ...none });
     expect(destinationComplete(d({ type: "announcement" }))).toBe(false);
     expect(destinationComplete(d({ type: "conference", conference_id: "c1" }))).toBe(true);

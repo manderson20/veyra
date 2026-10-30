@@ -88,4 +88,6 @@ The **SIP and media settings** card on the same page holds the ports and address
 
 Platform administrators can add their own Asterisk contexts under **System → Telephony Engine → Custom dialplan**, for something Veyra has no feature for. Contexts must be named `[custom-…]`. Commands that reach the server's shell or files are refused when you save. Saving does not change calls: deploy the changes as usual.
 
+To send calls there, choose **Custom dialplan** as the destination of an inbound route, a menu key or anywhere else a call can be sent. Calls start at the context's `s` extension, so only contexts that have one are listed. Only platform administrators can choose it. A context in use cannot be removed until nothing sends calls to it.
+
 > **Warning:** this is code that runs on the server, and it can dial out past classes of service and outbound routes. Only paste dialplan you understand.

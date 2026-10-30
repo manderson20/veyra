@@ -100,6 +100,24 @@ def contexts(text: str) -> list[str]:
     return out
 
 
+_START_RE = re.compile(r"^exten\s*=>\s*s\s*,")
+
+
+def entry_contexts(text: str) -> list[str]:
+    """The contexts a call can be sent to: a Custom destination enters at
+    ``s,1``, so those with an ``s`` extension."""
+    out: list[str] = []
+    current = ""
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = _CONTEXT_RE.match(line)
+        if m:
+            current = m.group(1)
+        elif current and _START_RE.match(line) and current not in out:
+            out.append(current)
+    return out
+
+
 def problems(text: str) -> list[str]:
     """What is wrong with the text, by line; empty when it can be deployed."""
     if len(text.encode()) > MAX_BYTES:

@@ -55,6 +55,7 @@ Inbound routes are at [Telephony → Inbound Routes](app:/routing/inbound/). You
 | **Conference room** | A conference room |
 | **Call flow** | A day/night switch: see [Day/night switches](guide:day-night-switches) |
 | **Fax to email** | A fax inbox |
+| **Custom dialplan** | A custom context (platform administrators only; see [Deploy changes](guide:deploy-changes)) |
 | **Dial-by-name directory** | Callers spell a name on the keypad |
 
 ## How numbers are matched

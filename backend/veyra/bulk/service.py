@@ -597,6 +597,7 @@ _DEST_FIELDS = {
     "conference": "conference_id",
     "call_flow": "call_flow_id",
     "fax": "fax_inbox_id",
+    "custom": "custom_context",
 }
 
 
@@ -608,6 +609,11 @@ def _destination(db: Session, org_id: uuid.UUID, value: str, prefix: str) -> dic
     out: dict[str, Any] = {f"{prefix}_{f}": None for f in set(_DEST_FIELDS.values())}
     out[f"{prefix}_type" if prefix == "destination" else "after_hours_type"] = kind
     if kind == "directory":
+        return out
+    if kind == "custom":
+        if not target:
+            raise RowError(f"{prefix}: write it as custom:<context>")
+        out[f"{prefix}_custom_context"] = target
         return out
     if kind not in _DEST_MODELS:
         raise RowError(f"{prefix}: unknown destination type {kind!r}")
@@ -624,6 +630,8 @@ def _destination_text(db: Session, route: InboundRoute, prefix: str) -> str:
         return ""
     if kind == "directory":
         return kind
+    if kind == "custom":
+        return f"custom:{getattr(route, f'{prefix}_custom_context', None) or ''}"
     fld = _DEST_FIELDS.get(kind)
     target = getattr(route, f"{prefix}_{fld}", None) if fld else None
     model = _DEST_MODELS[kind][0] if kind in _DEST_MODELS else None
@@ -852,6 +860,10 @@ def _destination_in(db: Session, org_id: uuid.UUID, value: str) -> dict[str, Any
     kind, target = kind.strip().lower(), target.strip()
     if kind in ("hangup", "directory"):
         return {"type": kind}
+    if kind == "custom":
+        if not target:
+            raise RowError("write it as custom:<context>")
+        return {"type": kind, "custom_context": target}
     if kind not in _DEST_MODELS:
         raise RowError(f"unknown destination type {kind!r}")
     if not target:
@@ -866,6 +878,8 @@ def _destination_of(db: Session, obj: Any, prefix: str) -> str:
         return ""
     if kind in ("hangup", "directory"):
         return kind
+    if kind == "custom":
+        return f"custom:{getattr(obj, f'{prefix}_custom_context', None) or ''}"
     fld = _DEST_FIELDS.get(kind)
     target = getattr(obj, f"{prefix}_{fld}", None) if fld else None
     model = _DEST_MODELS[kind][0] if kind in _DEST_MODELS else None

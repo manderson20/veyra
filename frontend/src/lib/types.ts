@@ -1098,7 +1098,7 @@ export interface TrunkInput {
   register_max_retries?: number | null;
 }
 
-export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "call_flow" | "fax" | "directory" | "hangup";
+export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "call_flow" | "fax" | "custom" | "directory" | "hangup";
 
 /** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6, RING_GROUPS_QUEUES.md §5). */
 export interface Destination {
@@ -1112,6 +1112,7 @@ export interface Destination {
   conference_id?: string | null;
   call_flow_id?: string | null;
   fax_inbox_id?: string | null;
+  custom_context?: string | null;
   /** "2214 — Front Office", "Voicemail of 2214 (Front Office)", "Shared inbox: Attendance (2900)", "Menu: Main menu", "Ring group: Sales (2300)", "Queue: Support (2400)", "Hang up"; null when the target is gone. */
   label: string | null;
   missing: boolean;
@@ -1128,6 +1129,7 @@ export interface DestinationInput {
   conference_id?: string | null;
   call_flow_id?: string | null;
   fax_inbox_id?: string | null;
+  custom_context?: string | null;
 }
 
 export type RouteDestinationType = Exclude<DestinationType, "hangup">;
@@ -1151,6 +1153,7 @@ export interface InboundRoute {
   destination_announcement_id?: string | null;
   destination_conference_id?: string | null;
   destination_call_flow_id?: string | null;
+  destination_custom_context?: string | null;
   destination_fax_inbox_id?: string | null;
   destination_number: string | null;
   destination_name: string | null;
@@ -1167,6 +1170,7 @@ export interface InboundRoute {
   after_hours_announcement_id?: string | null;
   after_hours_conference_id?: string | null;
   after_hours_call_flow_id?: string | null;
+  after_hours_custom_context?: string | null;
   after_hours_fax_inbox_id?: string | null;
   after_hours_number: string | null;
   after_hours_name: string | null;
@@ -1192,6 +1196,7 @@ export interface InboundRouteInput {
   destination_conference_id?: string | null;
   destination_call_flow_id?: string | null;
   destination_fax_inbox_id?: string | null;
+  destination_custom_context?: string | null;
   time_condition_id?: string | null;
   after_hours_type?: RouteDestinationType;
   after_hours_extension_id?: string | null;
@@ -1203,6 +1208,7 @@ export interface InboundRouteInput {
   after_hours_conference_id?: string | null;
   after_hours_call_flow_id?: string | null;
   after_hours_fax_inbox_id?: string | null;
+  after_hours_custom_context?: string | null;
   caller_id_prefix?: string | null;
   is_enabled?: boolean;
 }

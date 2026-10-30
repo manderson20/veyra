@@ -3085,6 +3085,9 @@ def _goto(dest: Any) -> list[str]:
         slug = _slug(dest.get("fax_inbox"), "fax inbox slug")
         ctx = engine_names.current().fax_in(slug)
         return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
+    if kind == "custom":
+        context = _check_section(str(dest.get("context") or ""), "custom context")
+        return [f" same => n,Goto({context},s,1)", " same => n,Hangup()"]
     if kind == "directory":
         return [f" same => n,Goto({engine_names.current().directory},s,1)", " same => n,Hangup()"]
     if kind in ("extension", "voicemail"):

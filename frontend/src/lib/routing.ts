@@ -101,6 +101,7 @@ export const DESTINATION_LABELS: Record<DestinationType, string> = {
   conference: "Conference room",
   call_flow: "Call flow",
   fax: "Fax to email",
+  custom: "Custom dialplan",
   directory: "Dial-by-name directory",
   hangup: "Hang up",
 };
@@ -117,9 +118,10 @@ export interface DestinationDraft {
   conference_id: string;
   call_flow_id: string;
   fax_inbox_id: string;
+  custom_context: string;
 }
 
-const NO_TARGETS = { extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "", announcement_id: "", conference_id: "", call_flow_id: "", fax_inbox_id: "" };
+const NO_TARGETS = { extension_id: "", ivr_id: "", ring_group_id: "", queue_id: "", voicemail_box_id: "", announcement_id: "", conference_id: "", call_flow_id: "", fax_inbox_id: "", custom_context: "" };
 
 export const EMPTY_DESTINATION: DestinationDraft = { type: "extension", ...NO_TARGETS };
 export const HANGUP: DestinationDraft = { type: "hangup", ...NO_TARGETS };
@@ -142,10 +144,11 @@ export function destinationDraft(d: Destination | null | undefined, fallback: De
     conference_id: d.conference_id ?? "",
     call_flow_id: d.call_flow_id ?? "",
     fax_inbox_id: d.fax_inbox_id ?? "",
+    custom_context: d.custom_context ?? "",
   };
 }
 
-export type DestinationTargetField = "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | "announcement_id" | "conference_id" | "call_flow_id" | "fax_inbox_id";
+export type DestinationTargetField = "extension_id" | "ivr_id" | "ring_group_id" | "queue_id" | "voicemail_box_id" | "announcement_id" | "conference_id" | "call_flow_id" | "fax_inbox_id" | "custom_context";
 
 /** The draft field that holds the target of a kind (none for hang up and the directory). */
 export function destinationTargetField(type: DestinationType): DestinationTargetField | null {
@@ -169,6 +172,8 @@ export function destinationTargetField(type: DestinationType): DestinationTarget
       return "call_flow_id";
     case "fax":
       return "fax_inbox_id";
+    case "custom":
+      return "custom_context";
     default:
       return null;
   }
@@ -188,6 +193,7 @@ export function destinationBody(d: DestinationDraft): DestinationInput {
     conference_id: field === "conference_id" ? d.conference_id || null : null,
     call_flow_id: field === "call_flow_id" ? d.call_flow_id || null : null,
     fax_inbox_id: field === "fax_inbox_id" ? d.fax_inbox_id || null : null,
+    custom_context: field === "custom_context" ? d.custom_context || null : null,
   };
 }
 
