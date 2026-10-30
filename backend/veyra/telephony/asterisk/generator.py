@@ -19,7 +19,7 @@ import re
 from contextvars import ContextVar
 from typing import Any
 
-from veyra.telephony import routing
+from veyra.telephony import custom_dialplan, routing
 from veyra.telephony.adapter import GeneratedFile
 from veyra.telephony.asterisk import names as engine_names
 from veyra.telephony.asterisk.names import Names
@@ -1413,6 +1413,13 @@ def _dialplan(
                 int((snapshot.get("numbering") or {}).get("extension_length") or 4),
             ),
         )
+    custom = str(snapshot.get("custom_dialplan") or "")
+    if custom.strip():
+        # Checked again here: the text may predate a stricter list.
+        wrong = custom_dialplan.problems(custom)
+        if wrong:
+            raise GenerationError("custom dialplan: " + "; ".join(wrong[:5]))
+        lines += ["", "; Custom dialplan (System -> Custom Dialplan)", custom.strip()]
     return GeneratedFile(FILE_DIALPLAN, "\n".join(lines).rstrip("\n") + "\n")
 
 

@@ -4,7 +4,7 @@ summary: Send saved changes to the telephony engine, now or when calls have ende
 audience: admin
 section: Maintenance
 order: 30
-reviewed: 0.27.45
+reviewed: 0.27.46
 pages:
   - /system/telephony/
 covers:
@@ -83,3 +83,9 @@ The **SIP and media settings** card on the same page holds the ports and address
 - **The engine is not running:** see [Health, alerts and diagnostics](guide:health-alerts-diagnostics).
 - **Installation key missing:** the page says so. Revisions with SIP passwords cannot be made without it. Run `sudo veyra installation-key check` on the server, and restore the key from a backup if it is gone.
 - **"The deployer has not reported a result yet":** run `journalctl -u veyra-deployer` on the server.
+
+## Custom dialplan
+
+Platform administrators can add their own Asterisk contexts under **System → Telephony Engine → Custom dialplan**, for something Veyra has no feature for. Contexts must be named `[custom-…]`. Commands that reach the server's shell or files are refused when you save. Saving does not change calls: deploy the changes as usual.
+
+> **Warning:** this is code that runs on the server, and it can dial out past classes of service and outbound routes. Only paste dialplan you understand.

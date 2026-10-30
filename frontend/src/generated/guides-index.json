@@ -720,8 +720,8 @@
    "summary": "Send saved changes to the telephony engine, now or when calls have ended, and roll back to an earlier configuration.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.46",
+   "reviewed_date": null,
    "pages": [
     "/system/telephony/"
    ],

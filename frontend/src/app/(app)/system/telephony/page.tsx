@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { CustomDialplanCard } from "@/components/account/CustomDialplanCard";
 import { REVISION_STATE, TELEPHONY_STATE } from "@/components/common/labels";
 import {
   Badge,
@@ -161,6 +162,7 @@ export default function TelephonyEnginePage() {
         />
       </Card>
       {can("system.settings.read") ? <SipSettingsCard editable={can("system.settings.write")} /> : null}
+      {can("system.settings.read") ? <CustomDialplanCard editable={can("system.settings.write")} /> : null}
       <RevisionDialog revision={open} onClose={() => setOpen(null)} canDeploy={canDeploy} onChanged={refreshAll} />
     </div>
   );

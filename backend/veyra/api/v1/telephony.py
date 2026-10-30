@@ -23,7 +23,7 @@ from veyra.core.models import ConfigRevision
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.crypto import InstallationKey, try_load_installation_key
 from veyra.core.security.principal import Principal
-from veyra.telephony import features
+from veyra.telephony import custom_dialplan, features
 from veyra.telephony.adapter import Capability, EngineUnavailable, TelephonyAdapter
 from veyra.telephony.numbering import NumberingPlan, load_numbering_plan, save_numbering_plan
 from veyra.telephony.settings import CODECS, SipSettings, load_sip_settings, save_sip_settings
@@ -190,6 +190,72 @@ def put_settings(
     )
     db.commit()
     return SipSettingsOut(settings=body, problems=[], codecs_available=list(CODECS))
+
+
+# ----------------------------------------------------------- custom dialplan
+
+
+class CustomDialplan(BaseModel):
+    text: str = Field("", max_length=custom_dialplan.MAX_BYTES)
+
+
+class CustomDialplanOut(CustomDialplan):
+    contexts: list[str]
+    blocked_applications: list[str]
+    blocked_functions: list[str]
+
+
+def _custom_out(text: str) -> CustomDialplanOut:
+    return CustomDialplanOut(
+        text=text,
+        contexts=custom_dialplan.contexts(text),
+        blocked_applications=list(custom_dialplan.BLOCKED_APPLICATIONS),
+        blocked_functions=list(custom_dialplan.BLOCKED_FUNCTIONS),
+    )
+
+
+@router.get("/custom-dialplan", response_model=CustomDialplanOut, summary="Custom dialplan")
+def get_custom_dialplan(
+    principal: Principal = Depends(require("system.settings.read")),
+    db: Session = Depends(get_db),
+) -> CustomDialplanOut:
+    return _custom_out(custom_dialplan.load(db)["text"])
+
+
+@router.put("/custom-dialplan", response_model=CustomDialplanOut, summary="Change custom dialplan")
+def put_custom_dialplan(
+    body: CustomDialplan,
+    principal: Principal = Depends(require("system.settings.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> CustomDialplanOut:
+    wrong = custom_dialplan.problems(body.text)
+    if wrong:
+        raise ProblemError(
+            422,
+            "Custom dialplan not saved",
+            " ".join(wrong[:5]),
+            code="validation_failed",
+            errors=[{"field": "text", "message": p} for p in wrong],
+        )
+    before = custom_dialplan.load(db)["text"]
+    if before != body.text:
+        custom_dialplan.save(db, body.text, updated_by=principal.user_id)
+        service.mark_changed(db, by=principal.label, what="telephony.custom_dialplan_update")
+        audit.record(
+            db,
+            action="telephony.custom_dialplan_update",
+            actor_user_id=principal.user_id,
+            actor_label=principal.label,
+            target_type="settings",
+            target_id=custom_dialplan.CUSTOM_DIALPLAN_KEY,
+            ip_address=ctx.ip,
+            request_id=ctx.request_id,
+            # The whole text: this is code that runs on the server.
+            details={"before": before, "after": body.text},
+        )
+        db.commit()
+    return _custom_out(body.text)
 
 
 # ----------------------------------------------------------------- numbering

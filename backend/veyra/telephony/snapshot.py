@@ -66,7 +66,7 @@ from veyra.core.models import (
     VoicemailBoxMember,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
-from veyra.telephony import extension_state, features, moh
+from veyra.telephony import custom_dialplan, extension_state, features, moh
 from veyra.telephony.numbering import load_numbering_plan
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
@@ -427,6 +427,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
             "multi_tenancy_enabled": bool(inst.multi_tenancy_enabled) if inst else False,
         },
         "sip": load_sip_settings(db).model_dump(mode="json"),
+        "custom_dialplan": custom_dialplan.load(db)["text"],
         # Configurable feature codes (docs/CALL_FEATURES.md §3.1).
         "feature_codes": features.active(db),
         "numbering": {"extension_length": load_numbering_plan(db).extension_length},

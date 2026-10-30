@@ -10,10 +10,11 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased — 0.27.46
 
-No migration. The web server's settings change (the update applies them).
+The web server's settings change (the update applies them).
 
 ### Added
 - **From FreePBX: recordings and hold music** (#42): System → Import and Export → From FreePBX → **Import the audio** takes an archive of the server's sounds and hold music folders. Recordings keep their FreePBX names, so the imported IVR menus find them, and each hold music folder becomes a hold music set. It only adds, so you can run it again.
+- **Custom dialplan** (platform administrators only): System → Telephony Engine → **Custom dialplan** holds your own `[custom-…]` Asterisk contexts, deployed like any other change. Commands that reach the server's shell or files are refused, and every change is in the audit log. Calls reach them through a new **Custom** destination.
 - **From FreePBX: dynamic queue agents** (#42): add the output of `asterisk -rx "database show QPENALTY"` and queue agents who log in with a code come over too.
 
 ### Fixed
