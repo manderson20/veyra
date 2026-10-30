@@ -5,6 +5,7 @@ audience: admin
 section: Calls and call flows
 order: 10
 reviewed: 0.27.45
+checked: 2026-10-30T15:10Z
 pages:
   - /trunks/
   - /trunks/view/

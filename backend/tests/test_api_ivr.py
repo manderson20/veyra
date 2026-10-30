@@ -197,6 +197,7 @@ def test_ivr_menu_crud_validation_and_in_use(admin, app, tmp_path):
         "fax_inbox_id": None,
         "label": "Hang up",
         "missing": False,
+        "custom_context": None,
     }
     assert menu["problems"] == [] and menu["prompt_name"] == "Welcome"
     assert admin.get(f"{VM}/{box['id']}").json()["in_use_by"] == 1
