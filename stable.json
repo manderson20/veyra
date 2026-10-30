@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 62,
+  "sequence": 63,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.46",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Custom dialplan for platform administrators, FreePBX recordings, hold music and queue agents import, and firmware uploads over 25 MB fixed.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "2454405c9c",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.46/veyra-0.27.46.tar.gz",
+        "sha256": "624ca00f5d1cbfdfff232abadcb849b7da896ca1598ca383ebc58ad643217927",
+        "size": 9374532
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1057,6 +1074,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-30T13:47:25+00:00",
-  "expires_at": "2027-01-28T13:47:25+00:00"
+  "generated_at": "2026-10-30T15:22:49+00:00",
+  "expires_at": "2027-01-28T15:22:49+00:00"
 }
