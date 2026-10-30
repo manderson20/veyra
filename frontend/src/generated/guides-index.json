@@ -135,10 +135,11 @@
    "summary": "How a new phone finds this server, signs in for its configuration, and learns to trust Veyra's certificate.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.54",
+   "reviewed_date": null,
    "pages": [
-    "/devices/"
+    "/devices/",
+    "/provisioning/requests/"
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Connect-phones-to-Veyra"
   },
@@ -161,8 +162,8 @@
    "summary": "Register a phone by its MAC address, give it a profile and extensions, and check that it picked up its configuration.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.54",
+   "reviewed_date": null,
    "pages": [
     "/devices/",
     "/devices/view/"
@@ -214,8 +215,8 @@
    "summary": "Change what Veyra writes into phones' configuration files with your own template, edited in the browser, previewed, exported and imported.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.54",
+   "reviewed_date": null,
    "pages": [
     "/provisioning/",
     "/provisioning/view/"

@@ -5,6 +5,7 @@ a per-device provisioning credential and the status of their last fetch."""
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -541,6 +542,99 @@ def unregistered(
             requests=1,
         )
     return list(seen.values())
+
+
+class ProvisioningRequestOut(BaseModel):
+    id: uuid.UUID
+    at: datetime
+    mac_address: str | None
+    mac_display: str | None
+    filename: str
+    method: str
+    ip_address: str | None
+    user_agent: str | None
+    organization_id: uuid.UUID | None
+    organization_name: str | None
+    device_id: uuid.UUID | None
+    result: str
+    status: int
+
+
+@router.get(
+    "/requests",
+    response_model=Page[ProvisioningRequestOut],
+    summary="Configuration requests from phones, refused ones too",
+)
+def provisioning_requests(
+    organization_id: uuid.UUID | None = None,
+    result: str | None = Query(None, max_length=32),
+    problems_only: bool = False,
+    q: str | None = Query(None, max_length=100),
+    since: datetime | None = Query(None, alias="from"),
+    params: PageParams = Depends(page_params),
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> Page[ProvisioningRequestOut]:
+    """A refused request belongs to no organization until the phone is known:
+    an organization sees those of its own devices' addresses, and only platform
+    administrators see those of phones Veyra does not know."""
+    stmt = select(ProvisioningRequest).order_by(ProvisioningRequest.at.desc())
+    orgs = principal.organization_ids_with(READ)
+    if orgs is not None:
+        ids = orgs or {uuid.UUID(int=0)}
+        stmt = stmt.where(
+            or_(
+                ProvisioningRequest.organization_id.in_(ids),
+                ProvisioningRequest.mac.in_(
+                    select(Device.mac_address).where(Device.organization_id.in_(ids))
+                ),
+            )
+        )
+    if organization_id:
+        stmt = stmt.where(ProvisioningRequest.organization_id == organization_id)
+    if result:
+        stmt = stmt.where(ProvisioningRequest.result == result)
+    if problems_only:
+        stmt = stmt.where(ProvisioningRequest.status >= 400)
+    if since:
+        stmt = stmt.where(ProvisioningRequest.at >= since)
+    if q:
+        needle = q.strip()
+        like = f"%{needle}%"
+        mac = re.sub(r"[^0-9A-Fa-f]", "", needle).lower()
+        conds = [
+            ProvisioningRequest.ip_address.ilike(like),
+            ProvisioningRequest.filename.ilike(like),
+            ProvisioningRequest.user_agent.ilike(like),
+        ]
+        if mac:
+            conds.append(ProvisioningRequest.mac.ilike(f"%{mac}%"))
+        stmt = stmt.where(or_(*conds))
+    rows, total = paginate(db, stmt, params)
+    names = {o.id: o.name for o in db.scalars(select(Organization))}
+    return Page(
+        items=[
+            ProvisioningRequestOut(
+                id=r.id,
+                at=r.at,
+                mac_address=r.mac,
+                mac_display=mac_display(r.mac) if r.mac else None,
+                filename=r.filename,
+                method=r.method,
+                ip_address=r.ip_address,
+                user_agent=r.user_agent,
+                organization_id=r.organization_id,
+                organization_name=names.get(r.organization_id) if r.organization_id else None,
+                device_id=r.device_id,
+                result=r.result,
+                status=r.status,
+            )
+            for r in rows
+        ],
+        total=total,
+        limit=params.limit,
+        offset=params.offset,
+    )
 
 
 @router.get("", response_model=Page[DeviceOut], summary="List devices")

@@ -3,10 +3,13 @@
 the phone-facing provisioning server (docs/DEVICE_PROVISIONING.md §3, §4)."""
 
 import base64
+import uuid
 
-from conftest import enable_multi_tenancy
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
 from fastapi.testclient import TestClient
 
+from veyra.core.db import session_scope
+from veyra.core.models import Device
 from veyra.provisioning.facts import dst_rules
 
 PROV = "/provisioning"
@@ -362,3 +365,57 @@ def test_snapshot_counts_phones_per_extension_and_site_emergency_default(admin, 
         e["action"] == "device.reprovision"
         for e in admin.get("/api/v1/audit", params={"q": "reprovision"}).json()["items"]
     )
+
+
+def test_request_log_api(admin, app):
+    """Issue #347: refused requests can be seen, and are scoped."""
+    enable_multi_tenancy()
+    other = admin.post("/api/v1/organizations", json={"name": "O2", "slug": "o2"}).json()["id"]
+    anon = TestClient(app, base_url="https://veyra.test")
+    # No credential: refused, belongs to no organization.
+    assert anon.get(f"{PROV}/veyra-0004f2aabbcc.cfg").status_code == 401
+    r = admin.get(f"{DEVICES}/requests", params={"problems_only": True})
+    assert r.status_code == 200, r.text
+    row = next(i for i in r.json()["items"] if i["mac_address"] == "0004f2aabbcc")
+    assert row["result"] == "unauthorized" and row["status"] == 401
+    assert row["organization_id"] is None and row["mac_display"]
+    base = {"problems_only": True}
+    for needle in ("00:04:F2:AA:BB:CC", "veyra-0004f2"):
+        found = admin.get(f"{DEVICES}/requests", params={**base, "q": needle}).json()["items"]
+        assert [i["mac_address"] for i in found] == ["0004f2aabbcc"]
+    assert not admin.get(f"{DEVICES}/requests", params={"result": "disabled"}).json()["items"]
+
+    # An organization administrator: not an unknown phone, but their own device's.
+    r = admin.post(
+        "/api/v1/users",
+        json={
+            "email": "tech@example.org",
+            "display_name": "Tech",
+            "password": ADMIN_PASSWORD,
+            "home_organization_id": other,
+            "require_password_change": False,
+        },
+    ).json()
+    assert (
+        admin.post(
+            f"/api/v1/users/{r['id']}/roles",
+            json={"role_key": "org_admin", "scope_type": "organization", "organization_id": other},
+        ).status_code
+        == 201
+    )
+    tech = login(TestClient(app, base_url="http://veyra.test"), "tech@example.org", ADMIN_PASSWORD)
+    assert not tech.get(f"{DEVICES}/requests").json()["items"]
+    with session_scope() as db:
+        db.add(
+            Device(
+                id=uuid.uuid4(),
+                organization_id=uuid.UUID(other),
+                mac_address="0004f2aabbcc",
+                label="Theirs",
+                manufacturer="polycom",
+                model="vvx450",
+            )
+        )
+    assert [i["mac_address"] for i in tech.get(f"{DEVICES}/requests").json()["items"]] == [
+        "0004f2aabbcc"
+    ]

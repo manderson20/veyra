@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.54
+
+No migration.
+
+### Added
+- **Provisioning requests page** (#347): Provisioning → Requests lists what phones asked for and what they got, including refused requests, with the reason in plain words. Filter by MAC, address, file or result. Kept 30 days, as the retention settings say. A phone Veyra does not know belongs to no organization yet, so only platform administrators see its requests.
+
 ## 0.27.53 — 2026-10-30
 
 No migration.

@@ -4,16 +4,18 @@ summary: How a new phone finds this server, signs in for its configuration, and 
 audience: admin
 section: Phones and devices
 order: 10
-reviewed: 0.27.44
+reviewed: 0.27.54
 checked: 2026-10-29
 pages:
   - /devices/
+  - /provisioning/requests/
 covers:
   - backend/veyra/provisioning/serve.py
   - backend/veyra/provisioning/bootstrap.py
   - backend/veyra/api/v1/enrollment.py
   - frontend/src/components/organizations/ProvisioningCredentialCard.tsx
   - frontend/src/app/(app)/provisioning/page.tsx
+  - frontend/src/app/(app)/provisioning/requests/*
 ---
 
 Every phone, adapter and speaker that Veyra manages downloads its configuration from Veyra. Nobody types settings into the phone. You do three things once, and after that each new phone sets itself up when it is plugged in:
@@ -82,6 +84,17 @@ When the bootstrap is on, the **Phone provisioning** card also shows the switch 
 **Grandstream and Algo.** These devices do not get the HTTP bootstrap. Point them straight at the **https** address. If a device refuses the certificate, download it from `https://<your Veyra server>/downloads/veyra-ca.crt` and add it in the device's web page as a trusted certificate. Grandstream's configuration from Veyra installs the Veyra CA by itself (setting `install_ca`) and leaves certificate checking off. Once the CA is installed you can turn checking on with the setting `validate_server_certificate` (see [Device profiles](guide:device-profiles)).
 
 > **Warning:** Whoever runs the server can set `VEYRA_PROVISIONING_HTTP_MODE=full` so that every file, SIP passwords included, is also sent over plain HTTP. Use it only for phones that cannot take the certificate any other way. The **Phone provisioning** card shows a warning while it is on.
+
+## See what a phone asked for
+
+[Provisioning → Requests](app:/provisioning/requests/) lists every configuration request for 30 days: the time, the phone's MAC and network address, the file, the result with its reason, and the phone's software. Tick **Problems only** to see just the refused requests, or search for a MAC or address.
+
+- **No row at all** means the phone is not reaching this server: check the provisioning URL it was given.
+- **Wrong sign-in** means its credential is missing or wrong.
+- **Unknown phone** means no device has that MAC address yet.
+- **No such file** is usually harmless, because phones ask for optional files.
+
+A phone Veyra does not know belongs to no organization yet, so only platform administrators see its requests.
 
 ## If something doesn't work
 
