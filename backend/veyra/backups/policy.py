@@ -22,7 +22,7 @@ DEFAULTS: dict[str, Any] = {
     "ssh_public": "",  # Veyra's SSH key for SFTP destinations
     "ssh_private_ciphertext": None,
 }
-DESTINATION_KINDS = ("directory", "sftp", "s3")
+DESTINATION_KINDS = ("directory", "sftp", "s3", "gdrive")
 # The copy directory of 0.23 to 0.27.43 becomes a folder destination.
 LEGACY_COPY_DIR_ID = "copy-dir"
 

@@ -102,10 +102,11 @@ def put_settings(
 
 
 class DestinationIn(BaseModel):
-    """A folder, an SFTP server or an S3-compatible bucket (§2.7). The
-    secret access key is write-only: left out, the stored one stays."""
+    """A folder, an SFTP server, an S3-compatible bucket or a Google Shared
+    drive (§2.7). The secret access key and the service account's key are
+    write-only: left out, the stored one stays."""
 
-    kind: Literal["directory", "sftp", "s3"]
+    kind: Literal["directory", "sftp", "s3", "gdrive"]
     name: str = Field("", max_length=80)
     enabled: bool = True
     keep: KeepIn | None = None
@@ -120,6 +121,9 @@ class DestinationIn(BaseModel):
     access_key_id: str | None = Field(None, max_length=128)
     secret_access_key: str | None = Field(None, max_length=200)
     addressing: Literal["path", "virtual"] | None = None
+    drive_id: str | None = Field(None, max_length=300)
+    folder: str | None = Field(None, max_length=300)
+    service_account_json: str | None = Field(None, max_length=8000)
 
 
 class HostKeyIn(BaseModel):

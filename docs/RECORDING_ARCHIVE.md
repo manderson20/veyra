@@ -8,7 +8,7 @@ longer. An installation that must keep them for years sets a long retention.
 ## 1. How it works
 
 * System -> Backups -> **Recording archive** chooses the destination
-  (`GET`/`PUT /backups/recording-archive`). Folder, SFTP and S3 all work.
+  (`GET`/`PUT /backups/recording-archive`). Folder, SFTP, S3 and Google Drive all work.
 * The worker starts `veyra-backup@recordings` (root, through polkit) when there
   is work, at most hourly. Up to 500 copies and 500 removals a run; the first
   run after turning it on works through older recordings over several hours.

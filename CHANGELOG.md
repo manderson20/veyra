@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.48
+
+No migration.
+
+### Added
+- **Google Drive backup destination** (#344): System → Backups → Add destination → **Google Drive** copies backups to a Shared drive through a service account, with each file's checksum compared after upload. The recording archive can use it too. The service account must be a **Manager** of the Shared drive; the Test button checks this by deleting a test file for good.
+
 ## 0.27.47 — 2026-10-30
 
 Migration 0072.

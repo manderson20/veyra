@@ -4,7 +4,7 @@ summary: Schedule verified, encrypted backups, copy them to a NAS, an SFTP serve
 audience: admin
 section: Maintenance
 order: 20
-reviewed: 0.27.47
+reviewed: 0.27.48
 checked: 2026-10-29
 pages:
   - /system/backups/
@@ -119,6 +119,18 @@ Other console commands: `sudo veyra backup list` lists backups and `sudo veyra b
 - **Last run failed:** the **Schedule** card shows the error, and the **Backup failed** alert is raised (see [Health, alerts and diagnostics](guide:health-alerts-diagnostics)). Disk space is the usual cause.
 - **Copy failed:** the destination shows the reason. A folder that is not mounted, an SFTP server that refuses Veyra's key (add the public key again) or whose host key changed (confirm the new one with **Test** if the server was reinstalled), or S3 credentials or a region that are wrong. Fix it and choose **Test**; the missing copies are made at the next backup.
 - **No recent good backup:** the **No recent good backup** alert is raised after two days without a verified backup.
+
+## Copy backups to Google Drive
+
+Backups can go to a Shared drive in your Google Workspace. Personal Google accounts and My Drive do not work, because a service account has no storage of its own.
+
+1. In the Google Cloud console, create a project and enable the **Google Drive API**.
+2. Create a **service account** and download a **JSON key** for it.
+3. Create a Shared drive and add the service account's email address as a **Manager**.
+4. On this page, add a destination, choose **Google Drive**, and enter the Shared drive's ID and the contents of the key file.
+5. Choose **Test**. It writes a file and deletes it for good.
+
+> **Warning:** the service account must be a Manager, not a Content manager. A Content manager can only move files to the trash, where they stay for 30 days, so old backups and archived recordings would outlive their deletion. Test fails with that message if the role is wrong.
 
 ## Archive call recordings
 

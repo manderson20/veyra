@@ -3158,7 +3158,7 @@ export interface BackupSettings {
 /** Where backups are copied (docs/PRODUCTION_HARDENING.md §2.7); never a secret. */
 export interface BackupDestination {
   id: string;
-  kind: "directory" | "sftp" | "s3";
+  kind: "directory" | "sftp" | "s3" | "gdrive";
   name: string;
   enabled: boolean;
   keep: { daily_days: number; weekly_weeks: number; upgrades: number } | null;
@@ -3175,6 +3175,9 @@ export interface BackupDestination {
   prefix?: string;
   access_key_id?: string;
   addressing?: "path" | "virtual";
+  drive_id?: string;
+  folder?: string;
+  client_email?: string | null;
   has_secret?: boolean;
   last: { state: "ok" | "failed"; at: string; error?: string | null; count?: number; copied?: string[] } | null;
 }

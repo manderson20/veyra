@@ -16,9 +16,10 @@ const KINDS: { value: Kind; title: string; text: string }[] = [
   { value: "directory", title: "Folder", text: "A share mounted on this server (NFS or Windows/SMB), such as a NAS." },
   { value: "sftp", title: "SFTP server", text: "Any server reachable over SSH: a NAS, a Linux server, a hosting provider." },
   { value: "s3", title: "S3-compatible storage", text: "Amazon S3, Backblaze B2, Wasabi, Cloudflare R2, MinIO and others." },
+  { value: "gdrive", title: "Google Drive", text: "A Shared drive in your Google Workspace, through a service account." },
 ];
 
-const KIND_LABEL: Record<Kind, string> = { directory: "Folder", sftp: "SFTP", s3: "S3" };
+const KIND_LABEL: Record<Kind, string> = { directory: "Folder", sftp: "SFTP", s3: "S3", gdrive: "Google Drive" };
 
 interface Draft {
   kind: Kind;
@@ -39,6 +40,9 @@ interface Draft {
   access_key_id: string;
   secret_access_key: string;
   addressing: "path" | "virtual";
+  drive_id: string;
+  folder: string;
+  service_account_json: string;
 }
 
 function draftOf(d: BackupDestination | null, keep: BackupSettings["keep"]): Draft {
@@ -62,6 +66,9 @@ function draftOf(d: BackupDestination | null, keep: BackupSettings["keep"]): Dra
     access_key_id: d?.access_key_id ?? "",
     secret_access_key: "",
     addressing: d?.addressing ?? "path",
+    drive_id: d?.drive_id ?? "",
+    folder: d?.folder ?? "",
+    service_account_json: "",
   };
 }
 
@@ -74,6 +81,7 @@ function bodyOf(f: Draft): Record<string, unknown> {
   };
   if (f.kind === "directory") return { ...common, path: f.path.trim() };
   if (f.kind === "sftp") return { ...common, host: f.host.trim(), port: Number(f.port) || 22, username: f.username.trim(), path: f.path.trim() || "." };
+  if (f.kind === "gdrive") return { ...common, drive_id: f.drive_id.trim(), folder: f.folder.trim(), ...(f.service_account_json.trim() ? { service_account_json: f.service_account_json.trim() } : {}) };
   return {
     ...common,
     endpoint: f.endpoint.trim(),
@@ -170,6 +178,27 @@ function DestinationDialog({ open, dest, settings, onClose, onSaved }: {
               <SelectField label="Addressing" value={f.addressing} options={[{ value: "path", label: "Path style (endpoint/bucket) — most S3-compatible storage" }, { value: "virtual", label: "Virtual host (bucket.endpoint)" }]} onChange={(e) => set({ addressing: e.target.value as Draft["addressing"] })} />
             ) : null}
             <Callout tone="neutral" title="A key for Veyra only">Create an access key that can only list, write and delete in this bucket (or this folder of it). Veyra stores the secret encrypted and never shows it again. Old copies are removed by Veyra&apos;s keep policy; a bucket lifecycle rule is not needed.</Callout>
+          </>
+        ) : null}
+        {f.kind === "gdrive" ? (
+          <>
+            <Callout tone="neutral" title="Set up in Google first">
+              <ol style={{ margin: 0, paddingLeft: 18 }}>
+                <li>In the Google Cloud console, create a project and enable the <strong>Google Drive API</strong>.</li>
+                <li>Create a <strong>service account</strong> and download a <strong>JSON key</strong> for it.</li>
+                <li>Create a Shared drive and add the service account&apos;s email as a <strong>Manager</strong>. A Content manager only moves files to the trash, where they stay for 30 days.</li>
+              </ol>
+            </Callout>
+            <div className="form-grid">
+              <TextField label="Shared drive ID" required value={f.drive_id} spellCheck={false} error={errors.fields.drive_id} help="The last part of its address in the browser; you can paste the whole address." onChange={(e) => set({ drive_id: e.target.value })} />
+              <TextField label="Folder" value={f.folder} placeholder="pbx1" spellCheck={false} help="Optional, so several servers can share a drive. Made when missing." onChange={(e) => set({ folder: e.target.value })} />
+            </div>
+            <label className="field">
+              <span className="field__label">{dest?.has_secret ? "New service account key (blank keeps the saved one)" : "Service account key (the JSON file's contents)"}</span>
+              <textarea className="input mono" rows={5} spellCheck={false} autoComplete="off" value={f.service_account_json} onChange={(e) => set({ service_account_json: e.target.value })} />
+              {dest?.client_email ? <span className="field__help">Saved key: {dest.client_email}</span> : null}
+            </label>
+            <p className="subtle" style={{ margin: 0 }}>Veyra stores the key encrypted and never shows it again. Use <strong>Test</strong> afterwards: it writes a file and deletes it for good, so a wrong role shows up now.</p>
           </>
         ) : null}
         <Switch label="Same keep policy as on this server" checked={!f.ownKeep} onChange={(e) => set({ ownKeep: !e.target.checked })}

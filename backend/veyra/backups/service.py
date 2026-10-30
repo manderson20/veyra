@@ -157,6 +157,19 @@ def save_destination(
             dest["secret_ciphertext"] = key.encrypt(secret, dests.secret_purpose(dest["id"]))
         elif not dest.get("secret_ciphertext"):
             raise BackupError(400, "bad_destination", "Enter the secret access key.")
+    if dest["kind"] == "gdrive":
+        key_json = str(body.get("service_account_json") or "").strip()
+        if key_json:
+            from veyra.backups import gdrive
+
+            try:
+                parsed = gdrive.parse_key(key_json)
+            except ValueError as e:
+                raise BackupError(400, "bad_destination", str(e)) from e
+            dest["client_email"] = parsed["client_email"]
+            dest["secret_ciphertext"] = key.encrypt(key_json, dests.secret_purpose(dest["id"]))
+        elif not dest.get("secret_ciphertext"):
+            raise BackupError(400, "bad_destination", "Paste the service account's key file.")
     others = [d for d in current if d["id"] != dest["id"]]
     if any(dests.describe(d) == dests.describe(dest) for d in others):
         raise BackupError(400, "duplicate", "Another destination already goes there.")

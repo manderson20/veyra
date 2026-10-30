@@ -34,7 +34,7 @@ import httpx
 
 from veyra.backups import policy
 
-KINDS = ("directory", "sftp", "s3")
+KINDS = ("directory", "sftp", "s3", "gdrive")
 SECRET_PURPOSE = "backups.destination"  # noqa: S105 - an encryption purpose, + ":<id>"
 SSH_KEY_PURPOSE = "backups.ssh_key"
 MAX_DESTINATIONS = 5
@@ -74,7 +74,7 @@ def normalize(value: dict[str, Any], *, existing: dict[str, Any] | None = None) 
     ValueError with a message for the person."""
     kind = str(value.get("kind") or (existing or {}).get("kind") or "")
     if kind not in KINDS:
-        raise ValueError("Choose a folder, an SFTP server or S3-compatible storage.")
+        raise ValueError("Choose a folder, an SFTP server, S3-compatible storage or Google Drive.")
     out: dict[str, Any] = {
         "id": str((existing or {}).get("id") or value.get("id") or uuid.uuid4().hex[:12]),
         "kind": kind,
@@ -114,6 +114,18 @@ def normalize(value: dict[str, Any], *, existing: dict[str, Any] | None = None) 
             path=path,
             host_key=(existing or {}).get("host_key") if same else None,
         )
+    elif kind == "gdrive":
+        from veyra.backups import gdrive
+
+        folder = str(value.get("folder") or "").strip().strip("/")
+        if folder:
+            _clean_path(folder, "folder", absolute=False)
+        out.update(
+            drive_id=gdrive.drive_id_of(str(value.get("drive_id") or "")),
+            folder=folder,
+            client_email=(existing or {}).get("client_email"),
+            secret_ciphertext=(existing or {}).get("secret_ciphertext"),
+        )
     else:
         endpoint = str(value.get("endpoint") or "").strip().rstrip("/")
         if endpoint and not re.match(r"^https://[^\s/]+(:\d+)?$", endpoint):
@@ -151,7 +163,7 @@ def normalize(value: dict[str, Any], *, existing: dict[str, Any] | None = None) 
 def public(dest: dict[str, Any], last: dict[str, Any] | None = None) -> dict[str, Any]:
     """What the interface sees: never a secret."""
     out = {k: v for k, v in dest.items() if k != "secret_ciphertext"}
-    if dest.get("kind") == "s3":
+    if dest.get("kind") in ("s3", "gdrive"):
         out["has_secret"] = bool(dest.get("secret_ciphertext"))
     if dest.get("kind") == "sftp":
         out["host_key_fingerprint"] = host_key_fingerprint(dest.get("host_key"))
@@ -166,6 +178,9 @@ def describe(dest: dict[str, Any]) -> str:
     if dest["kind"] == "sftp":
         port = f":{dest['port']}" if dest.get("port") != 22 else ""
         return f"sftp://{dest['username']}@{dest['host']}{port}/{dest['path'].lstrip('/')}"
+    if dest["kind"] == "gdrive":
+        folder = f"/{dest['folder']}" if dest.get("folder") else ""
+        return f"Google Drive · {dest['drive_id']}{folder}"
     where = dest.get("endpoint") or f"Amazon S3 ({dest.get('region')})"
     prefix = f"/{dest['prefix']}" if dest.get("prefix") else ""
     return f"{where} · {dest['bucket']}{prefix}"
@@ -722,6 +737,12 @@ def remote(
         if not ssh_private_key:
             raise DestinationError("Veyra's SSH key is missing; open the Backups page once.")
         return SftpRemote(dest, ssh_private_key, run)
+    if dest["kind"] == "gdrive":
+        if not secret:
+            raise DestinationError("The service account's key is missing; enter it again.")
+        from veyra.backups.gdrive import DriveRemote
+
+        return DriveRemote(dest, secret, client)
     if not secret:
         raise DestinationError("The secret access key is missing; enter it again.")
     return S3Remote(dest, secret, client)
@@ -738,6 +759,9 @@ def archive_remote(
     """The destination's ``recordings`` folder, apart from its backups, so the
     backup keep policy never sees a recording."""
     sub = dict(dest)
+    if dest["kind"] == "gdrive":
+        sub["folder"] = "/".join(p for p in (dest.get("folder") or "", "recordings") if p)
+        return remote(sub, secret=secret, client=client)
     if dest["kind"] == "s3":
         sub["prefix"] = "/".join(p for p in (dest.get("prefix") or "", "recordings") if p)
         return remote(sub, secret=secret, client=client)
