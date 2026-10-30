@@ -4,7 +4,7 @@ summary: Create accounts for the people who sign in to Veyra, give them roles, a
 audience: admin
 section: Getting started
 order: 40
-reviewed: 0.27.50
+reviewed: 0.27.52
 checked: 2026-10-29
 pages:
   - /users/
@@ -41,7 +41,7 @@ Every role except Platform Administrator is given for one organization. Only a p
 ## Add a user
 
 1. Open [Directory → Users](app:/users/) and choose **New user**.
-2. Enter the **Full name** and **Email address**. The email address is what they sign in with, and it cannot be changed later.
+2. Enter the **Full name** and **Email address**. The email address is what they sign in with.
 3. Enter an **Initial password** of at least 12 characters. It is temporary: the user must choose their own at the first sign-in. Give it to them over a channel you trust.
 4. Choose the **Organization**. A platform administrator can leave it empty for a platform-level account.
 5. Choose **Create user**. Veyra opens the new user's page.
@@ -55,7 +55,9 @@ Veyra refuses passwords that contain the person's name or email address, have fe
 
 Choose a user in the list to open their page.
 
-- **Profile:** change the **Full name**, or switch **Account enabled** off. Disabling an account signs the person out everywhere; you cannot disable your own.
+- **Profile:** change the **Full name** or **Email address**, or switch **Account enabled** off. Disabling an account signs the person out everywhere; you cannot disable your own.
+- **Changing an email address:** it is what the person signs in with from then on. Veyra asks you to sign in again if you have not recently, signs them out, cancels any password reset link, and emails their old address if email delivery is set up. An account that signs in through an identity provider gets its address from there, and cannot be changed here. An account that also works in an organization you do not administer needs a platform administrator.
+- **Deleting a user:** switch off **Account enabled** and save, then choose **Delete user**. The account, its roles and its personal settings (My Phone layout, contacts) are removed for good. Their phones stay, unassigned, with their voicemail; recordings and call history stay; the audit log keeps their name and address. You cannot delete yourself or the recovery administrator. If they had a phone, deploy changes afterwards.
 - **Account:** the sign-in method, the last sign-in, the password's state, whether two-factor sign-in is on, and whether the account is locked.
 - **Roles:** the roles the user holds. Use the bin icon to remove one. At least one platform administrator must remain.
 - **Sign-in:** accounts at sign-in providers (single sign-on) linked to this user. **Unlink** removes the link.

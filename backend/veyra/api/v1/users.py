@@ -3,10 +3,11 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import Select, or_, select
+from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,12 +24,23 @@ from veyra.api.v1.schemas import (
     UserPatch,
     UserSessionOut,
 )
-from veyra.core import audit
+from veyra.configmgmt import service as configmgmt
+from veyra.core import audit, mail
 from veyra.core.config import Settings, get_settings
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, check_recent_auth, recent_auth, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
-from veyra.core.models import Organization, Role, RoleAssignment, Site, User
+from veyra.core.models import (
+    Extension,
+    Installation,
+    Organization,
+    PasswordResetToken,
+    Role,
+    RoleAssignment,
+    Site,
+    User,
+    UserIdentity,
+)
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security import api_tokens, mfa, password_reset, passwords
@@ -36,6 +48,8 @@ from veyra.core.security.principal import Principal
 from veyra.core.security.sessions import active_sessions, revoke_user_sessions
 from veyra.integrations import sso
 from veyra.integrations.tokens import SERVICE_AUTH_SOURCE
+
+log = logging.getLogger("veyra.users")
 
 router = APIRouter(tags=["users"])
 
@@ -187,6 +201,89 @@ def get_user(
     return _out(db, _get_visible_user(db, principal, user_id, "users.read"))
 
 
+def _guard_other_organizations(db: Session, principal: Principal, user: User) -> None:
+    """An account's address and existence reach every organization it works in:
+    the caller must administer users in all of them."""
+    orgs = set(
+        db.scalars(
+            select(RoleAssignment.organization_id).where(
+                RoleAssignment.user_id == user.id, RoleAssignment.organization_id.is_not(None)
+            )
+        )
+    )
+    if user.home_organization_id:
+        orgs.add(user.home_organization_id)
+    allowed = principal.organization_ids_with("users.write")
+    if allowed is not None and not orgs <= allowed:
+        raise forbidden("This account also works in an organization you do not administer.")
+
+
+def _notify_address_changed(
+    db: Session, settings: Settings, user: User, old: str, ctx: RequestContext
+) -> None:
+    """Tell the old address: if this was not wanted, its owner hears of it. A
+    mail problem does not undo the change, which is in the audit log anyway."""
+    smtp = mail.load_smtp_settings(db)
+    if not smtp.enabled or smtp.problems():
+        return
+    inst = db.scalar(select(Installation))
+    from_address, from_name = mail.sender(smtp, inst.name if inst else "Veyra")
+    msg = mail.compose(
+        from_address=from_address,
+        from_name=from_name,
+        to=old,
+        subject="Your phone system sign-in address was changed",
+        text=(
+            f"Hello {user.display_name},\n\n"
+            f"The address you sign in with was changed from {old} to {user.email}.\n\n"
+            "If you did not expect this, contact your administrator at once. "
+            f"The change came from {ctx.ip or 'an unknown address'}.\n"
+        ),
+    )
+    try:
+        mail.enqueue(settings.mailqueue_dir, msg.as_bytes())
+    except OSError:
+        log.exception("Could not queue the address change notice for user %s", user.id)
+
+
+def _change_email(
+    db: Session,
+    principal: Principal,
+    settings: Settings,
+    ctx: RequestContext,
+    user: User,
+    email: str,
+    details: dict[str, object],
+) -> None:
+    """A sign-in address is a way into the account (password reset by email,
+    and single sign-on matching by address on a first sign-in, issue #352)."""
+    check_recent_auth(db, principal)
+    _guard_other_organizations(db, principal, user)
+    linked = db.scalar(select(UserIdentity.id).where(UserIdentity.user_id == user.id).limit(1))
+    if linked or user.auth_source != "local":
+        raise conflict(
+            "This account signs in through an external identity provider; "
+            "its address comes from there.",
+            "email_from_provider",
+        )
+    if db.scalar(select(User.id).where(func.lower(User.email) == email, User.id != user.id)):
+        raise ProblemError(
+            409,
+            "Conflict",
+            "A user with this email address already exists.",
+            code="email_in_use",
+            errors=[{"field": "email", "message": "already in use"}],
+        )
+    old = user.email
+    user.email = email
+    details["email"] = {"from": old, "to": email}
+    # A reset link already issued must not outlive the address it went to.
+    db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id))
+    if user.id != principal.user_id:
+        details["sessions_revoked"] = revoke_user_sessions(db, user.id)
+    _notify_address_changed(db, settings, user, old, ctx)
+
+
 @router.patch("/users/{user_id}", response_model=UserOut, summary="Update a user")
 def update_user(
     user_id: uuid.UUID,
@@ -194,10 +291,13 @@ def update_user(
     principal: Principal = Depends(require("users.write")),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
+    settings: Settings = Depends(get_settings),
 ) -> UserOut:
     user = _get_visible_user(db, principal, user_id, "users.write")
     _guard_platform_admin_target(db, principal, user)
     details: dict[str, object] = {}
+    if body.email is not None and body.email != user.email:
+        _change_email(db, principal, settings, ctx, user, body.email, details)
     if body.display_name is not None:
         user.display_name = details["display_name"] = body.display_name
     if body.is_active is not None:
@@ -330,6 +430,50 @@ def unlock_user(
     )
     db.commit()
     return MessageOut(message="Account unlocked." if was_locked else "The account was not locked.")
+
+
+@router.delete(
+    "/users/{user_id}",
+    dependencies=[Depends(recent_auth)],
+    status_code=204,
+    summary="Delete a disabled user",
+)
+def delete_user(
+    user_id: uuid.UUID,
+    principal: Principal = Depends(require("users.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    """Removes the account, its roles, sessions and settings. Its phones stay,
+    unassigned, with their voicemail; recordings, call history and the audit
+    log stay (docs/guides/users-and-roles.md, issue #352)."""
+    user = _get_visible_user(db, principal, user_id, "users.write")
+    _guard_platform_admin_target(db, principal, user)
+    _guard_other_organizations(db, principal, user)
+    if user.id == principal.user_id:
+        raise conflict("You cannot delete your own account.", "self_deletion")
+    if user.is_recovery_admin:
+        raise conflict("The recovery administrator cannot be deleted.", "recovery_admin")
+    if user.is_active:
+        raise conflict("Disable the account before deleting it.", "user_active")
+    phones = list(db.scalars(select(Extension.number).where(Extension.user_id == user.id)))
+    audit.record(
+        db,
+        action="user.delete",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=user.home_organization_id,
+        target_type="user",
+        target_id=user.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"email": user.email, "display_name": user.display_name, "extensions": phones},
+    )
+    db.delete(user)
+    if phones:
+        configmgmt.mark_changed(db, by=principal.label, what=f"user deleted: {len(phones)} phones")
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.post(

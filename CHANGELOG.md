@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.52
+
+No migration.
+
+### Added
+- **Change a user's email address and delete a user** (#352): both on the user's page. Changing an address signs the person out, cancels any reset link and tells the old address; accounts from an identity provider keep the provider's address. A user must be disabled before deletion; their phones and voicemail stay, unassigned, and recordings, call history and the audit log are kept.
+
 ## 0.27.51 — 2026-10-30
 
 No migration. Deploy changes once after updating.

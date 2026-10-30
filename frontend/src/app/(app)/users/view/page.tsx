@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { ConnectedAppsCard } from "@/components/account/ConnectedAppsCard";
 import { SessionsTable } from "@/components/account/SessionsTable";
@@ -36,6 +36,7 @@ import { useSession } from "@/hooks/useSession";
 import { useOnChange } from "@/hooks/useOnChange";
 
 function UserView() {
+  const router = useRouter();
   const id = useSearchParams().get("id");
   const { session, can } = useSession();
   const toast = useToast();
@@ -51,6 +52,10 @@ function UserView() {
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [unlockBusy, setUnlockBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [mfaReset, setMfaReset] = useState(false);
   const [mfaBusy, setMfaBusy] = useState(false);
   const [mfaError, setMfaError] = useState<string | null>(null);
@@ -58,6 +63,7 @@ function UserView() {
   useOnChange(user.data, (u) => {
     if (u) {
       setName(u.display_name);
+      setEmail(u.email);
       setActive(u.is_active);
     }
   });
@@ -68,7 +74,8 @@ function UserView() {
   const u = user.data;
   const editable = can("users.write");
   const isSelf = session?.user.id === u.id;
-  const dirty = name !== u.display_name || active !== u.is_active;
+  const emailChanged = email.trim().toLowerCase() !== u.email;
+  const dirty = name !== u.display_name || active !== u.is_active || emailChanged;
   const locked = isLockedOut(u);
 
   const unlock = async () => {
@@ -104,12 +111,25 @@ function UserView() {
     setBusy(true);
     errors.clear();
     try {
-      user.setData(await api.patch<User>(`/users/${u.id}`, { display_name: name.trim(), is_active: active }));
-      toast.success("User saved", active ? undefined : "The user's sessions have been signed out.");
+      user.setData(await api.patch<User>(`/users/${u.id}`, { display_name: name.trim(), is_active: active, ...(emailChanged ? { email: email.trim() } : {}) }));
+      toast.success("User saved", emailChanged ? "They now sign in with the new address." : active ? undefined : "The user's sessions have been signed out.");
     } catch (err) {
       errors.set(err);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const deleteUser = async () => {
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api.del(`/users/${u.id}`);
+      toast.success("User deleted", u.email);
+      router.push("/users/");
+    } catch (err) {
+      setDeleteError(errorMessage(err));
+      setDeleteBusy(false);
     }
   };
 
@@ -164,11 +184,12 @@ function UserView() {
         <Card title="Profile">
           <form className="stack stack--sm" onSubmit={save}>
             <TextField label="Full name" required value={name} disabled={!editable} error={errors.fields.display_name} onChange={(e) => setName(e.target.value)} />
-            <TextField label="Email address" value={u.email} disabled help="Email addresses cannot be changed yet." />
+            <TextField label="Email address" type="email" value={email} disabled={!editable} error={errors.fields.email} onChange={(e) => setEmail(e.target.value)} help={u.auth_source === "local" ? "What they sign in with. Their old address is told about a change." : "This comes from the identity provider."} />
             <Switch label="Account enabled" description={isSelf ? "You cannot disable your own account." : "Disabling signs the user out everywhere."}
               checked={active} disabled={!editable || isSelf} onChange={(e) => setActive(e.target.checked)} />
             {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
-            {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save changes</Button></div> : null}
+            {editable ? <div className="form-actions">{!isSelf && !u.is_recovery_admin ? <Button variant="danger" disabled={u.is_active} onClick={() => setDeleting(true)}>Delete user</Button> : null}<Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save changes</Button></div> : null}
+            {editable && !isSelf && !u.is_recovery_admin && u.is_active ? <p className="subtle" style={{ margin: 0 }}>To delete this user, switch off <strong>Account enabled</strong> and save first.</p> : null}
           </form>
         </Card>
         <Card title="Account">
@@ -225,6 +246,10 @@ function UserView() {
         <ConnectedAppsCard listPath={`/users/${u.id}/tokens`} revokeAllPath={`/users/${u.id}/tokens`} revokeOne={false} title="Connected apps (Companion)" showDownload={false} />
       ) : null}
       <ResetPasswordDialog open={resetOpen} onClose={() => setResetOpen(false)} user={u} onChanged={user.reload} />
+      <ConfirmDialog open={deleting} title={`Delete ${u.display_name}?`} confirmLabel="Delete user" tone="danger" busy={deleteBusy} onConfirm={deleteUser} onCancel={() => setDeleting(false)}>
+        <p>The account, its roles and its personal settings are removed, and this cannot be undone. Its phones stay, unassigned, with their voicemail. Recordings, call history and the audit log stay.</p>
+        {deleteError ? <Callout tone="danger">{deleteError}</Callout> : null}
+      </ConfirmDialog>
       <ConfirmDialog
         open={mfaReset}
         title="Reset two-factor authentication?"

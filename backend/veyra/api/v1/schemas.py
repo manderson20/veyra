@@ -157,6 +157,7 @@ class UserCreate(BaseModel):
 
 
 class UserPatch(BaseModel):
+    email: Email | None = None
     display_name: str | None = Field(None, min_length=1, max_length=200)
     is_active: bool | None = None
     password: str | None = Field(None, min_length=1, max_length=1024)
