@@ -77,3 +77,7 @@ class CallRecording(UUIDPrimaryKey, TenantScoped, Base):
     held_by: Mapped[str | None] = mapped_column(String(200))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_by: Mapped[str | None] = mapped_column(String(200))
+    # The copy on a backup destination (docs/RECORDING_ARCHIVE.md).
+    archive_destination: Mapped[str | None] = mapped_column(String(40))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archive_removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

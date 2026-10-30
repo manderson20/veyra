@@ -43,6 +43,7 @@ MULTIPART_OVER = 100 * 1024 * 1024
 MANIFEST = "manifest.json"
 PARTIAL = ".partial"
 _NAME_RE = re.compile(r"^veyra-\d{8}-\d{6}(\.tar\.age)?$")
+_ARCHIVE_NAME_RE = re.compile(r"^veyra-recording-[0-9a-f-]{36}$")
 _HOST_RE = re.compile(r"^[A-Za-z0-9.-]{1,253}$|^\[?[0-9A-Fa-f:.]{2,45}\]?$")
 _USER_RE = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
 _BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
@@ -257,6 +258,10 @@ class Remote:
     def delete(self, name: str) -> None:
         raise NotImplementedError
 
+    def exists(self, name: str) -> bool:
+        """Whether anything of this name is there (the archive checks deletes)."""
+        raise NotImplementedError
+
     def test(self) -> None:
         """Write, check and remove a small file."""
         raise NotImplementedError
@@ -313,6 +318,9 @@ class DirectoryRemote(Remote):
             shutil.rmtree(p, ignore_errors=True)
         else:
             p.unlink(missing_ok=True)
+
+    def exists(self, name: str) -> bool:
+        return (self.root / name).exists()
 
     def test(self) -> None:
         self._check()
@@ -456,10 +464,14 @@ class SftpRemote(Remote):
         self._batch([f"rename {self._q(tmp)} {self._q(self._dir(name))}"])
 
     def delete(self, name: str) -> None:
-        if not _NAME_RE.match(name.removesuffix(PARTIAL)):
+        bare = name.removesuffix(PARTIAL)
+        if not _NAME_RE.match(bare) and not _ARCHIVE_NAME_RE.match(bare):
             raise DestinationError("not a backup name")
         p = self._dir(name)
         self._batch([f"-rm {self._q(p)}/*", f"-rmdir {self._q(p)}", f"-rm {self._q(p)}"])
+
+    def exists(self, name: str) -> bool:
+        return any(n == name for n, _, _ in self._listing(self._dir()))
 
     def test(self) -> None:
         probe = self._dir(f".veyra-test-{uuid.uuid4().hex[:8]}")
@@ -639,8 +651,11 @@ class S3Remote(Remote):
             got = {k.rsplit("/", 1)[-1]: s for k, s in self._list(self._key(name) + "/")}
         _compare_sizes(artifact, got)
 
+    def exists(self, name: str) -> bool:
+        return bool(self._list(self._key(name) + "/") or self._list(self._key(name)))
+
     def delete(self, name: str) -> None:
-        if not _NAME_RE.match(name):
+        if not _NAME_RE.match(name) and not _ARCHIVE_NAME_RE.match(name):
             raise DestinationError("not a backup name")
         if name.endswith(".tar.age"):
             self._request("DELETE", self._key(name))
@@ -712,6 +727,33 @@ def remote(
     return S3Remote(dest, secret, client)
 
 
+def archive_remote(
+    dest: dict[str, Any],
+    *,
+    secret: str | None = None,
+    ssh_private_key: str | None = None,
+    run: Runner = _run,
+    client: httpx.Client | None = None,
+) -> Remote:
+    """The destination's ``recordings`` folder, apart from its backups, so the
+    backup keep policy never sees a recording."""
+    sub = dict(dest)
+    if dest["kind"] == "s3":
+        sub["prefix"] = "/".join(p for p in (dest.get("prefix") or "", "recordings") if p)
+        return remote(sub, secret=secret, client=client)
+    sub["path"] = str(dest.get("path") or "").rstrip("/") + "/recordings"
+    rem = remote(sub, ssh_private_key=ssh_private_key, run=run)
+    if isinstance(rem, DirectoryRemote):
+        if not Path(dest["path"]).is_dir():
+            raise DestinationError(f"{dest['path']} is not a folder (is the share mounted?)")
+        rem.root.mkdir(exist_ok=True)
+    elif isinstance(rem, SftpRemote):
+        rem._batch(
+            [f"-mkdir {rem._q(str(dest.get('path') or ''))}", f"-mkdir {rem._q(sub['path'])}"]
+        )
+    return rem
+
+
 # ---------------------------------------------------------------------- sync
 
 
@@ -770,6 +812,7 @@ def sync(
 __all__ = [
     "KINDS",
     "DestinationError",
+    "archive_remote",
     "describe",
     "generate_ssh_key",
     "host_key_fingerprint",

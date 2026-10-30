@@ -300,3 +300,51 @@ export function DestinationsCard({ settings, manage, onChanged }: { settings: Ba
     </Card>
   );
 }
+
+interface ArchiveStatus {
+  destination_id: string;
+  waiting: number;
+  to_remove: number;
+  archived: number;
+  last_run: { at?: string; copied?: number; removed?: number; errors?: string[] } | null;
+}
+
+/** Copies of call recordings on a destination (docs/RECORDING_ARCHIVE.md). */
+export function RecordingArchiveCard({ settings, manage }: { settings: BackupSettings; manage: boolean }) {
+  const toast = useToast();
+  const status = useApiData<ArchiveStatus>("/backups/recording-archive");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const d = status.data;
+  const choose = async (destination_id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.put("/backups/recording-archive", { destination_id });
+      toast.success(destination_id ? "Recordings will be archived" : "Archive turned off", destination_id ? "Copies start within the hour." : "Existing copies stay until their recordings are deleted.");
+      status.reload();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const errors = d?.last_run?.errors ?? [];
+  return (
+    <Card title="Recording archive" subtitle="Keep a copy of every call recording on a backup destination, in case this server is lost.">
+      <div className="stack stack--sm">
+        <SelectField label="Archive recordings to" value={d?.destination_id ?? ""} disabled={!manage || busy || !d}
+          options={[{ value: "", label: "Do not archive" }, ...settings.destinations.map((x) => ({ value: x.id, label: x.name }))]}
+          help="A copy lives exactly as long as its recording: when a recording is deleted, by hand or at its retention date, its copy is deleted too, within about an hour. Held recordings and their copies stay."
+          onChange={(e) => void choose(e.target.value)} />
+        {error ? <Callout tone="danger">{error}</Callout> : null}
+        {d ? <p className="subtle" style={{ margin: 0 }}>{d.archived} archived, {d.waiting} waiting to be copied, {d.to_remove} copies waiting to be deleted.{d.last_run?.at ? ` Last run ${formatRelative(d.last_run.at)}.` : ""}</p> : null}
+        {errors.length ? (
+          <Callout tone="danger" title="The last run had problems; it tries again within the hour">
+            <ul style={{ margin: 0, paddingLeft: 18 }}>{errors.map((e) => <li key={e}>{e}</li>)}</ul>
+          </Callout>
+        ) : null}
+      </div>
+    </Card>
+  );
+}

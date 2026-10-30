@@ -10,7 +10,10 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased — 0.27.47
 
-No migration.
+Migration 0072.
+
+### Added
+- **Recording archive**: System → Backups → **Recording archive** keeps a copy of every call recording on a backup destination (folder, SFTP or S3-compatible), in case the server is lost. A copy lives exactly as long as its recording: when a recording is deleted, by hand or at its retention date, its copy is deleted too, within about an hour, and Veyra checks that it is gone. If it cannot delete a copy, it keeps trying and raises the backup alert. Encrypted recordings stay encrypted.
 
 ### Fixed
 - **Let's Encrypt with high availability** (#43): the standby now takes over the public certificate fully. After a switchover the new primary serves it for the public name, the SIP TLS transport can present it, and it keeps renewing. Before, the new primary served the Veyra certificate until someone pressed **Get the certificate**, and the certificate would not renew there.

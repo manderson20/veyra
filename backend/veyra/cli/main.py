@@ -1478,6 +1478,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
                             log.info("Started the scheduled backup")
                     except backup_service.BackupError as e:
                         log.warning("Scheduled backup not started: %s", e.message)
+                    try:
+                        if backup_service.archive_tick(db):
+                            log.info("Started the recording archive")
+                    except backup_service.BackupError as e:
+                        log.warning("Recording archive not started: %s", e.message)
                     if settings.telephony_engine != "none":
                         ensure_prompt_dirs(db, settings)
                         # Dashboard graphs: one reading per iteration (docs/INTERFACE_REWORK.md §2).
@@ -1841,6 +1846,12 @@ def cmd_backup_unit(args: argparse.Namespace) -> int:
         )
         print(json.dumps({k: payload.get(k) for k in ("name", "state", "bytes", "error")}))
         return 0 if payload.get("state") == "verified" else 1
+    if instance == "recordings":
+        from veyra.core.config import get_settings
+
+        result = runner.run_recording_archive(Path(get_settings().recordings_dir))
+        print(json.dumps({k: len(v) for k, v in result.items()}))
+        return 1 if result["errors"] else 0
     if instance.startswith("delete-"):
         # Root has no database role: the row is looked up through the
         # service account, as the settings are.
@@ -2017,6 +2028,31 @@ def cmd_backup_record(args: argparse.Namespace) -> int:
     with session_scope() as db:
         row = service.record(db, json.loads(args.json))
         print(json.dumps({"id": str(row.id), "state": row.state}))
+    return 0
+
+
+def cmd_backup_archive_work(args: argparse.Namespace) -> int:
+    """Internal: what the recording archive's root job should do."""
+    import json
+
+    from veyra.backups import recording_archive, service
+    from veyra.core.db import session_scope
+
+    with session_scope() as db:
+        dest_id = service.settings(db)["recording_archive"]["destination_id"]
+        print(json.dumps(recording_archive.work(db, dest_id)))
+    return 0
+
+
+def cmd_backup_archive_report(args: argparse.Namespace) -> int:
+    """Internal: record what the recording archive's root job did."""
+    import json
+
+    from veyra.backups import recording_archive
+    from veyra.core.db import session_scope
+
+    with session_scope() as db:
+        recording_archive.report(db, json.loads(args.json))
     return 0
 
 
@@ -2612,6 +2648,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = bk.add_parser("record", help="Internal: record a runner result")
     s.add_argument("--json", required=True)
     s.set_defaults(func=cmd_backup_record)
+    s = bk.add_parser("archive-work", help="Internal: the recording archive's work")
+    s.set_defaults(func=cmd_backup_archive_work)
+    s = bk.add_parser("archive-report", help="Internal: record a recording archive run")
+    s.add_argument("--json", required=True)
+    s.set_defaults(func=cmd_backup_archive_report)
     s = bk.add_parser("settings", help="Show the backup settings")
     s.add_argument("--json", action="store_true")
     s.add_argument(

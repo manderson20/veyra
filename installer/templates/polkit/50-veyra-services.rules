@@ -19,7 +19,7 @@ polkit.addRule(function (action, subject) {
         return polkit.Result.YES;
     }
     // Backups (docs/PRODUCTION_HARDENING.md §2.2): run, run-manual, delete-<uuid>.
-    if (/^veyra-backup@(run|run-manual|delete-[0-9a-f-]{36})\.service$/.test(unit) && verb === "start") {
+    if (/^veyra-backup@(run|run-manual|recordings|delete-[0-9a-f-]{36})\.service$/.test(unit) && verb === "start") {
         return polkit.Result.YES;
     }
     // Installation key rotation (issue #125; docs/PRODUCTION_HARDENING.md §3.1).

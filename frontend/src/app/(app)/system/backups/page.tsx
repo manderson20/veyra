@@ -29,7 +29,7 @@ import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
-import { DestinationsCard } from "@/components/backups/DestinationsCard";
+import { DestinationsCard, RecordingArchiveCard } from "@/components/backups/DestinationsCard";
 
 const KIND: Record<string, string> = { scheduled: "Scheduled", manual: "Manual", upgrade: "Before upgrade" };
 
@@ -181,6 +181,7 @@ export default function BackupsPage() {
         <>
           <SettingsCard s={settings.data} manage={manage} onSaved={() => { settings.reload(); list.reload(); }} />
           <DestinationsCard settings={settings.data} manage={manage} onChanged={settings.reload} />
+          <RecordingArchiveCard settings={settings.data} manage={manage} />
         </>
       )}
       <Card title="Backups" flush>

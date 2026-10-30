@@ -18,6 +18,7 @@ DEFAULTS: dict[str, Any] = {
     "recordings": False,
     "recipients": [],  # age recipients (age1… or ssh-ed25519 …)
     "destinations": [],  # backups/destinations.py
+    "recording_archive": {"destination_id": ""},  # backups/recording_archive.py
     "ssh_public": "",  # Veyra's SSH key for SFTP destinations
     "ssh_private_ciphertext": None,
 }
@@ -41,6 +42,9 @@ def settings_doc(value: dict[str, Any] | None) -> dict[str, Any]:
         "recordings": bool(v.get("recordings", False)),
         "recipients": recipients,
         "destinations": _destinations(v),
+        "recording_archive": {
+            "destination_id": str((v.get("recording_archive") or {}).get("destination_id") or "")
+        },
         "ssh_public": str(v.get("ssh_public") or ""),
         "ssh_private_ciphertext": v.get("ssh_private_ciphertext") or None,
     }

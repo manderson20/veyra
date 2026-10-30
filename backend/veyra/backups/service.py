@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from veyra.backups import destinations as dests
-from veyra.backups import policy
+from veyra.backups import policy, recording_archive
 from veyra.core import audit
 from veyra.core.models import Backup, SystemSetting
 from veyra.core.models.base import utcnow
@@ -176,6 +176,15 @@ def delete_destination(db: Session, dest_id: str, by: uuid.UUID | None) -> dict[
     dest = next((d for d in value["destinations"] if d["id"] == dest_id), None)
     if dest is None:
         raise BackupError(404, "not_found", "No such destination.")
+    copies = recording_archive.uses_destination(db, dest_id)
+    if value["recording_archive"]["destination_id"] == dest_id or copies:
+        raise BackupError(
+            409,
+            "destination_in_use",
+            "Call recordings are archived here, and Veyra must be able to delete those copies "
+            f"when the recordings are deleted ({copies} copies). Choose another archive "
+            "destination first, and keep this one until its copies are gone.",
+        )
     value["destinations"] = [d for d in value["destinations"] if d["id"] != dest_id]
     _store(db, value, by)
     return dest
@@ -329,7 +338,8 @@ def summary(db: Session) -> dict[str, Any]:
         "last_error": last.error if last else None,
         "stale": stale,
         "encrypted": bool(s["recipients"]),
-        "copies_failed": _failed_copies(s, last),
+        "copies_failed": _failed_copies(s, last)
+        + [("Recording archive", e) for e in recording_archive.last_errors(db)],
         "count": db.scalar(
             select(func.count()).select_from(Backup).where(Backup.state == "verified")
         ),
@@ -347,6 +357,31 @@ def _failed_copies(s: dict[str, Any], last: Backup | None) -> list[tuple[str, st
         for k, v in (last.copies or {}).items()
         if k in names and isinstance(v, dict) and v.get("state") == "failed"
     ]
+
+
+# ---------------------------------------------------------- recording archive
+
+
+def set_archive_destination(db: Session, dest_id: str, by: uuid.UUID | None) -> None:
+    value = settings(db)
+    if dest_id and not any(d["id"] == dest_id for d in value["destinations"]):
+        raise BackupError(404, "not_found", "No such destination.")
+    value["recording_archive"] = {"destination_id": dest_id}
+    _store(db, value, by)
+
+
+def archive_tick(db: Session, now: datetime | None = None) -> bool:
+    """The worker: start the archive job when there is work, at most hourly."""
+    now = now or utcnow()
+    dest_id = settings(db)["recording_archive"]["destination_id"]
+    if running() or not recording_archive.due(db, now):
+        return False
+    if not recording_archive.has_work(db, dest_id):
+        return False
+    recording_archive.note_started(db, now)
+    db.commit()
+    start("recordings")
+    return True
 
 
 # ------------------------------------------------------------------ the unit

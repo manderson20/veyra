@@ -4,7 +4,7 @@ summary: Schedule verified, encrypted backups, copy them to a NAS, an SFTP serve
 audience: admin
 section: Maintenance
 order: 20
-reviewed: 0.27.44
+reviewed: 0.27.47
 checked: 2026-10-29
 pages:
   - /system/backups/
@@ -119,3 +119,13 @@ Other console commands: `sudo veyra backup list` lists backups and `sudo veyra b
 - **Last run failed:** the **Schedule** card shows the error, and the **Backup failed** alert is raised (see [Health, alerts and diagnostics](guide:health-alerts-diagnostics)). Disk space is the usual cause.
 - **Copy failed:** the destination shows the reason. A folder that is not mounted, an SFTP server that refuses Veyra's key (add the public key again) or whose host key changed (confirm the new one with **Test** if the server was reinstalled), or S3 credentials or a region that are wrong. Fix it and choose **Test**; the missing copies are made at the next backup.
 - **No recent good backup:** the **No recent good backup** alert is raised after two days without a verified backup.
+
+## Archive call recordings
+
+Under **Recording archive**, choose a destination to keep a copy of every call recording there, in case this server is lost. Copies start within the hour. The first run after turning it on works through your older recordings, up to 500 an hour.
+
+A copy lives exactly as long as its recording. When a recording is deleted, by hand or at its retention date, Veyra deletes its copy too, usually within an hour, and checks that it is gone. If it cannot, it keeps trying and raises an alert. Held recordings and their copies stay.
+
+> **Note:** the archive does not keep recordings longer than your retention period. To keep them longer, lengthen the retention on the recording policy.
+
+A destination that holds copies cannot be removed, because Veyra must be able to delete them. Restoring a copy is not in the interface yet.

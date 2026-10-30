@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from veyra.api.v1.extensions import installation_key
 from veyra.backups import destinations as dests
-from veyra.backups import policy, service
+from veyra.backups import policy, recording_archive, service
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
@@ -198,6 +198,36 @@ def delete_destination(
         raise _problem(e) from e
     _audit(db, principal, ctx, "backups.destination_delete", **_dest_audit(dest))
     db.commit()
+
+
+class ArchiveIn(BaseModel):
+    destination_id: str = Field("", max_length=40)
+
+
+@router.get("/recording-archive", summary="The recording archive's destination and progress")
+def get_recording_archive(
+    principal: Principal = Depends(require(MANAGE)), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    dest_id = service.settings(db)["recording_archive"]["destination_id"]
+    return recording_archive.status(db, dest_id)
+
+
+@router.put("/recording-archive", summary="Choose where call recordings are archived")
+def put_recording_archive(
+    body: ArchiveIn,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """Copies already made stay where they are, and are deleted from there when
+    their recordings are."""
+    try:
+        service.set_archive_destination(db, body.destination_id, principal.user_id)
+    except service.BackupError as e:
+        raise _problem(e) from e
+    _audit(db, principal, ctx, "backups.recording_archive_set", destination_id=body.destination_id)
+    db.commit()
+    return recording_archive.status(db, body.destination_id)
 
 
 @router.post("/destinations/{dest_id}/test", summary="Check that Veyra can write there")

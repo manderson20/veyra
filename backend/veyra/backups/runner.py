@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from veyra import __version__
-from veyra.backups import destinations, policy
+from veyra.backups import destinations, policy, recording_archive
 
 log = logging.getLogger("veyra.backup")
 
@@ -404,6 +404,33 @@ def load_settings(run: Runner) -> dict[str, Any]:
     if data.get("ssh_private_key"):
         out["ssh_private_key"] = str(data["ssh_private_key"])
     return out
+
+
+def run_recording_archive(recordings_dir: Path, run: Runner | None = None) -> dict[str, Any]:
+    """``veyra-backup@recordings``: the archive's copies and removals."""
+    run = run or subprocess_runner()
+    settings = load_settings(run)
+    r = run(["runuser", "-u", "veyra", "--", VEYRA_CLI, "backup", "archive-work"])
+    if not r.ok:
+        raise BackupError(f"reading the archive's work: {(r.stderr or r.stdout).strip()[:300]}")
+    todo = json.loads(r.stdout.strip().splitlines()[-1])
+    result = recording_archive.run(settings, todo, recordings_dir)
+    r = run(
+        [
+            "runuser",
+            "-u",
+            "veyra",
+            "--",
+            VEYRA_CLI,
+            "backup",
+            "archive-report",
+            "--json",
+            json.dumps(result),
+        ]
+    )
+    if not r.ok:
+        raise BackupError(f"recording the archive's run: {(r.stderr or r.stdout).strip()[:300]}")
+    return result
 
 
 def known_backups(run: Runner) -> list[dict[str, Any]]:
