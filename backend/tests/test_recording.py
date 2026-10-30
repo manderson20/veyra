@@ -367,12 +367,10 @@ def test_recordings_are_encrypted_at_rest(admin, app):
         assert recordings.audio_of(rec_dir, rec, key) is None
 
 
-def _exportable_recording(tmp_dir, ref, **call):
+def _exportable_recording(tmp_dir, ref, audio=True, **call):
     """A real Ogg file with its call, as the worker leaves them."""
     now = utcnow()
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    wav = tmp_dir / f"{ref}.wav"
-    _wav(wav)
     with session_scope() as db:
         org = db.scalars(select(Organization)).first()
         c = CallRecord(
@@ -390,7 +388,13 @@ def _exportable_recording(tmp_dir, ref, **call):
         db.add(c)
         db.flush()
         rel = f"{org.slug}/{ref}.ogg"
-        recordings.convert(wav, tmp_dir / rel)
+        if audio:
+            wav = tmp_dir / f"{ref}.wav"
+            _wav(wav)
+            recordings.convert(wav, tmp_dir / rel)
+        else:
+            (tmp_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_dir / rel).write_bytes(b"OggS")
         r = CallRecording(
             id=uuid.uuid4(),
             ref=ref,
@@ -462,7 +466,7 @@ def test_export_limits_and_permission(admin, app, monkeypatch):
 
     org = _org(admin)
     _exportable_recording(
-        app.state.settings.recordings_dir, "lim-a", from_number="1", to_number="2"
+        app.state.settings.recordings_dir, "lim-a", audio=False, from_number="1", to_number="2"
     )
     monkeypatch.setattr(api, "EXPORT_MAX_RECORDINGS", 0)
     r = admin.get(f"{REC}/export.zip")
