@@ -3,10 +3,11 @@
 it offers exists in the facts the renderer builds, and every snippet is
 valid Jinja for the sandbox."""
 
+from sqlalchemy import select
 from test_provisioning_grandstream import _device, _setup
 
 from veyra.core.db import session_scope
-from veyra.core.models import Device
+from veyra.core.models import AuditEvent, Device, ProvisioningTemplate
 from veyra.provisioning import catalog
 from veyra.provisioning.facts import build_facts, resolve_device, sample_facts
 from veyra.provisioning.renderer import _environment
@@ -108,3 +109,84 @@ def test_editor_saves_variables_and_inherited_defaults(admin):
     assert out.status_code == 200, out.text
     content = out.json()["files"][0]["content"]
     assert "<P1000>7</P1000>" in content and "<P1001>4</P1001>" in content
+
+
+def _customize(admin, parent, key):
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    r = admin.post(
+        f"/api/v1/provisioning/templates/{parent}/customize",
+        json={"key": key, "name": key, "organization_id": org},
+    )
+    assert r.status_code == 201, r.text
+    return f"/api/v1/provisioning/templates/{key}"
+
+
+def test_customize_a_template_without_blocks_can_be_changed(admin):
+    """Issue #350: the Algo files have no blocks, so a change must not be dropped."""
+    url = _customize(admin, "algo.sip", "local.algo")
+    doc = admin.get(f"{url}/export").json()
+    source = doc["sources"]["algom.conf.j2"]
+    assert "model_settings" not in source and "extends" not in source
+    assert "sip" in source.lower()
+    doc["sources"]["algom.conf.j2"] = source + "\nmy.setting = 1\n"
+    r = admin.put(url, json={"manifest": doc["manifest"], "sources": doc["sources"]})
+    assert r.status_code == 200, r.text
+
+
+def test_block_the_parent_lacks_is_refused(admin):
+    url = _customize(admin, "grandstream.grp261x", "local.gs")
+    doc = admin.get(f"{url}/export").json()
+    name = next(iter(doc["sources"]))
+    doc["sources"][name] = doc["sources"][name] + "{% block not_there %}x{% endblock %}\n"
+    r = admin.put(url, json={"manifest": doc["manifest"], "sources": doc["sources"]})
+    assert r.status_code == 422, r.text
+    assert "not_there" in r.text
+
+
+def test_accept_parent(admin):
+    url = _customize(admin, "grandstream.grp261x", "local.gs2")
+    with session_scope() as db:
+        row = db.scalars(
+            select(ProvisioningTemplate).where(ProvisioningTemplate.template_key == "local.gs2")
+        ).one()
+        real = row.manifest["template"]["parent_version"]
+        row.manifest = {
+            **row.manifest,
+            "template": {**row.manifest["template"], "parent_version": "0.0.1"},
+        }
+    t = admin.get(url).json()
+    assert t["parent_updated"] and t["parent_current_version"] == real
+    listed = admin.get("/api/v1/provisioning/templates").json()["items"]
+    assert next(i for i in listed if i["key"] == "local.gs2")["parent_updated"]
+    r = admin.post(f"{url}/accept-parent", json={})
+    assert r.status_code == 200, r.text
+    assert not r.json()["parent_updated"] and r.json()["parent_version"] == real
+    with session_scope() as db:
+        ev = db.scalars(
+            select(AuditEvent).where(AuditEvent.action == "provisioning.template.accept_parent")
+        ).one()
+        assert ev.details["from"] == "0.0.1"
+    # An official template has no stored row.
+    official = "/api/v1/provisioning/templates/grandstream.grp261x"
+    assert admin.post(f"{official}/accept-parent", json={}).status_code == 404
+
+
+def test_broken_template_can_be_opened_and_fixed(admin):
+    url = _customize(admin, "grandstream.grp261x", "local.broken")
+    with session_scope() as db:
+        row = db.scalars(
+            select(ProvisioningTemplate).where(ProvisioningTemplate.template_key == "local.broken")
+        ).one()
+        good = row.manifest
+        bad = {**good, "template": {k: v for k, v in good["template"].items() if k != "models"}}
+        row.manifest = bad
+    listed = admin.get("/api/v1/provisioning/templates").json()
+    assert "db:local.broken" in listed["load_errors"]
+    assert admin.get(url).status_code == 404
+    stored = admin.get(f"{url}/stored").json()
+    assert stored["problems"] and stored["manifest"] == bad
+    r = admin.put(url, json={"manifest": good, "sources": stored["sources"]})
+    assert r.status_code == 200, r.text
+    assert (
+        "db:local.broken" not in admin.get("/api/v1/provisioning/templates").json()["load_errors"]
+    )

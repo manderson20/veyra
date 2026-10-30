@@ -4,7 +4,7 @@ summary: How a new phone finds this server, signs in for its configuration, and 
 audience: admin
 section: Phones and devices
 order: 10
-reviewed: 0.27.54
+reviewed: 0.27.55
 checked: 2026-10-29
 pages:
   - /devices/

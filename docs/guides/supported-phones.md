@@ -4,7 +4,7 @@ summary: Which phones, analog adapters and paging speakers Veyra can configure, 
 audience: admin
 section: Phones and devices
 order: 15
-reviewed: 0.27.44
+reviewed: 0.27.55
 checked: 2026-10-29
 pages:
   - /provisioning/

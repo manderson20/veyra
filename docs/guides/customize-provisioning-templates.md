@@ -4,7 +4,7 @@ summary: Change what Veyra writes into phones' configuration files with your own
 audience: admin
 section: Phones and devices
 order: 60
-reviewed: 0.27.54
+reviewed: 0.27.55
 pages:
   - /provisioning/
   - /provisioning/view/
@@ -95,11 +95,11 @@ Choose **Save template**. Veyra checks the template first. If something is wrong
 
 ## When Veyra updates an official template
 
-After a Veyra update, a local template whose official parent has a new version shows **Parent updated** in the list. Your template keeps working. Compare it with the new parent (open the parent from **Inheritance and files**) to see whether the parent now does what you added, or changed something you rely on.
+After a Veyra update, a local template whose official parent has a new version shows **Parent updated** in the list. Your template keeps working, and phones already get the new parent together with your changes. Compare it with the new parent (open the parent from **Inheritance and files**) to see whether the parent now does what you added, or changed something you rely on, and check **Preview**. Veyra keeps only the current official version, so it cannot list what changed. When it looks right, choose **Take version …** on your template's page: the note goes away. If your template does not work with the new parent, Veyra says why and leaves it as it is.
 
 ## If something doesn't work
 
 - **"Template key … is already used."** Choose another key.
 - **The preview says "Could not render".** The list names the problem, often a misspelled name or an unclosed `{% if %}` or `{% for %}`.
-- **A setting you wrote does not reach the phone.** Check that your change is inside a block that the parent file has. Text outside the blocks of a file with `{% extends %}` is ignored.
-- **The Templates list shows "Some templates could not be loaded".** A stored template failed its checks, for example after its parent changed, and it cannot be used or opened. The message names the template and the problem.
+- **A setting you wrote does not reach the phone.** Check that your change is inside a block that the parent file has. Text outside the blocks of a file with `{% extends %}` is ignored. Veyra refuses to save a block the parent file does not have. **Customize** names the blocks you can override; when a parent file has none, such as the Algo template's, you get a full copy of the file to edit, which does not follow later versions of the parent's file.
+- **The Templates list shows "Some templates could not be loaded".** A stored template failed its checks, for example after its parent changed, and phones cannot use it. Choose its name in the message to see the problem and its stored text, then fix it with **Save and check**, or delete it.

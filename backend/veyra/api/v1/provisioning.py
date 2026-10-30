@@ -31,6 +31,7 @@ from veyra.provisioning.renderer import (
     TemplateRecord,
     export_template,
     render,
+    source_blocks,
     validate,
 )
 from veyra.provisioning.spec import TemplateError, parse_template_manifest
@@ -86,6 +87,16 @@ def _template_error(e: TemplateError) -> ProblemError:
     )
 
 
+def _parent_state(catalog: TemplateCatalog, rec: TemplateRecord) -> dict[str, Any]:
+    t = rec.manifest.template
+    parent = catalog.records.get(t.parent) if t.parent else None
+    current = parent.manifest.template.version if parent else None
+    return {
+        "parent_current_version": current,
+        "parent_updated": bool(current and t.parent_version and current != t.parent_version),
+    }
+
+
 def _summary(rec: TemplateRecord) -> dict[str, Any]:
     t = rec.manifest.template
     return {
@@ -119,6 +130,30 @@ def models(
     return {"manufacturers": [{"name": m, "models": sorted(v)} for m, v in sorted(out.items())]}
 
 
+def _broken_visible(db: Session, load_key: str, orgs: set[uuid.UUID] | None) -> bool:
+    """Another organization's broken template is not named to this one."""
+    if orgs is None or not load_key.startswith("db:"):
+        return True
+    rows = _local_rows(db, load_key.removeprefix("db:"))
+    return any(r.organization_id is None or r.organization_id in orgs for r in rows)
+
+
+def _writable_local_row(
+    db: Session, principal: Principal, key: str
+) -> tuple[ProvisioningTemplate, list[ProvisioningTemplate]]:
+    rows = _local_rows(db, key)
+    if not rows:
+        raise ProblemError(404, "Not found", f"Local template {key!r} not found", code="not_found")
+    row = rows[0]
+    if row.organization_id is not None and not principal.has(
+        "provisioning.write", row.organization_id
+    ):
+        raise forbidden()
+    if row.organization_id is None and not principal.is_platform_admin:
+        raise forbidden()
+    return row, rows
+
+
 @router.get("/templates", summary="List provisioning templates")
 def list_templates(
     request: Request,
@@ -137,13 +172,13 @@ def list_templates(
         key=lambda s: (s["manufacturer"], s["abstract"], s["name"]),
     )
     for item in items:
-        parent = catalog.records.get(item["parent"]) if item["parent"] else None
-        item["parent_updated"] = bool(
-            parent
-            and item["parent_version"]
-            and parent.manifest.template.version != item["parent_version"]
-        )
-    return {"items": items, "load_errors": catalog.load_errors}
+        item.update(_parent_state(catalog, catalog.records[item["key"]]))
+    return {
+        "items": items,
+        "load_errors": {
+            k: v for k, v in catalog.load_errors.items() if _broken_visible(db, k, orgs)
+        },
+    }
 
 
 @router.get("/template-catalog", summary="Facts and snippets for the template editor")
@@ -161,7 +196,8 @@ def get_template(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     try:
-        resolved = _catalog(request, db).resolve(key)
+        catalog = _catalog(request, db)
+        resolved = catalog.resolve(key)
     except TemplateError as e:
         raise ProblemError(404, "Not found", str(e), code="not_found") from e
     return {
@@ -175,6 +211,7 @@ def get_template(
             if not resolved.variables.get(k) or not resolved.variables[k].sensitive
         },
         "validation": validate(resolved),
+        **_parent_state(catalog, resolved.record),
     }
 
 
@@ -331,6 +368,81 @@ def _local_rows(db: Session, key: str) -> list[ProvisioningTemplate]:
     )
 
 
+@router.get("/templates/{key}/stored", summary="A local template as stored, even if broken")
+def stored_template(
+    key: str,
+    request: Request,
+    principal: Principal = Depends(require("provisioning.write")),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """What is needed to repair a template that does not load (issue #350)."""
+    row, _rows = _writable_local_row(db, principal, key)
+    catalog = _catalog(request, db)
+    problems = list(catalog.load_errors.get(f"db:{key}", []))
+    if not problems:
+        try:
+            problems = validate(catalog.resolve(key))
+        except TemplateError as e:
+            problems = list(e.errors)
+    return {
+        "key": key,
+        "version": row.version,
+        "manifest": row.manifest,
+        "sources": row.files,
+        "problems": problems,
+    }
+
+
+@router.post(
+    "/templates/{key}/accept-parent",
+    summary="Take the parent's current version as this template's parent",
+)
+def accept_parent(
+    key: str,
+    request: Request,
+    principal: Principal = Depends(require("provisioning.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    row, _rows = _writable_local_row(db, principal, key)
+    catalog = _catalog(request, db)
+    record = catalog.records.get(key)
+    parent = catalog.records.get(record.manifest.template.parent or "") if record else None
+    if record is None or parent is None:
+        raise conflict("This template has no parent to update to.", "no_parent")
+    try:
+        problems = validate(catalog.resolve(key))
+    except TemplateError as e:
+        problems = list(e.errors)
+    if problems:
+        raise ProblemError(
+            409,
+            "Does not work with the new parent",
+            "Fix the template first: " + "; ".join(problems),
+            code="template_invalid",
+            errors=[{"message": m} for m in problems],
+        )
+    previous = record.manifest.template.parent_version
+    current = parent.manifest.template.version
+    manifest = copy.deepcopy(row.manifest)
+    manifest["template"]["parent_version"] = current
+    row.manifest = manifest
+    audit.record(
+        db,
+        action="provisioning.template.accept_parent",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=row.organization_id,
+        target_type="provisioning_template",
+        target_id=key,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"parent": parent.key, "from": previous, "to": current},
+    )
+    db.commit()
+    return get_template(key, request, principal, db)
+
+
 @router.put("/templates/{key}", summary="Save a local template (editor)")
 def update_template(
     key: str,
@@ -437,6 +549,7 @@ def customize_template(
     if body.key in catalog.records:
         raise conflict(f"Template key {body.key!r} is already used.", "template_key_in_use")
     pt = parent.manifest.template
+    resolved = catalog.resolve(key)
     sources = {}
     files = []
     for f in parent.manifest.files:
@@ -448,12 +561,24 @@ def customize_template(
         files.append({"name": f.name, "source": f.source, "format": f.format})
         note = "Your changes go here. Override other blocks of the parent as needed."
         comment = f"  <!-- {note} -->" if f.format == "xml" else f"## {note}"
-        sources[f.source] = (
-            f'{{% extends "{pt.key}/{f.source}" %}}\n'
-            "{% block model_settings %}\n"
-            f"{comment}\n"
-            "{% endblock %}\n"
-        )
+        text, blocks = source_blocks(resolved, f.source)
+        if "model_settings" in blocks:
+            sources[f.source] = (
+                f'{{% extends "{pt.key}/{f.source}" %}}\n'
+                "{% block model_settings %}\n"
+                f"{comment}\n"
+                "{% endblock %}\n"
+            )
+        elif blocks:
+            # An empty block no parent file has would drop whatever is written in it.
+            sources[f.source] = (
+                f'{{% extends "{pt.key}/{f.source}" %}}\n'
+                f"{{# Override one of these blocks: {', '.join(sorted(blocks))} #}}\n"
+            )
+        else:
+            # Nothing to override: the whole file is the copy to change. It
+            # does not follow later versions of the parent's file.
+            sources[f.source] = text
     manifest = {
         "spec_version": parent.manifest.spec_version,
         "template": {

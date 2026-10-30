@@ -21,6 +21,7 @@ import {
   SelectField,
   TabPanel,
   Tabs,
+  TextArea,
   TextField,
   type Column,
 } from "@/components/ui";
@@ -38,6 +39,64 @@ const SAMPLE: Record<string, string> = {
   display_name: "Front Office",
 };
 
+interface StoredTemplate { key: string; version: string; manifest: Record<string, unknown>; sources: Record<string, string>; problems: string[] }
+
+/** A local template that does not load: its problems and its stored text, to fix or delete (issue #350). */
+function StoredTemplateRepair({ templateKey, error, onFixed }: { templateKey: string; error: unknown; onFixed: () => void }) {
+  const router = useRouter();
+  const base = `/provisioning/templates/${encodeURIComponent(templateKey)}`;
+  const stored = useApiData<StoredTemplate>(`${base}/stored`);
+  const [manifest, setManifest] = useState<string | null>(null);
+  const [sources, setSources] = useState<Record<string, string> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problems, setProblems] = useState<string | null>(null);
+  useOnChange(stored.data, (d) => {
+    if (d) {
+      setManifest(JSON.stringify(d.manifest, null, 2));
+      setSources(d.sources);
+    }
+  });
+  if (stored.error) return <ErrorState title="Could not load template" error={error as { message: string }} onRetry={onFixed} />;
+  if (!stored.data || manifest === null || sources === null) return <LoadingState />;
+  const save = async () => {
+    setBusy(true);
+    setProblems(null);
+    try {
+      await api.put(base, { manifest: JSON.parse(manifest), sources });
+      onFixed();
+    } catch (err) {
+      setProblems(err instanceof SyntaxError ? `The manifest is not valid JSON: ${err.message}` : errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    setBusy(true);
+    setProblems(null);
+    try {
+      await api.del(base);
+      router.push("/provisioning/");
+    } catch (err) {
+      setProblems(errorMessage(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="stack">
+      <PageHeader back={{ href: "/provisioning/", label: "Templates" }} title={templateKey} description="This template does not load, so phones cannot use it. Fix it here or delete it." />
+      <Callout tone="danger" title="What is wrong"><ul style={{ margin: 0, paddingLeft: 18 }}>{stored.data.problems.map((m) => <li key={m}>{m}</li>)}</ul></Callout>
+      <Card title="Stored template">
+        <div className="stack stack--sm">
+          <TextArea label="Manifest (JSON)" value={manifest} rows={14} className="mono" onChange={(e) => setManifest(e.target.value)} />
+          {Object.entries(sources).map(([name, text]) => <TextArea key={name} label={name} value={text} rows={12} className="mono" onChange={(e) => setSources({ ...sources, [name]: e.target.value })} />)}
+          {problems ? <Callout tone="danger">{problems}</Callout> : null}
+          <div className="form-actions"><Button variant="danger" onClick={remove} disabled={busy}>Delete template</Button><Button variant="primary" onClick={save} loading={busy}>Save and check</Button></div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function TemplateView() {
   const key = useSearchParams().get("key");
   const router = useRouter();
@@ -46,13 +105,15 @@ function TemplateView() {
   const [tab, setTab] = useState("overview");
   const [exportText, setExportText] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [parentBusy, setParentBusy] = useState(false);
+  const [parentError, setParentError] = useState<string | null>(null);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (!key) return <ErrorState title="No template selected" error={{ message: "Open a template from the list." }} />;
-  if (detail.error) return <ErrorState title="Could not load template" error={detail.error} onRetry={detail.reload} />;
+  if (detail.error) return can("provisioning.write") ? <StoredTemplateRepair templateKey={key} error={detail.error} onFixed={detail.reload} /> : <ErrorState title="Could not load template" error={detail.error} onRetry={detail.reload} />;
   if (!detail.data) return <LoadingState />;
   const t = detail.data;
 
@@ -67,6 +128,17 @@ function TemplateView() {
     } catch (err) {
       setExportError(errorMessage(err));
       setExportText("");
+    }
+  };
+  const acceptParent = async () => {
+    setParentBusy(true);
+    setParentError(null);
+    try {
+      detail.setData(await api.post<TemplateDetail>(`/provisioning/templates/${encodeURIComponent(t.key)}/accept-parent`, {}));
+    } catch (err) {
+      setParentError(errorMessage(err));
+    } finally {
+      setParentBusy(false);
     }
   };
   const remove = async () => {
@@ -119,6 +191,13 @@ function TemplateView() {
           </>
         }
       />
+      {t.parent_updated ? (
+        <Callout tone="info" title="The parent template has a new version">
+          <p style={{ marginTop: 0 }}>This template was made from <span className="mono">{t.parent}</span> version {t.parent_version}; it is now version {t.parent_current_version}. Phones already use the new version together with your changes. Check <strong>Preview</strong>, and when it is right, take the new version so that this note goes away.</p>
+          {parentError ? <p>{parentError}</p> : null}
+          {can("provisioning.write") ? <Button size="sm" loading={parentBusy} onClick={acceptParent}>Take version {t.parent_current_version}</Button> : null}
+        </Callout>
+      ) : null}
       {t.status === "experimental" ? (
         <Callout tone="warn" title="Experimental template">This template has not yet been verified on hardware. Test it with a single phone before wider use.</Callout>
       ) : null}

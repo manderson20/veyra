@@ -135,8 +135,8 @@
    "summary": "How a new phone finds this server, signs in for its configuration, and learns to trust Veyra's certificate.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.54",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.55",
+   "reviewed_date": null,
    "pages": [
     "/devices/",
     "/provisioning/requests/"
@@ -149,8 +149,8 @@
    "summary": "Which phones, analog adapters and paging speakers Veyra can configure, and what to check before rolling them out.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.55",
+   "reviewed_date": null,
    "pages": [
     "/provisioning/"
    ],
@@ -215,8 +215,8 @@
    "summary": "Change what Veyra writes into phones' configuration files with your own template, edited in the browser, previewed, exported and imported.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.54",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.55",
+   "reviewed_date": null,
    "pages": [
     "/provisioning/",
     "/provisioning/view/"

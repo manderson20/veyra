@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TEMPLATE_SOURCE } from "@/components/common/labels";
@@ -69,7 +70,7 @@ export default function ProvisioningPage() {
       </Callout>
       {errors.length ? (
         <Callout tone="warn" title="Some templates could not be loaded">
-          <ul style={{ margin: 0, paddingLeft: 18 }}>{errors.map(([k, v]) => <li key={k}><span className="mono">{k}</span>: {v.join("; ")}</li>)}</ul>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>{errors.map(([k, v]) => <li key={k}>{k.startsWith("db:") && can("provisioning.write") ? <Link className="mono" href={`/provisioning/view/?key=${encodeURIComponent(k.slice(3))}`}>{k.slice(3)}</Link> : <span className="mono">{k}</span>}: {v.join("; ")}</li>)}</ul>
         </Callout>
       ) : null}
       <RedirectServices />

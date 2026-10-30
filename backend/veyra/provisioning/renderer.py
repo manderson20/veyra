@@ -23,7 +23,14 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from jinja2 import BaseLoader, StrictUndefined, TemplateNotFound, TemplateSyntaxError, meta
+from jinja2 import (
+    BaseLoader,
+    StrictUndefined,
+    TemplateNotFound,
+    TemplateSyntaxError,
+    meta,
+    nodes,
+)
 from jinja2.exceptions import SecurityError, UndefinedError
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
@@ -288,6 +295,45 @@ def coerce_values(resolved: ResolvedTemplate, values: Mapping[str, Any]) -> dict
     return out
 
 
+def _extended(ast: nodes.Template) -> str | None:
+    """The file a source ``{% extends %}``, when it names one literally."""
+    node = ast.find(nodes.Extends)
+    if node is not None and isinstance(node.template, nodes.Const):
+        return str(node.template.value)
+    return None
+
+
+def _blocks_through(env: ImmutableSandboxedEnvironment, name: str, depth: int = 0) -> set[str]:
+    """The blocks a file and the files it extends offer to override."""
+    if depth > 16:
+        return set()
+    source, _, _ = env.loader.get_source(env, name)  # type: ignore[union-attr]
+    ast = env.parse(source)
+    found = {b.name for b in ast.find_all(nodes.Block)}
+    parent = _extended(ast)
+    return found | (_blocks_through(env, parent, depth + 1) if parent else set())
+
+
+def source_blocks(resolved: ResolvedTemplate, source: str) -> tuple[str, set[str]]:
+    """A file's text as this template sees it, and the blocks a child can override."""
+    env = _environment(resolved.chain, autoescape=False)
+    text, _, _ = env.loader.get_source(env, source)  # type: ignore[union-attr]
+    return text, _blocks_through(env, source)
+
+
+def _ignored_blocks(env: ImmutableSandboxedEnvironment, ast: nodes.Template) -> list[str]:
+    """Blocks of a child that its parent file does not have: their text is
+    silently dropped from what the phone gets (issue #350)."""
+    parent = _extended(ast)
+    if parent is None:
+        return []
+    try:
+        offered = _blocks_through(env, parent)
+    except (TemplateNotFound, TemplateSyntaxError):
+        return []  # the render reports a missing or broken parent
+    return sorted(n.name for n in ast.body if isinstance(n, nodes.Block) and n.name not in offered)
+
+
 def validate(resolved: ResolvedTemplate) -> list[str]:
     """Static validation: syntax, sandbox-safe sources, declared variables only."""
     problems: list[str] = []
@@ -310,6 +356,12 @@ def validate(resolved: ResolvedTemplate) -> list[str]:
         undeclared = meta.find_undeclared_variables(ast) - allowed
         if undeclared:
             problems.append(f"{f.name}: uses undeclared variables {sorted(undeclared)}")
+        ignored = _ignored_blocks(env, ast)
+        if ignored:
+            problems.append(
+                f"{f.name}: the parent file has no block {', '.join(ignored)}, "
+                "so that text would never reach the phone"
+            )
     if not resolved.files:
         problems.append("Template produces no files")
     return problems

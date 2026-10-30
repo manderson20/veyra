@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.55
+
+No migration.
+
+### Added
+- **Template editor** (#350): a local template showing *Parent updated* can take the new version as its parent, after Veyra checks that it still works. A local template that fails to load can be opened, repaired or deleted.
+
+### Fixed
+- **Customize** no longer adds an empty `model_settings` block to files whose parent has no such block, such as the Algo template, where changes were silently ignored. Such a file is now a full copy to edit, and saving a block the parent file does not have is refused, with the reason.
+
 ## 0.27.54 — 2026-10-30
 
 No migration.

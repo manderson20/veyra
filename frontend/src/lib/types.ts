@@ -981,6 +981,7 @@ export interface TemplateSummary {
   source: "official" | "community" | "local";
   features: string[];
   parent_updated?: boolean;
+  parent_current_version?: string | null;
 }
 
 export interface TemplateVariable {
