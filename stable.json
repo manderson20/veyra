@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 61,
+  "sequence": 62,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.45",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Interface review fixes: customized phone templates per organization, masked phone passwords, layout editing, recording delete and filters, extended absence for many boxes, audit log dates and export, and many missing controls.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "ecb598b16b",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.45/veyra-0.27.45.tar.gz",
+        "sha256": "bb59ecdab635f0a5ac61d3839126d670719c2f5a3f19f692866281bdcfcc2486",
+        "size": 9351023
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1040,6 +1057,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-29T19:39:54+00:00",
-  "expires_at": "2027-01-27T19:39:54+00:00"
+  "generated_at": "2026-10-30T13:47:25+00:00",
+  "expires_at": "2027-01-28T13:47:25+00:00"
 }
