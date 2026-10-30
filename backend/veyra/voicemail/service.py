@@ -10,15 +10,17 @@ import logging
 import re
 import uuid
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from veyra.core import tenancy
+from veyra.core import audit, tenancy
 from veyra.core.config import Settings
 from veyra.core.errors import ProblemError
 from veyra.core.models import Extension, VoicemailBox
+from veyra.core.security.crypto import InstallationKey
 from veyra.telephony import audio as audio_tools
 from veyra.voicemail.client import StoreClient, StoreClientError, StoreUnavailable
 from veyra.voicemail.store import FOLDERS, GREETINGS
@@ -730,3 +732,65 @@ def absence_sweep(
             continue
     db.commit()
     return changed
+
+
+# ------------------------------------------------------- PINs from the phone
+
+PIN_SUFFIX = ".vmpin"
+_PIN_LINE = re.compile(r"^([A-Za-z0-9_.-]+) ([0-9]+) ([0-9]+)$")
+
+
+def ingest_phone_pins(db: Session, queue_dir: Path, key: InstallationKey | None) -> int:
+    """Store the PINs ``veyra-vmpin`` (Asterisk's ``externpassnotify``) queued,
+    oldest first, so that the next deployment keeps them (issue #346). Files
+    wait while the installation key is missing. Never logs a PIN."""
+    from veyra.integrations.sources import _box_of
+    from veyra.telephony import routing
+    from veyra.telephony.snapshot import pin_purpose
+
+    if not queue_dir.is_dir():
+        return 0
+    files = sorted(queue_dir.glob(f"*{PIN_SUFFIX}"))
+    if not files:
+        return 0
+    if key is None:
+        log.warning("Voicemail PINs wait: the installation key is missing")
+        return 0
+    stored = 0
+    for f in files:
+        try:
+            line = f.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            log.exception("Cannot read voicemail PIN file %s", f.name)
+            continue
+        m = _PIN_LINE.match(line)
+        found = _box_of(db, m.group(1), m.group(2)) if m else None
+        if m is None or found is None:
+            log.warning("Voicemail PIN file %s names no box; dropped", f.name)
+            f.unlink(missing_ok=True)
+            continue
+        box, _name = found
+        pin = m.group(3)
+        try:
+            routing.check_pin(pin)
+            outcome = "success"
+        except ValueError:
+            # Longer than a deployment accepts: the old PIN returns with it.
+            outcome = "failure"
+            log.warning("Voicemail box %s: PIN from the phone is not valid", m.group(2))
+        if outcome == "success":
+            box.pin_ciphertext = key.encrypt(pin, pin_purpose(box.id))
+            stored += 1
+        audit.record(
+            db,
+            action="voicemail.pin_change",
+            outcome=outcome,
+            actor_label=f"Phone, mailbox {m.group(2)}",
+            organization_id=box.organization_id,
+            target_type="voicemail_box",
+            target_id=box.id,
+            details={"from_phone": True},
+        )
+        db.flush()
+        f.unlink(missing_ok=True)
+    return stored

@@ -243,6 +243,9 @@ elif [[ "$ENGINE" == "asterisk" ]]; then
     [[ -x "$VEYRA_PREFIX/current/installer/bin/veyra-mailqueue" ]] \
         && check mailqueue-command pass "executable" \
         || check mailqueue-command fail "$VEYRA_PREFIX/current/installer/bin/veyra-mailqueue is missing or not executable"
+    [[ -x "$VEYRA_PREFIX/current/installer/bin/veyra-vmpin" ]] \
+        && check vmpin-command pass "executable" \
+        || check vmpin-command fail "$VEYRA_PREFIX/current/installer/bin/veyra-vmpin is missing or not executable"
     [[ -x "$VEYRA_PREFIX/current/installer/bin/veyra-vmnotify" ]] \
         && check vmnotify-command pass "executable" \
         || check vmnotify-command fail "$VEYRA_PREFIX/current/installer/bin/veyra-vmnotify is missing or not executable"

@@ -1238,6 +1238,11 @@ def deliver_webhooks(settings: Any, log: Any) -> None:
             sources.voicemail_notifications(
                 db, settings.mailqueue_dir, store=StoreClient(settings.vmstore_socket)
             )
+        # PINs changed in the phone menu (issue #346).
+        from veyra.voicemail.service import ingest_phone_pins
+
+        with session_scope() as db:
+            ingest_phone_pins(db, settings.mailqueue_dir, try_load_installation_key(settings))
         # Voicemail pruning (issue #142), once a day.
         from veyra.voicemail import service as vm_service
 

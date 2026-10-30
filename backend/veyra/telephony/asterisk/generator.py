@@ -4670,6 +4670,10 @@ def _voicemail(snapshot: dict[str, Any], boxes: Boxes, mailqueue_command: str) -
         f"mailcmd={mailqueue_command}",
         # New-message counts for the voicemail.message webhook (docs/INTEGRATIONS.md §3.2).
         f"externnotify={posixpath.join(posixpath.dirname(mailqueue_command), 'veyra-vmnotify')}",
+        # A PIN changed in the phone menu reaches the database (issue #346);
+        # shorter than the 4 digits a deployment accepts is refused here.
+        f"externpassnotify={posixpath.join(posixpath.dirname(mailqueue_command), 'veyra-vmpin')}",
+        "minpassword=4",
         # The web inbox moves and deletes messages outside the engine
         # (docs/USER_PORTAL.md §2.2): polling keeps the MWI lamps and the
         # externnotify counts right.

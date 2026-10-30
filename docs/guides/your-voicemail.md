@@ -4,7 +4,7 @@ summary: Listen to your messages from your phone or the browser, record your gre
 audience: user
 section: Using Veyra
 order: 20
-reviewed: 0.27.45
+reviewed: 0.27.51
 checked: 2026-10-29
 pages:
   - /my-phone/
@@ -75,10 +75,9 @@ If your administrator has set office hours for your box, your **After hours** gr
 
 On [your account page](app:/account/), the **Voicemail** card shows where your new messages are emailed and how long your phone rings before voicemail answers.
 
-- **Change PIN** sets a new PIN of 4 to 10 digits. It starts working after your administrator's next deployment of changes, so keep using the old one until then.
+- **Change PIN** sets a new PIN of 4 to 10 digits. It starts working after your administrator's next deployment of changes, so keep using the old one until then. From a phone, the mailbox options change it at once; use 4 to 10 digits.
 - **Greeting keys** lets callers press a key during your greeting instead of leaving a message: **Press 1 during the greeting** can try your follow-me numbers or ring another number, and **Press 2 during the greeting** can ring another number. Say so in your greeting, for example *press 1 to try my mobile*.
 
-> **Tip:** Change your PIN on your account page rather than from the phone's mailbox options, so that Veyra keeps it.
 
 ## Shared inboxes
 

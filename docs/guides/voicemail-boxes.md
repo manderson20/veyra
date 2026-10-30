@@ -4,7 +4,7 @@ summary: Give extensions a voicemail box, set PINs and email delivery, and creat
 audience: admin
 section: Voicemail and fax
 order: 10
-reviewed: 0.27.45
+reviewed: 0.27.51
 pages:
   - /voicemail/
 covers:
@@ -60,7 +60,7 @@ Each message can be up to 3 minutes long, and greetings up to 60 seconds.
 
 ## Reset a PIN
 
-Open the box and choose **Reset PIN**. A new random PIN is shown once. The old PIN stops working at the next deployment. Users can also choose their own PIN on their account page, except for a shared inbox, whose PIN only an administrator resets here.
+Open the box and choose **Reset PIN**. A new random PIN is shown once. The old PIN stops working at the next deployment. Users can also change their PIN from the phone (`*97`, mailbox options) or on their account page, except for a shared inbox, whose PIN only an administrator resets here.
 
 ## Shared inboxes
 

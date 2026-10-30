@@ -6,9 +6,11 @@ directory's groups."""
 from __future__ import annotations
 
 import json
+import subprocess
 import time
 import uuid
 from datetime import timedelta
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -18,13 +20,17 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from fake_adapter import FakeAdapter
+from sqlalchemy import select
 from test_api_ivr import _upload
 
 from veyra.core.db import session_scope
-from veyra.core.models import AuditEvent, Extension, User, Webhook, WebhookDelivery
+from veyra.core.models import AuditEvent, Extension, User, VoicemailBox, Webhook, WebhookDelivery
 from veyra.core.models.base import utcnow
 from veyra.core.security import oidc
+from veyra.core.security.crypto import try_load_installation_key
 from veyra.integrations import sources, webhooks
+from veyra.telephony.snapshot import pin_purpose
+from veyra.voicemail import service as vm_service
 
 GOOGLE = "https://accounts.google.com"
 CLIENT_ID = "veyra-test.apps.googleusercontent.com"
@@ -909,6 +915,8 @@ def test_generated_voicemail_conf_has_externnotify():
 
     out = generator._voicemail({}, {}, "/opt/veyra/current/installer/bin/veyra-mailqueue")
     assert "externnotify=/opt/veyra/current/installer/bin/veyra-vmnotify" in out.content
+    assert "externpassnotify=/opt/veyra/current/installer/bin/veyra-vmpin" in out.content
+    assert "minpassword=4" in out.content
 
 
 def test_metrics_scope_is_server_wide_and_platform_only(admin, app):
@@ -938,3 +946,52 @@ def test_metrics_scope_is_server_wide_and_platform_only(admin, app):
         json={"organization_id": org["id"], "name": "Sneaky", "scopes": ["metrics.read"]},
     )
     assert r.status_code == 403
+
+
+def test_phone_pin_change_is_stored(admin, app, tmp_path):
+    """Issue #346: the hook's file becomes the stored PIN, and the hook takes
+    nothing but digits."""
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    ext = admin.post(
+        "/api/v1/extensions", json={"organization_id": org, "number": "1077", "display_name": "P"}
+    ).json()
+    box = admin.post("/api/v1/voicemail", json={"extension_id": ext["id"], "pin": "1111"})
+    assert box.status_code == 201, box.text
+    box_id = box.json()["box"]["id"] if "box" in box.json() else box.json()["id"]
+    queue = tmp_path / "pinqueue"
+    queue.mkdir()
+    hook = Path(__file__).parents[2] / "installer" / "bin" / "veyra-vmpin"
+    env = {"VEYRA_MAILQUEUE_DIR": str(queue), "PATH": "/usr/bin:/bin"}
+
+    def run(*args):
+        subprocess.run([hook, *args], env=env, check=True)  # noqa: S603
+
+    run("veyra", "1077", "$(id)")
+    run("bad;ctx", "1077", "2222")
+    assert not list(queue.iterdir())
+    run("veyra", "1077", "2222")
+    run("veyra", "9999", "3333")
+    assert len(list(queue.glob("*.vmpin"))) == 2
+    key = try_load_installation_key(app.state.settings)
+    with session_scope() as db:
+        assert vm_service.ingest_phone_pins(db, queue, None) == 0
+    assert len(list(queue.glob("*.vmpin"))) == 2
+    with session_scope() as db:
+        assert vm_service.ingest_phone_pins(db, queue, key) == 1
+    assert not list(queue.iterdir())
+    with session_scope() as db:
+        row = db.get(VoicemailBox, uuid.UUID(box_id))
+        assert key.decrypt(row.pin_ciphertext, pin_purpose(row.id)) == "2222"
+        ev = db.scalars(
+            select(AuditEvent)
+            .where(AuditEvent.action == "voicemail.pin_change")
+            .order_by(AuditEvent.id.desc())
+        ).first()
+        assert ev.details == {"from_phone": True} and "2222" not in str(ev.details)
+    # Too long for a deployment: the failure is on record, the PIN unchanged.
+    run("veyra", "1077", "12345678901")
+    with session_scope() as db:
+        assert vm_service.ingest_phone_pins(db, queue, key) == 0
+        row = db.get(VoicemailBox, uuid.UUID(box_id))
+        assert key.decrypt(row.pin_ciphertext, pin_purpose(row.id)) == "2222"
+    assert not list(queue.iterdir())

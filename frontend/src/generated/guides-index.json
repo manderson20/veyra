@@ -18,8 +18,8 @@
    "summary": "Put Veyra on an Ubuntu server, open the setup wizard and create the first administrator.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.51",
+   "reviewed_date": null,
    "pages": [],
    "wiki": "https://github.com/manderson20/veyra/wiki/Install-Veyra"
   },
@@ -592,8 +592,8 @@
    "summary": "Give extensions a voicemail box, set PINs and email delivery, and create shared inboxes that several phones watch.",
    "audience": "admin",
    "section": "Voicemail and fax",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.51",
+   "reviewed_date": null,
    "pages": [
     "/voicemail/"
    ],
@@ -842,8 +842,8 @@
    "summary": "Listen to your messages from your phone or the browser, record your greetings, set an away message for the holidays, and choose your PIN.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.51",
+   "reviewed_date": null,
    "pages": [
     "/my-phone/"
    ],

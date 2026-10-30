@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Asterisk's voicemail "externpassnotify": called when someone changes their
+# PIN from the phone menu. It leaves one small file in Veyra's mail queue
+# directory; the worker stores the PIN encrypted and deletes the file, so the
+# next deployment keeps the new PIN (docs/VOICEMAIL_IVR.md §3.2).
+#
+# Usage: veyra-vmpin CONTEXT MAILBOX PIN
+# Runs as the asterisk user; the queue directory is 2770 veyra:asterisk. The
+# PIN is in clear here for seconds, as it always is in voicemail.conf.
+set -eu
+dir="${VEYRA_MAILQUEUE_DIR:-/var/lib/veyra/mailqueue}"
+[ "$#" -eq 3 ] || exit 0
+[ -d "$dir" ] || exit 0
+context="$1" mailbox="$2" pin="$3"
+case "$context" in
+    "" | *[!A-Za-z0-9_.-]*) exit 0 ;;
+esac
+case "$mailbox$pin" in
+    "" | *[!0-9]*) exit 0 ;;
+esac
+umask 007
+name="$(date -u +%Y%m%dT%H%M%S)-$$-$(od -An -N4 -tx4 /dev/urandom 2>/dev/null | tr -d ' \n')"
+tmp="$dir/.$name.tmp"
+printf '%s %s %s\n' "$context" "$mailbox" "$pin" >"$tmp"
+mv -f "$tmp" "$dir/$name.vmpin"
