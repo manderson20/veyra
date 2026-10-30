@@ -4,7 +4,7 @@ summary: Schedule verified, encrypted backups, copy them to a NAS, an SFTP serve
 audience: admin
 section: Maintenance
 order: 20
-reviewed: 0.27.48
+reviewed: 0.27.56
 checked: 2026-10-29
 pages:
   - /system/backups/
@@ -93,6 +93,14 @@ Choose **Back up now**. A **Backup running** note shows the current step. Take o
 Each row shows when it was **Taken** and how (**Scheduled**, **Manual** or **Before upgrade**, which Veyra takes before every update), its **State**, **Size**, **Contents**, whether it is **Encrypted** (**age** or **clear**), the **Copies** to each destination (*name*: **ok** or **failed**, or **local only**), and the Veyra **Version** it came from. **Delete** removes the files from the server and from every destination.
 
 Backups are stored on the server in `/var/backups/veyra`.
+
+## Download a backup
+
+To keep a backup somewhere of your own, choose **Download** on a verified backup in the list, then **Prepare download**. Veyra makes a copy the web service can read, which takes a few minutes for a large backup. Choose **Download**. The window shows the file's SHA-256, so you can check it arrived whole. The prepared copy is removed from the server when the download ends, or after 6 hours if nobody downloads it. Veyra may ask you to sign in again first, and the audit log records each download.
+
+> **Warning:** A backup that is not encrypted holds the server's secrets in the clear, including its installation key and passwords. Veyra warns you first. Turn on encryption, or keep the file somewhere as safe as the server.
+
+The file restores with the same console command as below, once copied to the server.
 
 ## Restore a server
 

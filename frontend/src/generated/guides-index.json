@@ -708,8 +708,8 @@
    "summary": "Schedule verified, encrypted backups, copy them to a NAS, an SFTP server or S3 storage, and restore a server from one.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.48",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.56",
+   "reviewed_date": null,
    "pages": [
     "/system/backups/"
    ],

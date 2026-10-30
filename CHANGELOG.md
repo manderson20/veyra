@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.56
+
+No migration.
+
+### Added
+- **Download a backup from the web** (#348): System → Backups → **Download** on a verified backup, for platform administrators. The file's SHA-256 is shown, each download is written to the audit log, and a backup that is not encrypted warns you first. Restoring is still a console command.
+
+### Security
+- The root job that deletes a backup now accepts only a plain backup name. Before, a tampered database entry could have made it delete files outside the backup folder.
+
 ## 0.27.55 — 2026-10-30
 
 No migration.

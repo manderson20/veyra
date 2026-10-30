@@ -9,15 +9,18 @@ from __future__ import annotations
 import json
 import shutil
 import tarfile
+import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
+from sqlalchemy import select
 
 from veyra.backups import policy, restore, runner, service
 from veyra.core.db import session_scope
-from veyra.core.models import Backup
+from veyra.core.models import AuditEvent, Backup
 
 # ------------------------------------------------------------------ policy
 
@@ -481,3 +484,106 @@ def test_settings_partial_update_keeps_the_rest(admin):
     assert r.json()["enabled"] is True
     r = admin.put("/api/v1/backups/settings", json={"recipients": []})
     assert r.json()["recipients"] == [] and r.json()["time"] == "04:00"
+
+
+def test_prepare_download(tmp_path, monkeypatch):
+    """Issue #348: root's copy for the page, encrypted or as a tar of the folder."""
+    monkeypatch.setattr(runner.shutil, "chown", lambda *a, **k: None)
+    store, out = tmp_path / "store", tmp_path / "out"
+    store.mkdir()
+    name = "veyra-20261030-120000"
+    (store / f"{name}.tar.age").write_bytes(b"age-bytes")
+    bid = "0f0e0d0c-0b0a-0908-0706-050403020100"
+    assert runner.prepare_download(bid, name, store=store, out=out)
+    state = json.loads((out / f"{bid}.json").read_text())
+    assert state["state"] == "ready" and state["filename"] == f"{name}.tar.age"
+    assert state["bytes"] == 9 and state["sha256"] == runner.sha256_file(store / f"{name}.tar.age")
+    assert (out / state["file"]).stat().st_mode & 0o777 == 0o640
+    assert service.download_file(uuid.UUID(bid), out) == out / state["file"]
+
+    # A new one replaces it; a folder becomes a tar; the store is untouched.
+    (store / f"{name}.tar.age").unlink()
+    (store / name).mkdir()
+    (store / name / "db.dump").write_text("x")
+    other = "1f0e0d0c-0b0a-0908-0706-050403020100"
+    assert runner.prepare_download(other, name, store=store, out=out)
+    assert not (out / f"{bid}.json").exists()
+    state = json.loads((out / f"{other}.json").read_text())
+    with tarfile.open(out / state["file"]) as archive:
+        assert f"{name}/db.dump" in archive.getnames()
+    assert (store / name / "db.dump").exists()
+
+    # Gone, and names that are not backups.
+    assert not runner.prepare_download(other, "veyra-20261030-120001", store=store, out=out)
+    assert json.loads((out / f"{other}.json").read_text())["state"] == "failed"
+    assert service.download_file(uuid.UUID(other), out) is None
+    for bad in ("../../etc/passwd", "veyra-20261030-120000./../../etc/shadow"):
+        with pytest.raises(runner.BackupError):
+            runner.prepare_download(other, bad, store=store, out=out)
+    runner.clean_downloads(out)
+    assert not list(out.iterdir())
+
+
+def test_download_api(admin, monkeypatch, tmp_path):
+    class R:
+        returncode = 0
+        stderr = ""
+
+    calls = []
+    monkeypatch.setattr(service, "systemctl", lambda cmd: calls.append(cmd) or R())
+    monkeypatch.setattr(service.download_state, "__defaults__", (tmp_path,))
+    monkeypatch.setattr(service.download_file, "__defaults__", (tmp_path,))
+
+    def row(state, encrypted):
+        return Backup(kind="manual", state=state, path="/x", encrypted=encrypted, manifest={})
+
+    with session_scope() as db:
+        clear, enc, failed = row("verified", False), row("verified", True), row("failed", False)
+        db.add_all([clear, enc, failed])
+        db.flush()
+        clear_id, enc_id, failed_id = clear.id, enc.id, failed.id
+    base = "/api/v1/backups"
+    r = admin.post(f"{base}/{clear_id}/download", json={})
+    assert r.status_code == 409 and r.json()["code"] == "unencrypted"
+    assert admin.post(f"{base}/{failed_id}/download", json={}).status_code == 409
+    assert not calls
+    r = admin.post(f"{base}/{clear_id}/download", json={"allow_unencrypted": True})
+    assert r.status_code == 202
+    assert admin.post(f"{base}/{enc_id}/download", json={}).status_code == 202
+    assert calls[-1][3] == f"veyra-backup@download-{enc_id}.service"
+    assert admin.get(f"{base}/{enc_id}/download").json()["state"] == "none"
+    assert admin.get(f"{base}/{enc_id}/download/file").status_code == 409
+    (tmp_path / f"{enc_id}.tar.age").write_bytes(b"secret-age")
+    (tmp_path / f"{enc_id}.json").write_text(
+        json.dumps(
+            {
+                "state": "ready",
+                "file": f"{enc_id}.tar.age",
+                "filename": "20261030-120001.tar.age",
+                "bytes": 10,
+                "sha256": "abc",
+            }
+        )
+    )
+    assert admin.get(f"{base}/{enc_id}/download").json()["sha256"] == "abc"
+    r = admin.get(f"{base}/{enc_id}/download/file")
+    assert r.status_code == 200 and r.content == b"secret-age"
+    assert "20261030-120001.tar.age" in r.headers["content-disposition"]
+    # The clean-up job starts when the stream ends, and the download is on record.
+    assert calls[-1][3] == "veyra-backup@download-clean.service"
+    with session_scope() as db:
+        ev = db.scalars(select(AuditEvent).where(AuditEvent.action == "backups.download")).one()
+        assert ev.details["sha256"] == "abc" and ev.details["encrypted"] is True
+
+
+def test_clean_downloads_due(tmp_path):
+    assert not service.clean_downloads_due(tmp_path / "none")
+    assert not service.clean_downloads_due(tmp_path)
+    (tmp_path / "a.tar").write_text("x")
+    assert not service.clean_downloads_due(tmp_path)
+    assert service.clean_downloads_due(tmp_path, now=time.time() + 7 * 3600)
+
+
+def test_delete_accepts_only_a_plain_name(tmp_path):
+    with pytest.raises(runner.BackupError):
+        runner.delete_backup("veyra-20261030-120000./../../victim", store=tmp_path)

@@ -18,8 +18,9 @@ polkit.addRule(function (action, subject) {
     if (/^veyra-upgrade@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.service$/.test(unit) && verb === "start") {
         return polkit.Result.YES;
     }
-    // Backups (docs/PRODUCTION_HARDENING.md §2.2): run, run-manual, delete-<uuid>.
-    if (/^veyra-backup@(run|run-manual|recordings|delete-[0-9a-f-]{36})\.service$/.test(unit) && verb === "start") {
+    // Backups (docs/PRODUCTION_HARDENING.md §2.2): run, run-manual, delete-<uuid>,
+    // download-<uuid> and download-clean (only ever root reading into its own directory).
+    if (/^veyra-backup@(run|run-manual|recordings|download-clean|(delete|download)-[0-9a-f-]{36})\.service$/.test(unit) && verb === "start") {
         return polkit.Result.YES;
     }
     // Installation key rotation (issue #125; docs/PRODUCTION_HARDENING.md §3.1).

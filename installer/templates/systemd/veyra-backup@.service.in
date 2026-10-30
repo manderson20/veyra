@@ -1,6 +1,7 @@
 # Veyra backup runner (docs/PRODUCTION_HARDENING.md §2): takes, verifies,
 # encrypts and prunes backups as root. Instances: run (scheduled, started by
-# the worker through polkit), run-manual (the page), delete-<id>.
+# the worker through polkit), run-manual (the page), delete-<id>, download-<id>,
+# download-clean.
 [Unit]
 Description=Veyra backup (%i)
 Documentation=file://@VEYRA_PREFIX@/current/docs/PRODUCTION_HARDENING.md

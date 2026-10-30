@@ -4,11 +4,15 @@ verify-again (a new backup), delete, and the runner's status."""
 
 from __future__ import annotations
 
+import logging
+import re
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -17,12 +21,14 @@ from veyra.backups import destinations as dests
 from veyra.backups import policy, recording_archive, service
 from veyra.core import audit
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, request_context, require
+from veyra.core.deps import RequestContext, recent_auth, request_context, require
 from veyra.core.errors import ProblemError, not_found
 from veyra.core.models import Backup
 from veyra.core.security.principal import Principal
 
 router = APIRouter(prefix="/backups", tags=["backups"])
+log = logging.getLogger("veyra.backups")
+
 READ = "backups.read"
 MANAGE = "backups.manage"
 
@@ -362,6 +368,131 @@ def delete_backup(
     _audit(db, principal, ctx, "backups.delete", id=str(backup_id), name=row.manifest.get("name"))
     db.commit()
     return {"deleting": True}
+
+
+# ------------------------------------------------- download (issue #348)
+
+
+class DownloadIn(BaseModel):
+    # A backup in the clear holds the server's secrets: the page warns first.
+    allow_unencrypted: bool = False
+
+
+def _download_out(row: Backup) -> dict[str, Any]:
+    state = service.download_state(row.id) or {"state": "none"}
+    return {k: state.get(k) for k in ("state", "filename", "bytes", "sha256", "error")}
+
+
+@router.post(
+    "/{backup_id}/download",
+    status_code=202,
+    dependencies=[Depends(recent_auth)],
+    summary="Prepare a backup for downloading",
+)
+def prepare_download(
+    backup_id: uuid.UUID,
+    body: DownloadIn,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    row = db.get(Backup, backup_id)
+    if row is None:
+        raise not_found("Backup")
+    if row.state != "verified":
+        raise ProblemError(
+            409, "Not available", "Only a verified backup can be downloaded.", code="not_verified"
+        )
+    if not row.encrypted and not body.allow_unencrypted:
+        raise ProblemError(
+            409,
+            "Not encrypted",
+            "This backup holds the server's secrets in the clear.",
+            code="unencrypted",
+        )
+    try:
+        service.start(f"download-{backup_id}")
+    except service.BackupError as e:
+        raise _problem(e) from e
+    _audit(
+        db,
+        principal,
+        ctx,
+        "backups.download_prepare",
+        id=str(backup_id),
+        name=row.manifest.get("name"),
+        encrypted=row.encrypted,
+    )
+    db.commit()
+    return _download_out(row)
+
+
+@router.get("/{backup_id}/download", summary="How the prepared download is doing")
+def download_status(
+    backup_id: uuid.UUID,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    row = db.get(Backup, backup_id)
+    if row is None:
+        raise not_found("Backup")
+    return _download_out(row)
+
+
+@router.get(
+    "/{backup_id}/download/file",
+    dependencies=[Depends(recent_auth)],
+    summary="Download a prepared backup (audited)",
+)
+def download_file(
+    backup_id: uuid.UUID,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> StreamingResponse:
+    row = db.get(Backup, backup_id)
+    if row is None:
+        raise not_found("Backup")
+    path = service.download_file(backup_id)
+    if path is None:
+        raise ProblemError(409, "Not ready", "Prepare the download first.", code="not_prepared")
+    state = service.download_state(backup_id) or {}
+    filename = re.sub(r"[^0-9A-Za-z._-]", "_", str(state.get("filename") or path.name))
+    _audit(
+        db,
+        principal,
+        ctx,
+        "backups.download",
+        id=str(backup_id),
+        name=row.manifest.get("name"),
+        encrypted=row.encrypted,
+        bytes=state.get("bytes"),
+        sha256=state.get("sha256"),
+    )
+    db.commit()
+
+    def chunks() -> Iterator[bytes]:
+        try:
+            with path.open("rb") as f:
+                while chunk := f.read(1024 * 1024):
+                    yield chunk
+        finally:
+            # Finished or abandoned: the copy does not stay readable.
+            try:
+                service.start("download-clean")
+            except service.BackupError:
+                log.warning("Could not clean up the backup download; the worker will")
+
+    return StreamingResponse(
+        chunks(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(path.stat().st_size),
+            "Cache-Control": "private, no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 __all__ = ["policy", "router"]

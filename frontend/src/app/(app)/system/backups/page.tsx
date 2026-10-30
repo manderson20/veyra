@@ -11,8 +11,10 @@ import {
   Checkbox,
   ConfirmDialog,
   DataTable,
+  Dialog,
   EmptyState,
   ErrorState,
+  Icon,
   LoadingState,
   PageHeader,
   StatusBadge,
@@ -22,7 +24,8 @@ import {
   useToast,
   type Column,
 } from "@/components/ui";
-import { api, errorMessage } from "@/lib/api";
+import { buttonClass } from "@/components/ui/Button";
+import { API_BASE, api, errorMessage } from "@/lib/api";
 import { formatBytes, formatDateTime, formatRelative } from "@/lib/format";
 import type { BackupRow, BackupSettings, BackupStatus, BackupSummary } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -112,6 +115,48 @@ function Progress({ active, onFinished }: { active: boolean; onFinished: () => v
   return <Callout tone="info" title="Backup running">{status.step ?? "Working"} · started {formatRelative(status.started_at)}</Callout>;
 }
 
+interface DownloadState { state: "none" | "preparing" | "ready" | "failed"; filename: string | null; bytes: number | null; sha256: string | null; error: string | null }
+
+/** Root prepares a copy the web service can read; then the browser downloads it (issue #348). */
+function BackupDownloadDialog({ backup, onClose }: { backup: BackupRow; onClose: () => void }) {
+  const [started, setStarted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<DownloadState | null>(null);
+  const [fetched, setFetched] = useState(false);
+  const url = `/backups/${backup.id}/download`;
+  useEffect(() => {
+    if (!started || fetched) return;
+    const t = window.setInterval(() => {
+      void api.get<DownloadState>(url).then(setState).catch((err) => setError(errorMessage(err)));
+    }, 2000);
+    return () => window.clearInterval(t);
+  }, [started, fetched, url]);
+  const prepare = async () => {
+    setError(null);
+    try {
+      await api.post(url, { allow_unencrypted: !backup.encrypted });
+      setState(null);
+      setStarted(true);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  const ready = started && state?.state === "ready";
+  const failed = started && state?.state === "failed";
+  return (
+    <Dialog open onClose={onClose} title="Download this backup" description={formatDateTime(backup.started_at)}
+      footer={<><Button onClick={onClose}>Close</Button>{!started ? <Button variant="primary" onClick={prepare}>{backup.encrypted ? "Prepare download" : "Prepare anyway"}</Button> : null}{ready ? <a className={buttonClass("primary", "md")} href={`${API_BASE}${url}/file`} download onClick={() => setFetched(true)}><Icon name="download" size={14} /> Download {state.bytes != null ? formatBytes(state.bytes) : ""}</a> : null}</>}>
+      <div className="stack stack--sm">
+        {!backup.encrypted ? <Callout tone="danger" title="This backup is not encrypted">It holds the server&apos;s secrets, including the installation key and every password, in the clear. Anyone with the file can read them. Turn on encryption in the settings on this page unless you have a safe place for it.</Callout> : <p>This backup is encrypted. Restoring it needs your private age key.</p>}
+        {error ? <Callout tone="danger">{error}</Callout> : null}
+        {started && !state?.filename && !failed ? <p className="subtle">Preparing the download. A large backup takes a few minutes.</p> : null}
+        {failed ? <Callout tone="danger">{state?.error ?? "The download could not be prepared."}</Callout> : null}
+        {ready ? <><p className="mono" style={{ overflowWrap: "anywhere", margin: 0 }}>{state.filename}</p><p className="subtle" style={{ margin: 0 }}>SHA-256, to check the file arrived whole:</p><p className="mono" style={{ overflowWrap: "anywhere", margin: 0 }}>{state.sha256}</p><p className="subtle" style={{ margin: 0 }}>The prepared copy is removed from the server when the download ends, so it can be downloaded once. If yours fails, close this and download again.</p></> : null}
+      </div>
+    </Dialog>
+  );
+}
+
 export default function BackupsPage() {
   const { can } = useSession();
   const toast = useToast();
@@ -134,6 +179,7 @@ export default function BackupsPage() {
       setBusy(false);
     }
   };
+  const [downloading, setDownloading] = useState<BackupRow | null>(null);
   const doDelete = async () => {
     if (!remove) return;
     setBusy(true);
@@ -158,7 +204,7 @@ export default function BackupsPage() {
     { key: "enc", header: "Encrypted", render: (b) => b.encrypted ? <Badge tone="ok">age</Badge> : <Badge tone="warn">clear</Badge> },
     { key: "copies", header: "Copies", render: (b) => Object.entries(b.copies).length ? <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>{Object.entries(b.copies).map(([d, c]) => <Badge key={d} tone={c.state === "ok" ? "ok" : "danger"}>{c.name ?? "copy"}: {c.state === "ok" ? "ok" : "failed"}</Badge>)}</span> : <span className="subtle">local only</span> },
     { key: "ver", header: "Version", render: (b) => <span className="mono">{b.version ?? "—"}</span> },
-    { key: "actions", header: "", render: (b) => manage && b.state !== "running" && b.state !== "deleted" ? <Button size="sm" variant="danger" onClick={() => setRemove(b)}>Delete</Button> : null },
+    { key: "actions", header: "", render: (b) => manage && b.state !== "running" && b.state !== "deleted" ? <span className="row" style={{ gap: 4 }}>{b.state === "verified" ? <Button size="sm" icon="download" onClick={() => setDownloading(b)}>Download</Button> : null}<Button size="sm" variant="danger" onClick={() => setRemove(b)}>Delete</Button></span> : null },
   ];
 
   return (
@@ -190,6 +236,7 @@ export default function BackupsPage() {
             empty={<EmptyState compact icon="database" title="No backups yet">{manage ? "Use “Back up now”, or wait for the schedule." : "No backup has been taken."}</EmptyState>} />
         )}
       </Card>
+      {downloading ? <BackupDownloadDialog backup={downloading} onClose={() => setDownloading(null)} /> : null}
       <Card title="Restore">
         <p className="subtle">On a server with the same Veyra release installed (a fresh install is fine), as root:</p>
         <pre className="mono" style={{ margin: 0 }}>{"sudo veyra backup restore /var/backups/veyra/<backup>.tar.age --identity ~/veyra-backup-identity.txt"}</pre>

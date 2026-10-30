@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -28,6 +29,8 @@ from veyra.core.security.crypto import InstallationKey
 UNIT = "veyra-backup@{instance}.service"
 STALE_RUNNING_HOURS = 8  # longer than TimeoutStartSec of the unit (6 h)
 STATUS_PATH = Path("/var/lib/veyra-backup/status.json")
+DOWNLOADS = Path("/var/lib/veyra-backup/download")
+DOWNLOAD_KEEP_SECONDS = 6 * 3600
 STALE_AFTER = timedelta(days=2)
 # Tests replace this with a recorder.
 systemctl: Callable[[list[str]], Any] | None = None
@@ -421,6 +424,31 @@ def start(instance: str) -> None:
             "The backup could not be started: "
             + ((getattr(res, "stderr", "") or "systemctl failed").strip()[:300]),
         )
+
+
+def download_state(backup_id: uuid.UUID, directory: Path = DOWNLOADS) -> dict[str, Any] | None:
+    """What root has prepared for this backup's download, if anything."""
+    data = status(directory / f"{backup_id}.json")
+    return data
+
+
+def download_file(backup_id: uuid.UUID, directory: Path = DOWNLOADS) -> Path | None:
+    state = download_state(backup_id, directory)
+    if not state or state.get("state") != "ready":
+        return None
+    # Named by root; never a path from elsewhere.
+    name = Path(str(state.get("file") or "")).name
+    path = directory / name
+    return path if name and path.is_file() else None
+
+
+def clean_downloads_due(directory: Path = DOWNLOADS, now: float | None = None) -> bool:
+    """A download nobody finished is removed after a few hours (worker)."""
+    now = now if now is not None else time.time()
+    try:
+        return any(now - p.stat().st_mtime > DOWNLOAD_KEEP_SECONDS for p in directory.iterdir())
+    except OSError:
+        return False
 
 
 def status(path: Path = STATUS_PATH) -> dict[str, Any] | None:

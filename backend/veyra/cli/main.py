@@ -1479,6 +1479,8 @@ def cmd_worker(args: argparse.Namespace) -> int:
                     from veyra.backups import service as backup_service
 
                     try:
+                        if backup_service.clean_downloads_due():
+                            backup_service.start("download-clean")
                         if backup_service.tick(db):
                             log.info("Started the scheduled backup")
                     except backup_service.BackupError as e:
@@ -1857,6 +1859,17 @@ def cmd_backup_unit(args: argparse.Namespace) -> int:
         result = runner.run_recording_archive(Path(get_settings().recordings_dir))
         print(json.dumps({k: len(v) for k, v in result.items()}))
         return 1 if result["errors"] else 0
+    if instance == "download-clean":
+        runner.clean_downloads()
+        return 0
+    if instance.startswith("download-"):
+        backup_id = str(uuid.UUID(instance[len("download-") :]))
+        match = [
+            b for b in runner.known_backups(runner.subprocess_runner()) if b.get("id") == backup_id
+        ]
+        if not match:
+            raise RuntimeError("unknown backup")
+        return 0 if runner.prepare_download(backup_id, str(match[0]["name"])) else 1
     if instance.startswith("delete-"):
         # Root has no database role: the row is looked up through the
         # service account, as the settings are.

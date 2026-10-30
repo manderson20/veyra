@@ -22,6 +22,7 @@ import shlex
 import shutil
 import socket
 import subprocess
+import tarfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -34,6 +35,9 @@ from veyra.backups import destinations, policy, recording_archive
 log = logging.getLogger("veyra.backup")
 
 STORE = Path("/var/backups/veyra")
+# Readable by the service account, written only by root (issue #348).
+DOWNLOADS = Path("/var/lib/veyra-backup/download")
+SERVICE_GROUP = "veyra"
 STATUS_DIR = Path("/var/lib/veyra-backup")
 SCRATCH_DB = "veyra_restore_test"
 VEYRA_CLI = "/usr/local/bin/veyra"
@@ -539,12 +543,83 @@ def policy_fingerprint(recipient: str) -> str:
     return recipient.strip()[:16] + "…"
 
 
+def _write_download_state(out: Path, backup_id: str, state: dict[str, Any]) -> None:
+    path = out / f"{backup_id}.json"
+    tmp = out / f".{backup_id}.tmp"
+    tmp.write_text(json.dumps(state))
+    os.chmod(tmp, 0o640)
+    shutil.chown(tmp, "root", SERVICE_GROUP)
+    tmp.replace(path)
+
+
+def _clear_downloads(out: Path) -> None:
+    for p in out.iterdir():
+        p.unlink(missing_ok=True)
+
+
+def clean_downloads(out: Path = DOWNLOADS) -> None:
+    if out.is_dir():
+        _clear_downloads(out)
+
+
+def prepare_download(
+    backup_id: str, name: str, *, store: Path = STORE, out: Path = DOWNLOADS
+) -> bool:
+    """Put one backup where the service account can read it, for the page's
+    download (issue #348). The store stays root's; this directory is not the
+    service's to write, so it cannot steer what root does here. One at a time,
+    removed after the download or by the worker after a few hours."""
+    # The name reaches root through the service account: nothing but a stamp.
+    if not policy.STAMP_RE.fullmatch(name):
+        raise BackupError("not a backup name")
+    out.mkdir(mode=0o750, exist_ok=True)
+    os.chmod(out, 0o750)  # noqa: S103
+    shutil.chown(out, "root", SERVICE_GROUP)
+    _clear_downloads(out)
+    _write_download_state(out, backup_id, {"state": "preparing"})
+    encrypted, folder = store / f"{name}.tar.age", store / name
+    try:
+        if encrypted.is_file():
+            target = out / f"{backup_id}.tar.age"
+            try:
+                # The store is 0700, so the shared inode's mode opens nothing there.
+                os.link(encrypted, target)
+            except OSError:
+                shutil.copy2(encrypted, target)
+            filename = encrypted.name
+        elif folder.is_dir():
+            target = out / f"{backup_id}.tar"
+            with tarfile.open(target, "w") as archive:
+                archive.add(folder, arcname=name)
+            filename = f"{name}.tar"
+        else:
+            raise BackupError("the backup's files are gone from this server")
+        os.chmod(target, 0o640)
+        shutil.chown(target, "root", SERVICE_GROUP)
+        _write_download_state(
+            out,
+            backup_id,
+            {
+                "state": "ready",
+                "file": target.name,
+                "filename": filename,
+                "bytes": target.stat().st_size,
+                "sha256": sha256_file(target),
+            },
+        )
+        return True
+    except (BackupError, OSError, tarfile.TarError) as e:
+        log.exception("Could not prepare the backup download")
+        _write_download_state(out, backup_id, {"state": "failed", "error": str(e)[:300]})
+        return False
+
+
 def delete_backup(
     name: str, *, store: Path = STORE, settings: dict[str, Any] | None = None
 ) -> bool:
     """Remove a backup's files (root) here and, best effort, from every
     destination; the row is marked by the caller."""
-    if not policy.STAMP_RE.fullmatch(name.split(".")[0]):
+    if not policy.STAMP_RE.fullmatch(name):
         raise BackupError("not a backup name")
     found = False
     for p in (store / name, store / f"{name}.tar.age"):
