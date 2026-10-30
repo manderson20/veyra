@@ -69,7 +69,7 @@
    "audience": "admin",
    "section": "Getting started",
    "reviewed": "0.27.50",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/users/",
     "/users/view/"
@@ -502,7 +502,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.50",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/recording/"
    ],
@@ -528,7 +528,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.50",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/call-history/",
     "/reports/"
