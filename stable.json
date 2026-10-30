@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 65,
+  "sequence": 66,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.49",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Conference rooms: recording, invitations and room owners.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "dd6497dffe",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.49/veyra-0.27.49.tar.gz",
+        "sha256": "d88470a685362f27d4d4f7fa0b2164d1fa8170a41b42e73b93c9d62f619874ad",
+        "size": 9406938
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1108,6 +1125,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-30T17:14:18+00:00",
-  "expires_at": "2027-01-28T17:14:18+00:00"
+  "generated_at": "2026-10-30T17:52:20+00:00",
+  "expires_at": "2027-01-28T17:52:20+00:00"
 }
