@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 69,
+  "sequence": 70,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.53",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Active Calls shows which calls are being recorded.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "331683a88a",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.53/veyra-0.27.53.tar.gz",
+        "sha256": "326c801ed88ad462d2781f022cb3c34a5d705c7a5ec11f8837c3c2e2f67d0f5a",
+        "size": 9430128
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1176,6 +1193,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-30T19:38:12+00:00",
-  "expires_at": "2027-01-28T19:38:12+00:00"
+  "generated_at": "2026-10-30T20:12:38+00:00",
+  "expires_at": "2027-01-28T20:12:38+00:00"
 }
