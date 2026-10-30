@@ -741,7 +741,7 @@
    "audience": "admin",
    "section": "Phones and devices",
    "reviewed": "0.27.49",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/system/portal-layouts/"
    ],
@@ -899,7 +899,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.49",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/routing/inbound/",
     "/routing/inbound/view/"
@@ -1025,7 +1025,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.49",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/routing/outbound/",
     "/routing/outbound/view/"
@@ -1070,7 +1070,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.49",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/routing/time-conditions/",
     "/routing/time-conditions/view/"
@@ -1209,7 +1209,7 @@
    "audience": "admin",
    "section": "Calls and call flows",
    "reviewed": "0.27.49",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/conferences/",
     "/conferences/view/"
@@ -2549,7 +2549,7 @@
    "audience": "user",
    "section": "Using Veyra",
    "reviewed": "0.27.49",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/my-phone/"
    ],
