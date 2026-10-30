@@ -52,19 +52,13 @@ export default function ActiveCallsPage() {
       setMonBusy(null);
     }
   };
-  // Recordings started here (issue #135); the engine refuses a second one.
-  const [recording, setRecording] = useState<Set<string>>(new Set());
   const [recBusy, setRecBusy] = useState<string | null>(null);
   const toggleRecord = async (c: ActiveCall) => {
-    const on = recording.has(c.channel_id);
+    const on = c.recording;
     setRecBusy(c.channel_id);
     try {
       const r = await api.post<{ message: string }>(`/calls/${encodeURIComponent(c.channel_id)}/record`, { action: on ? "stop" : "start" });
-      setRecording((prev) => {
-        const next = new Set(prev);
-        if (on) next.delete(c.channel_id); else next.add(c.channel_id);
-        return next;
-      });
+      reload();
       toast.success(r.message, on ? undefined : "It is filed with the call record (Call Recording) when the call ends.");
     } catch (err) {
       toast.error(on ? "Could not stop the recording" : "Could not record", errorMessage(err));
@@ -105,10 +99,10 @@ export default function ActiveCallsPage() {
     ...(canRecord ? [{
       key: "record",
       header: <span className="sr-only">Record</span>,
-      render: (c: ActiveCall) => (
-        <Button size="sm" icon={recording.has(c.channel_id) ? "stop" : "record"} loading={recBusy === c.channel_id} onClick={() => void toggleRecord(c)}
-          aria-label={`${recording.has(c.channel_id) ? "Stop recording" : "Record"} the call on ${c.extension_number ?? c.endpoint ?? c.channel_id}`}>
-          {recording.has(c.channel_id) ? "Stop recording" : "Record"}
+      render: (c: ActiveCall) => c.recording && !c.recording_stoppable ? <Badge tone="danger" icon="record">Recording</Badge> : (
+        <Button size="sm" icon={c.recording ? "stop" : "record"} loading={recBusy === c.channel_id} onClick={() => void toggleRecord(c)}
+          aria-label={`${c.recording ? "Stop recording" : "Record"} the call on ${c.extension_number ?? c.endpoint ?? c.channel_id}`}>
+          {c.recording ? "Stop recording" : "Record"}
         </Button>
       ),
     }] : []),

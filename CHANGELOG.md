@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.53
+
+No migration.
+
+### Fixed
+- **Active Calls shows which calls are being recorded** (#351), including calls recorded by a policy or from a phone, and still shows it after you reload the page. Only a recording started from the web has **Stop recording**; the others show a *Recording* badge.
+
 ## 0.27.52 — 2026-10-30
 
 No migration.

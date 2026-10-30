@@ -119,6 +119,17 @@ class ActiveCall:
     duration_seconds: int
     # The engine endpoint the channel belongs to (``PJSIP/<endpoint>-…``), when known.
     endpoint: str | None = None
+    # The engine's channel name (``PJSIP/<endpoint>-…``), for recording_states.
+    channel_name: str | None = None
+
+
+@dataclass(frozen=True)
+class RecordingState:
+    """Whether a channel's call is being recorded right now (issue #351), and
+    whether that recording was started from the web, so can be stopped there."""
+
+    recording: bool
+    stoppable: bool = False
 
 
 @dataclass(frozen=True)
@@ -249,6 +260,12 @@ class TelephonyAdapter(ABC):
         """Start or stop recording a call in progress from the web (issue
         #135); the file is filed like the phone's on-demand recording."""
         raise NotSupported(f"{self.name}: recording from the web not implemented")
+
+    def recording_states(self, calls: list[ActiveCall]) -> dict[str, RecordingState]:
+        """By channel id, for these calls; a channel left out is not known to
+        be recorded. Separate from active_calls, which many pages use: this
+        asks the engine about every channel."""
+        return {}
 
     def monitor_call(
         self,

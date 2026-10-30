@@ -4,7 +4,7 @@ summary: See the calls in progress, hang one up, record it, or listen in, whispe
 audience: admin
 section: Calls and call flows
 order: 90
-reviewed: 0.27.45
+reviewed: 0.27.53
 pages:
   - /calls/
 covers:
@@ -42,7 +42,7 @@ Choose **Hang up**, then **Hang up** again to confirm (or **Keep** to cancel). T
 
 Choose **Record** to start recording the call, and **Stop recording** to stop. The recording is filed with the call when it ends and appears under [Call Recording](app:/recording/). See [Record calls](guide:call-recording).
 
-> **Note:** the **Stop recording** state is remembered only in your browser tab. After you reload the page the button shows **Record** again even if the recording is still running; it stops when the call ends.
+A call that is already being recorded, by a [recording policy](guide:call-recording) or from a phone, shows a *Recording* badge instead. Only a recording started here can be stopped here. A call can be recorded from this page once: after **Stop recording**, starting again is refused.
 
 ## Supervise a call
 

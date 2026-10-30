@@ -24,6 +24,7 @@ from veyra.telephony.adapter import (
     EngineInfo,
     EngineUnavailable,
     GeneratedFile,
+    RecordingState,
     Registration,
     TelephonyAdapter,
     TrunkRegistration,
@@ -518,9 +519,40 @@ class AsteriskAdapter(TelephonyAdapter):
                     state=str(ch.get("state", "unknown")),
                     duration_seconds=_age_seconds(ch.get("creationtime"), now),
                     endpoint=_endpoint_of(str(ch.get("name", ""))),
+                    channel_name=str(ch.get("name") or "") or None,
                 )
             )
         return out
+
+    def _mixmonitor_running(self, name: str) -> bool:
+        """``mixmonitor list`` prints a "File:" line per running recording."""
+        if not _CONF_CHANNEL_RE.match(name):
+            return False
+        ok, out = cli.run(f"mixmonitor list {name}")
+        return ok and "File:" in out
+
+    def recording_states(self, calls: list[ActiveCall]) -> dict[str, RecordingState]:
+        running: dict[str, bool] = {}
+        refs: dict[str, str] = {}
+        web: dict[str, bool] = {}
+        for c in calls:
+            try:
+                running[c.channel_id] = self._mixmonitor_running(c.channel_name or "")
+                refs[c.channel_id] = self.ari.get_variable(c.channel_id, "VEYRA_CALLREC")
+                web[c.channel_id] = self.ari.get_variable(c.channel_id, "VEYRA_ONDEMAND_WEB") == "1"
+            except EngineUnavailable:
+                # The call may just have ended: unknown, not an error for the page.
+                continue
+        # The recording's other leg carries its reference when the policy set
+        # it before dialling (the variable is inherited).
+        live_refs = {refs[i] for i, on in running.items() if on and refs.get(i)}
+        return {
+            i: RecordingState(
+                recording=on or (bool(refs.get(i)) and refs[i] in live_refs),
+                stoppable=on and web.get(i, False),
+            )
+            for i, on in running.items()
+        }
 
     def originate(
         self, endpoint: str, number: str, *, caller_id: str, context: str, timeout: int = 30
@@ -554,7 +586,12 @@ class AsteriskAdapter(TelephonyAdapter):
         ours = self.ari.get_variable(channel_id, "VEYRA_ONDEMAND_WEB") == "1"
         if start:
             if self.ari.get_variable(channel_id, "VEYRA_CALLREC"):
-                raise ValueError("this call is already being recorded")
+                # A second recording would overwrite the first one's file.
+                if self._mixmonitor_running(name):
+                    raise ValueError("this call is already being recorded")
+                raise ValueError(
+                    "this call was already recorded once; it can only be recorded once"
+                )
             rec = re.sub(r"[^0-9A-Za-z.-]", "", channel_id)[:64]
             self.ari.set_variable(channel_id, "VEYRA_CALLREC", rec)
             self.ari.set_variable(channel_id, "CDR(veyra_rec)", rec)

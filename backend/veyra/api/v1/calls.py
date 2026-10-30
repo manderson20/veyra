@@ -52,6 +52,10 @@ class ActiveCallOut(BaseModel):
     endpoint: str | None
     extension_number: str | None = None
     extension_name: str | None = None
+    # Being recorded now, by a policy, the phone or the web (issue #351).
+    recording: bool = False
+    # Started from the web, so the web can stop it.
+    recording_stoppable: bool = False
 
 
 class ActiveCallsOut(BaseModel):
@@ -104,10 +108,20 @@ def active_calls(
     by_endpoint = {e.endpoint_name: e for e in rows}
     by_number = {e.number: e for e in rows}
     out: list[ActiveCallOut] = []
-    for c in calls:
+    visible = [
+        c
+        for c in calls
+        if principal.is_platform_admin
+        or by_endpoint.get(c.endpoint or "")
+        or by_number.get(c.caller or "")
+    ]
+    try:
+        states = adapter.recording_states(visible)
+    except (EngineUnavailable, NotSupported):
+        states = {}
+    for c in visible:
         ext = by_endpoint.get(c.endpoint or "") or by_number.get(c.caller or "")
-        if ext is None and not principal.is_platform_admin:
-            continue
+        state = states.get(c.channel_id)
         out.append(
             ActiveCallOut(
                 channel_id=c.channel_id,
@@ -118,6 +132,8 @@ def active_calls(
                 endpoint=c.endpoint,
                 extension_number=ext.number if ext else None,
                 extension_name=ext.display_name if ext else None,
+                recording=bool(state and state.recording),
+                recording_stoppable=bool(state and state.stoppable),
             )
         )
     return ActiveCallsOut(calls=out, available=True)

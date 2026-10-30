@@ -12,7 +12,7 @@ from veyra.configmgmt import service
 from veyra.core.db import session_scope
 from veyra.core.models import ConfigRevision
 from veyra.core.security.crypto import load_installation_key
-from veyra.telephony.adapter import ActiveCall, EndpointStatus
+from veyra.telephony.adapter import ActiveCall, EndpointStatus, RecordingState
 from veyra.telephony.asterisk.adapter import _age_seconds, _endpoint_of
 
 EXT = "/api/v1/extensions"
@@ -268,3 +268,55 @@ def test_record_a_call_from_the_web(admin, app, tmp_path):
     assert admin.post("/api/v1/calls/1697.1/record", json={"action": "pause"}).status_code == 422
     events = admin.get("/api/v1/audit", params={"q": "call.record"}).json()
     assert events["total"] == 2
+
+
+def test_active_calls_report_recordings(admin, app, tmp_path):
+    """Issue #351: from the engine, so it survives a reload and covers policies."""
+    fake = FakeAdapter()
+    fake.calls = [
+        ActiveCall("c1", "1001", "1002", "Up", 5, channel_name="PJSIP/a-1"),
+        ActiveCall("c2", "1002", "1001", "Up", 5, channel_name="PJSIP/b-2"),
+        ActiveCall("c3", "1003", "1004", "Up", 5, channel_name="PJSIP/c-3"),
+    ]
+    fake.recordings = {
+        "c1": RecordingState(True, True),
+        "c2": RecordingState(True, False),
+    }
+    app.state.telephony = fake
+    out = {c["channel_id"]: c for c in admin.get("/api/v1/calls").json()["calls"]}
+    assert out["c1"]["recording"] and out["c1"]["recording_stoppable"]
+    assert out["c2"]["recording"] and not out["c2"]["recording_stoppable"]
+    assert not out["c3"]["recording"]
+
+
+def test_recording_states_from_the_engine(monkeypatch):
+    """A policy's recording on one leg marks the other leg by its inherited
+    reference; a finished recording (reference, nothing running) is not one."""
+    from veyra.telephony.asterisk import adapter as ast
+
+    monkeypatch.setattr(
+        ast.cli,
+        "run",
+        lambda cmd, timeout=10.0: (True, "File: /x/1.wav" if cmd.endswith("PJSIP/a-1") else ""),
+    )
+    variables = {
+        ("c1", "VEYRA_CALLREC"): "ref1",
+        ("c1", "VEYRA_ONDEMAND_WEB"): "1",
+        ("c2", "VEYRA_CALLREC"): "ref1",
+        ("c3", "VEYRA_CALLREC"): "old",
+    }
+
+    class Ari:
+        def get_variable(self, channel, name):
+            return variables.get((channel, name), "")
+
+    a = ast.AsteriskAdapter.__new__(ast.AsteriskAdapter)
+    a.ari = Ari()
+    calls = [
+        ActiveCall(i, None, None, "Up", 1, channel_name=n)
+        for i, n in (("c1", "PJSIP/a-1"), ("c2", "PJSIP/b-2"), ("c3", "PJSIP/c-3"))
+    ]
+    states = a.recording_states(calls)
+    assert states["c1"] == RecordingState(True, True)
+    assert states["c2"] == RecordingState(True, False)
+    assert states["c3"] == RecordingState(False, False)

@@ -514,8 +514,8 @@
    "summary": "See the calls in progress, hang one up, record it, or listen in, whisper and join as a supervisor.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.53",
+   "reviewed_date": null,
    "pages": [
     "/calls/"
    ],

@@ -265,6 +265,8 @@ export interface ActiveCall {
   endpoint: string | null;
   extension_number: string | null;
   extension_name: string | null;
+  recording: boolean;
+  recording_stoppable: boolean;
 }
 
 export interface ActiveCalls {

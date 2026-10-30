@@ -109,6 +109,12 @@ class FakeAdapter(TelephonyAdapter):
     def active_calls(self) -> list[ActiveCall]:
         return list(self.calls)
 
+    # Issue #351: channel id → RecordingState.
+    recordings: dict[str, Any]
+
+    def recording_states(self, calls: list[Any]) -> dict[str, Any]:
+        return dict(getattr(self, "recordings", {}))
+
     def hangup(self, channel_id: str) -> None:
         self.hung_up.append(channel_id)
         self.calls = [c for c in self.calls if c.channel_id != channel_id]
