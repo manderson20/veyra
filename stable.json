@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 63,
+  "sequence": 64,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.47",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Recording archive to backup destinations; public certificate survives an HA switchover.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "2f7f4ab828",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.47/veyra-0.27.47.tar.gz",
+        "sha256": "ac0e4df6dd334296d6b7b436cdf84aace1ff980dd1f4962bf3d4841221444dd9",
+        "size": 9389349
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1074,6 +1091,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-30T15:22:49+00:00",
-  "expires_at": "2027-01-28T15:22:49+00:00"
+  "generated_at": "2026-10-30T15:46:20+00:00",
+  "expires_at": "2027-01-28T15:46:20+00:00"
 }
