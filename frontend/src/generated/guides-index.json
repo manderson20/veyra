@@ -708,7 +708,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.48",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-30",
    "pages": [
     "/system/backups/"
    ],
