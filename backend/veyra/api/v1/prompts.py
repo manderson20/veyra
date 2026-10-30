@@ -301,6 +301,30 @@ def _store(path: Path, data: bytes, wide: bytes | None = None) -> None:
         ) from e
 
 
+def import_prompt(
+    db: Session, base: Path, org: Organization, name: str, data: bytes, filename: str, kind: Kind
+) -> Prompt:
+    """A new library recording from bytes that did not come through
+    ``create_prompt`` (the FreePBX import). The caller checks the name is free
+    and commits; ``audio.AudioError`` when the file cannot be converted."""
+    narrow, duration = audio.convert_any(data, filename)
+    wide = audio.wideband_copy(data, filename)
+    prompt = Prompt(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        name=name,
+        slug=_unique_slug(db, org.id, name),
+        source="upload",
+        kind=kind,
+        duration_seconds=duration,
+        size_bytes=len(narrow),
+    )
+    db.add(prompt)
+    db.flush()
+    _store(prompt_path(base, org.slug, prompt.slug), narrow, wide)
+    return prompt
+
+
 def _audit(
     db: Session,
     ctx: RequestContext,

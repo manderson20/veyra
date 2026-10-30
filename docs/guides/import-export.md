@@ -4,7 +4,7 @@ summary: Create or change many extensions, users, routes or groups at once with 
 audience: admin
 section: Maintenance
 order: 40
-reviewed: 0.27.44
+reviewed: 0.27.46
 checked: 2026-10-29
 pages:
   - /system/import/
@@ -52,10 +52,10 @@ If you can export but not import a kind, the page says *You cannot change …*: 
 The **From FreePBX** card turns a FreePBX database into the files above. Extensions, ring groups, queues, IVR menus, time conditions and inbound routes come across.
 
 1. If FreePBX used shorter extensions than Veyra's numbering plan, widen the numbering plan under Settings first.
-2. Upload the IVR recordings to the audio library first, under the names they had in FreePBX.
-3. On the FreePBX server run `mysqldump asterisk > asterisk.sql` (it may be gzipped).
-4. Choose the file under **FreePBX database dump**. Optionally add `voicemail.conf` under **voicemail.conf (optional: keeps PINs and emails)**.
-5. Choose **Read the FreePBX files**. Nothing is saved yet. A list of *things to do by hand* shows what could not be converted.
+2. On the FreePBX server run `mysqldump asterisk > asterisk.sql` (it may be gzipped).
+3. Choose the file under **FreePBX database dump**. Optionally add `voicemail.conf` to keep PINs and emails, and the output of `asterisk -rx "database show QPENALTY"` saved as a text file to keep queue agents who log in with a code.
+4. Choose **Read the FreePBX files**. Nothing is saved yet. A list of *things to do by hand* shows what could not be converted.
+5. Bring the recordings and hold music over: on the FreePBX server run `tar czf audio.tar.gz -C /var/lib/asterisk sounds/en/custom moh`, choose the file under **Audio archive** and choose **Import the audio**. Keep the database dump chosen, so recordings keep the names the IVR menus look for. The archive can be up to 1000 MB. Nothing already in the library is changed, so you can run it again. A list shows anything that could not be read, for example a file over 25 MB or 5 minutes.
 6. Choose each **Check n …** button in order (extensions, ring groups, queues, IVR menus, time conditions, inbound routes). Each loads the converted file into **2. Check and import**; check it and import it before the next.
 
 > **Note:** SIP passwords are not carried over from FreePBX.

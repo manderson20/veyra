@@ -108,5 +108,18 @@ then goes through **Check the file** and **Import** in that order.
   second file and the `[default]` boxes keep their PIN (4 to 10 digits;
   others get a random one) and email address, through the extensions'
   write-only `voicemail_pin` column.
-* Not yet: other voicemail settings from
-  `voicemail.conf`, recordings and music on hold.
+* Dynamic queue agents (0.27.46): add the output of
+  `asterisk -rx "database show QPENALTY"` as a file; each
+  `/QPENALTY/<queue>/agents/<ext>` line becomes a dynamic member.
+* Recordings and hold music (0.27.46, `POST /bulk/freepbx/audio`,
+  `ivr.write`): an archive made with
+  `tar czf audio.tar.gz -C /var/lib/asterisk sounds/en/custom moh`, up to
+  1000 MB. With the dump, a recording takes its `recordings.displayname`,
+  which the converted IVR menus refer to; without it, its file name. Each
+  folder under `moh` (the top level is `default`) becomes a hold music set.
+  It only adds: a name already there is left alone, so a run can be repeated.
+  WAV, MP3 and the other formats of the audio library are read; a sound only
+  in an Asterisk format (`.sln`, `.ulaw`, `.gsm`, …), one that plays several
+  files in a row, and a file over 25 MB or 5 minutes are warnings. NGINX
+  allows this route, the dump and firmware uploads 1 GB and 15 minutes.
+* Not yet: other voicemail settings from `voicemail.conf`.

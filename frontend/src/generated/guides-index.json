@@ -474,8 +474,8 @@
    "summary": "Record prompts from a phone, upload audio, add Veyra's built-in sounds, and build hold music sets.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.46",
+   "reviewed_date": null,
    "pages": [
     "/prompts/",
     "/hold-music/"
@@ -733,8 +733,8 @@
    "summary": "Create or change many extensions, users, routes or groups at once with a spreadsheet, or move from FreePBX.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.46",
+   "reviewed_date": null,
    "pages": [
     "/system/import/"
    ],

@@ -337,6 +337,25 @@ def list_sets(
     )
 
 
+def import_set(
+    request: Request, db: Session, org: Organization, name: str, prompts: list[Prompt]
+) -> MohClass:
+    """A new set from recordings already in the library (the FreePBX import);
+    the caller checks the name is free and commits."""
+    cls = MohClass(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        name=name,
+        slug=helpers.unique_slug(db, MohClass, name),
+        description="Imported from FreePBX",
+    )
+    db.add(cls)
+    db.flush()
+    _set_tracks(db, cls, prompts[:MAX_TRACKS])
+    sync_files(request, db, cls)
+    return cls
+
+
 @router.post("", response_model=MohOut, status_code=201, summary="Create a hold music set")
 def create_set(
     body: MohIn,

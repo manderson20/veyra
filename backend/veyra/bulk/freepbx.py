@@ -12,7 +12,8 @@ listed as a warning.
 Tables read: ``users`` and ``devices`` (extensions), ``sip`` (caller ID),
 ``ringgroups``, ``queues_config`` / ``queues_details`` (queues and their
 static members), ``incoming``, ``ivr_details`` / ``announcement`` (names of
-destinations).
+destinations). An archive of the server's audio (``plan_audio``) brings the
+recordings and hold music, which are not in the database.
 """
 
 from __future__ import annotations
@@ -22,7 +23,8 @@ import io
 import re
 import tarfile
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import PurePosixPath
+from typing import IO, Any
 
 from veyra.bulk import service
 
@@ -269,11 +271,27 @@ def parse_voicemail_conf(text: str) -> dict[str, dict[str, str]]:
     return out
 
 
-def convert(text: str, voicemail_conf: str | None = None) -> Conversion:
+_AGENT_RE = re.compile(r"^/QPENALTY/([^/\s]+)/agents/(\d+)\s*:", re.M)
+
+
+def parse_queue_agents(text: str) -> dict[str, list[str]]:
+    """Dynamic agents from ``asterisk -rx "database show QPENALTY"``: queue →
+    extensions (``/QPENALTY/400/agents/1001 : 0``)."""
+    out: dict[str, list[str]] = {}
+    for queue, agent in _AGENT_RE.findall(text):
+        out.setdefault(queue, []).append(agent)
+    return out
+
+
+def convert(
+    text: str, voicemail_conf: str | None = None, queue_agents: str | None = None
+) -> Conversion:
     """The CSV files (by bulk kind) for a FreePBX database dump, with the
-    voicemail PINs and emails of ``voicemail.conf`` when given."""
+    voicemail PINs and emails of ``voicemail.conf`` and the dynamic queue
+    agents of the AstDB when given."""
     t = parse_dump(text)
     boxes = parse_voicemail_conf(voicemail_conf) if voicemail_conf else {}
+    agents = parse_queue_agents(queue_agents) if queue_agents else {}
     conv = Conversion()
     warn = conv.warnings
     names = {
@@ -438,6 +456,7 @@ def convert(text: str, voicemail_conf: str | None = None) -> Conversion:
                 else "no",
                 "announce_position": "yes" if get.get("announce-position") == "yes" else "no",
                 "members": "; ".join(members),
+                "dynamic_members": "; ".join(a for a in agents.get(number, []) if a not in members),
                 "failover": _dest(str(q.get("dest") or ""), names, warn, f"queue {number}")
                 or "hangup",
             }
@@ -445,10 +464,12 @@ def convert(text: str, voicemail_conf: str | None = None) -> Conversion:
     if queues:
         conv.csv["queues"] = service.to_csv(service.KINDS["queues"], queues)
         conv.counts["queues"] = len(queues)
-        warn.append(
-            "queues: dynamic agents (who log in with a code) live in FreePBX's AstDB, not in "
-            "the database dump; add them on each queue's page"
-        )
+        if queue_agents is None:
+            warn.append(
+                "queues: dynamic agents (who log in with a code) live in FreePBX's AstDB, not in "
+                'the database dump; add the output of asterisk -rx "database show QPENALTY" '
+                "to keep them, or add them on each queue's page"
+            )
 
     recordings = {str(r.get("id")): str(r.get("displayname") or "") for r in t["recordings"]}
     entries: dict[str, list[tuple[str, str]]] = {}
@@ -500,8 +521,8 @@ def convert(text: str, voicemail_conf: str | None = None) -> Conversion:
         conv.csv["ivr_menus"] = service.to_csv(service.KINDS["ivr_menus"], menus)
         conv.counts["ivr_menus"] = len(menus)
         warn.append(
-            "IVR menus: the recordings are not in the dump; upload them to the audio library "
-            "under the same names before checking the menus, or choose them afterwards"
+            "IVR menus: the recordings are not in the dump; import the audio archive (below) "
+            "before checking the menus, or choose the recordings afterwards"
         )
 
     groups_by_id: dict[str, list[str]] = {}
@@ -570,3 +591,132 @@ def convert(text: str, voicemail_conf: str | None = None) -> Conversion:
     if not conv.csv:
         raise FreepbxError("no extensions, ring groups or inbound routes found in the dump")
     return conv
+
+
+# -------------------------------------------------------------------- audio
+
+MAX_AUDIO_BYTES = 1000 * 1024 * 1024
+# Stops a small archive that unpacks to something enormous.
+MAX_AUDIO_UNPACKED = 8 * 1024 * 1024 * 1024
+_READABLE = (".wav", ".mp3", ".ogg", ".oga", ".flac", ".m4a", ".aac", ".opus")
+# Asterisk's own formats, kept next to a WAV or alone; Veyra cannot read them.
+_ENGINE_ONLY = (".sln", ".sln16", ".sln48", ".ulaw", ".alaw", ".gsm", ".g722", ".g729", ".wav49")
+_CUSTOM_RE = re.compile(r"(?:^|/)custom/(.+)$")
+_MOH_RE = re.compile(r"(?:^|/)moh/(?:([^/]+)/)?([^/]+)$")
+_LANGUAGE_RE = re.compile(r"(?:^|/)sounds/([^/]+)/custom/")
+
+
+@dataclass
+class AudioFile:
+    """One file to bring over; ``member`` is only ever a key into the archive,
+    never a path on this server."""
+
+    name: str
+    member: tarfile.TarInfo
+
+
+@dataclass
+class AudioPlan:
+    recordings: list[AudioFile] = field(default_factory=list)
+    hold_music: dict[str, list[AudioFile]] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+
+
+def _best(found: dict[str, tarfile.TarInfo]) -> tarfile.TarInfo | None:
+    """The file to use among one sound's formats (``{suffix: member}``)."""
+    for suffix in _READABLE:
+        if suffix in found:
+            return found[suffix]
+    return None
+
+
+def plan_audio(tar: tarfile.TarFile, dump_text: str | None = None) -> AudioPlan:
+    """What an archive of ``sounds/<lang>/custom`` and ``moh`` holds. With the
+    database dump the recordings keep their FreePBX names, which is what the
+    converted IVR menus refer to; without it, their file names."""
+    plan = AudioPlan()
+    warn = plan.warnings
+    sounds_by_stem: dict[str, dict[str, tarfile.TarInfo]] = {}
+    languages: dict[str, str] = {}
+    moh: dict[str, dict[str, dict[str, tarfile.TarInfo]]] = {}
+    for member in tar:
+        if tar.offset > MAX_AUDIO_UNPACKED:
+            raise FreepbxError("the archive unpacks to more than 8 GB")
+        if not member.isfile():
+            continue
+        path = PurePosixPath(member.name)
+        suffix = path.suffix.lower()
+        if suffix not in _READABLE and suffix not in _ENGINE_ONLY:
+            continue
+        cm = _CUSTOM_RE.search(member.name)
+        if cm:
+            stem = str(PurePosixPath(cm.group(1)).with_suffix(""))
+            lang_match = _LANGUAGE_RE.search(member.name)
+            lang = lang_match.group(1) if lang_match else ""
+            known = languages.setdefault(stem, lang)
+            if known != lang:
+                # One language per name: English when there is one.
+                if lang == "en":
+                    sounds_by_stem.pop(stem, None)
+                    languages[stem] = lang
+                else:
+                    continue
+            sounds_by_stem.setdefault(stem, {})[suffix] = member
+            continue
+        mm = _MOH_RE.search(member.name)
+        if mm:
+            cls = mm.group(1) or "default"
+            moh.setdefault(cls, {}).setdefault(path.stem, {})[suffix] = member
+
+    names: dict[str, str] = {}
+    if dump_text is not None:
+        for r in parse_dump(dump_text, ("recordings",))["recordings"]:
+            display = str(r.get("displayname") or "")
+            filename = str(r.get("filename") or "")
+            if "&" in filename:
+                warn.append(
+                    f"recording {display}: it plays several files in a row; "
+                    "join them into one and upload it by hand"
+                )
+                continue
+            stem = filename.rpartition("custom/")[2]
+            if stem not in sounds_by_stem:
+                warn.append(f"recording {display}: {filename!r} is not in the archive")
+                continue
+            names[stem] = display
+
+    for stem, found in sorted(sounds_by_stem.items()):
+        best = _best(found)
+        if best is None:
+            warn.append(
+                f"recording {names.get(stem, stem)}: only in {', '.join(sorted(found))}, "
+                "which Veyra cannot read; convert it to WAV"
+            )
+            continue
+        plan.recordings.append(AudioFile((names.get(stem) or stem)[:100], best))
+    for cls, tracks in sorted(moh.items()):
+        files = []
+        for stem, found in sorted(tracks.items()):
+            best = _best(found)
+            if best is None:
+                warn.append(
+                    f"hold music {cls}: {stem} is only in {', '.join(sorted(found))}, "
+                    "which Veyra cannot read; convert it to WAV"
+                )
+                continue
+            files.append(AudioFile(f"{cls} - {stem}"[:100], best))
+        if files:
+            plan.hold_music[cls[:100]] = files
+    if not plan.recordings and not plan.hold_music:
+        warn.append("the archive holds no recordings or hold music Veyra can read")
+    return plan
+
+
+def open_audio(fileobj: IO[bytes]) -> tarfile.TarFile:
+    try:
+        return tarfile.open(fileobj=fileobj, mode="r:*")
+    except tarfile.TarError as e:
+        raise FreepbxError(
+            "not a tar archive; on the FreePBX server run "
+            "`tar czf audio.tar.gz -C /var/lib/asterisk sounds/en/custom moh`"
+        ) from e

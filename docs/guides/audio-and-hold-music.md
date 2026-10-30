@@ -4,7 +4,7 @@ summary: Record prompts from a phone, upload audio, add Veyra's built-in sounds,
 audience: admin
 section: Calls and call flows
 order: 70
-reviewed: 0.27.45
+reviewed: 0.27.46
 pages:
   - /prompts/
   - /hold-music/

@@ -236,3 +236,98 @@ def test_freepbx_dump_becomes_import_files(admin):
     assert r.status_code == 200
     r = admin.post("/api/v1/bulk/freepbx/convert", files={"file": ("a.sql", b"hello", "x")})
     assert r.status_code == 422 and r.json()["code"] == "freepbx_invalid"
+
+
+def _wav(seconds: float = 0.2) -> bytes:
+    import io
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(b"\0\0" * int(8000 * seconds))
+    return buf.getvalue()
+
+
+def _archive(files: dict[str, bytes]) -> bytes:
+    import io
+    import tarfile
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, data in files.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def test_freepbx_queue_agents_become_dynamic_members():
+    from pathlib import Path
+
+    from veyra.bulk import freepbx
+
+    sql = (Path(__file__).parent / "data" / "freepbx_sample.sql").read_text()
+    without = freepbx.convert(sql)
+    assert any("database show QPENALTY" in w for w in without.warnings)
+    number = freepbx.parse_dump(sql)["queues_config"][0]["extension"]
+    agents = f"/QPENALTY/{number}/agents/1234 : 0\n/QPENALTY/{number}/dynmemberonly : no\n"
+    conv = freepbx.convert(sql, queue_agents=agents)
+    assert not any("database show QPENALTY" in w for w in conv.warnings)
+    assert "1234" in conv.csv["queues"]
+
+
+def test_freepbx_audio_archive_adds_recordings_and_hold_music(admin):
+    orgs = admin.get("/api/v1/organizations").json()["items"]
+    org = orgs[0]["id"]
+    dump = (
+        b"CREATE TABLE `recordings` (\n  `id` int NOT NULL,\n  `displayname` varchar(50),\n"
+        b"  `filename` blob\n);\n"
+        b"INSERT INTO `recordings` VALUES (1,'Main Greeting','custom/main-gr'),"
+        b"(2,'Joined','custom/a&custom/b'),(3,'Gone','custom/gone');\n"
+    )
+    archive = _archive(
+        {
+            "sounds/en/custom/main-gr.wav": _wav(),
+            "sounds/en/custom/main-gr.ulaw": b"raw",
+            "sounds/en/custom/only-raw.gsm": b"raw",
+            "sounds/en/custom/broken.wav": b"not audio",
+            "moh/lobby.wav": _wav(),
+            "moh/jazz/one.wav": _wav(),
+            "moh/.custom": b"",
+            "../../etc/custom/evil.txt": b"ignored",
+        }
+    )
+
+    def send():
+        r = admin.post(
+            "/api/v1/bulk/freepbx/audio",
+            data={"organization_id": org},
+            files={"file": ("audio.tar.gz", archive, "x"), "dump": ("a.sql", dump, "x")},
+        )
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    out = send()
+    assert out["recordings"] == 1 and out["music_tracks"] == 2 and out["hold_music_sets"] == 2
+    text = " ".join(out["warnings"])
+    for expected in ("Joined", "Gone", "only-raw", "broken"):
+        assert expected in text
+    names = {p["name"] for p in admin.get("/api/v1/prompts", params={"limit": 200}).json()["items"]}
+    assert {"Main Greeting", "default - lobby", "jazz - one"} <= names
+    sets = {s["name"] for s in admin.get("/api/v1/hold-music").json()["items"]}
+    assert {"default", "jazz"} <= sets
+
+    # A second run adds nothing and changes nothing.
+    again = send()
+    assert again["recordings"] == 0 and again["music_tracks"] == 0 and again["hold_music_sets"] == 0
+    assert again["already_there"] == 3
+
+    r = admin.post(
+        "/api/v1/bulk/freepbx/audio",
+        data={"organization_id": org},
+        files={"file": ("audio.tar.gz", b"not a tar", "x")},
+    )
+    assert r.status_code == 422 and r.json()["code"] == "freepbx_invalid"
