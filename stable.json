@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 78,
+  "sequence": 79,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.62",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Provisioning organized by brand: grouped lists, and phones list only their brand's profiles",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "ced15f883a",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.62/veyra-0.27.62.tar.gz",
+        "sha256": "50c1034a134bc835312bdc709a996bba33b630c694764ddbcc9a20baf4118582",
+        "size": 9475657
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1329,6 +1346,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T03:56:51+00:00",
-  "expires_at": "2027-01-29T03:56:51+00:00"
+  "generated_at": "2026-10-31T04:31:42+00:00",
+  "expires_at": "2027-01-29T04:31:42+00:00"
 }
