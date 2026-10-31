@@ -4,7 +4,7 @@ summary: Each brand has its templates. A template holds the settings, line keys,
 audience: admin
 section: Phones and devices
 order: 30
-reviewed: 0.27.65
+reviewed: 0.27.68
 checked: 2026-10-29T20:28Z
 pages:
   - /provisioning/brands/

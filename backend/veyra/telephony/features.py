@@ -71,6 +71,22 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         True,
     ),
     FeatureCodeDef("cfu_off", "*53", "Forward on no answer off", "", 18),
+    FeatureCodeDef(
+        "cf_remote_on",
+        "*94",
+        "Forward all calls of another phone",
+        "Dial with the extension, enter its voicemail PIN, then the number.",
+        18,
+        True,
+    ),
+    FeatureCodeDef(
+        "cf_remote_off",
+        "*96",
+        "Forward all calls of another phone off",
+        "Dial with the extension, then enter its voicemail PIN.",
+        18,
+        True,
+    ),
     FeatureCodeDef("fmfm_toggle", "*21", "Find me / follow me toggle", "", 18),
     FeatureCodeDef(
         "intercom",

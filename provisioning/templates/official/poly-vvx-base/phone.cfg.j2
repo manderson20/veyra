@@ -53,6 +53,13 @@
     efk.efklist.{{ key.speed_dial_index }}.status="1"
     efk.efklist.{{ key.speed_dial_index }}.label="{{ key.label }}"
     efk.efklist.{{ key.speed_dial_index }}.action.string="{{ key.value }}$Tinvite$" />
+{% elif key.type == "record" %}
+  <lineKey lineKey.{{ key.index }}.category="SpeedDial" lineKey.{{ key.index }}.index="{{ key.speed_dial_index }}" />
+  <efk
+    efk.efklist.{{ key.speed_dial_index }}.mname="veyra-sd-{{ key.speed_dial_index }}"
+    efk.efklist.{{ key.speed_dial_index }}.status="1"
+    efk.efklist.{{ key.speed_dial_index }}.label="{{ key.label }}"
+    efk.efklist.{{ key.speed_dial_index }}.action.string="{{ key.value }}$Tdtmf$" />
 {% elif key.type == "page" %}
   <lineKey lineKey.{{ key.index }}.category="Paging" lineKey.{{ key.index }}.index="{{ key.group }}" />
 {% endif %}

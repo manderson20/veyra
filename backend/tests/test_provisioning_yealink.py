@@ -58,6 +58,7 @@ def test_yealink_renders_and_directory_is_served(admin, app):
                 {"type": "speed_dial", "value": "5735550100", "label": "District office"},
                 {"type": "transfer", "value": ""},
                 {"type": "page", "value": zone["slug"]},
+                {"type": "record", "value": ""},
             ],
             "paging": [{"zone_id": zone["id"], "subscribed": True, "transmit": True}],
         },
@@ -78,7 +79,8 @@ def test_yealink_renders_and_directory_is_served(admin, app):
     assert r.status_code == 200, r.text
     out = r.json()
     assert out["error"] is None and out["template_key"] == "yealink.t4x", out
-    assert out["warnings"] == []  # Yealink has a transfer key
+    assert out["warnings"] == []  # Yealink has transfer and record keys
+    assert "linekey.6.type = 11\nlinekey.6.value = *1\n" in out["files"][0]["content"]
     (f,) = out["files"]
     assert f["filename"] == "805ec0112233.cfg"
     cfg = f["content"]

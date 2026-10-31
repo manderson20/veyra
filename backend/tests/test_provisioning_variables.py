@@ -240,6 +240,7 @@ def test_feature_keys_render_as_blf_and_speed_dials(admin, app):
         {"type": "toggle", "value": "agent"},
         {"type": "transfer", "value": ""},
         {"type": "presence", "value": "1002"},
+        {"type": "record", "value": ""},
     ]
     r = admin.patch(f"{DEVICES}/{d1['id']}", json={"keys": keys})
     assert r.status_code == 200, r.text
@@ -250,6 +251,9 @@ def test_feature_keys_render_as_blf_and_speed_dials(admin, app):
     assert '.action.string="*97$Tinvite$"' in content
     assert f'.action.string="{codes["intercom"]}1002$Tinvite$"' in content
     assert '.action.string="2970$Tinvite$"' in content
+    # The record key sends its code into the call instead of placing a new one.
+    assert f'.action.string="{codes["record_toggle"]}$Tdtmf$"' in content
+    assert not any("record" in w for w in warnings)
     # BLF lamps: DND of the phone's own number, a parking slot, the flow, queue log-in.
     for watched in (
         f"{codes['dnd_toggle']}1001",

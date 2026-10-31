@@ -4,7 +4,7 @@ summary: Set up the programmable keys on desk phones (lines, busy lamps, speed d
 audience: admin
 section: Phones and devices
 order: 40
-reviewed: 0.27.60
+reviewed: 0.27.68
 checked: 2026-10-29
 pages:
   - /provisioning/brands/template/
@@ -42,6 +42,7 @@ The first key in the list is the phone's first programmable key. The phone's own
 | **Park (a lot, or watch a slot)** | A parking lot, such as `front-desk`, or a lot and slot, such as `front-desk:2972` | With a lot: parks the current call. With a slot: lights while a call is parked there; press it to pick the call up. |
 | **Toggle (call flow, time condition, queue log-in)** | `flow:<call flow>`, `tc:<time condition>`, `agent` or `queue:<queue>` | Switches a call flow or a time condition override, or logs the phone in and out of its queues (`agent`) or one queue. The light is on while it is switched or logged in. |
 | **Transfer** | Nothing | Transfers the current call. Not every phone has a transfer key: where it has none, the preview says so and the phone's own soft key does it. |
+| **Record this call** | Nothing | Pressed during a call, starts recording; pressed again, stops it. It sends the record code, so the class of service must allow that code. Yealink desk phones and Poly phones have this key; on others the preview says there is none, and people dial the code in the call. |
 | **Presence of a colleague** | An extension number | Lit while the colleague is busy or in a meeting, blinking while away, off when available. Press it to call them. |
 
 For the voicemail, intercom, presence, park and toggle types, a hint under the value field says what to enter. For speed dial, BLF, intercom and presence keys, spaces, dashes and brackets in the number are removed when you save.

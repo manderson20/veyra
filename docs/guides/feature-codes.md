@@ -4,7 +4,7 @@ summary: The star codes phones dial to forward calls, turn on Do Not Disturb, pi
 audience: admin
 section: Getting started
 order: 60
-reviewed: 0.27.44
+reviewed: 0.27.68
 checked: 2026-10-29
 pages:
   - /feature-codes/
@@ -32,6 +32,8 @@ These are the defaults. Your installation may have changed some of them: the pag
 | `*91` | Forward on busy off | |
 | `*52` | Forward on no answer | Dial with the number, or alone and enter it. |
 | `*53` | Forward on no answer off | |
+| `*94` | Forward all calls of another phone | Dial with the extension, enter its voicemail PIN, then the number. |
+| `*96` | Forward all calls of another phone off | Dial with the extension, then enter its voicemail PIN. |
 | `*21` | Find me / follow me toggle | |
 | `*80` | Intercom | Dial with the extension: that phone answers on speaker. |
 | `*` | Direct to voicemail | Dial with an extension, or transfer to it: straight to its greeting. |

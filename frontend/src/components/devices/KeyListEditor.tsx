@@ -7,7 +7,7 @@ import type { LineKey, LineKeyType, PagingZone } from "@/lib/types";
 export const KEY_TYPE_LABELS: Record<LineKeyType, string> = {
   line: "Line", blf: "BLF (watch a phone or group)", speed_dial: "Speed dial", page: "Page a zone", user: "User's choice (set from My Phone)",
   voicemail: "Voicemail", intercom: "Intercom to an extension", dnd: "Do Not Disturb (lit while on)", park: "Park (a lot, or watch a slot)",
-  toggle: "Toggle (call flow, time condition, queue log-in)", transfer: "Transfer", presence: "Presence of a colleague",
+  toggle: "Toggle (call flow, time condition, queue log-in)", transfer: "Transfer", record: "Record this call", presence: "Presence of a colleague",
 };
 
 /** What the value field of a key type asks for (docs/PROVISIONING_BREADTH.md §3). */
@@ -39,8 +39,8 @@ export function KeyListEditor({ keys, onChange, zones, disabled, error }: { keys
             onChange={(e) => update(i, { type: e.target.value as LineKeyType, value: e.target.value === "line" ? "1" : "" })} />
           {k.type === "user" ? (
             <span className="subtle" style={{ alignSelf: "center" }}>Open slot: the user of the phone picks a speed dial or a BLF from My Phone. Every other key is locked for them.</span>
-          ) : k.type === "dnd" || k.type === "transfer" ? (
-            <span className="subtle" style={{ alignSelf: "center" }}>{k.type === "dnd" ? "Toggles Do Not Disturb on this phone; lit while it is on." : "Not every phone has a transfer key; where it has none the preview says so and the phone's softkey does it."}</span>
+          ) : k.type === "dnd" || k.type === "transfer" || k.type === "record" ? (
+            <span className="subtle" style={{ alignSelf: "center" }}>{k.type === "dnd" ? "Toggles Do Not Disturb on this phone; lit while it is on." : k.type === "record" ? "Pressed during a call: starts recording, and again stops it. Not every phone has this key; where it has none the preview says so." : "Not every phone has a transfer key; where it has none the preview says so and the phone's softkey does it."}</span>
           ) : VALUE_HINT[k.type] ? (
             <TextField label={<span className="sr-only">Key {i + 1} value</span>} disabled={disabled} value={k.value} placeholder={VALUE_HINT[k.type]!.placeholder} help={VALUE_HINT[k.type]!.help} style={{ width: 200 }} onChange={(e) => update(i, { value: e.target.value.trim() })} />
           ) : k.type === "page" ? (

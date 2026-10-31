@@ -281,6 +281,10 @@ def _keys(
             speed += 1
             entry["speed_dial_index"] = speed
             entry["label"] = label or names.get(value, value)
+        elif kind == "record":
+            # Poly's macro list numbers these with the speed dials.
+            speed += 1
+            entry["speed_dial_index"] = speed
         elif kind == "page":
             zone = zones.get(value)
             if zone is None:
@@ -319,7 +323,16 @@ def _feature_keys(
     original type. A lamp is a hint the generator publishes: pressing a BLF
     key dials the watched number, so each watched number is also the code."""
     kinds = {str(k.get("type") or "") for k in raw}
-    if not kinds & {"park", "voicemail", "transfer", "intercom", "dnd", "toggle", "presence"}:
+    if not kinds & {
+        "park",
+        "voicemail",
+        "transfer",
+        "record",
+        "intercom",
+        "dnd",
+        "toggle",
+        "presence",
+    }:
         return raw
     codes = features.active(db)
 
@@ -429,6 +442,16 @@ def _feature_keys(
                     "feature": kind,
                     "label": label or default_label,
                 }
+            )
+        elif kind == "record":
+            # Sends the in-call code as DTMF during the call; kept as its own
+            # type, as a speed dial would start a new call (feature "key_record").
+            code = codes.get("record_toggle")
+            if not code:
+                note("a record key: the record code is turned off")
+                continue
+            out.append(
+                {**k, "type": "record", "value": code, "feature": kind, "label": label or "Record"}
             )
         elif kind == "transfer":
             # Kept as its own type: families with a transfer key render it
@@ -761,6 +784,12 @@ def render_device(
         ):
             warnings.append(
                 "a transfer key: this template has no transfer key; the phone's softkey does it"
+            )
+        if "key_record" not in resolved.features and any(
+            k["type"] == "record" for k in facts["keys"]
+        ):
+            warnings.append(
+                "a record key: this template has no record key; dial the record code in the call"
             )
     return files
 

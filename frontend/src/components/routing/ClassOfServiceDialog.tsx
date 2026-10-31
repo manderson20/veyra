@@ -4,7 +4,7 @@
 import { useState, type FormEvent } from "react";
 import { Button, Callout, Checkbox, Dialog, SelectField, Switch, TextArea, TextField, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { ClassOfService, ClassOfServiceInput, FeatureCodes, OutboundRoutes } from "@/lib/types";
+import type { CallQueue, ClassOfService, ClassOfServiceInput, ConferenceRoom, FeatureCodes, OutboundRoutes, Page, RingGroup } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -30,10 +30,18 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
   const [protectedCls, setProtectedCls] = useState(false);
   const [fax, setFax] = useState(true);
   const [maxCalls, setMaxCalls] = useState("");
+  const [paging, setPaging] = useState(true);
+  const [ringGroupIds, setRingGroupIds] = useState<string[] | null>(null);
+  const [queueIds, setQueueIds] = useState<string[] | null>(null);
+  const [roomIds, setRoomIds] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const effectiveOrg = cls?.organization_id ?? (org || (organizations.length === 1 ? organizations[0]!.id : ""));
   const routeList = useApiData<OutboundRoutes>(open ? "/routing/outbound" : null);
   const codeList = useApiData<FeatureCodes>(open ? "/telephony/feature-codes" : null);
+  const orgQuery = open && effectiveOrg ? { organization_id: effectiveOrg, limit: 200 } : undefined;
+  const ringGroups = useApiData<Page<RingGroup>>(orgQuery ? "/ring-groups" : null, orgQuery);
+  const queues = useApiData<Page<CallQueue>>(orgQuery ? "/queues" : null, orgQuery);
+  const rooms = useApiData<Page<ConferenceRoom>>(orgQuery ? "/conferences" : null, orgQuery);
 
   useOnChange(open, () => {
     if (open) {
@@ -50,6 +58,10 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
       setProtectedCls(cls?.monitor_protected ?? false);
       setFax(cls?.allow_fax ?? true);
       setMaxCalls(cls?.max_outbound_calls ? String(cls.max_outbound_calls) : "");
+      setPaging(cls?.allow_paging ?? true);
+      setRingGroupIds(cls?.allowed_ring_group_ids ?? null);
+      setQueueIds(cls?.allowed_queue_ids ?? null);
+      setRoomIds(cls?.allowed_conference_ids ?? null);
       errors.clear();
     }
   });
@@ -72,6 +84,10 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
         allow_monitor: monitor,
         monitor_protected: protectedCls,
         allow_fax: fax,
+        allow_paging: paging,
+        allowed_ring_group_ids: ringGroupIds,
+        allowed_queue_ids: queueIds,
+        allowed_conference_ids: roomIds,
         ...(allCodes ? (cls ? { all_feature_codes: true } : { allowed_feature_code_keys: null }) : { allowed_feature_code_keys: codes }),
         ...(maxCalls.trim() ? { max_outbound_calls: Number(maxCalls) } : (cls ? { no_call_limit: true } : {})),
       };
@@ -95,7 +111,7 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
       <form id="cos-form" className="stack stack--sm" onSubmit={submit}>
         {!cls && organizations.length > 1 ? (
           <SelectField label="Organization" required value={effectiveOrg} error={errors.fields.organization_id} placeholder="Choose an organization"
-            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setRoutes([]); }} />
+            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setRoutes([]); setRingGroupIds(null); setQueueIds(null); setRoomIds(null); }} />
         ) : null}
         <TextField label="Name" required autoFocus value={name} error={errors.fields.name} placeholder="e.g. Classrooms" onChange={(e) => setName(e.target.value)} />
         <TextArea label="Description" rows={2} value={description} error={errors.fields.description} onChange={(e) => setDescription(e.target.value)} />
@@ -111,7 +127,25 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
             {(codeList.data?.codes ?? []).filter((c) => c.enabled).map((c) => <Checkbox key={c.key} label={`${c.label} (${c.code})`} checked={codes.includes(c.key)} onChange={() => toggle(codes, c.key, setCodes)} />)}
           </fieldset>
         ) : null}
+        {([
+          ["ring groups", ringGroups.data?.items, ringGroupIds, setRingGroupIds, "allowed_ring_group_ids"],
+          ["queues", queues.data?.items, queueIds, setQueueIds, "allowed_queue_ids"],
+          ["conference rooms", rooms.data?.items, roomIds, setRoomIds, "allowed_conference_ids"],
+        ] as const).map(([what, items, chosen, set, field]) => (
+          <div key={field} className="stack stack--sm">
+            <Switch label={`Every one of the ${what}`} checked={chosen === null} onChange={(e) => set(e.target.checked ? null : [])} description={`Off: the class's phones may call only the ${what} ticked here. Outside callers are not affected.`} />
+            {chosen !== null ? (
+              <fieldset className="stack stack--sm">
+                <legend className="field__label">Allowed {what}</legend>
+                {items?.length ? items.map((x) => <Checkbox key={x.id} label={x.name} checked={chosen.includes(x.id)} onChange={() => toggle(chosen, x.id, set)} />) : <p className="subtle">None yet.</p>}
+                {errors.fields[field] ? <p className="field__error" role="alert">{errors.fields[field]}</p> : null}
+              </fieldset>
+            ) : null}
+          </div>
+        ))}
         <div className="grid grid--2">
+          <Checkbox label="May page by dialing a zone or page number" checked={paging} onChange={(e) => setPaging(e.target.checked)}
+            description="A page's own Who may page setting still applies. A phone's paging keys send directly and are set on its template." />
           <Checkbox label="Forwards may go to outside numbers" checked={extForwards} onChange={(e) => setExtForwards(e.target.checked)} />
           <Checkbox label="Follow-me may ring outside numbers" checked={extFollowMe} onChange={(e) => setExtFollowMe(e.target.checked)} />
           <Checkbox label="May use intercom" checked={intercom} onChange={(e) => setIntercom(e.target.checked)} />

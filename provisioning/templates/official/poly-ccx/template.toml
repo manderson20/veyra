@@ -1,5 +1,5 @@
 spec_version = 2
-features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "ntp", "dst_rules", "vlan", "firmware", "device_credential"]
+features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "key_record"]
 
 [template]
 key = "poly.ccx"

@@ -139,6 +139,11 @@ def _trunk_password(trunk: SipTrunk, key: InstallationKey | None) -> str | None:
         raise SnapshotError(f"the password of trunk {trunk.name} cannot be read: {e}") from e
 
 
+def _class_slugs(ids: list[str] | None, slugs: dict[str, str]) -> list[str] | None:
+    """A class's allowed ids as slugs; one deleted since is dropped, None stays all."""
+    return None if ids is None else sorted(slugs[x] for x in ids if x in slugs)
+
+
 def _pin(box: VoicemailBox, number: str, key: InstallationKey | None) -> str:
     if key is None:
         raise SnapshotError(
@@ -303,6 +308,11 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     classes = list(db.scalars(select(ClassOfService).order_by(ClassOfService.slug)))
     class_slug = {c.id: c.slug for c in classes}
     route_slug = {r.id: r.slug for r in db.scalars(select(OutboundRoute))}
+    destination_slug = {
+        str(row.id): row.slug
+        for model in (RingGroup, CallQueue, ConferenceRoom)
+        for row in db.scalars(select(model))
+    }
     ext_by_id = {e.id: e for e in extensions}
     ring_seconds = {
         s.extension_id: s.ring_seconds
@@ -446,6 +456,10 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                     if uuid.UUID(x) in route_slug
                 ),
                 "allowed_feature_codes": c.allowed_feature_code_keys,
+                "allowed_ring_groups": _class_slugs(c.allowed_ring_group_ids, destination_slug),
+                "allowed_queues": _class_slugs(c.allowed_queue_ids, destination_slug),
+                "allowed_conferences": _class_slugs(c.allowed_conference_ids, destination_slug),
+                "allow_paging": c.allow_paging,
                 "allow_external_forwards": c.allow_external_forwards,
                 "allow_external_follow_me": c.allow_external_follow_me,
                 "allow_intercom": c.allow_intercom,

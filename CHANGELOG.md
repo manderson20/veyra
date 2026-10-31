@@ -8,6 +8,15 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.68 — 2026-10-31
+
+Migration 0078 adds four class of service columns. New codes, keys and class limits need **Deploy changes**.
+
+### Added
+- **Forward another phone** (#142): `*94` plus an extension, its voicemail PIN and a number sets that phone's forward all; `*96` plus the extension and PIN turns it off. Works from any phone in the organization, and only for extensions with a voicemail box.
+- **Record key** (#142): a phone key that starts and stops recording during a call, on Yealink desk phones and Poly phones. Other phones get a preview warning.
+- **Class of service limits** (#142): a class can now be limited to chosen ring groups, queues and conference rooms, and can be stopped from paging by dialing. Calls from outside aren't affected, and a phone's own paging keys aren't covered because they send directly.
+
 ## 0.27.67 — 2026-10-31
 
 Migration 0077 adds three ring group columns. Ring group changes need **Deploy changes**.

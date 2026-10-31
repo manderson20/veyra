@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from veyra.configmgmt import service as configmgmt
 from veyra.core.db import session_scope
 from veyra.core.models import Extension, ExtensionState, SystemSetting
-from veyra.telephony import extension_state, features
+from veyra.telephony import extension_state, features, snapshot
 from veyra.telephony.asterisk import events, generator
 from veyra.telephony.settings import SipSettings
 
@@ -319,6 +319,110 @@ def test_generator_renders_forward_codes_and_dialplan():
     snap["extensions"][0]["ring_seconds"] = 3
     with pytest.raises(generator.GenerationError, match="ring time"):
         generator.generate(snap)
+
+
+def test_class_guards_ring_groups_queues_rooms_and_paging():
+    def body(slug):
+        return {"slug": slug, "name": slug, "organization": "example"}
+
+    snap = _snapshot(
+        classes_of_service=[
+            {
+                "slug": "classroom",
+                "organization": "example",
+                "allowed_ring_groups": ["office"],
+                "allowed_queues": [],
+                "allowed_conferences": [],
+                "allow_paging": False,
+            },
+            {"slug": "staff", "organization": "example"},
+        ],
+        ring_groups=[
+            {**body("office"), "number": "6001"},
+            {**body("nurses"), "number": "6002"},
+        ],
+        queues=[{**body("help"), "number": "7001"}],
+        conference_rooms=[{**body("board"), "number": "8001"}],
+        paging={
+            "zones": [
+                {
+                    **body("all"),
+                    "number": "9001",
+                    "multicast_port": 5004,
+                    "multicast_address": "239.0.0.1",
+                    "port": 5004,
+                    "poly_address": "224.0.1.116",
+                    "poly_port": 5001,
+                    "poly_group": 1,
+                    "kind": "multicast",
+                }
+            ]
+        },
+    )
+    d = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    guard = 'GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})}]?cosdenied)'
+    assert guard not in _section(d, "veyra-rg-office")
+    for context in ("veyra-rg-nurses", "veyra-queue-help", "veyra-conf-board"):
+        section = _section(d, context)
+        assert guard in section and "n(cosdenied)," in section, context
+    page = 'GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})}]?denied)'
+    assert page in _section(d, "veyra-paging")
+
+
+def test_class_destination_api(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    url = "/api/v1/classes-of-service"
+    r = admin.post(url, json={"organization_id": org["id"], "name": "Rooms"})
+    assert r.status_code == 201, r.text
+    row = r.json()
+    assert row["allowed_ring_group_ids"] is None and row["allow_paging"] is True
+    group = admin.post(
+        "/api/v1/ring-groups",
+        json={"organization_id": org["id"], "name": "Office", "number": "6001"},
+    )
+    assert group.status_code == 201, group.text
+    gid = group.json()["id"]
+    r = admin.patch(
+        f"{url}/{row['id']}", json={"allowed_ring_group_ids": [gid], "allow_paging": False}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["allowed_ring_group_ids"] == [gid] and r.json()["allow_paging"] is False
+    with session_scope() as db:
+        snap_class = next(
+            c
+            for c in snapshot.build_snapshot(db, None)["classes_of_service"]
+            if c["slug"] == row["slug"]
+        )
+    assert snap_class["allowed_ring_groups"] == [group.json()["slug"]]
+    assert snap_class["allow_paging"] is False
+    r = admin.patch(f"{url}/{row['id']}", json={"allowed_ring_group_ids": None})
+    assert r.json()["allowed_ring_group_ids"] is None
+    r = admin.patch(f"{url}/{row['id']}", json={"allowed_queue_ids": [gid]})
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "allowed_queue_ids"
+
+
+def test_remote_forward_codes_ask_for_the_targets_pin():
+    box = {"number": "1001", "organization": "example", "pin": "4821"}
+    snap = _snapshot(
+        feature_codes={"cf_remote_on": "*94", "cf_remote_off": "*96"},
+        voicemail_boxes=[box, {**box, "number": "1002", "pin": ""}],
+    )
+    snap["extensions"][0]["voicemail"] = {"pin": "4821"}
+    files = {f.path: f.content for f in generator.generate(snap)}
+    feat = _section(files["extensions.conf"], "veyra-features")
+    on = feat[feat.index("exten => *941001,1,") :]
+    # The PIN comes before the extension changes hands and before any store.
+    order = [
+        '"${VEYRA_ORG}"!="example"',
+        "VMAuthenticate(1001@veyra)",
+        "Set(VEYRA_EXT=1001)",
+        "n(store),Set(DB(veyra/ext/${VEYRA_ORG}/${VEYRA_EXT}/cf_always)=${VEYRA_NUM})",
+        "Field: cf_always,Value: ${VEYRA_NUM}",
+    ]
+    assert [on.index(x) for x in order] == sorted(on.index(x) for x in order)
+    assert "exten => *961001,1," in feat and "Field: cf_always,Value: )" in feat
+    # Asterisk would let anyone into a box without a PIN.
+    assert "*941002" not in feat and "*961002" not in feat
 
 
 def test_forward_api_and_phone_event(admin, app):

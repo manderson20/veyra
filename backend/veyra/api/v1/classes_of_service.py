@@ -23,7 +23,15 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import ClassOfService, Extension, Organization, OutboundRoute
+from veyra.core.models import (
+    CallQueue,
+    ClassOfService,
+    ConferenceRoom,
+    Extension,
+    Organization,
+    OutboundRoute,
+    RingGroup,
+)
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import features, routing
@@ -58,6 +66,11 @@ class ClassIn(BaseModel):
     allow_monitor: bool = False
     monitor_protected: bool = False
     max_outbound_calls: int | None = Field(None, ge=1, le=500)
+    # None: all of them.
+    allowed_ring_group_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+    allowed_queue_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+    allowed_conference_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+    allow_paging: bool = True
 
     @field_validator("name")
     @classmethod
@@ -97,6 +110,11 @@ class ClassPatch(BaseModel):
     monitor_protected: bool | None = None
     max_outbound_calls: int | None = Field(None, ge=1, le=500)
     no_call_limit: bool | None = None
+    # An explicit null: back to all of them.
+    allowed_ring_group_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+    allowed_queue_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+    allowed_conference_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+    allow_paging: bool | None = None
 
 
 class RouteRef(BaseModel):
@@ -120,9 +138,17 @@ class ClassOut(BaseModel):
     allow_monitor: bool = False
     monitor_protected: bool = False
     max_outbound_calls: int | None
+    allowed_ring_group_ids: list[uuid.UUID] | None = None
+    allowed_queue_ids: list[uuid.UUID] | None = None
+    allowed_conference_ids: list[uuid.UUID] | None = None
+    allow_paging: bool = True
     extensions: int
     created_at: datetime
     updated_at: datetime
+
+
+def _uuids(ids: list[str] | None) -> list[uuid.UUID] | None:
+    return None if ids is None else [uuid.UUID(x) for x in ids]
 
 
 def _outs(db: Session, rows: list[ClassOfService]) -> list[ClassOut]:
@@ -166,6 +192,10 @@ def _outs(db: Session, rows: list[ClassOfService]) -> list[ClassOut]:
             allow_monitor=r.allow_monitor,
             monitor_protected=r.monitor_protected,
             max_outbound_calls=r.max_outbound_calls,
+            allowed_ring_group_ids=_uuids(r.allowed_ring_group_ids),
+            allowed_queue_ids=_uuids(r.allowed_queue_ids),
+            allowed_conference_ids=_uuids(r.allowed_conference_ids),
+            allow_paging=r.allow_paging,
             extensions=int(counts.get(r.id, 0)),
             created_at=r.created_at,
             updated_at=r.updated_at,
@@ -213,6 +243,34 @@ def _check_routes(db: Session, organization_id: uuid.UUID, ids: list[uuid.UUID])
         if str(rid) not in out:
             out.append(str(rid))
     return out
+
+
+DESTINATIONS: dict[str, Any] = {
+    "allowed_ring_group_ids": RingGroup,
+    "allowed_queue_ids": CallQueue,
+    "allowed_conference_ids": ConferenceRoom,
+}
+
+
+def _check_destinations(
+    db: Session, organization_id: uuid.UUID, field: str, ids: list[uuid.UUID] | None
+) -> list[str] | None:
+    """The organization's own ring groups, queues or rooms; None stays all."""
+    if ids is None:
+        return None
+    model = DESTINATIONS[field]
+    wanted = set(ids)
+    found = set(
+        db.scalars(
+            select(model.id).where(model.id.in_(wanted), model.organization_id == organization_id)
+        )
+    )
+    missing = wanted - found
+    if missing:
+        raise _validation(
+            field, f"{sorted(map(str, missing))[0]} is not available to this organization"
+        )
+    return [str(x) for x in dict.fromkeys(ids)]
 
 
 def _changed(db: Session, principal: Principal, row: ClassOfService) -> None:
@@ -264,6 +322,8 @@ def create_class(
         allow_monitor=body.allow_monitor,
         monitor_protected=body.monitor_protected,
         max_outbound_calls=body.max_outbound_calls,
+        allow_paging=body.allow_paging,
+        **{f: _check_destinations(db, org.id, f, getattr(body, f)) for f in DESTINATIONS},
     )
     db.add(row)
     try:
@@ -354,10 +414,15 @@ def update_class(
         "allow_fax",
         "allow_monitor",
         "monitor_protected",
+        "allow_paging",
     ):
         if changes.get(field) is not None and changes[field] != getattr(row, field):
             setattr(row, field, changes[field])
             details[field] = changes[field]
+    for field in DESTINATIONS:
+        if field in changes:
+            setattr(row, field, _check_destinations(db, row.organization_id, field, changes[field]))
+            details[field] = None if changes[field] is None else len(changes[field])
     if changes.get("no_call_limit"):
         row.max_outbound_calls = None
         details["max_outbound_calls"] = None

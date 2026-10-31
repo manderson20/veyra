@@ -101,6 +101,11 @@ class ClassOfService(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         Boolean, default=True, server_default="true"
     )
     allow_intercom: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # Ring groups, queues and conference rooms the class may call; None: all.
+    allowed_ring_group_ids: Mapped[list[str] | None] = mapped_column(JSONB)
+    allowed_queue_ids: Mapped[list[str] | None] = mapped_column(JSONB)
+    allowed_conference_ids: Mapped[list[str] | None] = mapped_column(JSONB)
+    allow_paging: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     # May send faxes from My Phone (docs/USER_PORTAL.md §9).
     allow_fax: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     # Supervisor listen, whisper and barge (issue #167): this class's phones

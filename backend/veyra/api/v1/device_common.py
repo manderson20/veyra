@@ -44,6 +44,7 @@ KeyType = Literal[
     "park",
     "voicemail",
     "transfer",
+    "record",
     "intercom",
     "dnd",
     "toggle",
@@ -117,7 +118,7 @@ def check_keys(db: Session, organization_id: uuid.UUID, keys: list[LineKey], fie
         elif key.type in ("blf", "speed_dial", "intercom", "presence"):
             if not _NUMBER_RE.match(key.value):
                 raise validation(field, f"key {i}: enter a number to dial or watch")
-        elif key.type in ("dnd", "transfer"):
+        elif key.type in ("dnd", "transfer", "record"):
             continue  # no target: the phone's own line
         elif key.type == "voicemail":
             if key.value and not (key.value.isdigit() and 1 <= int(key.value) <= MAX_LINES):

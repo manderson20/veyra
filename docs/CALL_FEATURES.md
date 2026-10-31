@@ -279,6 +279,11 @@ otherwise), `*73` off; `*90`/`*91` busy; `*52`/`*53` no answer; the
 forwarding lamp hint `*72<ext>` is lit while any forward is set. The class
 of service check for external targets comes with §3.8.
 
+*Remote codes (issue #142):* `*94<ext>` and `*96<ext>` set and clear another
+extension's `cf_always` from any phone of the organization, after
+`VMAuthenticate` against that extension's voicemail PIN. One exact dialplan
+entry per box with a PIN, because Asterisk lets anyone into a box without one.
+
 ### 3.4 Find me / follow me and external ring-group members
 
 `follow_me` per extension: `enabled`, `strategy` (`ringall`,

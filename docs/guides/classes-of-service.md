@@ -4,7 +4,7 @@ summary: Limit what groups of phones may dial, such as local calls only for clas
 audience: admin
 section: Calls and call flows
 order: 60
-reviewed: 0.27.45
+reviewed: 0.27.68
 pages:
   - /routing/classes-of-service/
 covers:
@@ -38,19 +38,21 @@ The office phones could simply have no class at all.
 3. Enter a **Name**, such as *Classrooms*, and an optional **Description**.
 4. Under **Outbound routes the class may use**, tick the routes. Emergency routes are not listed because they are always allowed. With no route ticked, the phones can call extensions and 911 only.
 5. **Every feature code**: leave it on to allow every star code, or turn it off and tick the codes the class may dial.
-6. Set the other permissions:
+6. **Every one of the ring groups**, **queues** and **conference rooms**: leave these on, or turn one off and tick the ones the class's phones may call. Calls from outside are not affected, even when they reach a ring group through a menu.
+7. Set the other permissions:
 
 | Setting | When ticked |
 |---|---|
 | **Forwards may go to outside numbers** | People can forward their phone to a mobile or other outside number |
 | **Follow-me may ring outside numbers** | Follow-me can include outside numbers |
 | **May use intercom** | The phone can make intercom calls that answer on the other phone's speaker |
+| **May page by dialing a zone or page number** | The phone may dial a paging zone or page. The page's own **Who may page** setting still applies. A Poly or Yealink paging key sends directly from the phone, so limit those on the phone's template |
 | **May send faxes from My Phone** | People can send faxes from the web |
 | **May listen to, whisper on and join calls (supervisor codes)** | The phone may use `*222`, `*223` and `*224` plus an extension. Off by default. Check your state's rules on call monitoring and consent before turning it on |
 | **Never monitored** | Nobody can listen to these phones' calls, with a supervisor code or from the web. Use it for counselors, nurses and others whose calls must stay private |
 
-7. **Outside calls at once (empty: no limit)**: the most outside calls the whole class may have at the same time, counted across all its phones (1 to 500). When the limit is reached, the next caller hears a busy signal.
-8. Choose **Create class**, then **Deploy changes** in the top bar.
+8. **Outside calls at once (empty: no limit)**: the most outside calls the whole class may have at the same time, counted across all its phones (1 to 500). When the limit is reached, the next caller hears a busy signal.
+9. Choose **Create class**, then **Deploy changes** in the top bar.
 
 ## Put phones in a class
 

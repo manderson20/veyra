@@ -48,6 +48,11 @@ linekey.{{ n }}.label = {{ c(key.label) }}
 {% elif key.type == "transfer" %}
 linekey.{{ n }}.type = 3
 linekey.{{ n }}.label = {{ c(key.label) }}
+{% elif key.type == "record" %}
+linekey.{{ n }}.type = 11
+linekey.{{ n }}.value = {{ key.value }}
+linekey.{{ n }}.line = 1
+linekey.{{ n }}.label = {{ c(key.label) }}
 {% elif key.type == "page" and key.multicast_address %}
 linekey.{{ n }}.type = 24
 linekey.{{ n }}.value = {{ key.multicast_address }}:{{ key.multicast_port }}

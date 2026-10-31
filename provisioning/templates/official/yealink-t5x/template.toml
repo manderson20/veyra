@@ -1,5 +1,5 @@
 spec_version = 2
-features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer"]
+features = ["multi_line", "line_keys", "blf", "directed_pickup", "voicemail_mwi", "multicast_paging", "ntp", "dst_rules", "vlan", "firmware", "device_credential", "directory", "key_transfer", "key_record"]
 
 [template]
 key = "yealink.t5x"

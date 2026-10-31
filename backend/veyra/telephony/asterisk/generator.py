@@ -262,9 +262,12 @@ def _page_dial(zones: list[dict[str, Any]], slugs: list[str], max_seconds: int) 
     return f" same => n,Page({targets},i,{int(max_seconds)})"
 
 
-def _allowed_lines(entry: dict[str, Any], org: str) -> list[str]:
-    """Organization check plus the ``allowed`` policy (docs/PAGING_RECORDINGS.md §2.4)."""
+def _allowed_lines(entry: dict[str, Any], org: str, cos: Cos | None = None) -> list[str]:
+    """Organization check, the class of service, plus the ``allowed`` policy
+    (docs/PAGING_RECORDINGS.md §2.4)."""
     out = [f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?denied)']
+    if cos:
+        out += cos.paging_guard()
     allowed = str(entry.get("allowed") or "everyone")
     if allowed == "administrators":
         out.append(' same => n,GotoIf($["${VEYRA_PAGE_BY}"!="veyra"]?denied)')
@@ -293,7 +296,7 @@ def _page_event(org: str, kind: str, slug: str) -> str:
     )
 
 
-def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
+def _paging_contexts(paging: dict[str, Any], prompts: str, cos: Cos | None = None) -> list[str]:
     """``veyra-paging`` (zone and page numbers dialled from phones) and
     ``veyra-page-play`` (recordings played into a page by Veyra)."""
     zones = list(paging.get("zones") or [])
@@ -315,7 +318,7 @@ def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
         slug = _check_section(str(z["slug"]), "zone slug")
         lines += [
             f"exten => {number},1,NoOp(Veyra page zone {slug} by ${{CALLERID(num)}})",
-            *_allowed_lines(z, org),
+            *_allowed_lines(z, org, cos),
             _page_event(org, "zone", slug),
             " same => n,Playback(beep)",
             _page_dial(zones, [slug], int(z.get("max_seconds") or 120)),
@@ -337,7 +340,7 @@ def _paging_contexts(paging: dict[str, Any], prompts: str) -> list[str]:
         zone_slugs = [str(x) for x in p.get("zones") or []]
         lines += [
             f"exten => {number},1,NoOp(Veyra page {slug} by ${{CALLERID(num)}})",
-            *_allowed_lines(p, org),
+            *_allowed_lines(p, org, cos),
         ]
         if zone_slugs:
             lines.append(_page_event(org, "page", slug))
@@ -1370,7 +1373,7 @@ def _dialplan(
                 "zones": mine(list(paging.get("zones") or []), ns),
                 "pages": mine(list(paging.get("pages") or []), ns),
             }
-            lines += _paging_contexts(part, prompts_dir)
+            lines += _paging_contexts(part, prompts_dir, _cos_for(snapshot, ns))
     lines += _lastcid_context()
     lines += _alert_info_context()
     lines += _rg_answered_context()
@@ -1405,7 +1408,7 @@ def _dialplan(
         with engine_names.using(Names(ns)):
             lines += _ivr_contexts(mine(menus, ns), prompts_dir)
             lines += _announcement_contexts(mine(announcements, ns), prompts_dir)
-            lines += _conference_contexts(mine(rooms, ns))
+            lines += _conference_contexts(mine(rooms, ns), _cos_for(snapshot, ns))
             lines += _call_flow_contexts(mine(flows, ns))
             lines += _fax_contexts(mine(fax_inboxes, ns), fax_dir)
             lines += _agent_contexts(codes, mine(queues, ns))
@@ -1414,10 +1417,14 @@ def _dialplan(
     moh = _check_moh(list(snapshot.get("hold_music") or []))
     for ns in spaces:
         with engine_names.using(Names(ns)):
-            lines += _ring_group_contexts(mine(ring_groups, ns), moh, recording, prompts_dir)
+            lines += _ring_group_contexts(
+                mine(ring_groups, ns), moh, recording, prompts_dir, _cos_for(snapshot, ns)
+            )
     for ns in spaces:
         with engine_names.using(Names(ns)):
-            lines += _queue_contexts(mine(queues, ns), prompts_dir, recording)
+            lines += _queue_contexts(
+                mine(queues, ns), prompts_dir, recording, _cos_for(snapshot, ns)
+            )
     if recording:
         lines += _record_context(recordings_dir, prompts_dir)
     if "record_toggle" in codes:
@@ -1566,6 +1573,14 @@ class Cos:
                 )
             )
         )
+
+    def destination_guard(self, field: str, slug: str) -> list[str]:
+        """A ring group, queue or conference room the calling phone's class
+        may not call; a caller from outside has no class and is never held."""
+        return self.guard(self._denied(lambda c: c.get(field) is not None and slug not in c[field]))
+
+    def paging_guard(self) -> list[str]:
+        return self.guard(self._denied(lambda c: not c.get("allow_paging", True)), label="denied")
 
     def forward_guard(self) -> list[str]:
         """An outside forward target (longer than an extension number) by a
@@ -2353,6 +2368,63 @@ def _forward_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     return lines
 
 
+def _remote_forward_codes(
+    codes: dict[str, str], boxes: list[tuple[str, dict[str, Any]]], cos: Cos | None = None
+) -> list[str]:
+    """``*94<ext>`` / ``*96<ext>``: another phone's forward all, from any phone
+    of the organization, against that extension's voicemail PIN (asterisk
+    accepts any password for a box without one, so such a box gets no code).
+    One exact entry per box, as ``_voicemail_direct``. The target's own class
+    still decides at call time whether it may forward outside."""
+    n = engine_names.current()
+    on, off = codes.get("cf_remote_on"), codes.get("cf_remote_off")
+    prompt = _CF_PROMPTS["cf_always"]
+    lines: list[str] = []
+    for number, b in sorted(boxes, key=lambda kv: (len(kv[0]), kv[0])):
+        if not b.get("pin") or b.get("shared"):
+            continue
+        org = _slug(str(b.get("organization") or ""), "organization")
+        unlock = [
+            f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?nophone)',
+            f" same => n,VMAuthenticate({number}@{n.voicemail})",
+            f" same => n,NoOp(Veyra: ${{CALLERID(num)}} changes the forward of {number})",
+            f" same => n,Set(VEYRA_EXT={number})",
+        ]
+        if on:
+            lines += _code_block(
+                f"exten => {on}{number},1,NoOp(Veyra remote forward of {number})",
+                [
+                    *unlock,
+                    f" same => n,Read(VEYRA_NUM,{prompt}&vm-enter-num-to-call,20,,2,10)",
+                    ' same => n,GotoIf($[${REGEX("^\\+?[0-9]{2,20}$" ${VEYRA_NUM})}]?store:bad)',
+                    f" same => n(store),Set(DB({STATE_KEY}/cf_always)=${{VEYRA_NUM}})",
+                    _CF_LAMP,
+                    _state_event("cf_always", "${VEYRA_NUM}"),
+                    f" same => n,Playback({prompt}&activated)",
+                    " same => n,Hangup()",
+                    " same => n(bad),Playback(pbx-invalid)",
+                    " same => n,Hangup()",
+                ],
+                cos,
+                "cf_remote_on",
+            )
+        if off:
+            lines += _code_block(
+                f"exten => {off}{number},1,NoOp(Veyra remote forward of {number} off)",
+                [
+                    *unlock,
+                    f" same => n,Set(VEYRA_GONE=${{DB_DELETE({STATE_KEY}/cf_always)}})",
+                    _CF_LAMP,
+                    _state_event("cf_always", ""),
+                    f" same => n,Playback({prompt}&de-activated)",
+                    " same => n,Hangup()",
+                ],
+                cos,
+                "cf_remote_off",
+            )
+    return lines
+
+
 def _features(
     extensions: list[dict[str, Any]],
     prompts_dir: str,
@@ -2374,6 +2446,7 @@ def _features(
         *_acr_codes(codes, cos),
         *_presence_codes(codes, cos),
         *_forward_codes(codes, cos),
+        *_remote_forward_codes(codes, boxes or [], cos),
         *_follow_me_codes(codes, cos),
         *_intercom_code(codes, cos),
         *_voicemail_direct(codes, boxes or [], cos),
@@ -3918,7 +3991,7 @@ def _fax_contexts(inboxes: list[dict[str, Any]], fax_dir: str) -> list[str]:
     return lines
 
 
-def _conference_contexts(rooms: list[dict[str, Any]]) -> list[str]:
+def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) -> list[str]:
     """One ``veyra-conf-<slug>`` per enabled room (docs/CALL_FEATURES.md §4.3):
     the PIN check (user and administrator PINs, three attempts), then
     ``ConfBridge`` with the room's profiles from ``confbridge.conf``."""
@@ -3932,6 +4005,7 @@ def _conference_contexts(rooms: list[dict[str, Any]]) -> list[str]:
         name = _check_value(str(r.get("name") or slug), "conference room name")
         org = _slug(r.get("organization") or "", f"organization of conference room {slug}")
         room, bridge, user, admin, menu = _conference_profiles(slug)
+        guard = cos.destination_guard("allowed_conferences", slug) if cos else []
         user_pin = str(r.get("user_pin") or "")
         admin_pin = str(r.get("admin_pin") or "")
         for which, pin in (("user", user_pin), ("admin", admin_pin)):
@@ -3944,6 +4018,7 @@ def _conference_contexts(rooms: list[dict[str, Any]]) -> list[str]:
         lines += [
             f"[{engine_names.current().conference(slug)}]",
             f"exten => s,1,NoOp(Veyra conference {name} ({org}))",
+            *guard,
             " same => n,Answer()",
             f" same => n,Set(VEYRA_CONF_PROFILE={user})",
         ]
@@ -3974,6 +4049,7 @@ def _conference_contexts(rooms: list[dict[str, Any]]) -> list[str]:
             " same => n,Hangup()",
             " same => n(bye),Playback(vm-goodbye)",
             " same => n,Hangup()",
+            *(COS_DENIED if guard else []),
             "",
         ]
     return lines
@@ -4178,10 +4254,13 @@ def _parking_contexts(lots: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _group_prologue(ctx: str, what: str, name: str, org: str) -> list[str]:
+def _group_prologue(
+    ctx: str, what: str, name: str, org: str, guard: list[str] | None = None
+) -> list[str]:
     return [
         f"[{ctx}]",
         f"exten => s,1,NoOp(Veyra {what} {name} ({org}))",
+        *(guard or []),
         " same => n,Set(__VEYRA_GROUP_DEPTH=$[0${VEYRA_GROUP_DEPTH} + 1])",
         f" same => n,GotoIf($[${{VEYRA_GROUP_DEPTH}} > {MAX_GROUP_DEPTH}]?toodeep)",
         # For the answering phone's last-caller record (CONTEXT_LASTCID): its
@@ -4217,13 +4296,14 @@ def _lastcid_context() -> list[str]:
     ]
 
 
-def _group_epilogue(what: str, name: str, failover: Any) -> list[str]:
+def _group_epilogue(what: str, name: str, failover: Any, guarded: bool = False) -> list[str]:
     return [
         f" same => n(failover),NoOp(Veyra {what} {name}: not answered)",
         *_goto(failover if failover is not None else {"type": "hangup"}),
         " same => n(toodeep),NoOp(Veyra: groups and queues point at each other in a loop)",
         " same => n,Playback(pbx-invalid)",
         " same => n,Hangup()",
+        *(COS_DENIED if guarded else []),
     ]
 
 
@@ -4235,6 +4315,7 @@ def _ring_group_contexts(
     moh: MohSets | None = None,
     recording: list[dict[str, Any]] | None = None,
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
+    cos: Cos | None = None,
 ) -> list[str]:
     """One ``veyra-rg-<slug>`` per enabled ring group (docs/RING_GROUPS_QUEUES.md §2)."""
     lines: list[str] = []
@@ -4300,7 +4381,8 @@ def _ring_group_contexts(
             extra += f"b({CONTEXT_ALERT_INFO}^s^1)"
         dial_opts += extra
         ctx = engine_names.current().ring_group(slug)
-        lines += _group_prologue(ctx, "ring group", name, org)
+        guard = cos.destination_guard("allowed_ring_groups", slug) if cos else []
+        lines += _group_prologue(ctx, "ring group", name, org, guard)
         if alert:
             lines.append(f" same => n,Set(__VEYRA_ALERT_INFO={alert})")
         lines += _record_for_group(recording or [], org, "ring_groups", slug, prompts_dir)
@@ -4375,7 +4457,7 @@ def _ring_group_contexts(
                 ]
             lines.append(" same => n,Goto(failover)")
         lines += [" same => n(done),Hangup()"]
-        lines += _group_epilogue("ring group", name, g.get("failover"))
+        lines += _group_epilogue("ring group", name, g.get("failover"), bool(guard))
         lines.append("")
     return lines
 
@@ -4517,6 +4599,7 @@ def _queue_contexts(
     queues: list[dict[str, Any]],
     prompts_dir: str,
     recording: list[dict[str, Any]] | None = None,
+    cos: Cos | None = None,
 ) -> list[str]:
     """One ``veyra-queue-<slug>`` per enabled queue (docs/RING_GROUPS_QUEUES.md §3)."""
     lines: list[str] = []
@@ -4534,7 +4617,10 @@ def _queue_contexts(
         wait = int(q.get("max_wait_seconds") or 0)
         if wait and not 30 <= wait <= 3600:
             raise GenerationError(f"queue {slug}: maximum wait {wait} is out of range")
-        lines += _group_prologue(engine_names.current().queue_context(slug), "queue", name, org)
+        guard = cos.destination_guard("allowed_queues", slug) if cos else []
+        lines += _group_prologue(
+            engine_names.current().queue_context(slug), "queue", name, org, guard
+        )
         lines += _record_for_group(recording or [], org, "queues", slug, prompts_dir)
         lines.append(" same => n,Answer()")
         announcement = q.get("announcement_prompt")
@@ -4550,7 +4636,7 @@ def _queue_contexts(
             f" same => n,NoOp(Veyra queue {name} left with ${{QUEUESTATUS}})",
             " same => n,Goto(failover)",
         ]
-        lines += _group_epilogue("queue", name, q.get("failover"))
+        lines += _group_epilogue("queue", name, q.get("failover"), bool(guard))
         lines.append("")
     return lines
 

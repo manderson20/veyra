@@ -2174,7 +2174,7 @@ export interface PageLogEntry {
 }
 
 /** "user": an open slot the phone's user fills from My Phone (docs/USER_PORTAL.md §8). */
-export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user" | "park" | "voicemail" | "transfer" | "intercom" | "dnd" | "toggle" | "presence";
+export type LineKeyType = "line" | "blf" | "speed_dial" | "page" | "user" | "park" | "voicemail" | "transfer" | "record" | "intercom" | "dnd" | "toggle" | "presence";
 
 export interface LineKey {
   type: LineKeyType;
@@ -3366,6 +3366,11 @@ export interface ClassOfService {
   monitor_protected?: boolean;
   allow_fax: boolean;
   max_outbound_calls: number | null;
+  /** null: all of them. */
+  allowed_ring_group_ids?: string[] | null;
+  allowed_queue_ids?: string[] | null;
+  allowed_conference_ids?: string[] | null;
+  allow_paging?: boolean;
   extensions: number;
   created_at: string;
   updated_at: string;
@@ -3386,6 +3391,10 @@ export interface ClassOfServiceInput {
   allow_fax?: boolean;
   max_outbound_calls?: number | null;
   no_call_limit?: boolean;
+  allowed_ring_group_ids?: string[] | null;
+  allowed_queue_ids?: string[] | null;
+  allowed_conference_ids?: string[] | null;
+  allow_paging?: boolean;
 }
 
 export interface FollowMeMember {

@@ -1,6 +1,6 @@
 # FreePBX feature gap analysis
 
-Veyra 0.27.67 compared with FreePBX 16/17, every free module and every
+Veyra 0.27.68 compared with FreePBX 16/17, every free module and every
 Sangoma commercial module (FreePBX add-ons and PBXact), as of
 2026-10-31. First written before the public release (now Milestone 23) so that no
 FreePBX feature is left out of the roadmap only because the current
@@ -122,7 +122,7 @@ below are the reasons a FreePBX site would hesitate.
 | **Outbound caller ID per extension** (`"name" <number>` on trunks) | outbound number and name per extension, checked against the organization's DIDs or an allow list; precedence emergency → forced route → extension → route → trunk default | ✔ | **P1** |
 | Emergency caller ID per extension | yes, plus ELIN per site, location per extension and device, readiness checks | ✔ ahead | |
 | Do Not Disturb (`*78/*79/*76`, portal, presence-driven) | `*78/*79/*76`, extension page, My Phone and presence rules; lit BLF key; callers who still ring, per phone and per organization | ✔ | **P1** |
-| Call forwarding unconditional, busy, no-answer (`*72/*73`, `*90/*91`, `*52/*53`, remote variants, ring timer) | always, busy, no answer and offline, with ring time; `*72/*73`, `*90/*91`, `*52/*53`, extension page, My Phone; no remote-variant codes for another extension's forward | ◐ | **P1** |
+| Call forwarding unconditional, busy, no-answer (`*72/*73`, `*90/*91`, `*52/*53`, remote variants, ring timer) | always, busy, no answer and offline, with ring time; `*72/*73`, `*90/*91`, `*52/*53`, extension page, My Phone; another extension's forward all with `*94/*96` and its voicemail PIN; no remote codes for busy or no answer | ◐ | **P1** |
 | Find Me / Follow Me (external numbers, strategies, confirm calls, calendar-linked, `*21`) | ring-all or in-turn legs, external numbers, desk phone first, press-1 confirm, caller ID mode, no-answer destination, `*21`; not calendar-linked | ◐ | **P1** |
 | Call waiting toggle (`*70/*71`) | switch on the call handling card and `*70<number>` for one call; no lasting on/off code from the phone | ◐ | P2 |
 | Internal auto-answer / intercom per extension | `*80<ext>` with auto-answer headers, allow or deny per extension with an organization default; base files set the phone's auto-answer | ✔ | **P1** (with intercom, §3.5) |
@@ -201,7 +201,7 @@ below are the reasons a FreePBX site would hesitate.
 | Emergency route type (forces emergency CID) | yes, evaluated first, site-bound routes, notification | ✔ ahead | |
 | Route password | no | ✘ | P3 |
 | PIN sets (prompt for PIN, record in CDR) and Pinset Pro (per-extension pinless dialing, PIN reports) | no | ✘ | P2 |
-| **Class of Service** (allow/deny routes, feature codes, groups, queues, conferences, paging per class of extensions) and **Extension Routing** (allowed extensions per route) | classes of service per organization: allowed outbound routes and feature codes, outside forwards and follow-me, intercom, fax, monitoring, outside-call cap; no restriction by ring group, queue or conference, and paging is limited per page, not per class | ◐ | **P1** |
+| **Class of Service** (allow/deny routes, feature codes, groups, queues, conferences, paging per class of extensions) and **Extension Routing** (allowed extensions per route) | classes of service per organization: allowed outbound routes and feature codes, outside forwards and follow-me, intercom, fax, monitoring, outside-call cap; chosen ring groups, queues and conference rooms; dialled paging on or off per class, not per zone | ✔ | **P1** |
 | Intra-company route type | no | ✘ | P3 |
 | Time group restriction on a route | no | ✘ | P2 |
 | Music on hold on outbound | no | ✘ | P3 |
@@ -348,7 +348,7 @@ below are the reasons a FreePBX site would hesitate.
 |---|---|---|---|
 | **EndPoint Manager ($199): 22 brands, several hundred models** | 4 brands in 20 official base files, all experimental: Poly VVX, Edge E, CCX; Yealink T3x–T8x, CP; Grandstream GRP, GXP, HT; Algo. Other brands as local base files; no CyberData, Cisco ATA, Snom, Cisco MPP, Fanvil or Sangoma | ◐ | **P1**: Yealink (T3x/T4x/T5x), Grandstream (GRP/GXP), Poly Edge/CCX, an ATA (Grandstream HT, Cisco ATA 19x), Algo and CyberData paging endpoints; P2: Snom, Cisco MPP, Fanvil, Sangoma |
 | Template editor with raw parameter override (basefile edit) | base file editor: customize, import/export, facts and variables, parent updates; Base File Edit per model | ✔ ahead | |
-| Button types: line, BLF, speed dial, park, transfer, voicemail, intercom, DND, record, XML app | line, BLF, speed dial, page, user's choice, park, voicemail, transfer, intercom, DND, toggle, presence; no record or XML app key | ◐ | **P1** (park, voicemail, transfer, intercom, DND once those exist) |
+| Button types: line, BLF, speed dial, park, transfer, voicemail, intercom, DND, record, XML app | line, BLF, speed dial, page, user's choice, park, voicemail, transfer, intercom, DND, toggle, presence, record (Yealink desk phones and Poly; other brands dial the code); no XML app key | ◐ | **P1** (park, voicemail, transfer, intercom, DND once those exist) |
 | Expansion modules (sidecars) | no; the VVX 450 base file marks them as later | ✘ | P2 |
 | Background image, ring tones, screensaver | screen saver and backlight variables on Poly VVX only; no background image or ring tones | ◐ | P3 |
 | Firmware slots and Sangoma's firmware list | upload and assign | ◐ | P3 |
