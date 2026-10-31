@@ -2711,8 +2711,8 @@
    "summary": "Listen to your messages from your phone or the browser, record your greetings, set an away message for the holidays, and choose your PIN.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.68",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.70",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/my-phone/"
    ],
