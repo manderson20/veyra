@@ -4,7 +4,7 @@ summary: Run Veyra on two servers so a standby can take over when the primary ne
 audience: admin
 section: Maintenance
 order: 60
-reviewed: 0.27.44
+reviewed: 0.27.57
 pages:
   - /system/ha/
 covers:
@@ -95,10 +95,28 @@ On the primary:
 
 ## Remove the standby
 
-**Remove** on the standby's card (type its name) takes it out of the pair. That server then refuses to run the telephony engine until `sudo veyra ha standalone` is run on it. With one server left, the installation is standalone again.
+**Remove** on the standby's card (type its name) takes it out of the pair. With one server left, the installation is standalone again.
+
+The removed server keeps its phone system off, so it cannot register to your carrier alongside the server still running. If it should handle calls, open **System → High availability** on it and choose **Run on its own**.
+
+## Run a server on its own
+
+**Run on its own** is for a server with no working pair left:
+
+- A standby whose primary is gone for good, or that was removed while it was away. It is refused while the primary still answers and still has it as its standby.
+- A primary with no standby.
+- A server that was just removed from its pair.
+
+The database starts accepting changes, the phone system starts, and the server lets go of the service address. You may have to sign in again.
+
+> **Warning:** On a standby, be sure the primary is really off. If only the network between them is down, you get two servers taking calls and two diverging databases.
+
+## Sync files now
+
+The standby copies files every 30 seconds. The **File sync** card shows the last success, what is left to copy and the last error, read from the standby itself. **Sync now** starts a copy straight away from either server.
 
 ## Events and alerts
 
 **Events** lists switchovers, failovers and role changes. The alerts **HA node offline**, **Replication broken**, **Replication lagging**, **File sync failing**, **Primary isolated** and **HA operation failed** watch the pair (see [Health, alerts and diagnostics](guide:health-alerts-diagnostics)).
 
-On the console, `sudo veyra ha status` shows the server's state.
+On the console, `sudo veyra ha status` shows the server's state, and `sudo veyra ha sync-now` and `sudo veyra ha standalone` do the same as the buttons, without the check on the primary.

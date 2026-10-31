@@ -32,7 +32,7 @@ from veyra.core.security.principal import Principal
 from veyra.core.security.ratelimit import SlidingWindowLimiter
 from veyra.ha import join, peer, rules, service, sync
 from veyra.ha.client import AgentClient, AgentError, AgentUnavailable
-from veyra.ha.state import StateDir
+from veyra.ha.state import NodeState, StateDir
 
 router = APIRouter(prefix="/ha", tags=["high availability"])
 READ = "ha.read"
@@ -115,7 +115,11 @@ def _peer_node(db: Session) -> ClusterNode | None:
 
 
 def _peer_call(
-    db: Session, settings: Settings, verb: str, payload: dict[str, Any]
+    db: Session,
+    settings: Settings,
+    verb: str,
+    payload: dict[str, Any],
+    timeout: float = peer.CALL_TIMEOUT,
 ) -> dict[str, Any]:
     """A signed call to the peer from the API (it can read the node key)."""
     node = _state_dir(settings).node()
@@ -130,6 +134,7 @@ def _peer_call(
             private_key=_node_key(settings),
             peer_public_key=node.peer.public_key,
             ca_pem=_ca_pem(settings),
+            timeout=timeout,
         )
     except peer.PeerError as e:
         raise ProblemError(
@@ -496,10 +501,148 @@ def remove_node(
         )
     # Best effort: tell the node it is on its own, so it never starts the engine.
     with contextlib.suppress(ProblemError):
-        _peer_call(db, settings, "run", {"verb": "standalone", "args": {}})
+        _peer_call(db, settings, "run", {"verb": "standalone", "args": {"hold_engine": True}})
     _audit(db, principal, ctx, "ha.node_remove", node=node.node_name)
     db.commit()
     return _agent_call(settings, "remove-peer", actor=principal.label)
+
+
+def _sync_view(st: dict[str, Any], running: bool) -> dict[str, Any]:
+    return {
+        "reachable": True,
+        "running": running,
+        "last_success_at": st.get("last_success_at"),
+        "last_attempt_at": st.get("last_attempt_at"),
+        "last_error": st.get("last_error") or "",
+        "backlog": st.get("backlog") or 0,
+    }
+
+
+@router.get("/sync-state", summary="The standby's file sync, asked of the standby")
+def sync_state(
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    local = _state_dir(settings).node()
+    if local is None or local.peer is None:
+        return {"reachable": False, "running": False}
+    if local.role == "secondary":
+        st = _agent_call(settings, "status")
+    else:
+        try:
+            st = _peer_call(
+                db,
+                settings,
+                "run",
+                {"verb": "status", "args": {}},
+                timeout=peer.HEALTH_TIMEOUT,
+            ).get("result")
+        except ProblemError:
+            return {"reachable": False, "running": False}
+    st = st if isinstance(st, dict) else {}
+    return _sync_view(st.get("sync") or {}, bool(st.get("sync_running")))
+
+
+@router.post("/sync-now", summary="Start the standby's file sync now")
+def sync_now(
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    local = _state_dir(settings).node()
+    if local is None or local.peer is None:
+        raise ProblemError(409, "No standby", "This node has no peer.", code="no_peer")
+    if local.role == "secondary":
+        out = _agent_call(settings, "sync-now", background=True)
+    else:
+        out = _peer_call(
+            db,
+            settings,
+            "run",
+            {"verb": "sync-now", "args": {"background": True}},
+            timeout=peer.HEALTH_TIMEOUT,
+        ).get("result")
+    # The standby cannot write the audit log; a failed entry does not undo the sync.
+    try:
+        _audit(db, principal, ctx, "ha.sync_now")
+        db.commit()
+    except Exception:
+        db.rollback()
+    return out if isinstance(out, dict) else {"started": True}
+
+
+def _standalone_refusal(settings: Settings, local: NodeState | None) -> ProblemError | None:
+    """Why this node may not become standalone from the web, or None. The
+    console keeps its plain warning; here a node that is still in a pair with a
+    live primary is refused, since promoting it would make two primaries."""
+    if local is None or local.role == "standalone":
+        if local is not None and local.state == "removed":
+            return None
+        return ProblemError(
+            409, "Already standalone", "This node is not in a pair.", code="not_in_cluster"
+        )
+    if local.role == "primary":
+        if local.peer is None:
+            return None
+        return ProblemError(
+            409,
+            "This node has a standby",
+            "Remove the standby from its card first; the installation then runs alone.",
+            code="has_standby",
+        )
+    if local.peer is None:
+        return None
+    try:
+        peer.call(
+            local.peer.url,
+            "health",
+            {},
+            node_id=local.node_id,
+            private_key=_node_key(settings),
+            peer_public_key=local.peer.public_key,
+            ca_pem=_ca_pem(settings),
+            timeout=peer.HEALTH_TIMEOUT,
+        )
+    except peer.PeerError as e:
+        if e.code in ("unreachable", "unknown_node"):
+            # Down, or it removed this node while this node was away.
+            return None
+        return ProblemError(409, "The primary answered with an error", e.message, code=e.code)
+    return ProblemError(
+        409,
+        "The primary is still running",
+        f"{local.peer.node_name} answers and still has this node as its standby. "
+        "Remove this node on its page instead.",
+        code="primary_alive",
+    )
+
+
+@router.post(
+    "/standalone",
+    dependencies=[Depends(recent_auth)],
+    summary="This node leaves the pair and runs on its own, with the engine started",
+)
+def standalone(
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    local = _state_dir(settings).node()
+    problem = _standalone_refusal(settings, local)
+    if problem is not None:
+        raise problem
+    # Any read so far ran on a replica; the entry needs a transaction after the promotion.
+    db.rollback()
+    out = _agent_call(settings, "standalone", actor=principal.label)
+    try:
+        _audit(db, principal, ctx, "ha.standalone")
+        db.commit()
+    except Exception:
+        db.rollback()
+    return out if isinstance(out, dict) else {"role": "standalone"}
 
 
 class StandbyUpgradeIn(BaseModel):

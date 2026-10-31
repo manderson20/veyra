@@ -475,6 +475,7 @@ def status(
             "last_attempt_at": sync.last_attempt_at,
             "last_error": sync.last_error,
             "backlog": sync.backlog,
+            "running": bool(agent_status.get("sync_running")) if agent_status else False,
             "recordings": sync_settings(db)["recordings"],
         }
         if mode == "ha"

@@ -8,6 +8,18 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+No migration.
+
+### Added
+- **High availability from the web** (#349): System → High availability has a **File sync** card that reads the standby itself, with **Sync now** from either server. **Run on its own** takes a server out of a pair with no console. It is refused while the primary still answers and still has this server as its standby. The page also shows whether the other server is reachable. Each action is in the audit log.
+
+### Fixed
+- A standby removed from its pair kept its phone system set to start at the next reboot, so a forgotten server could register to the carrier alongside the live one. It now stays off until someone chooses **Run on its own**, as the documentation said.
+- `sudo veyra ha standalone` now starts the phone system. Before, it only took effect at the next reboot.
+- A forced file sync can no longer overlap the regular one.
+
 ## 0.27.56 — 2026-10-30
 
 No migration.

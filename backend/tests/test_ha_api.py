@@ -23,6 +23,7 @@ from veyra.central import protocol
 from veyra.core.db import session_scope
 from veyra.core.models import ClusterNode, Installation
 from veyra.core.models.base import utcnow
+from veyra.core.models.platform import AuditEvent as AuditLog
 from veyra.ha import peer, service
 from veyra.ha.standby import Flags, StandbySessions, write_blocked
 from veyra.ha.state import NodeState, Peer, ServiceAddress, StateDir
@@ -592,3 +593,120 @@ def test_ha_alert_checks(node):
         inst.deployment_mode = "standalone"
         db.flush()
         assert alerts.check_ha(db, settings, now, 64) == []
+
+
+def test_sync_now_and_state_on_a_standby(node):
+    client, app, settings, fake, priv, pub = node  # noqa: RUF059
+    n = NodeState(
+        node_name=service.local_name(),
+        node_id=str(uuid.uuid4()),
+        role="primary",
+    )
+    _state(settings).save_node(n)
+    # No peer: nothing to sync.
+    assert client.post("/api/v1/ha/sync-now").status_code == 409
+    assert client.get("/api/v1/ha/sync-state").json() == {"reachable": False, "running": False}
+    n.role = "secondary"
+    n.peer = Peer(
+        node_id=str(uuid.uuid4()),
+        node_name="veyra-b",
+        address="10.0.0.2",
+        url="https://veyra-b",
+        public_key=pub,
+    )
+    _state(settings).save_node(n)
+    fake.results["sync-now"] = {"started": True}
+    r = client.post("/api/v1/ha/sync-now")
+    assert r.status_code == 200 and r.json() == {"started": True}
+    assert fake.calls[-1] == ("sync-now", {"background": True})
+    fake.results["status"] = {
+        "sync": {"last_error": "disk full", "backlog": 3},
+        "sync_running": True,
+    }
+    st = client.get("/api/v1/ha/sync-state").json()
+    assert (
+        st["reachable"] and st["running"] and st["last_error"] == "disk full" and st["backlog"] == 3
+    )
+    with session_scope() as db:
+        actions = db.scalars(select(AuditLog.action)).all()
+    assert "ha.sync_now" in actions
+
+
+def test_standalone_guards(node, monkeypatch):
+    client, app, settings, fake, priv, pub = node  # noqa: RUF059
+    # Not in a pair.
+    r = client.post("/api/v1/ha/standalone")
+    assert r.status_code == 409 and r.json()["code"] == "not_in_cluster"
+    assert "standalone" not in fake.verbs()
+    n = NodeState(
+        node_name=service.local_name(),
+        node_id=str(uuid.uuid4()),
+        role="primary",
+        peer=Peer(
+            node_id=str(uuid.uuid4()),
+            node_name="veyra-b",
+            address="10.0.0.2",
+            url="https://veyra-b",
+            public_key=pub,
+        ),
+    )
+    _state(settings).save_node(n)
+    # A primary with a standby removes it instead.
+    r = client.post("/api/v1/ha/standalone")
+    assert r.status_code == 409 and r.json()["code"] == "has_standby"
+    # A standby whose primary answers: two primaries otherwise.
+    n.role = "secondary"
+    _state(settings).save_node(n)
+    monkeypatch.setattr(peer, "call", lambda *a, **k: {"role": "primary"})
+    r = client.post("/api/v1/ha/standalone")
+    assert r.status_code == 409 and r.json()["code"] == "primary_alive"
+
+    def fails(status, code):
+        def f(*a, **k):
+            raise peer.PeerError(status, code, "no")
+
+        return f
+
+    # Any other error from the primary is no proof that it is gone.
+    monkeypatch.setattr(peer, "call", fails(503, "db_unavailable"))
+    assert client.post("/api/v1/ha/standalone").status_code == 409
+    assert "standalone" not in fake.verbs()
+    fake.results["standalone"] = {"role": "standalone", "state": "online"}
+    # The primary is unreachable, or removed this node while it was away.
+    for status, code in ((502, "unreachable"), (401, "unknown_node")):
+        monkeypatch.setattr(peer, "call", fails(status, code))
+        r = client.post("/api/v1/ha/standalone")
+        assert r.status_code == 200 and fake.verbs()[-1] == "standalone"
+    # Removed by the primary: the operator releases the held engine here.
+    _state(settings).save_node(NodeState(node_name=n.node_name, role="standalone", state="removed"))
+    assert client.post("/api/v1/ha/standalone").status_code == 200
+    with session_scope() as db:
+        actions = db.scalars(select(AuditLog.action)).all()
+    assert actions.count("ha.standalone") == 3
+
+
+def test_remove_holds_the_removed_nodes_engine(node, monkeypatch):
+    client, app, settings, fake, priv, pub = node  # noqa: RUF059
+    n = NodeState(
+        node_name=service.local_name(),
+        node_id=str(uuid.uuid4()),
+        role="primary",
+        peer=Peer(
+            node_id=str(uuid.uuid4()),
+            node_name="veyra-b",
+            address="10.0.0.2",
+            url="https://veyra-b",
+            public_key=pub,
+        ),
+    )
+    _state(settings).save_node(n)
+    with session_scope() as db:
+        b = ClusterNode(node_name="veyra-b", hostname="veyra-b", role="secondary", state="online")
+        db.add(b)
+        db.flush()
+        node_id = b.id
+    seen = []
+    monkeypatch.setattr(peer, "call", lambda url, verb, payload, **k: seen.append(payload) or {})
+    fake.results["remove-peer"] = {"removed": True, "deployment_mode": "standalone"}
+    assert client.delete(f"/api/v1/ha/nodes/{node_id}").status_code == 200
+    assert seen == [{"verb": "standalone", "args": {"hold_engine": True}}]

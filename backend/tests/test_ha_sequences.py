@@ -6,6 +6,8 @@ agent's verbs against a fake system."""
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -472,3 +474,52 @@ def test_agent_sync_now_uses_peer_manifest(ha_agent, monkeypatch, tmp_path):
     assert st["last_error"] == ""
     assert st["last_success_at"] and st["backlog"] == 0 and st["transferred"] == 1
     assert (a.paths.data_dir / "prompts/x.wav").read_bytes() == content
+
+
+def test_agent_sync_now_in_background_and_one_at_a_time(ha_agent, monkeypatch):
+    a, _system = ha_agent
+    release, entered = threading.Event(), threading.Event()
+
+    def slow(verb, payload, timeout=0):
+        entered.set()
+        release.wait(5)
+        return {"entries": []}
+
+    monkeypatch.setattr(a, "peer_call", slow)
+    assert call(a, "sync-now", background=True) == {"started": True}
+    assert entered.wait(5)
+    assert call(a, "status")["sync_running"] is True
+    assert call(a, "sync-now", background=True) == {"started": False}
+    before = a.state.sync().last_attempt_at
+    assert a.run_sync().last_attempt_at == before  # the loop skips its turn
+    release.set()
+    for _ in range(500):
+        if not a.sync_lock.locked():
+            break
+        time.sleep(0.01)
+    assert call(a, "status")["sync_running"] is False
+    assert a.state.sync().last_success_at
+    # A primary has nothing to sync.
+    n = a.node()
+    n.role = "primary"
+    a.state.save_node(n)
+    with pytest.raises(agent_mod.AgentError):
+        call(a, "sync-now", background=True)
+
+
+def test_agent_standalone_starts_or_holds_the_engine(ha_agent, monkeypatch):
+    a, system = ha_agent
+    monkeypatch.setattr(system, "veyra_db", lambda *x: {}, raising=False)
+    monkeypatch.setattr(a, "_nginx_service_listen", lambda addr: None)
+    monkeypatch.setattr(a, "_hba", lambda n: None)
+    # The primary removing this node: the engine stays off.
+    out = call(a, "standalone", hold_engine=True)
+    assert out == {"role": "standalone", "state": "removed"}
+    assert a.node().state == "removed" and a.node().peer is None
+    engine = [c for c in system.calls if c[0] == "systemctl" and "asterisk" in c]
+    assert not engine and "asterisk" not in system.active
+    # The operator, on this node: it runs.
+    out = call(a, "standalone")
+    assert out == {"role": "standalone", "state": "online"}
+    assert "asterisk" in system.active
+    assert ["systemctl", "enable", *agent_mod.ENGINE_UNITS] in system.calls

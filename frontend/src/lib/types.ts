@@ -615,10 +615,19 @@ export interface HaStatus extends ClusterStatus {
   };
   peer: ClusterNode | null;
   replication: HaReplication | null;
-  sync: { last_success_at: string | null; last_attempt_at: string | null; last_error: string; backlog: number; recordings: boolean } | null;
+  sync: { last_success_at: string | null; last_attempt_at: string | null; last_error: string; backlog: number; running: boolean; recordings: boolean } | null;
   service: HaService;
   operation: HaOperation | null;
   fencing: { configured: boolean; method: string };
+}
+
+export interface HaSyncState {
+  reachable: boolean;
+  running: boolean;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string;
+  backlog?: number;
 }
 
 export interface HaEvent {

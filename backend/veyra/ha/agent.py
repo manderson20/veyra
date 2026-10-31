@@ -243,6 +243,7 @@ class Agent:
     state: StateDir = field(init=False)
     lock: threading.RLock = field(default_factory=threading.RLock)
     op_thread: threading.Thread | None = None
+    sync_lock: threading.Lock = field(default_factory=threading.Lock)
     last_peer: PeerHealth | None = None
     last_sync: float = -1e9
     last_report: float = -1e9
@@ -338,6 +339,7 @@ class Agent:
             "holds_address": self.holds_address(),
             "replication": self.replication(),
             "sync": self.state.sync().to_dict(),
+            "sync_running": self.sync_lock.locked(),
             "operation": op.to_dict() if op else None,
             "peer_reachable": self.last_peer.reachable if self.last_peer else None,
             "peer": {
@@ -556,6 +558,16 @@ class Agent:
         return sync.roots_for(self.paths.data_dir, self.paths.config_dir, recordings=recordings)
 
     def run_sync(self, force: bool = False) -> SyncState:
+        """One file sync at a time: the loop skips its turn while one runs, a
+        forced sync waits for it."""
+        if not self.sync_lock.acquire(blocking=force):
+            return self.state.sync()
+        try:
+            return self._run_sync()
+        finally:
+            self.sync_lock.release()
+
+    def _run_sync(self) -> SyncState:
         n = self.node()
         st = self.state.sync()
         if n.role != "secondary" or n.peer is None:
@@ -1254,7 +1266,18 @@ class Agent:
         return {"holds_address": self.holds_address()}
 
     def verb_sync_now(self, args: dict[str, Any]) -> dict[str, Any]:
-        return self.run_sync(force=True).to_dict()
+        """The console waits for the sync. The web interface asks for it in
+        the background, because a sync can outlast any request, and follows
+        ``sync_running`` in the status."""
+        if not args.get("background"):
+            return self.run_sync(force=True).to_dict()
+        n = self.node()
+        if n.role != "secondary" or n.peer is None:
+            raise AgentError("not_secondary", "The standby runs the file sync.")
+        if self.sync_lock.locked():
+            return {"started": False}
+        threading.Thread(target=self.run_sync, name="ha-sync-now", daemon=True).start()
+        return {"started": True}
 
     def verb_set_sync(self, args: dict[str, Any]) -> dict[str, Any]:
         (self.paths.state / "sync.conf.json").write_text(
@@ -1321,24 +1344,30 @@ class Agent:
         """§8 from the console: the peer becomes standalone (best effort),
         then it is removed here."""
         with contextlib.suppress(peer.PeerError, AgentError, OSError):
-            self.peer_run("standalone")
+            self.peer_run("standalone", hold_engine=True)
         return self.verb_remove_peer(args)
 
     def verb_standalone(self, args: dict[str, Any]) -> dict[str, Any]:
-        """A removed secondary becomes a standalone that may run the engine
-        again (§8); PostgreSQL is promoted so it accepts writes."""
+        """A removed secondary becomes a standalone; PostgreSQL is promoted so
+        it accepts writes (§8). ``hold_engine`` is the primary removing it: the
+        engine stays off, so a forgotten node never registers to the carrier,
+        until an operator runs this again here. Otherwise the engine starts."""
         n = self.node()
+        hold = bool(args.get("hold_engine"))
         if self.pg and self.pg.in_recovery():
             self.pg.promote()
             self.pg.clear_standby()
-        n.role, n.state, n.peer = "standalone", "online", None
+        n.role, n.state, n.peer = "standalone", "removed" if hold else "online", None
         self.state.save_node(n)
         self._hba(n)
         self.system.veyra_db("standalone", {"node_name": n.node_name})
-        self.system.systemctl("enable", *ENGINE_UNITS)
         self.release_address()
         self._nginx_service_listen(None)
-        return {"role": "standalone"}
+        if hold:
+            return {"role": "standalone", "state": n.state}
+        self.system.systemctl("enable", *ENGINE_UNITS)
+        self.system.systemctl("start", *ENGINE_UNITS)
+        return {"role": "standalone", "state": n.state}
 
     def verb_upgrade(self, args: dict[str, Any]) -> dict[str, Any]:
         version = str(args.get("version") or "")

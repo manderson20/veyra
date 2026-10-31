@@ -762,8 +762,8 @@
    "summary": "Run Veyra on two servers so a standby can take over when the primary needs maintenance or fails.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.57",
+   "reviewed_date": null,
    "pages": [
     "/system/ha/"
    ],

@@ -39,6 +39,7 @@ RUNNABLE = (
     "status",
     "set-peer-epoch",
     "standalone",
+    "sync-now",
 )
 MAX_SKEW = protocol.MAX_SKEW
 HEALTH_TIMEOUT = 5.0

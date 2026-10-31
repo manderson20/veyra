@@ -309,9 +309,10 @@ The standby applies the mirror rule: it never promotes itself.
   for a node in `rejoining` or `diverged` state (`pg_rewind` failed →
   fresh base backup).
 * **Remove node**: allowed for a secondary; drops the slot and the
-  `pg_hba` lines, deletes the row, and the node becomes a standalone that
-  refuses to start Asterisk until `veyra ha standalone` is run on it (so
-  a forgotten node never registers to the carrier). With one node left,
+  `pg_hba` lines, deletes the row, and the node becomes a standalone in state
+  `removed` with the engine off until an operator chooses **Run on its own**
+  (`POST /ha/standalone`) or runs `veyra ha standalone` on it (so a forgotten
+  node never registers to the carrier). With one node left,
   `deployment_mode` goes back to `standalone` and the service address stays
   on the remaining node (phones keep working).
 * **Replace node**: remove, then add with a new join token.

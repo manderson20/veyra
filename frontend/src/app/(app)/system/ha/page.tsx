@@ -21,7 +21,7 @@ import {
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { EVENT_LABELS, OPERATION_LABELS, lagLabel, nodeStatus, operationProgress, overallStatus, replicationLabel, seconds, stepLabel } from "@/lib/ha";
-import type { ClusterNode, HaEvent, HaJoinToken, HaJoinTokenCreated, HaOperation, HaStatus } from "@/lib/types";
+import type { ClusterNode, HaEvent, HaJoinToken, HaJoinTokenCreated, HaOperation, HaStatus, HaSyncState } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
 
@@ -48,10 +48,32 @@ function NodeCard({ n, status, manage, onSwitchover, onRejoin, onRemove }: {
         <dt>Version</dt><dd><span className="mono">{n.software_version ?? "—"}</span>{n.software_version && n.software_version !== status.version ? <Badge tone="warn">differs</Badge> : null}</dd>
         <dt>Database</dt><dd>{n.db_role ?? "unknown"} · {replicationLabel(rep)}</dd>
         <dt>Replication lag</dt><dd>{lagLabel(rep)}</dd>
+        {!local && status.local.peer_reachable !== null ? <><dt>Reachable from this node</dt><dd>{status.local.peer_reachable ? "Yes" : <Badge tone="danger">No</Badge>}</dd></> : null}
         <dt>Last heartbeat</dt><dd>{formatRelative(n.last_heartbeat_at)}</dd>
         <dt>File sync</dt><dd>{n.role === "secondary" ? formatRelative(local ? status.sync?.last_success_at : n.sync_at) : "serves the files"}</dd>
         <dt>Service address</dt><dd>{n.holds_address ? <Badge tone="ok">held</Badge> : <span className="subtle">not held</span>}</dd>
       </dl>
+    </Card>
+  );
+}
+
+function SyncCard({ state, manage, starting, onSync }: {
+  state: HaSyncState | null; manage: boolean; starting: boolean; onSync: () => void;
+}) {
+  return (
+    <Card title="File sync" actions={manage ? <Button size="sm" icon="refresh" onClick={onSync} loading={starting || !!state?.running} disabled={state?.reachable === false}>Sync now</Button> : null}>
+      {!state ? <LoadingState /> : !state.reachable ? (
+        <Callout tone="warn" title="The standby does not answer">Its file sync cannot be read or started from here.</Callout>
+      ) : (
+        <div className="stack stack--sm">
+          <dl className="dl">
+            <dt>State</dt><dd>{state.running ? <StatusBadge status="degraded" label="Syncing" /> : <StatusBadge status={state.last_error ? "failed" : "ok"} label={state.last_error ? "Last sync failed" : "Idle"} />}</dd>
+            <dt>Last success</dt><dd>{formatRelative(state.last_success_at)}</dd>
+            <dt>Files still to copy</dt><dd>{state.backlog}</dd>
+          </dl>
+          {state.last_error ? <Callout tone="warn" title="Last sync failed">{state.last_error}</Callout> : null}
+        </div>
+      )}
     </Card>
   );
 }
@@ -90,15 +112,40 @@ export default function HaPage() {
   const [fencing, setFencing] = useState(false);
   const [resume, setResume] = useState(false);
   const [remove, setRemove] = useState<ClusterNode | null>(null);
+  const [standalone, setStandalone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [syncStarting, setSyncStarting] = useState(false);
   const s = status.data;
   const running = !!s?.operation && s.operation.status === "running";
+  const syncState = useApiData<HaSyncState>(s?.peer ? "/ha/sync-state" : null);
+  const syncRunning = !!syncState.data?.running;
+  const removed = s?.local.role === "standalone" && s.local.state === "removed";
+  const canStandalone = !!s && (removed || (s.ha_enabled && (s.local.role === "secondary" || (s.local.role === "primary" && !s.peer))));
 
   // Follow a running operation and the heartbeats.
   useEffect(() => {
     const id = setInterval(() => { status.reload(); if (running) events.reload(); }, running ? 2000 : 15000);
     return () => clearInterval(id);
   }, [running, status, events]);
+
+  // Follow a sync started here until the standby says it finished.
+  useEffect(() => {
+    const id = setInterval(syncState.reload, syncRunning || syncStarting ? 2000 : 30000);
+    return () => clearInterval(id);
+  }, [syncRunning, syncStarting, syncState]);
+
+  const syncNow = async () => {
+    setSyncStarting(true);
+    try {
+      const out = await api.post<{ started: boolean }>("/ha/sync-now");
+      toast.success(out.started ? "File sync started" : "A file sync is already running");
+      setTimeout(() => setSyncStarting(false), 3000);
+    } catch (err) {
+      toast.error("File sync failed to start", errorMessage(err));
+      setSyncStarting(false);
+    }
+    syncState.reload();
+  };
 
   const reloadAll = () => { status.reload(); events.reload(); tokens.reload(); };
 
@@ -147,6 +194,14 @@ export default function HaPage() {
 
       {status.error ? <Card><ErrorState error={status.error} onRetry={status.reload} /></Card> : !s ? <Card><LoadingState /></Card> : !s.ha_enabled ? (
         <>
+          {removed ? (
+            <Callout tone="warn" title="This server was removed from its pair">
+              <div className="stack stack--sm">
+                <p>Its phone system stays off, so it cannot register to your carrier alongside the server that is still running. Start it only if this server should now handle calls by itself.</p>
+                {manage ? <span><Button variant="danger" onClick={() => setStandalone(true)}>Run on its own</Button></span> : null}
+              </div>
+            </Callout>
+          ) : null}
           <div className="grid grid--3">
             <Card title="Deployment mode"><p className="metric__value">Standalone</p><p className="subtle">This server operates independently.</p></Card>
             <Card title="Database role"><p className="metric__value" style={{ textTransform: "capitalize" }}>{s.database_role ?? "Unknown"}</p><p className="subtle">Accepts writes</p></Card>
@@ -187,6 +242,12 @@ export default function HaPage() {
 
           {s.operation ? <OperationCard op={s.operation} /> : null}
 
+          {manage && canStandalone ? (
+            <Card title="Leave the pair" actions={<Button variant="danger" onClick={() => setStandalone(true)} disabled={running}>Run on its own</Button>}>
+              <p className="subtle">{s.local.role === "secondary" ? "For a standby whose primary is gone for good, or that was removed while it was away. It is refused while the primary still answers." : "This server has no standby. It stops using the service address and goes back to being a single server."}</p>
+            </Card>
+          ) : null}
+
           <section aria-label="Nodes" className="grid grid--2">
             {s.nodes.filter((n) => n.role === "primary" || n.role === "secondary").map((n) => (
               <NodeCard key={n.id} n={n} status={s} manage={manage}
@@ -203,12 +264,13 @@ export default function HaPage() {
             ) : null}
           </section>
 
+          {s.peer ? <SyncCard state={syncState.data ?? null} manage={manage} starting={syncStarting} onSync={syncNow} /> : null}
+
           {manage && s.local.role === "primary" ? (
             <Card title="Options">
               <div className="stack stack--sm">
                 <ReplicationModeField status={s} onChanged={status.reload} />
                 <SyncField status={s} onChanged={status.reload} />
-                {s.sync?.last_error ? <Callout tone="warn" title="File sync">{s.sync.last_error}</Callout> : null}
               </div>
             </Card>
           ) : null}
@@ -239,7 +301,13 @@ export default function HaPage() {
       </ConfirmDialog>
       <ConfirmDialog open={!!remove} title={`Remove ${remove?.node_name ?? ""}`} confirmLabel="Remove" tone="danger" typeToConfirm={remove?.node_name ?? ""} busy={busy}
         onCancel={() => setRemove(null)} onConfirm={() => remove ? act(`${remove.node_name} removed`, () => api.del(`/ha/nodes/${remove.id}`)).then(() => setRemove(null)) : undefined}>
-        <p>The node leaves the cluster: its replication slot is dropped, it becomes a standalone that refuses to run Asterisk until <code>veyra ha standalone</code> is run on it. With one node left, this installation is standalone again; the service address stays here.</p>
+        <p>The node leaves the cluster and its replication slot is dropped. Its phone system stays off until someone chooses <strong>Run on its own</strong> on its High availability page. With one node left, this installation is standalone again; the service address stays here.</p>
+      </ConfirmDialog>
+      <ConfirmDialog open={standalone} title="Run this server on its own" confirmLabel="Run on its own" tone="danger" typeToConfirm={s?.local.node_name ?? ""} busy={busy}
+        onCancel={() => setStandalone(false)} onConfirm={() => act("This server now runs on its own", () => api.post("/ha/standalone")).then(() => setStandalone(false))}>
+        <p>{s?.local.node_name} leaves the pair, its database starts accepting changes, and its phone system starts. It lets go of the service address, so phones that use it need another path to this server.</p>
+        {s?.local.role === "secondary" ? <p><strong>Only if {s.peer?.node_name ?? "the primary"} is off or gone for good.</strong> If only the network between them is down, you get two servers taking calls and two diverging databases, and one server&apos;s changes will be lost.</p> : null}
+        <p>You may have to sign in again. To make a pair again, add a new standby with a join token.</p>
       </ConfirmDialog>
     </div>
   );
