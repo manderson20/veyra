@@ -39,6 +39,7 @@ from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.crypto import try_load_installation_key
 from veyra.core.security.principal import Principal
 from veyra.provisioning import facts
+from veyra.provisioning import variables as provisioning_vars
 from veyra.provisioning.renderer import normalize_mac
 from veyra.provisioning.spec import TemplateError
 from veyra.telephony.asterisk import cli
@@ -50,6 +51,7 @@ WRITE = "devices.write"
 # Poly phones poll once a day (docs/DEVICE_PROVISIONING.md §4.4); a device
 # unseen for two polling intervals is stale.
 POLLING_HOURS = 24
+MAX_SELECTED = 500
 Status = Literal["never", "provisioned", "stale", "error"]
 
 
@@ -176,6 +178,8 @@ class DeviceOut(BaseModel):
     firmware_state: Literal["unknown", "up_to_date", "pending", "none"]
     is_enabled: bool
     status: Status
+    # Has the phone fetched since its template or its own settings changed?
+    config_state: Literal["current", "pending", "never", "none"] = "none"
     last_seen_at: datetime | None
     last_seen_ip: str | None
     last_user_agent: str | None
@@ -265,6 +269,17 @@ def status_of(device: Device, now: datetime | None = None) -> Status:
     return "provisioned"
 
 
+def config_state(
+    device: Device, profile: DeviceProfile | None
+) -> Literal["current", "pending", "never", "none"]:
+    if profile is None:
+        return "none"
+    if device.last_seen_at is None:
+        return "never"
+    changed = max(c for c in (device.config_changed_at, profile.updated_at) if c is not None)
+    return "current" if device.last_seen_at >= changed else "pending"
+
+
 def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
     if not rows:
         return []
@@ -319,11 +334,11 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
         profile = profiles.get(r.profile_id) if r.profile_id else None
         template_key = None
         if profile is None:
-            problems.append("No profile: nothing is served to this phone.")
+            problems.append("No template: nothing is served to this phone.")
         else:
             rec = catalog.records.get(profile.template_key)
             if rec is None:
-                problems.append(f"Template {profile.template_key} of the profile is missing.")
+                problems.append(f"Base file {profile.template_key} of the template is missing.")
             elif rec.manifest.template.abstract:
                 found = common.model_templates(
                     catalog, profile.template_key, r.model, r.organization_id
@@ -332,10 +347,10 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
                     template_key = found[0]
                 else:
                     problems.append(
-                        f"No template under {profile.template_key} supports model {r.model}."
+                        f"No base file under {profile.template_key} supports model {r.model}."
                     )
             elif r.model not in rec.manifest.template.models:
-                problems.append(f"Template {profile.template_key} does not support {r.model}.")
+                problems.append(f"Base file {profile.template_key} does not support {r.model}.")
             else:
                 template_key = profile.template_key
 
@@ -410,6 +425,7 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
                 firmware_state=fw_state,
                 is_enabled=r.is_enabled,
                 status=status_of(r, now),
+                config_state=config_state(r, profile),
                 last_seen_at=r.last_seen_at,
                 last_seen_ip=r.last_seen_ip,
                 last_user_agent=r.last_user_agent,
@@ -496,7 +512,7 @@ def _check_values(
     if not values:
         return {}
     if profile is None:
-        raise common.validation("values", "choose a profile before overriding values")
+        raise common.validation("values", "choose a template before overriding values")
     resolved = common.resolve_template(catalog_for(request, db), profile.template_key, "profile_id")
     checked = common.check_values(resolved, values, "values", existing)
     common.check_srtp(db, checked, profile.values)
@@ -708,11 +724,15 @@ def list_devices(
         term = q.strip()
         like = f"%{term}%"
         mac_like = f"%{''.join(c for c in term.lower() if c in '0123456789abcdef')}%"
-        ext_ids = select(Extension.id).where(Extension.number.ilike(like))
+        ext_ids = select(Extension.id).where(
+            or_(Extension.number.ilike(like), Extension.display_name.ilike(like))
+        )
         stmt = stmt.where(
             or_(
                 Device.label.ilike(like),
                 Device.model.ilike(like),
+                Device.manufacturer.ilike(like),
+                Device.last_seen_ip.ilike(like),
                 Device.mac_address.like(mac_like) if len(mac_like) > 2 else Device.id.is_(None),
                 Device.primary_extension_id.in_(ext_ids),
             )
@@ -836,6 +856,72 @@ class ReprovisionOut(BaseModel):
     sent: bool
     endpoint: str | None
     message: str
+
+
+class UseTemplateIn(BaseModel):
+    device_ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_SELECTED)
+    profile_id: uuid.UUID
+
+
+class SelectedPhonesIn(BaseModel):
+    device_ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_SELECTED)
+
+
+class UpdatePhonesOut(BaseModel):
+    phones: int
+    asked: int
+
+
+def _selected(db: Session, principal: Principal, device_ids: list[uuid.UUID]) -> list[Device]:
+    return [_get(db, principal, device_id, WRITE) for device_id in dict.fromkeys(device_ids)]
+
+
+@router.post("/use-template", summary="Put the selected phones on a template, all of them or none")
+def use_template(
+    body: UseTemplateIn,
+    request: Request,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, int]:
+    devices = _selected(db, principal, body.device_ids)
+    changed = 0
+    for device in devices:
+        profile = _check_profile(db, device.organization_id, body.profile_id)
+        _check_brand(request, db, profile, device.manufacturer)
+        if device.profile_id != body.profile_id:
+            old_values = device.values
+            device.profile_id = body.profile_id
+            # Overrides belong to the old template, as on the phone's page.
+            device.values = _check_values(request, db, profile, {}, old_values)
+            device.config_changed_at = utcnow()
+            _record(
+                db, ctx, principal, "device.update", device, {"profile_id": str(body.profile_id)}
+            )
+            changed += 1
+    db.commit()
+    return {"changed": changed}
+
+
+@router.post(
+    "/update-phones",
+    response_model=UpdatePhonesOut,
+    summary="Ask the selected phones to re-read their configuration now",
+)
+def update_selected_phones(
+    body: SelectedPhonesIn,
+    request: Request,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> UpdatePhonesOut:
+    devices = _selected(db, principal, body.device_ids)
+    notify = getattr(request.app.state, "notify_phone", None) or cli.send_notify
+    asked = provisioning_vars.reprovision(db, devices, notify)
+    for device in devices:
+        _record(db, ctx, principal, "device.reprovision", device, {"action": "check_config"})
+    db.commit()
+    return UpdatePhonesOut(phones=len(devices), asked=asked)
 
 
 @router.post(
@@ -1071,6 +1157,7 @@ def update_device(
             details[field] = changes[field]
     if not details:
         return _outs(request, db, [device])[0]
+    device.config_changed_at = utcnow()
     try:
         db.flush()
     except IntegrityError as e:

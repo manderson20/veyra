@@ -60,7 +60,7 @@ An administrator can change a user's keys too. On the phone's page, open the **L
 
 ## A different key list for one phone
 
-1. Open the phone under [Provisioning → Devices](app:/devices/) and go to the **Line keys** tab.
+1. Open the phone under [Provisioning → Extension Mapping](app:/devices/) and go to the **Line keys** tab.
 2. Tick **Override the profile's keys for this phone**. The profile's keys are copied as a starting point.
 3. Change the list and choose **Save changes**.
 

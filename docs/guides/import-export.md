@@ -4,7 +4,7 @@ summary: Create or change many extensions, users, routes or groups at once with 
 audience: admin
 section: Maintenance
 order: 40
-reviewed: 0.27.46
+reviewed: 0.27.64
 checked: 2026-10-30T15:10Z
 pages:
   - /system/import/
@@ -23,7 +23,7 @@ Open [System → Import and Export](app:/system/import/). You can export what ex
 ## How the file works
 
 - The first line names the columns. An export is always a valid import.
-- The **first column is the key**: extensions, ring groups, queues and shared inboxes by `number`, users by `email`, inbound routes by `did`, IVR menus and time conditions by `name`. A row whose key exists **updates** it; otherwise it **creates** a new one.
+- The **first column is the key**: extensions, ring groups, queues and shared inboxes by `number`, users by `email`, inbound routes by `did`, IVR menus and time conditions by `name`, phones by `mac`. A row whose key exists **updates** it; otherwise it **creates** a new one.
 - **An empty cell keeps** the current value. **A dash (`-`) clears** it.
 - Yes/no cells take `yes` or `no`. Lists (such as `members`, `pickup_groups` or `roles`) are separated by `;`.
 - At most 5,000 rows and 5 MB per file. A key appearing twice is an error.

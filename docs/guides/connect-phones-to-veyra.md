@@ -4,7 +4,7 @@ summary: How a new phone finds this server, signs in for its configuration, and 
 audience: admin
 section: Phones and devices
 order: 10
-reviewed: 0.27.62
+reviewed: 0.27.64
 checked: 2026-10-29
 pages:
   - /devices/
@@ -98,7 +98,7 @@ A phone Veyra does not know belongs to no organization yet, so only platform adm
 
 ## If something doesn't work
 
-Open [Provisioning → Devices](app:/devices/). What you see there tells you how far the phone got.
+Open [Provisioning → Extension Mapping](app:/devices/). What you see there tells you how far the phone got.
 
 - **The phone appears under "Phones seen but not registered".** It reached Veyra and signed in correctly, but nobody has registered its MAC address yet. Choose **Register** on its row. This list covers the last 7 days.
 - **The phone is in neither list.** Veyra never saw a correct sign-in from it. Check:
@@ -106,7 +106,7 @@ Open [Provisioning → Devices](app:/devices/). What you see there tells you how
   - the enrollment user name and password (rotate the credential if you are not sure, and use the new one);
   - that the phone can reach the server, and that the firewall lets it in;
   - the certificate. A Poly or Yealink phone that cannot use HTTPS yet needs the trust bootstrap, a public certificate, or the CA installed by hand. A phone using the bootstrap must be on one of the **Phone bootstrap networks**.
-- **The phone is registered but its status is "Never provisioned".** The phone has not asked for its files since you registered it. Restart it, or wait for its daily check.
+- **The phone is registered but its status is "Never fetched".** The phone has not asked for its files since you registered it. Restart it, or wait for its daily check.
 - **Status "Error".** The last request failed. Open the phone, go to the **Configuration** tab and choose **Render**. An error there (for example a missing template) is the reason. Also read the **Needs attention** box at the top of the page.
 - **A reset phone no longer gets the bootstrap.** Use **Allow bootstrap again** on its **Status** tab.
 - **A phone that worked is refused.** Check that **Enabled** is on in the device's settings. Disabled phones are refused their configuration.

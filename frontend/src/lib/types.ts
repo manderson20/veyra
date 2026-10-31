@@ -2286,6 +2286,8 @@ export interface Device {
   firmware_state: "unknown" | "up_to_date" | "pending" | "none";
   is_enabled: boolean;
   status: DeviceStatus;
+  /** Has the phone fetched since its template or its own settings changed? */
+  config_state: "current" | "pending" | "never" | "none";
   last_seen_at: string | null;
   last_seen_ip: string | null;
   last_user_agent: string | null;

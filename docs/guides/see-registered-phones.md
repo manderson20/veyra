@@ -41,7 +41,7 @@ If the server has SIP trunks to carriers, the **Trunks** card shows Veyra's own 
 ## If something doesn't work
 
 - **A phone is missing from the list.**
-  1. Open the phone under [Provisioning → Devices](app:/devices/). If its status is **Never provisioned** or **Error**, it never got its configuration: see [Connect phones to Veyra](guide:connect-phones-to-veyra).
+  1. Open the phone under [Provisioning → Extension Mapping](app:/devices/). If its status is **Never provisioned** or **Error**, it never got its configuration: see [Connect phones to Veyra](guide:connect-phones-to-veyra).
   2. Check that the phone has an **Extension (line 1)** and that the extension is enabled.
   3. If more phones use the extension than it allows, the phone that registers last replaces the earliest one, so two phones on one extension keep pushing each other out.
 - **Unreachable.** The phone registered but no longer answers. It may have been unplugged, or a router between them is dropping traffic. Phones behind NAT are the usual case; check the router at that location.

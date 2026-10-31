@@ -6,6 +6,7 @@ import io
 
 from conftest import ADMIN_PASSWORD, login
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from test_api_rbac import make_org, make_user
 
 from veyra.core.db import session_scope
@@ -569,3 +570,82 @@ def test_template_default_used_by_model_keys_and_brands(admin, app):
     app.state.notify_phone = lambda action, endpoint: (asked.append(endpoint), (True, ""))[1]
     r = admin.post(f"{url}/{second['id']}/update-phones")
     assert r.json() == {"phones": 1, "asked": 1} and len(asked) == 1
+
+
+def test_extension_mapping_status_selection_and_list(admin, app):
+    org = _org(admin)
+    ext = _ext(admin, org["id"], "1301", "Mapped Phone")
+    a = _profile(admin, org["id"])
+    b = _profile(admin, org["id"], "VVX, Building B")
+    yealink = _profile(admin, org["id"], "Yealink desks", "yealink.base")
+    phone = admin.post(
+        DEVICES,
+        json={
+            "organization_id": org["id"],
+            "mac_address": "00:04:F2:00:02:01",
+            "manufacturer": "Poly",
+            "model": "VVX 411",
+            "profile_id": a["id"],
+            "primary_extension_id": ext["id"],
+        },
+    ).json()
+    assert phone["config_state"] == "never"
+
+    # Fetched after the last change: current. A template change: pending again.
+    def seen():
+        from veyra.core.models import Device
+        from veyra.core.models.base import utcnow
+
+        with session_scope() as db:
+            device = db.scalar(select(Device).where(Device.mac_address == phone["mac_address"]))
+            device.last_seen_at = utcnow()
+            device.last_result = "ok"
+
+    def state():
+        return admin.get(f"{DEVICES}/{phone['id']}").json()["config_state"]
+
+    seen()
+    assert state() == "current"
+    url = "/api/v1/device-profiles"
+    assert admin.patch(f"{url}/{a['id']}", json={"description": "changed"}).status_code == 200
+    assert state() == "pending"
+    seen()
+    assert state() == "current"
+
+    # Use Selected: one brand only, all or none.
+    r = admin.post(
+        f"{DEVICES}/use-template", json={"device_ids": [phone["id"]], "profile_id": yealink["id"]}
+    )
+    assert r.status_code == 422 and "for Yealink phones" in r.text
+    r = admin.post(
+        f"{DEVICES}/use-template", json={"device_ids": [phone["id"]], "profile_id": b["id"]}
+    )
+    assert r.json() == {"changed": 1}
+    assert state() == "pending"
+    assert admin.get(DEVICES, params={"q": "Mapped"}).json()["total"] == 1
+
+    asked = []
+    app.state.notify_phone = lambda action, endpoint: (asked.append(endpoint), (True, ""))[1]
+    r = admin.post(f"{DEVICES}/update-phones", json={"device_ids": [phone["id"]]})
+    assert r.json() == {"phones": 1, "asked": 1}
+
+    # The list: an export imports unchanged; new rows and errors are per row.
+    params = {"organization_id": org["id"]}
+    exported = admin.get("/api/v1/bulk/phones/export.csv", params=params).text
+    assert "1301" in exported and "VVX, Building B" in exported
+    url = "/api/v1/bulk/phones/import"
+    r = admin.post(url, params={**params, "dry_run": False}, json={"csv": exported}).json()
+    assert r["counts"]["unchanged"] == 1, r
+    text = (
+        "mac,extension,brand,model,template,label\r\n"
+        "00:04:F2:00:02:02,,Poly,VVX 411,VVX; Building A,\r\n"
+        "00:04:F2:00:02:03,,Poly,VVX 411,Yealink desks,\r\n"
+        "00:04:F2:00:02:04,,,,,\r\n"
+        f"{phone['mac_address']},,,,,Front desk\r\n"
+    )
+    r = admin.post(url, params={**params, "dry_run": False}, json={"csv": text}).json()
+    actions = [x["action"] for x in r["rows"]]
+    assert actions == ["error", "error", "error", "update"], r
+    assert "no template named" in r["rows"][0]["message"]
+    assert "Yealink" in r["rows"][1]["message"]
+    assert admin.get(f"{DEVICES}/{phone['id']}").json()["label"] == "Front desk"

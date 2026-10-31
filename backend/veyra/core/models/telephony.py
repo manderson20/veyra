@@ -234,6 +234,8 @@ class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # with the installation key. Purpose string: ``device.provisioning_secret:<id>``.
     provisioning_secret_ciphertext: Mapped[str | None] = mapped_column(Text)
     provisioning_secret_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Not updated_at: every fetch by the phone touches the row.
+    config_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_seen_ip: Mapped[str | None] = mapped_column(String(45))
     last_user_agent: Mapped[str | None] = mapped_column(String(200))

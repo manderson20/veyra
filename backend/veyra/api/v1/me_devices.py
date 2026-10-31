@@ -21,6 +21,7 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, forbidden, not_found
 from veyra.core.models import CallQueue, Device, DeviceProfile, Extension, RingGroup, UserContact
+from veyra.core.models.base import utcnow
 from veyra.core.security.principal import Principal
 from veyra.provisioning import facts
 from veyra.telephony.asterisk import cli
@@ -254,6 +255,7 @@ def apply_user_keys(
                 entry["contact_id"] = str(contact.id)
         new[slot] = entry
     device.user_keys = new
+    device.config_changed_at = utcnow()
     return new, user_slots
 
 

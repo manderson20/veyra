@@ -33,6 +33,7 @@ from veyra.core.models import (
     PagingZone,
     Site,
 )
+from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.provisioning import variables as provisioning_vars
@@ -655,6 +656,8 @@ def update_profile(
         details["zones"] = len(paging)
     if not details:
         return _outs(request, db, [profile])[0]
+    # Paging lives in another table, and a phone must still see this as a change.
+    profile.updated_at = utcnow()
     try:
         db.flush()
     except IntegrityError as e:

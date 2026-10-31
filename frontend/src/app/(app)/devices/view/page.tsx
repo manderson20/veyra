@@ -140,7 +140,7 @@ function DeviceView() {
 
   return (
     <div className="stack">
-      <PageHeader back={{ href: "/devices/", label: "Devices" }} title={d.label ?? d.mac_display}
+      <PageHeader back={{ href: "/devices/", label: "Extension Mapping" }} title={d.label ?? d.mac_display}
         description={<span className="row"><span className="mono">{d.mac_display}</span><span>{d.manufacturer} {d.model}</span><Badge tone={DEVICE_STATUS[d.status].tone}>{DEVICE_STATUS[d.status].label}</Badge>{!d.is_enabled ? <Badge tone="neutral">Disabled</Badge> : null}</span>}
         actions={editable ? (
           <>

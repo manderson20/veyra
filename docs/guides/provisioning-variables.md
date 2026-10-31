@@ -67,7 +67,7 @@ The **Built-in values** card lists the values every template has without any def
 
 ## See what a phone gets
 
-Open the phone under [Provisioning → Devices](app:/devices/), go to the **Configuration** tab, and look at the **Variables** card. It lists every variable that reaches the phone, its value, and the scope it came from. **Render** shows the files; a variable that a key or template uses but nobody defined is listed under **Missing variables**, and the setting or key is left out.
+Open the phone under [Provisioning → Extension Mapping](app:/devices/), go to the **Configuration** tab, and look at the **Variables** card. It lists every variable that reaches the phone, its value, and the scope it came from. **Render** shows the files; a variable that a key or template uses but nobody defined is listed under **Missing variables**, and the setting or key is left out.
 
 ## Remove a variable
 

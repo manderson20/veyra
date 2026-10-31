@@ -47,7 +47,7 @@ Each step has its own guide.
 6. **Users and roles.** Add the people who sign in and give them roles. See [Add users and give them roles](guide:users-and-roles).
 7. **Extensions.** Create an extension for each phone. See [Add extensions](guide:extensions).
 8. **Deploy the changes.** Changes to extensions, routes and trunks reach the phone system only when you choose **Deploy changes** in the top bar.
-9. **Phones.** Connect the desk phones under Provisioning → Devices.
+9. **Phones.** Connect the desk phones under Provisioning → Extension Mapping.
 10. **Backups.** Turn on scheduled backups under System → Backups.
 
 ## If something doesn't work

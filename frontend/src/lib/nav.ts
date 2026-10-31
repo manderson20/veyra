@@ -89,8 +89,8 @@ export const NAV: NavSection[] = [
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone }, group: "Coming later",
     })),
   ] },
-  { id: "provisioning", label: "Provisioning", icon: "device", description: "Phones, the templates of each brand, base files and firmware.", items: [
-    { label: "Devices", href: "/devices/", icon: "device", permissions: ["devices.read"], group: "Phones" },
+  { id: "provisioning", label: "Provisioning", icon: "device", description: "Extension mapping, the templates of each brand, base files and firmware.", items: [
+    { label: "Extension Mapping", href: "/devices/", icon: "device", permissions: ["devices.read"], group: "Phones" },
     { label: "Requests", href: "/provisioning/requests/", icon: "history", permissions: ["devices.read"], group: "Phones" },
     { label: "Add Brand", href: "/provisioning/brands/", icon: "plus", permissions: ["devices.read"], group: "Advanced" },
     { label: "Base Files", href: "/provisioning/", icon: "template", permissions: ["provisioning.read"], group: "Advanced" },

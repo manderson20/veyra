@@ -135,7 +135,7 @@
    "summary": "How a new phone finds this server, signs in for its configuration, and learns to trust Veyra's certificate.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.62",
+   "reviewed": "0.27.64",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/devices/",
@@ -159,10 +159,10 @@
   {
    "slug": "add-a-phone",
    "title": "Add a phone",
-   "summary": "Register a phone by its MAC address, give it a profile and extensions, and check that it picked up its configuration.",
+   "summary": "Map phones to extensions by MAC address, give them a template, and check that it picked up its configuration.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.62",
+   "reviewed": "0.27.64",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/devices/",
@@ -735,8 +735,8 @@
    "summary": "Create or change many extensions, users, routes or groups at once with a spreadsheet, or move from FreePBX.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.46",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.64",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/system/import/"
    ],
@@ -831,7 +831,7 @@
    "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.63",
+   "reviewed": "0.27.64",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/my-phone/"

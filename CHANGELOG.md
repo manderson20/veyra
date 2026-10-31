@@ -8,6 +8,19 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.64 — 2026-10-31
+
+Migration 0075 adds one phone column.
+
+### Added
+- **EndPoint Manager workflow, part 2: Extension Mapping** (#372) replaces the Devices list. One table shows each phone's extension, brand and MAC, IP and status, template and model. Template and model change right in the row, and Template lists only the row's brand.
+- **Add Extension** adds a phone as a new row. **Use Selected** moves ticked phones to one template, and **Update Phones** asks them to fetch now.
+- **Export List** and **Import List** handle phones as a CSV, with a check before importing. Phones are also a kind under System → Import and export.
+- **Green or yellow status**: green means the phone has fetched since its last change, and yellow means it has not.
+
+### Changed
+- Phones can also be searched by name, IP address and brand.
+
 ## 0.27.63 — 2026-10-31
 
 Migration 0074 adds two template columns. Nothing to convert.

@@ -51,7 +51,7 @@ To add a brand, open [Provisioning → Add Brand](app:/provisioning/brands/) and
 3. Fill in the settings, line keys and paging zones (below).
 4. Choose **Create template**.
 
-Then choose it for phones on the Devices page (see [Add a phone](guide:add-a-phone)).
+Then choose it for phones on the Extension Mapping page (see [Add a phone](guide:add-a-phone)).
 
 ## Settings
 
@@ -104,7 +104,7 @@ A problem with a template shows as a badge, for example:
 
 ## Delete a template
 
-**Delete** works only while no phone uses the template. Move its phones to another template first: click **more** under **Used By** or filter the Devices list by the template, and change each phone's **Template**.
+**Delete** works only while no phone uses the template. Move its phones to another template first: click **more** under **Used By** or filter Extension Mapping by the template, and change each phone's **Template**.
 
 ## If something doesn't work
 

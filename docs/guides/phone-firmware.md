@@ -34,7 +34,7 @@ The list shows each image with its file name, models, size, the start of its SHA
 
 ## Roll it out
 
-1. Test on one phone first: open the phone under [Provisioning → Devices](app:/devices/) and choose the image under **Firmware override** on the **Settings** tab. Save, then choose **Reprovision**.
+1. Test on one phone first: open the phone under [Provisioning → Extension Mapping](app:/devices/) and choose the image under **Firmware override** on the **Settings** tab. Save, then choose **Reprovision**.
 2. When it works, open the template under its brand in the Provisioning menu, choose the image under **Firmware** and save. Every phone of the template updates at its next daily check. To update one now, use **Reprovision** on its page.
 3. Remove the test phone's override again (set **Firmware override** back to **From the profile**).
 

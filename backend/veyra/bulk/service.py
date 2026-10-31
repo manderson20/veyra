@@ -40,6 +40,8 @@ from veyra.core.models import (
     ClassOfService,
     ConferenceRoom,
     Department,
+    Device,
+    DeviceProfile,
     Extension,
     ExtensionTemplate,
     FaxInbox,
@@ -59,6 +61,7 @@ from veyra.core.models import (
 )
 from veyra.core.models.routing import SipTrunk
 from veyra.core.security.principal import Principal
+from veyra.reporting.recording_export import safe_cell
 
 MAX_ROWS = 5000
 MAX_BYTES = 5 * 1024 * 1024
@@ -1382,6 +1385,93 @@ class TimeConditionsKind:
         return "update", []
 
 
+class PhonesKind:
+    """Extension Mapping's list (issue #372), matched on the MAC address."""
+
+    name = "phones"
+    label = "Phones (extension mapping)"
+    permission = "devices.write"
+    key = "mac"
+    columns = ["mac", "extension", "brand", "model", "template", "label"]
+
+    def export(self, db: Session, org: Organization) -> list[dict[str, str]]:
+        return [
+            {
+                "mac": d.mac_address,
+                "extension": _name_of(db, Extension, d.primary_extension_id),
+                "brand": d.manufacturer,
+                "model": d.model,
+                "template": safe_cell(_name_of(db, DeviceProfile, d.profile_id)),
+                "label": safe_cell(d.label),
+            }
+            for d in db.scalars(
+                select(Device)
+                .where(Device.organization_id == org.id)
+                .order_by(func.lower(Device.manufacturer), Device.mac_address)
+            )
+        ]
+
+    def apply(self, ctx: Ctx, row: dict[str, str]) -> tuple[str, list[str]]:
+        from veyra.api.v1 import devices as api
+
+        db, org = ctx.db, ctx.org
+        wanted: dict[str, Any] = {"mac_address": (row.get("mac") or "").strip()}
+        for col, target in (("brand", "manufacturer"), ("model", "model")):
+            v = _text(row, col)
+            if isinstance(v, str):
+                wanted[target] = v
+        label = _text(row, "label")
+        if label is not None:
+            wanted["label"] = None if label is _CLEARED else str(label).lstrip("'")
+        extension = _text(row, "extension")
+        if extension is not None:
+            wanted["primary_extension_id"] = (
+                None
+                if extension is _CLEARED
+                else _find(db, Extension, org.id, str(extension), "extension").id
+            )
+        template = _text(row, "template")
+        if template is not None:
+            if template is _CLEARED:
+                wanted["profile_id"] = None
+            else:
+                profile = db.scalar(
+                    select(DeviceProfile).where(
+                        DeviceProfile.organization_id == org.id,
+                        DeviceProfile.name == str(template).lstrip("'"),
+                    )
+                )
+                if profile is None:
+                    raise RowError(f"template: no template named {template}")
+                wanted["profile_id"] = profile.id
+        mac = api.DeviceIn.model_validate(
+            {"organization_id": org.id, "manufacturer": "x", "model": "x", **wanted}
+        ).mac_address
+        device = db.scalar(select(Device).where(Device.mac_address == mac))
+        if device is None:
+            for target, col in (("manufacturer", "brand"), ("model", "model")):
+                if target not in wanted:
+                    raise RowError(f"{col}: required for a new phone")
+            api.create_device(
+                api.DeviceIn(organization_id=org.id, **wanted),
+                ctx.request,
+                ctx.principal,
+                db,
+                ctx.rctx,
+            )
+            return "create", []
+        if device.organization_id != org.id:
+            raise RowError("this MAC address is registered in another organization")
+        wanted["mac_address"] = mac
+        changes = _changes(device, wanted)
+        if not changes:
+            return "unchanged", []
+        api.update_device(
+            device.id, api.DevicePatch(**changes), ctx.request, ctx.principal, db, ctx.rctx
+        )
+        return "update", sorted(changes)
+
+
 KINDS: dict[str, Any] = {
     k.name: k
     for k in (
@@ -1393,6 +1483,7 @@ KINDS: dict[str, Any] = {
         TimeConditionsKind(),
         InboundRoutesKind(),
         SharedInboxesKind(),
+        PhonesKind(),
     )
 }
 
