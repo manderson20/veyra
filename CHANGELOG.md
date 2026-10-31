@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.78 — 2026-11-01
+
+Migration 0084 adds one queue column. No deployment is needed.
+
+### Added
+- **Queue auto-pause** (#392): a queue can pause a logged-in agent after a chosen number of missed calls in a row. Off by default. It works from the queue log, so it can take a few minutes.
+
 ## 0.27.77 — 2026-11-01
 
 Migration 0083 adds three follow-me columns. No deployment is needed to link a calendar.

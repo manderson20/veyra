@@ -3,12 +3,18 @@
 §4.10): the queue API, the live state endpoint, phone events, the worker's
 sync and the generated configuration."""
 
+from datetime import timedelta
+
 import pytest
 from fake_adapter import FakeAdapter
+from sqlalchemy import delete
 from test_api_ivr import _ext, _org
 from test_generator_callflow import _context, _files, _snapshot
 
 from veyra.core.db import session_scope
+from veyra.core.models import QueueEvent
+from veyra.core.models.base import utcnow
+from veyra.reporting import queues as reporting_queues
 from veyra.telephony import agents
 
 QUEUES = "/api/v1/queues"
@@ -122,6 +128,50 @@ def test_dynamic_agents_state_api_events_and_sync(admin, app):
         assert (
             agents.sync(db, adapter) == 1 and "PJSIP/ghost" not in adapter.queue_state[queue_name]
         )
+
+
+def test_auto_pause_after_missed_calls_in_a_row(admin, app):
+    adapter = _fake(app)
+    org = _org(admin)
+    a = _ext(admin, org["id"], "6011", "Front")
+    q = _queue(
+        admin,
+        org,
+        [{"extension_id": a["id"], "penalty": 0, "dynamic": True}],
+        auto_pause_misses=2,
+        name="Auto",
+        number="2411",
+    )
+    assert q["auto_pause_misses"] == 2
+    url = f"{QUEUES}/{q['id']}/agents/{a['id']}/state"
+    assert admin.post(url, json={"logged_in": True}).status_code == 200
+
+    def feed(*events):
+        base = int((utcnow() + timedelta(minutes=1)).timestamp())
+        with session_scope() as db:
+            lines = [
+                f"{base + i}|c{i}|veyra-{q['slug']}|Front|{e}|{d}|x|y"
+                for i, (e, d) in enumerate(events)
+            ]
+            reporting_queues.ingest(db, lines)
+            reporting_queues.auto_pause(db, adapter)
+
+    def paused():
+        got = admin.get(f"{QUEUES}/{q['id']}").json()["members"][0]
+        return got["paused"], got["state_by"]
+
+    # A busy phone (no ring) and a call answered between misses don't count.
+    feed(("RINGNOANSWER", "0"), ("RINGNOANSWER", "15000"))
+    assert paused()[0] is False
+    with session_scope() as db:
+        db.execute(delete(QueueEvent))
+    feed(("RINGNOANSWER", "15000"), ("CONNECT", "4"), ("RINGNOANSWER", "15000"))
+    assert paused()[0] is False
+    with session_scope() as db:
+        db.execute(delete(QueueEvent))
+    feed(("RINGNOANSWER", "15000"), ("RINGNOANSWER", "15000"))
+    assert paused() == (True, "auto-pause")
+    assert adapter.queue_calls[-1][-1] is True
 
 
 def test_breakout_menu_is_validated_and_rendered(admin, app):

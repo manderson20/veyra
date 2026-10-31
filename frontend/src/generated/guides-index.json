@@ -338,7 +338,7 @@
    "summary": "Let callers wait in line with music and announcements until an agent is free, and let agents log in and out.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.71",
+   "reviewed": "0.27.78",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/queues/",

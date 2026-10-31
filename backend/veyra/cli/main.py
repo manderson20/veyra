@@ -1561,7 +1561,7 @@ def cmd_worker(args: argparse.Namespace) -> int:
                 from veyra.reporting import queues as queue_log
 
                 with session_scope() as db:
-                    queue_log.process(db)
+                    queue_log.process(db, adapter=get_adapter(settings))
                 # Fax jobs (docs/USER_PORTAL.md §9): start the queued sends,
                 # give up on attempts the engine never reported on.
                 from veyra.fax import service as fax_service

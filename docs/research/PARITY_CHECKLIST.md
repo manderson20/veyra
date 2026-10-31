@@ -14,7 +14,7 @@ comparison (PR #162) and a code-checked review of the Grandstream UCM6300 manual
 - [x] Remote forward codes for busy and no answer (FreePBX)
 - [x] Follow-me linked to a calendar (FreePBX, P1)
 - [ ] Pause reason codes (VQ Plus)
-- [ ] Queue auto-pause on no answer, written to the database row (FreeSWITCH, FreePBX)
+- [x] Queue auto-pause on no answer, written to the database row (FreeSWITCH, FreePBX)
 - [ ] Queue weight and importance (FreeSWITCH, FreePBX)
 - [ ] DISA (FreePBX, Grandstream)
 - [ ] Wake-up calls (Grandstream, FreePBX Hotel)

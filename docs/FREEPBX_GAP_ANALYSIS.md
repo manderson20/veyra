@@ -1,6 +1,6 @@
 # FreePBX feature gap analysis
 
-Veyra 0.27.77 compared with FreePBX 16/17, every free module and every
+Veyra 0.27.78 compared with FreePBX 16/17, every free module and every
 Sangoma commercial module (FreePBX add-ons and PBXact), as of
 2026-10-31. First written before the public release (now Milestone 23) so that no
 FreePBX feature is left out of the roadmap only because the current
@@ -240,7 +240,7 @@ below are the reasons a FreePBX site would hesitate.
 | Queues: eight strategies | six (no rrordered, wrandom) | ◐ | P3 |
 | **Queues: dynamic agents, log in/out and pause** (`*45/*46/*47`, BLF hints) | `*45/*46/*47`, queue page and API, BLF hints, per queue or all | ✔ | **P1** |
 | Queues: pause reason codes (VQ Plus) | no | ✘ | P2 |
-| Queues: auto-pause on no answer, member delay, agent announcement, report hold time | member delay and report hold time; no auto-pause or agent announcement | ◐ | P2 |
+| Queues: auto-pause on no answer, member delay, agent announcement, report hold time | member delay, report hold time and auto-pause (dynamic agents, after a few minutes); no agent announcement | ◐ | P2 |
 | Queues: join/leave-empty modes, max callers, max wait, failover, wrap-up, penalties, announcements, periodic announcements | yes | ✔ | |
 | **Queues: IVR break-out menu** (press a key during hold to leave voicemail) | an IVR menu's keys work while waiting | ✔ | **P1** |
 | Queues: hold-time announcement | a setting per queue | ✔ | P2 |
