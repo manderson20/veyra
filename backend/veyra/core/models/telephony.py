@@ -197,6 +197,14 @@ class FollowMe(Base):
     # Where the call goes when nobody answers: an extension number, else the
     # extension's own no-answer handling (forward, voicemail).
     no_answer_destination: Mapped[str | None] = mapped_column(String(32))
+    # On while an event of this calendar is on (issue #392); match: text in its title.
+    calendar_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("calendars.id", ondelete="SET NULL")
+    )
+    calendar_match: Mapped[str | None] = mapped_column(String(100))
+    # The current event: "switched" if the calendar turned follow-me on (and so
+    # turns it off), "kept" if it was on already; None: no event.
+    calendar_state: Mapped[str | None] = mapped_column(String(16))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

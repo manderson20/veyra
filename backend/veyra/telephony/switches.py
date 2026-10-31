@@ -18,11 +18,19 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from veyra.core.events import Event, bus
-from veyra.core.models import Calendar, CalendarEvent, CallFlow, Organization, TimeCondition
+from veyra.core.models import (
+    Calendar,
+    CalendarEvent,
+    CallFlow,
+    Extension,
+    FollowMe,
+    Organization,
+    TimeCondition,
+)
 from veyra.core.models.base import utcnow
 from veyra.telephony import routing
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
@@ -217,15 +225,21 @@ def expire(db: Session, now: datetime | None = None) -> list[TimeCondition]:
 
 
 def calendar_closed(db: Session, tc: TimeCondition, now: datetime | None = None) -> bool:
-    """An event of the condition's enabled calendar is on now. An all-day event
-    without an end lasts a day; a timed one without an end has no length."""
-    if tc.closed_calendar_id is None:
+    return event_on(db, tc.closed_calendar_id, tc.closed_calendar_match, now)
+
+
+def event_on(
+    db: Session, calendar_id: Any, match_text: str | None, now: datetime | None = None
+) -> bool:
+    """An event of the enabled calendar is on now. An all-day event without an
+    end lasts a day; a timed one without an end has no length."""
+    if calendar_id is None:
         return False
-    calendar = db.get(Calendar, tc.closed_calendar_id)
+    calendar = db.get(Calendar, calendar_id)
     if calendar is None or not calendar.is_enabled:
         return False
     now = now or utcnow()
-    match = (tc.closed_calendar_match or "").casefold()
+    match = (match_text or "").casefold()
     events = db.scalars(
         select(CalendarEvent).where(
             CalendarEvent.calendar_id == calendar.id, CalendarEvent.starts_at <= now
@@ -236,6 +250,43 @@ def calendar_closed(db: Session, tc: TimeCondition, now: datetime | None = None)
         if now < ends and match in e.summary.casefold():
             return True
     return False
+
+
+def follow_me_calendars(db: Session, adapter: Any, now: datetime | None = None) -> int:
+    """Follow-me linked to a calendar (issue #392): on when an event starts and
+    off when it ends, acting only at those moments, so a user's own switch
+    during an event stands, and a follow-me already on is left on."""
+    from veyra.telephony import extension_state
+
+    changed = 0
+    for row in db.scalars(
+        select(FollowMe).where(
+            or_(FollowMe.calendar_id.is_not(None), FollowMe.calendar_state.is_not(None))
+        )
+    ):
+        on = event_on(db, row.calendar_id, row.calendar_match, now)
+        if on == (row.calendar_state is not None):
+            continue
+        ext = db.get(Extension, row.extension_id)
+        if ext is None:
+            continue
+        if on:
+            state = extension_state.ensure(db, ext)
+            row.calendar_state = "kept" if state.fmfm_enabled else "switched"
+            if not state.fmfm_enabled:
+                extension_state.apply(
+                    db, ext, {"fmfm_enabled": True}, by="calendar", adapter=adapter
+                )
+                changed += 1
+        else:
+            if row.calendar_state == "switched":
+                extension_state.apply(
+                    db, ext, {"fmfm_enabled": False}, by="calendar", adapter=adapter
+                )
+                changed += 1
+            row.calendar_state = None
+    db.flush()
+    return changed
 
 
 def wanted(db: Session, now: datetime | None = None) -> dict[tuple[str, str, str], str]:

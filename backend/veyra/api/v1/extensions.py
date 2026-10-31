@@ -31,6 +31,7 @@ from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
 from veyra.core.models import (
     Building,
+    Calendar,
     CallQueue,
     ClassOfService,
     Department,
@@ -1164,6 +1165,8 @@ def _follow_me_out(row: FollowMe | None, state: ExtensionState | None) -> dict[s
         "caller_id_mode": row.caller_id_mode if row else "caller",
         "members": list(row.members or []) if row else [],
         "no_answer_destination": row.no_answer_destination if row else None,
+        "calendar_id": str(row.calendar_id) if row and row.calendar_id else None,
+        "calendar_match": row.calendar_match if row else None,
         "updated_at": row.updated_at.isoformat() if row and row.updated_at else None,
         "updated_by": row.updated_by if row else None,
     }
@@ -1241,6 +1244,46 @@ def save_follow_me(
         "confirm_calls": body.confirm_calls,
         "no_answer_destination": dest,
     }
+
+
+class FollowMeCalendarIn(BaseModel):
+    calendar_id: uuid.UUID | None = None
+    calendar_match: str | None = Field(None, max_length=100)
+
+
+@router.put("/{extension_id}/follow-me/calendar", summary="Link follow-me to a calendar")
+def put_follow_me_calendar(
+    extension_id: uuid.UUID,
+    body: FollowMeCalendarIn,
+    principal: Principal = Depends(require("extensions.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    """Takes effect at the worker's next pass; no deployment. Administrators
+    only: a user may not be able to see the organization's calendars."""
+    ext = _get_visible(db, principal, extension_id, "extensions.write")
+    if body.calendar_id is not None:
+        calendar = db.get(Calendar, body.calendar_id)
+        if calendar is None or calendar.organization_id != ext.organization_id:
+            raise _validation("calendar_id", "not a calendar of this organization")
+    row = db.get(FollowMe, ext.id)
+    if row is None:
+        row = FollowMe(extension_id=ext.id)
+        db.add(row)
+    row.calendar_id = body.calendar_id
+    row.calendar_match = (body.calendar_match or "").strip() or None
+    row.updated_by = principal.label[:320]
+    db.flush()
+    _record(
+        db,
+        ctx,
+        principal,
+        "extension.follow_me_update",
+        ext,
+        {"calendar": str(body.calendar_id) if body.calendar_id else None},
+    )
+    db.commit()
+    return _follow_me_out(row, extension_state.get(db, ext.id))
 
 
 @router.put("/{extension_id}/follow-me", summary="Change find me / follow me")

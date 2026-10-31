@@ -301,7 +301,7 @@ function ExtensionView() {
       </TabPanel>
 
       <TabPanel idBase="ext" id="followme" active={tab}>
-        <FollowMeCard base={`/extensions/${x.id}`} editable={editable} onDirty={followMeDirty} />
+        <FollowMeCard base={`/extensions/${x.id}`} editable={editable} onDirty={followMeDirty} organizationId={x.organization_id} />
       </TabPanel>
 
       {can("voicemail.read") ? (

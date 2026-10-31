@@ -82,8 +82,8 @@
    "summary": "Create an extension for each phone, assign it to a person, and set its caller ID, location, voicemail and phone options.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.67",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.77",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/extensions/",
     "/extensions/view/"

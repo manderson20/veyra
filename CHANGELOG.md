@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.77 — 2026-11-01
+
+Migration 0083 adds three follow-me columns. No deployment is needed to link a calendar.
+
+### Added
+- **Follow-me from a calendar** (#392): on the extension page, follow-me can switch on when an event starts in a chosen calendar and off when it ends, optionally only for events whose title contains a word. A switch by hand during an event stands, and a follow-me that was already on stays on.
+
 ## 0.27.76 — 2026-11-01
 
 No migration. The new codes need **Deploy changes**.

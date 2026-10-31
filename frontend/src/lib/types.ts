@@ -3433,6 +3433,8 @@ export interface FollowMe {
   caller_id_mode: "caller" | "extension" | string;
   members: FollowMeMember[];
   no_answer_destination: string | null;
+  calendar_id?: string | null;
+  calendar_match?: string | null;
   updated_at: string | null;
   updated_by: string | null;
 }

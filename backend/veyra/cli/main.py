@@ -1516,6 +1516,9 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         fixed = switches.sync(db, get_adapter(settings))
                         if fixed:
                             log.info("Synced %d switch(es) to the engine", fixed)
+                        switched = switches.follow_me_calendars(db, get_adapter(settings))
+                        if switched:
+                            log.info("A calendar switched follow-me on %d phone(s)", switched)
                         from veyra.telephony import blacklist
 
                         fixed = blacklist.sync(db, get_adapter(settings))

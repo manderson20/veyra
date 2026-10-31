@@ -4,7 +4,7 @@ summary: Create an extension for each phone, assign it to a person, and set its 
 audience: admin
 section: Getting started
 order: 50
-reviewed: 0.27.67
+reviewed: 0.27.77
 checked: 2026-10-29
 pages:
   - /extensions/
@@ -76,6 +76,8 @@ The person can change their own forwarding and Do Not Disturb on My Phone or wit
 ### Follow me
 
 Rings other numbers, such as a mobile, as well as the desk phone. Add up to 10 numbers with **Add a number**, choose whether they ring **All at once** or **One after another**, and choose **Save follow me**. Then switch **Follow me** on. **Outside numbers must press 1 to accept** stops a mobile's voicemail from taking the call.
+
+To switch it automatically, choose a calendar under **On during events of a calendar** and choose **Save calendar link**. Follow me comes on when an event starts and goes off when it ends, within a few minutes, with no deployment. Fill in **Only events whose title contains** to use only some events. A switch by hand during an event stands until the next event, and if follow me was already on, the event's end leaves it on. Only administrators can set this link.
 
 ### Voicemail
 

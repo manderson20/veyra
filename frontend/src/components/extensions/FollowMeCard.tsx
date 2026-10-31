@@ -5,13 +5,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Button, Callout, Card, Checkbox, SelectField, Switch, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatRelative } from "@/lib/format";
-import type { FollowMe, FollowMeMember } from "@/lib/types";
+import type { CalendarSub, FollowMe, FollowMeMember, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 
 /** Find me / follow me of one extension (docs/CALL_FEATURES.md §3.4); `base` is the extension's API path. */
-export function FollowMeCard({ base, editable, onDirty }: { base: string; editable: boolean; onDirty?: (dirty: boolean) => void }) {
+export function FollowMeCard({ base, editable, onDirty, organizationId }: { base: string; editable: boolean; onDirty?: (dirty: boolean) => void; /** Administrators: shows the calendar link. */ organizationId?: string }) {
   const toast = useToast();
   const errors = useFormErrors();
   const fm = useApiData<FollowMe>(`${base}/follow-me`);
@@ -26,6 +26,23 @@ export function FollowMeCard({ base, editable, onDirty }: { base: string; editab
     if (v) { setStrategy(v.strategy); setInitial(String(v.initial_ring_seconds)); setConfirm(v.confirm_calls); setCidMode(v.caller_id_mode); setMembers(v.members.map((m) => ({ ...m }))); setDest(v.no_answer_destination ?? ""); }
   });
   const d = fm.data;
+  const calendars = useApiData<Page<CalendarSub>>(organizationId ? "/calendars" : null, { organization_id: organizationId, limit: 100 });
+  const [calendarId, setCalendarId] = useState("");
+  const [calendarMatch, setCalendarMatch] = useState("");
+  useOnChange(fm.data, (v) => { if (v) { setCalendarId(v.calendar_id ?? ""); setCalendarMatch(v.calendar_match ?? ""); } });
+  const saveCalendar = async () => {
+    setBusy(true);
+    errors.clear();
+    try {
+      fm.setData(await api.put<FollowMe>(`${base}/follow-me/calendar`, { calendar_id: calendarId || null, calendar_match: calendarMatch.trim() || null }));
+      toast.success("Calendar link saved", "Takes effect within a few minutes; no deployment needed.");
+    } catch (err) {
+      errors.set(err);
+      toast.error("Could not save the calendar link", errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
   const body = { strategy, initial_ring_seconds: Number(initial), confirm_calls: confirm, caller_id_mode: cidMode, members: members.map((m) => ({ ...m, target: m.target.trim(), ring_seconds: Number(m.ring_seconds) })), no_answer_destination: dest.trim() || null };
   const dirty = !!d && JSON.stringify(body) !== JSON.stringify({ strategy: d.strategy, initial_ring_seconds: d.initial_ring_seconds, confirm_calls: d.confirm_calls, caller_id_mode: d.caller_id_mode, members: d.members, no_answer_destination: d.no_answer_destination });
   useEffect(() => {
@@ -86,6 +103,17 @@ export function FollowMeCard({ base, editable, onDirty }: { base: string; editab
         <Checkbox label="Outside numbers must press 1 to accept" checked={confirm} disabled={!editable || !d} onChange={(e) => setConfirm(e.target.checked)} description="Keeps a mobile’s voicemail from swallowing the call." />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
         {editable ? <div className="form-actions"><Button variant="primary" type="submit" loading={busy} disabled={!dirty}>Save follow me</Button></div> : null}
+        {organizationId ? (
+          <div className="stack stack--sm">
+            <div className="grid grid--2">
+              <SelectField label="On during events of a calendar" value={calendarId} disabled={!editable || !d} error={errors.fields.calendar_id}
+                options={[{ value: "", label: "No calendar" }, ...(calendars.data?.items ?? []).map((c) => ({ value: c.id, label: c.name }))]}
+                onChange={(e) => setCalendarId(e.target.value)} help="Switches follow me on when an event starts and off when it ends. A switch by hand during an event stands." />
+              {calendarId ? <TextField label="Only events whose title contains" value={calendarMatch} disabled={!editable || !d} maxLength={100} placeholder="Any event" onChange={(e) => setCalendarMatch(e.target.value)} /> : null}
+            </div>
+            <div><Button size="sm" disabled={!editable || busy || !d} onClick={() => void saveCalendar()}>Save calendar link</Button></div>
+          </div>
+        ) : null}
       </form>
     </Card>
   );

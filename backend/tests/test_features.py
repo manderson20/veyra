@@ -5,14 +5,18 @@ phone's UserEvent and the worker's sync with the engine."""
 
 from __future__ import annotations
 
+import uuid
+from datetime import timedelta
+
 import pytest
 from fake_adapter import FakeAdapter
 from fastapi.testclient import TestClient
 
 from veyra.configmgmt import service as configmgmt
 from veyra.core.db import session_scope
-from veyra.core.models import Extension, ExtensionState, SystemSetting
-from veyra.telephony import extension_state, features, snapshot
+from veyra.core.models import Calendar, CalendarEvent, Extension, ExtensionState, SystemSetting
+from veyra.core.models.base import utcnow
+from veyra.telephony import extension_state, features, snapshot, switches
 from veyra.telephony.asterisk import events, generator
 from veyra.telephony.settings import SipSettings
 
@@ -623,6 +627,61 @@ def test_generator_renders_follow_me():
         generator.generate(snap)
 
 
+def test_follow_me_follows_a_calendar_but_not_over_a_user(admin, app):
+    adapter = FakeAdapter()
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    r = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1501", "display_name": "A"},
+    )
+    ext_id = r.json()["id"]
+    now = utcnow()
+    with session_scope() as db:
+        calendar = Calendar(
+            organization_id=uuid.UUID(org["id"]),
+            name="Away",
+            url_ciphertext="x",
+            url_display="https://example.org",
+        )
+        db.add(calendar)
+        db.flush()
+        db.add(
+            CalendarEvent(
+                calendar_id=calendar.id,
+                uid="a",
+                summary="Away at the district office",
+                starts_at=now,
+                ends_at=now + timedelta(hours=1),
+                all_day=False,
+            )
+        )
+        calendar_id = str(calendar.id)
+    url = f"/api/v1/extensions/{ext_id}/follow-me/calendar"
+    assert admin.put(url, json={"calendar_id": str(uuid.uuid4())}).status_code == 422
+    r = admin.put(url, json={"calendar_id": calendar_id, "calendar_match": "away"})
+    assert r.status_code == 200 and r.json()["calendar_id"] == calendar_id
+
+    def on(moment):
+        with session_scope() as db:
+            switches.follow_me_calendars(db, adapter, moment)
+        with session_scope() as db:
+            return extension_state.get(db, uuid.UUID(ext_id)).fmfm_enabled
+
+    during, after = now + timedelta(minutes=1), now + timedelta(hours=2)
+    assert on(during) is True
+    # The user turned it off during the event: it stays off until the next event.
+    assert (
+        admin.put(f"/api/v1/extensions/{ext_id}/state", json={"fmfm_enabled": False}).status_code
+        == 200
+    )
+    assert on(during) is False
+    assert on(after) is False
+    # Already on by hand before an event: the event's end leaves it on.
+    admin.put(f"/api/v1/extensions/{ext_id}/state", json={"fmfm_enabled": True})
+    assert on(during) is True
+    assert on(after) is True
+
+
 def test_follow_me_api_and_toggle(admin, app):
     adapter = FakeAdapter()
     app.state.telephony = adapter
@@ -644,6 +703,8 @@ def test_follow_me_api_and_toggle(admin, app):
         "caller_id_mode": "caller",
         "members": [],
         "no_answer_destination": None,
+        "calendar_id": None,
+        "calendar_match": None,
         "updated_at": None,
         "updated_by": None,
     }
