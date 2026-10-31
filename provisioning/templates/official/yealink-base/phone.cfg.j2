@@ -14,6 +14,7 @@ account.{{ line.index }}.sip_server.1.address = {{ server.sip_host }}
 account.{{ line.index }}.sip_server.1.port = {{ server.sip_port }}
 account.{{ line.index }}.sip_server.1.transport_type = {{ tr }}
 account.{{ line.index }}.sip_server.1.expires = {{ registration_expires }}
+account.{{ line.index }}.srtp_encryption = {{ {"off": 0, "optional": 1, "required": 2}[server.srtp] }}
 {% if line.voicemail %}
 account.{{ line.index }}.subscribe_mwi = 1
 account.{{ line.index }}.subscribe_mwi_to_vm = 1

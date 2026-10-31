@@ -28,6 +28,7 @@ from veyra.telephony import custom_dialplan, features
 from veyra.telephony.adapter import Capability, EngineUnavailable, TelephonyAdapter
 from veyra.telephony.numbering import NumberingPlan, load_numbering_plan, save_numbering_plan
 from veyra.telephony.settings import CODECS, SipSettings, load_sip_settings, save_sip_settings
+from veyra.telephony.snapshot import srtp_profiles
 
 router = APIRouter(prefix="/telephony", tags=["telephony"])
 
@@ -172,6 +173,15 @@ def put_settings(
             code="validation_failed",
             errors=[{"field": "settings", "message": p} for p in problems],
         )
+    if not body.tls_enabled:
+        using = srtp_profiles(db)
+        if using:
+            raise ProblemError(
+                422,
+                "Settings not saved",
+                "Phones use SRTP over TLS on these device profiles: " + ", ".join(using) + ".",
+                code="tls_in_use",
+            )
     before = load_sip_settings(db).model_dump(mode="json")
     save_sip_settings(db, body, updated_by=principal.user_id)
     after = body.model_dump(mode="json")

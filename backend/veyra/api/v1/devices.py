@@ -464,7 +464,9 @@ def _check_values(
     if profile is None:
         raise common.validation("values", "choose a profile before overriding values")
     resolved = common.resolve_template(catalog_for(request, db), profile.template_key, "profile_id")
-    return common.check_values(resolved, values, "values", existing)
+    checked = common.check_values(resolved, values, "values", existing)
+    common.check_srtp(db, checked, profile.values)
+    return checked
 
 
 def _record(

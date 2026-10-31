@@ -212,8 +212,17 @@ bootstrap, DEVICE_PROVISIONING.md §6), `media_encryption=sdes` with
 `media_encryption_optimistic` per endpoint; the provisioning templates for
 the supported families get `sip_transport` and `srtp` facts. The firewall
 opens 5061 like 5060. Trunks are unchanged (a carrier's TLS trunk is a
-trunk setting that exists). This is the largest item of the milestone; if
-time is short it becomes 17b (§12 question 4).
+trunk setting that exists).
+
+Built in 0.27.60 (issue #49), for the Poly and Yealink families: the profile
+variable `srtp` is `off`, `optional` or `required`. SDES carries its keys in
+the signalling, so SRTP counts only on the TLS transport; a profile or device
+that asks for it otherwise is refused, as is turning TLS off while a profile
+uses it. The endpoint's setting comes from every phone on the extension, and
+any mix becomes optional so that a shared extension loses no phone. A
+softphone with no provisioned device has no profile, so it stays unencrypted.
+Grandstream, Algo and trunk SRTP are not built. Verified with generated files
+only; not with phones or a carrier.
 
 ### 3.4 Smaller items
 

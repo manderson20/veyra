@@ -4,7 +4,7 @@ features = ["intercom_auto_answer", "hotline", "multi_line", "line_keys", "blf",
 [template]
 key = "poly.vvx.base"
 name = "Poly VVX (common settings)"
-version = "0.4.0"
+version = "0.5.0"
 manufacturer = "Poly"
 abstract = true
 firmware = "UC Software 5.9 / 6.x"
@@ -31,6 +31,12 @@ name = "sip_transport"
 description = "SIP transport for the registrations"
 default = "UDPOnly"
 pattern = "^(UDPOnly|TCPOnly|TLS|DNSnaptr)$"
+
+[[variables]]
+name = "srtp"
+description = "Encrypt call audio with SRTP: off, optional (falls back to plain audio) or required. Needs the TLS transport."
+default = "off"
+pattern = "^(off|optional|required)$"
 
 [[variables]]
 name = "registration_expires"

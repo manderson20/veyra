@@ -4,7 +4,7 @@ summary: Register a phone by its MAC address, give it a profile and extensions, 
 audience: admin
 section: Phones and devices
 order: 20
-reviewed: 0.27.54
+reviewed: 0.27.60
 pages:
   - /devices/
   - /devices/view/

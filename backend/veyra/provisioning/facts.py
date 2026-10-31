@@ -35,7 +35,7 @@ from veyra.core.models import (
     VoicemailBox,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
-from veyra.provisioning import bootstrap
+from veyra.provisioning import bootstrap, srtp
 from veyra.provisioning.renderer import (
     MASK,
     RenderedFile,
@@ -613,6 +613,10 @@ def build_facts(
     sip = load_sip_settings(db)
     transport = str(values.get("sip_transport") or "UDPOnly")
     sip_port = sip.tls_port if transport == "TLS" and sip.tls_enabled else sip.udp_port
+    srtp_mode = srtp.effective(values, sip)
+    srtp_problem = srtp.problem(values, sip)
+    if srtp_problem and warnings is not None:
+        warnings.append(srtp_problem)
     sip_host = str(
         values.get("sip_server") or sip.external_signaling_address or _host(settings, host)
     )
@@ -652,6 +656,7 @@ def build_facts(
             "sip_host": sip_host,
             "sip_port": sip_port,
             "transport": transport,
+            "srtp": srtp_mode,
             "provisioning_url": f"{base}/provisioning/",
             "directory_url": f"{base}/provisioning/directory/",
             # For devices that take the server and the path separately (Algo).
@@ -810,6 +815,9 @@ def sample_facts(values: dict[str, Any], mac: str, model: str) -> dict[str, Any]
             "sip_host": host,
             "sip_port": int(values.get("sip_port") or 5060),
             "transport": str(values.get("sip_transport") or "UDPOnly"),
+            "srtp": str(values.get("srtp") or "off")
+            if str(values.get("sip_transport") or "UDPOnly") == "TLS"
+            else "off",
             "provisioning_url": str(
                 values.get("provisioning_url") or f"https://{host}/provisioning/"
             ),

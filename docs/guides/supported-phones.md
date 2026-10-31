@@ -4,7 +4,7 @@ summary: Which phones, analog adapters and paging speakers Veyra can configure, 
 audience: admin
 section: Phones and devices
 order: 15
-reviewed: 0.27.55
+reviewed: 0.27.60
 checked: 2026-10-29
 pages:
   - /provisioning/
@@ -71,3 +71,7 @@ Each template's page (**Overview** tab, **Firmware**) names the firmware it was 
 ## How phones first reach Veyra
 
 The **Redirect services** card on the same page shows the provisioning URL and each vendor's zero-touch service. See [Connect phones to Veyra](guide:connect-phones-to-veyra).
+
+## Encrypted calls
+
+Poly and Yealink phones can encrypt call audio with SRTP, set on the device profile. See [Device profiles](guide:device-profiles). Other families cannot yet.

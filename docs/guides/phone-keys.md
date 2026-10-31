@@ -4,7 +4,7 @@ summary: Set up the programmable keys on desk phones (lines, busy lamps, speed d
 audience: admin
 section: Phones and devices
 order: 40
-reviewed: 0.27.45
+reviewed: 0.27.60
 checked: 2026-10-29
 pages:
   - /device-profiles/view/

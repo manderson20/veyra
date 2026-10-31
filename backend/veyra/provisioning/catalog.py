@@ -147,6 +147,7 @@ GROUPS: tuple[Group, ...] = (
             Fact("server.sip_host", "SIP server host or address"),
             Fact("server.sip_port", "SIP port for the profile's transport"),
             Fact("server.transport", "UDPOnly, TCPOnly, TLS or DNSnaptr"),
+            Fact("server.srtp", "off, optional or required; off unless the transport is TLS"),
             Fact("server.host", "Web host name"),
             Fact("server.provisioning_url", "Provisioning address, ending in /"),
             Fact("server.provisioning_path", "Provisioning path without the host"),

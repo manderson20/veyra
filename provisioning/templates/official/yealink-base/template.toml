@@ -4,7 +4,7 @@ features = ["intercom_auto_answer", "hotline", "multi_line", "line_keys", "blf",
 [template]
 key = "yealink.base"
 name = "Yealink (common settings)"
-version = "0.3.0"
+version = "0.4.0"
 manufacturer = "Yealink"
 abstract = true
 firmware = "Yealink firmware 66.86 / 96.86 and later"
@@ -27,6 +27,12 @@ name = "sip_transport"
 description = "SIP transport for the registrations (same values as the Poly family)"
 default = "UDPOnly"
 pattern = "^(UDPOnly|TCPOnly|TLS|DNSnaptr)$"
+
+[[variables]]
+name = "srtp"
+description = "Encrypt call audio with SRTP: off, optional (falls back to plain audio) or required. Needs the TLS transport."
+default = "off"
+pattern = "^(off|optional|required)$"
 
 [[variables]]
 name = "registration_expires"

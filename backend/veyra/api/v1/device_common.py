@@ -22,9 +22,11 @@ from veyra.core.models import (
     Site,
     TimeCondition,
 )
+from veyra.provisioning import srtp
 from veyra.provisioning.renderer import ResolvedTemplate, TemplateCatalog, coerce_one
 from veyra.provisioning.spec import TemplateError
 from veyra.provisioning.variables import MASK
+from veyra.telephony.settings import load_sip_settings
 
 MAX_KEYS = 48
 MAX_LINES = 8
@@ -308,3 +310,11 @@ def catalog_models(catalog: TemplateCatalog) -> dict[str, list[str]]:
 
 def slug_ok(value: str) -> bool:
     return bool(_SLUG_RE.match(value))
+
+
+def check_srtp(db: Session, values: dict[str, Any], fallback: dict[str, Any] | None = None) -> None:
+    """Refuse SRTP that would not take effect: saying "required" and sending
+    plain audio is worse than saying "off"."""
+    message = srtp.problem({**(fallback or {}), **values}, load_sip_settings(db))
+    if message:
+        raise validation("values", message)

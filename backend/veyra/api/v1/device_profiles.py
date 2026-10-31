@@ -367,6 +367,7 @@ def create_profile(
     catalog = catalog_for(request, db)
     resolved = common.resolve_template(catalog, body.template_key, "template_key", org.id)
     values = common.check_values(resolved, body.values, "values")
+    common.check_srtp(db, values)
     common.check_keys(db, org.id, body.keys, "keys")
     common.check_site(db, org.id, body.site_id)
     common.check_firmware(
@@ -436,6 +437,7 @@ def update_profile(
         values = common.check_values(
             resolved, changes.get("values", profile.values) or {}, "values", profile.values
         )
+        common.check_srtp(db, values)
         if values != profile.values:
             profile.values = values
             details["values"] = sorted(values)

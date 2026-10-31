@@ -4,7 +4,7 @@ summary: Group phones that share a template, settings, keys, paging zones and fi
 audience: admin
 section: Phones and devices
 order: 30
-reviewed: 0.27.44
+reviewed: 0.27.60
 checked: 2026-10-29T20:28Z
 pages:
   - /device-profiles/
@@ -89,3 +89,17 @@ The list of profiles shows a **Ready** badge, or the first problem, for example:
 - **"A device profile with that name exists in this organization."** Choose another name.
 - **"only one zone can be the default group"** (or priority, or emergency). Give that role to a single zone.
 - **A setting is refused** (for example *has an invalid format*). The template only allows certain values. Read the setting's description on the template's **Variables** tab.
+
+## Encrypt call audio
+
+On a Poly or Yealink profile, **SRTP** encrypts call audio between the phone and Veyra. It can be **off**, **optional** (falls back to plain audio) or **required**.
+
+SRTP needs TLS:
+
+1. Turn on the TLS transport in Telephony settings.
+2. Set the profile's **SIP transport** to `TLS`.
+3. Set **SRTP** and save, then let the phones pick up their new configuration.
+
+Veyra refuses SRTP without TLS, because the encryption keys travel in the signalling.
+
+> **Note:** If several phones share an extension and not all of them require SRTP, the extension accepts plain audio. Only the leg between the phone and Veyra is encrypted; calls to your carrier are not covered.

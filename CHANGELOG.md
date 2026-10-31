@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.60 — 2026-10-31
+
+No migration.
+
+### Added
+- **Encrypted call audio (SRTP)** (#49): a device profile on the Poly or Yealink templates can set **SRTP** to off, optional or required, with the TLS transport. It is refused without TLS, because the encryption keys travel in the signalling. Other phone families and trunks are not covered yet.
+
 ## 0.27.59 — 2026-10-31
 
 No migration. The update changes the nginx site and the API's service file.

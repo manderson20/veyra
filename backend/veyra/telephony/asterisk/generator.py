@@ -792,9 +792,22 @@ def _endpoints(
             if ext.get("fax_t38")
             else []
         )
+        # SRTP (docs/PRODUCTION_HARDENING.md §3.3): keys in the TLS signalling.
+        srtp = str(ext.get("srtp") or "off")
+        if srtp not in ("off", "optional", "required"):
+            raise GenerationError(f"endpoint {name!r}: unknown SRTP mode {srtp!r}")
+        media = (
+            []
+            if srtp == "off"
+            else [
+                "media_encryption=sdes",
+                f"media_encryption_optimistic={'yes' if srtp == 'optional' else 'no'}",
+            ]
+        )
         lines += [
             f"; {org} {number}",
             f"[{name}](veyra-endpoint)",
+            *media,
             *([f"context={n.internal}"] if n.ns else []),
             f"auth={name}",
             f"aors={name}",

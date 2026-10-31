@@ -204,6 +204,12 @@ elif [[ "$ENGINE" == "asterisk" ]]; then
     else
         check engine-cli fail "the veyra service account cannot use the Asterisk CLI (asterisk.conf, under an active [files] header: astctlpermissions = 0660, astctlgroup = asterisk, then restart Asterisk); phones cannot be told to reprovision"
     fi
+    # Encrypted call audio (docs/PRODUCTION_HARDENING.md §3.3) needs this module.
+    if asterisk -rx "module show like res_srtp" 2>/dev/null | grep -q "res_srtp.so"; then
+        check engine-srtp pass "res_srtp is loaded"
+    else
+        check engine-srtp warn "res_srtp is not loaded; phones set to require SRTP cannot make calls"
+    fi
     if asterisk -rx "moh show classes" 2>/dev/null | grep -q "Class: default"; then
         check engine-moh pass "music-on-hold class default is loaded"
     else

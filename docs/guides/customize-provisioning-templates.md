@@ -4,7 +4,7 @@ summary: Change what Veyra writes into phones' configuration files with your own
 audience: admin
 section: Phones and devices
 order: 60
-reviewed: 0.27.55
+reviewed: 0.27.60
 pages:
   - /provisioning/
   - /provisioning/view/

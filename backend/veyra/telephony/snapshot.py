@@ -31,6 +31,7 @@ from veyra.core.models import (
     ClassOfService,
     ConferenceRoom,
     Device,
+    DeviceProfile,
     DirectoryEntry,
     DirectorySettings,
     Extension,
@@ -66,6 +67,7 @@ from veyra.core.models import (
     VoicemailBoxMember,
 )
 from veyra.core.security.crypto import DecryptionError, InstallationKey
+from veyra.provisioning import srtp
 from veyra.telephony import custom_dialplan, extension_state, features, moh
 from veyra.telephony.numbering import load_numbering_plan
 from veyra.telephony.settings import load_sip_settings
@@ -359,6 +361,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         if s.organization_id in active
     ]
     contacts = _contacts(db, ext_by_id)
+    srtp_modes = _srtp_modes(db, ext_by_id)
     ring_groups = [
         g
         for g in db.scalars(select(RingGroup).order_by(RingGroup.number)).all()
@@ -511,6 +514,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 # Phones that may register (docs/EXTENSIONS.md §1): the larger of
                 # the administrator's limit and the provisioned-phone count.
                 "max_contacts": max(contacts.get(e.id, 1), e.max_registrations or 1),
+                "srtp": srtp_modes.get(e.id, "off"),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
                 "shared_mailboxes": shared_by_ext.get(e.id, []),
@@ -692,6 +696,43 @@ def _contacts(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, int]:
     """Extensions carried by more than one device register more than once."""
     counts = provisioned_phones(db, set(ext_by_id))
     return {k: v for k, v in counts.items() if v > 1}
+
+
+def _device_extensions(d: Device) -> list[Any]:
+    ids: list[Any] = [d.primary_extension_id] if d.primary_extension_id else []
+    for line in d.lines or []:
+        try:
+            ids.append(uuid.UUID(str(line.get("extension_id"))))
+        except (ValueError, AttributeError):
+            continue
+    return ids
+
+
+def _srtp_modes(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, str]:
+    """Each extension's SRTP setting, from every enabled phone that carries it
+    (docs/PRODUCTION_HARDENING.md §3.3)."""
+    sip = load_sip_settings(db)
+    profiles = {p.id: p for p in db.scalars(select(DeviceProfile))}
+    modes: dict[Any, list[str]] = {}
+    for d in db.scalars(select(Device).where(Device.is_enabled.is_(True))):
+        profile = profiles.get(d.profile_id)
+        values = {**(profile.values if profile else {}), **(d.values or {})}
+        mode = srtp.effective(values, sip)
+        for ext_id in _device_extensions(d):
+            if ext_id in ext_by_id:
+                modes.setdefault(ext_id, []).append(mode)
+    return {k: srtp.for_extension(v) for k, v in modes.items()}
+
+
+def srtp_profiles(db: Session) -> list[str]:
+    """Device profiles and phones that ask for SRTP, which needs TLS on."""
+    out = [p.name for p in db.scalars(select(DeviceProfile)) if srtp.requested(p.values) != "off"]
+    out += [
+        d.label or d.mac_address
+        for d in db.scalars(select(Device))
+        if srtp.requested(d.values or {}) != "off"
+    ]
+    return sorted(out)
 
 
 class Targets:
