@@ -4,17 +4,20 @@ summary: Each brand has its templates. A template holds the settings, line keys,
 audience: admin
 section: Phones and devices
 order: 30
-reviewed: 0.27.63
+reviewed: 0.27.65
 checked: 2026-10-29T20:28Z
 pages:
   - /provisioning/brands/
   - /provisioning/brands/view/
   - /provisioning/brands/template/
+  - /provisioning/base-file-edit/
 covers:
   - frontend/src/app/(app)/provisioning/brands/*
   - frontend/src/app/(app)/provisioning/brands/view/*
   - frontend/src/app/(app)/provisioning/brands/template/*
   - frontend/src/components/devices/NewTemplateDialog.tsx
+  - frontend/src/app/(app)/provisioning/base-file-edit/*
+  - backend/veyra/provisioning/base_edits.py
   - frontend/src/components/devices/ProfileFields.tsx
   - frontend/src/hooks/useProfileOptions.ts
   - backend/veyra/api/v1/device_profiles.py
@@ -101,6 +104,30 @@ A problem with a template shows as a badge, for example:
 
 - *No model's base file inherits from this family yet.* The family has no file for any model, so no phone can use it.
 - *Base file … is missing; phones cannot be provisioned.* The base file was deleted or failed to load. The template then appears under **Other** in the Provisioning menu. Pick another base file.
+
+## Change one setting of a phone's file
+
+Sometimes a phone needs a setting that the template does not offer. **Base File Edit** changes it without touching the base file. Your change belongs to the template, survives updates, and is applied after the file is built.
+
+1. Open [Provisioning → Base File Edit](app:/provisioning/base-file-edit/), or the link on the template's page.
+2. Choose the **Brand**, **Template**, **Model** and, if there are several, the **File**.
+3. Click a value in the file. **Parameter** and **Value** open beside it.
+4. Under **Applies to Model(s)**, click the models that should get the change.
+5. Choose one:
+   - **Change Basefile** stores the new value.
+   - **Delete Entry** takes the setting out of the file.
+
+To set something the file does not contain yet, choose **Add Entry** and type the parameter as the phone maker's documentation names it. Be careful: Veyra cannot tell whether the phone understands it. On Poly's first file, which has no room for more settings, an added entry has no effect. Use the phone's own configuration file instead.
+
+**Changes in this template** lists every change, with **Undo**. Phones pick changes up at their next check, or choose **Update Phones**.
+
+Good to know:
+
+- The file shows example line and server details. Settings from line keys and paging appear only for a real phone, on its **Configuration** tab. You can still add them by name, and a change there wins over the built value.
+- A change to `reg.1.label` or similar applies to every phone of the template, whichever extension it has.
+- Passwords are hidden and cannot be changed here. Set them in the template's settings.
+- You need permission to change both phones and provisioning.
+- To change the structure of a file, use the code editor: open the base file under [Provisioning → Base Files](app:/provisioning/) and choose **Customize**.
 
 ## Delete a template
 

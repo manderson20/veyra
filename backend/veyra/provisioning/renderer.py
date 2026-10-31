@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -34,6 +34,7 @@ from jinja2 import (
 from jinja2.exceptions import SecurityError, UndefinedError
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
+from veyra.provisioning import base_edits
 from veyra.provisioning.spec import (
     CORE_VARIABLES,
     DEVICE_VARIABLES,
@@ -99,6 +100,8 @@ class RenderedFile:
     filename: str
     format: str
     content: str
+    # The file's name in the base file, such as ``{mac}.cfg``.
+    source_name: str = ""
 
 
 def read_template_dir(directory: Path, source: str) -> TemplateRecord:
@@ -379,10 +382,12 @@ def render(
     model: str,
     mask_secrets: bool = False,
     facts: Mapping[str, Any] | None = None,
+    edits: Iterable[Mapping[str, Any]] = (),
 ) -> list[RenderedFile]:
     """Render every file of a concrete template. ``facts`` are the structured
     objects of spec version 2 (already masked by the caller when needed); they
-    are added to the context as they are, never validated as variables."""
+    are added to the context as they are, never validated as variables. ``edits``
+    are the template's Base File Edit changes; checksums cover the result."""
     if resolved.record.manifest.template.abstract:
         raise TemplateError("Abstract templates cannot be rendered; use a model template")
     if model not in resolved.record.manifest.template.models:
@@ -418,9 +423,12 @@ def render(
             ValueError,
         ) as e:
             raise TemplateError(f"{f.name}: rendering failed: {e}") from e
+        content = base_edits.apply(f.format, content, f.name, model, edits)
         if len(content.encode()) > MAX_OUTPUT_BYTES:
             raise TemplateError(f"{f.name}: output is too large")
-        rendered.append(RenderedFile(output_filename(f.name, mac, model), f.format, content))
+        rendered.append(
+            RenderedFile(output_filename(f.name, mac, model), f.format, content, f.name)
+        )
     by_name = {r.filename: r for r in rendered}
     for f in resolved.files:
         if not f.checksum_of:

@@ -112,7 +112,7 @@ describe("brand entries", () => {
   it("lists each brand between the phones and the advanced items", () => {
     const nav = buildNav({ permissions: ["devices.read", "provisioning.read"], isPlatformAdmin: false, brands: ["Poly", "Yealink"] });
     const items = nav.find((s) => s.id === "provisioning")!.items;
-    expect(items.map((i) => i.group)).toEqual(["Phones", "Phones", "Brands", "Brands", "Advanced", "Advanced", "Advanced", "Advanced"]);
+    expect(items.map((i) => i.group)).toEqual(["Phones", "Phones", "Brands", "Brands", "Advanced", "Advanced", "Advanced", "Advanced", "Advanced"]);
     expect(items[2]!.href).toBe("/provisioning/brands/view/?name=Poly");
   });
 });

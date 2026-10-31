@@ -37,7 +37,9 @@ from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.provisioning import variables as provisioning_vars
-from veyra.provisioning.renderer import TemplateCatalog
+from veyra.provisioning.base_edits import PARAMETER, SECRET_NAME, settings
+from veyra.provisioning.renderer import MASK, TemplateCatalog, render
+from veyra.provisioning.spec import TemplateError
 from veyra.telephony.asterisk import cli
 
 router = APIRouter(prefix="/device-profiles", tags=["devices"])
@@ -112,6 +114,30 @@ class FirmwareRef(BaseModel):
     filename: str
 
 
+class BaseEdit(BaseModel):
+    file: str = Field(min_length=1, max_length=200)
+    parameter: str = Field(min_length=1, max_length=200)
+    value: str = Field("", max_length=2000)
+    remove: bool = False
+    models: list[str] = Field(min_length=1, max_length=200)
+
+    @field_validator("parameter")
+    @classmethod
+    def _parameter(cls, v: str) -> str:
+        if not PARAMETER.fullmatch(v):
+            raise ValueError("letters, digits, dots, dashes and underscores only")
+        if SECRET_NAME.search(v):
+            raise ValueError("passwords are set in the template's settings, not here")
+        return v
+
+    @field_validator("value")
+    @classmethod
+    def _value(cls, v: str) -> str:
+        if any(c in v for c in "\r\n\0"):
+            raise ValueError("a value is one line")
+        return v
+
+
 class UsedBy(BaseModel):
     device_id: uuid.UUID
     label: str
@@ -142,6 +168,7 @@ class ProfileOut(BaseModel):
     keys: list[LineKey]
     model_keys: dict[str, list[LineKey]]
     is_default: bool
+    base_edits: list[BaseEdit]
     paging: list[PagingMembershipOut]
     firmware: FirmwareRef | None
     devices: int
@@ -330,6 +357,7 @@ def _outs(request: Request, db: Session, rows: list[DeviceProfile]) -> list[Prof
                     for m, keys in (r.model_keys or {}).items()
                 },
                 is_default=r.is_default,
+                base_edits=[BaseEdit.model_validate(e) for e in (r.base_edits or [])],
                 paging=paging,
                 firmware=(
                     FirmwareRef(
@@ -720,3 +748,154 @@ def update_phones(
     )
     db.commit()
     return UpdatePhonesOut(phones=len(devices), asked=asked)
+
+
+# What a real phone gets from its extension and the server.
+SAMPLE_PHONE = {
+    "extension_number": "1001",
+    "sip_username": "example-1001",
+    "sip_password": "example",
+    "sip_server": "pbx.example.org",
+    "sip_port": 5060,
+    "display_name": "Example",
+    "timezone": "UTC",
+    "ntp_server": "pool.ntp.org",
+    "provisioning_url": "https://pbx.example.org/provisioning/",
+}
+
+
+class BaseFileSetting(BaseModel):
+    parameter: str
+    value: str
+    start: int
+    end: int
+    secret: bool
+
+
+class BaseFileOut(BaseModel):
+    file: str
+    filename: str
+    format: str
+    content: str
+    settings: list[BaseFileSetting]
+
+
+class BaseEditsIn(BaseModel):
+    edits: list[BaseEdit] = Field(max_length=500)
+
+
+def _base_files(
+    catalog: TemplateCatalog, profile: DeviceProfile, model: str, edits: list[dict[str, Any]]
+) -> list[BaseFileOut]:
+    """The files of a phone of this model, with sample line and server details
+    and secrets masked. Files that are only checksums have nothing to change."""
+    key = _served_models(catalog, profile.template_key, profile.organization_id).get(model)
+    if key is None:
+        raise common.validation("model", f"this template does not serve {model}")
+    resolved = catalog.resolve(key)
+    files = render(
+        resolved,
+        {
+            **{k: v for k, v in SAMPLE_PHONE.items() if k in resolved.variables},
+            **dict(profile.values),
+        },
+        mac="000000000000",
+        model=model,
+        mask_secrets=True,
+        edits=edits,
+    )
+    return [
+        BaseFileOut(
+            file=f.source_name,
+            filename=f.filename,
+            format=f.format,
+            content=f.content,
+            settings=[
+                BaseFileSetting(
+                    parameter=s.parameter,
+                    value=s.value,
+                    start=s.start,
+                    end=s.end,
+                    secret=s.value == MASK or bool(SECRET_NAME.search(s.parameter)),
+                )
+                for s in settings(f.format, f.content)
+            ],
+        )
+        for f in files
+        if f.source_name
+    ]
+
+
+@router.get(
+    "/{profile_id}/base-files",
+    response_model=list[BaseFileOut],
+    summary="A model's files with this template's edits, secrets masked",
+)
+def base_files(
+    profile_id: uuid.UUID,
+    request: Request,
+    model: str = Query(min_length=1, max_length=64),
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> list[BaseFileOut]:
+    profile = _get(db, principal, profile_id, READ)
+    try:
+        return _base_files(catalog_for(request, db), profile, model, list(profile.base_edits or []))
+    except TemplateError as e:
+        raise common.validation("model", "; ".join(e.errors) or str(e)) from e
+
+
+@router.put(
+    "/{profile_id}/base-edits", response_model=ProfileOut, summary="Save the Base File Edit changes"
+)
+def save_base_edits(
+    profile_id: uuid.UUID,
+    body: BaseEditsIn,
+    request: Request,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> ProfileOut:
+    profile = _get(db, principal, profile_id, WRITE)
+    # This reaches the same phone settings as editing a base file.
+    if not principal.has("provisioning.write", profile.organization_id):
+        raise forbidden()
+    catalog = catalog_for(request, db)
+    served = _served_models(catalog, profile.template_key, profile.organization_id)
+    taken: set[tuple[str, str, str]] = set()
+    for edit in body.edits:
+        for model in edit.models:
+            if model not in served:
+                raise common.validation("edits", f"this template does not serve {model}")
+            place = (edit.file, edit.parameter, model)
+            if place in taken:
+                raise common.validation("edits", f"{edit.parameter} is changed twice for {model}")
+            taken.add(place)
+    dumped = [e.model_dump() for e in body.edits]
+    known_masked: dict[str, set[tuple[str, str]]] = {}
+    for model in {m for e in body.edits for m in e.models}:
+        try:
+            for f in _base_files(catalog, profile, model, []):
+                known_masked.setdefault(model, set()).update(
+                    (f.file, s.parameter) for s in f.settings if s.secret
+                )
+        except TemplateError as e:
+            raise common.validation("edits", "; ".join(e.errors) or str(e)) from e
+    for edit in body.edits:
+        if any((edit.file, edit.parameter) in known_masked.get(m, set()) for m in edit.models):
+            raise common.validation(
+                "edits", f"{edit.parameter} is a secret: set it in the template's settings"
+            )
+    if dumped != (profile.base_edits or []):
+        profile.base_edits = dumped
+        profile.updated_at = utcnow()
+        _record(
+            db,
+            ctx,
+            principal,
+            "device_profile.base_edits",
+            profile,
+            {"edits": [{"parameter": e.parameter, "models": e.models} for e in body.edits]},
+        )
+        db.commit()
+    return _outs(request, db, [profile])[0]

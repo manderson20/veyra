@@ -103,6 +103,8 @@ class DeviceProfile(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     keys: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     # {model: line keys} for the models that do not use ``keys``.
     model_keys: Mapped[dict[str, list[dict[str, Any]]]] = mapped_column(JSONB, default=dict)
+    # Base File Edit: [{file, parameter, value, remove, models}], applied after rendering.
+    base_edits: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     # New phones of this brand in the organization start on this template.
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     firmware_image_id: Mapped[uuid.UUID | None] = mapped_column(

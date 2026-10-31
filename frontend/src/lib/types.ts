@@ -2222,6 +2222,7 @@ export interface DeviceProfile {
   /** Line keys of the models that do not use `keys`. */
   model_keys: Record<string, LineKey[]>;
   is_default: boolean;
+  base_edits: BaseEdit[];
   paging: PagingMembership[];
   firmware: FirmwareRef | null;
   devices: number;
@@ -2229,6 +2230,31 @@ export interface DeviceProfile {
   problems: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface BaseEdit {
+  /** The file's name in the base file, such as `{mac}.cfg`. */
+  file: string;
+  parameter: string;
+  value: string;
+  remove: boolean;
+  models: string[];
+}
+
+export interface BaseFileSetting {
+  parameter: string;
+  value: string;
+  start: number;
+  end: number;
+  secret: boolean;
+}
+
+export interface BaseFile {
+  file: string;
+  filename: string;
+  format: string;
+  content: string;
+  settings: BaseFileSetting[];
 }
 
 export interface PhoneBrand {

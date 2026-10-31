@@ -176,12 +176,13 @@
    "summary": "Each brand has its templates. A template holds the settings, line keys, paging zones and firmware that a group of phones share.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.63",
+   "reviewed": "0.27.65",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/provisioning/brands/",
     "/provisioning/brands/view/",
-    "/provisioning/brands/template/"
+    "/provisioning/brands/template/",
+    "/provisioning/base-file-edit/"
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Phone-templates"
   },
@@ -216,7 +217,7 @@
    "summary": "Change what Veyra writes into phones' configuration files with your own base file, edited in the browser, previewed, exported and imported.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.63",
+   "reviewed": "0.27.65",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/provisioning/",

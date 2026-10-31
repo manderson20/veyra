@@ -750,6 +750,7 @@ def render_device(
             model=device.model,
             mask_secrets=mask_secrets,
             facts=facts,
+            edits=ctx.profile.base_edits or [],
         )
     except TemplateError as e:
         raise ProvisioningError("render_error", "; ".join(e.errors)) from e

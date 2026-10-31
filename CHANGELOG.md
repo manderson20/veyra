@@ -8,7 +8,12 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
-## Unreleased
+## 0.27.65 — 2026-10-31
+
+Migration 0076 adds one template column.
+
+### Added
+- **EndPoint Manager workflow, part 3: Base File Edit** (#372): choose a template, model and file, click a setting, and change or delete it for the models you pick. You can also add a setting by name. Changes belong to the template, survive updates and apply after the file is built, so official base files stay untouched. Passwords cannot be changed here.
 
 ### Security
 - Frontend build tools only, nothing installed on a server: `zod` moves to 4.6.7 and ESLint's `minimatch` to 11.0.3. Two ESLint plugins stay on `minimatch` 3.1.5, which they require and which lacks the affected code.

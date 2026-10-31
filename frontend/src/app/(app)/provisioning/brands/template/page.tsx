@@ -140,6 +140,7 @@ function TemplateView() {
         <DataTable columns={modelColumns} rows={modelRows} rowKey={(m) => m.model} caption="Available phones" onRowClick={(m) => setOpenModel(m.model)} rowLabel={(m) => `Line keys of the ${m.model}`}
           empty={<EmptyState compact icon="device" title="No model's base file under this family yet" />} />
       </Card>
+      <div><Link href={`/provisioning/base-file-edit/?template=${p.id}`}>Base File Edit{p.base_edits.length ? ` (${p.base_edits.length} change${p.base_edits.length === 1 ? "" : "s"})` : ""}</Link></div>
       <ModelKeysDialog model={openModel} draft={draft} zones={options.zones} disabled={!editable} onChange={setModelKeys} onClose={() => setOpenModel(null)} />
       <ConfirmDialog open={deleting} title={`Delete the template "${p.name}"?`} confirmLabel="Delete template" tone="danger" busy={deleteBusy} error={deleteError} onConfirm={remove} onCancel={() => { setDeleting(false); setDeleteError(null); }}>
         <p>Templates with phones cannot be deleted.</p>
