@@ -715,7 +715,7 @@ def _srtp_modes(db: Session, ext_by_id: dict[Any, Extension]) -> dict[Any, str]:
     profiles = {p.id: p for p in db.scalars(select(DeviceProfile))}
     modes: dict[Any, list[str]] = {}
     for d in db.scalars(select(Device).where(Device.is_enabled.is_(True))):
-        profile = profiles.get(d.profile_id)
+        profile = profiles.get(d.profile_id) if d.profile_id else None
         values = {**(profile.values if profile else {}), **(d.values or {})}
         mode = srtp.effective(values, sip)
         for ext_id in _device_extensions(d):
