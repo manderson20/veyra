@@ -128,6 +128,9 @@ class StoreClient:
     def prune(self, context: str, mailbox: str, before: int) -> int:
         return int(self.call("prune", context=context, mailbox=mailbox, before=before)["removed"])
 
+    def usage(self, context: str, mailbox: str) -> dict[str, int]:
+        return self.call("usage", context=context, mailbox=mailbox)
+
     def copy(
         self,
         context: str,

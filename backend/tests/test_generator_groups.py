@@ -368,3 +368,51 @@ def test_group_answer_records_the_last_outside_caller():
         "Set(DB(veyra/lastcid/${VEYRA_LASTCID_ORG}/${CHANNEL(endpoint):${VEYRA_LASTCID_OFF}})"
         "=${CALLERID(num)})" in ctx
     )
+
+
+def test_ring_group_options_reach_dial():
+    snap = _snapshot()
+    snap["ring_groups"][0].update(
+        answered_elsewhere=True, ignore_forwards=True, alert_info="info=ring2"
+    )
+    dp = _files(snap)["extensions.conf"].content
+    section = dp[dp.index("[veyra-rg-sales]") :]
+    section = section[: section.index("\n\n")]
+    assert " same => n,Set(__VEYRA_ALERT_INFO=info=ring2)\n" in section
+    assert "ci" + "b(veyra-alertinfo^s^1)" in section
+    assert "[veyra-alertinfo]" in dp
+    assert "PJSIP_HEADER(add,Alert-Info)" in dp
+
+    snap["ring_groups"][0]["alert_info"] = "bad value)"
+    with pytest.raises(generator.GenerationError):
+        _files(snap)
+    snap["ring_groups"][0].update(alert_info=None, answered_elsewhere=False, ignore_forwards=False)
+    dp = _files(snap)["extensions.conf"].content
+    section = dp[dp.index("[veyra-rg-sales]") :]
+    assert "VEYRA_ALERT_INFO" not in section[: section.index("\n\n")]
+
+
+def test_ring_group_api_keeps_options_and_refuses_a_bad_tone(admin):
+    from test_api_devices import _ext, _org
+
+    org = _org(admin)
+    member = _ext(admin, org["id"], "1601")
+    body = {
+        "organization_id": org["id"],
+        "name": "Office",
+        "number": "2601",
+        "members": [member["id"]],
+        "answered_elsewhere": True,
+        "ignore_forwards": True,
+        "alert_info": "info=ring2",
+    }
+    r = admin.post("/api/v1/ring-groups", json=body)
+    assert r.status_code == 201, r.text
+    group = r.json()
+    assert group["answered_elsewhere"] and group["ignore_forwards"]
+    assert group["alert_info"] == "info=ring2"
+    url = f"/api/v1/ring-groups/{group['id']}"
+    assert admin.patch(url, json={"alert_info": "a b)"}).status_code == 422
+    r = admin.patch(url, json={"alert_info": "", "answered_elsewhere": False})
+    assert r.status_code == 200 and r.json()["alert_info"] is None
+    assert r.json()["answered_elsewhere"] is False

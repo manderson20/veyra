@@ -33,6 +33,7 @@ from veyra.telephony.asterisk.names import Names
 router = APIRouter(prefix="/ring-groups", tags=["ring-groups"])
 
 Strategy = Literal["ringall", "sequential", "circular", "roundrobin", "longest_idle"]
+_ALERT_INFO_RE = re.compile(r"^[A-Za-z0-9:;=_.<>/@+-]{1,100}$")
 _PREFIX_RE = re.compile(r"^[\w .'&():-]{1,40}$", re.UNICODE)
 MAX_MEMBERS = 32
 
@@ -56,6 +57,9 @@ class RingGroupIn(BaseModel):
     external_members: list[str] = Field(default_factory=list, max_length=10)
     confirm_external: bool = False
     caller_id_prefix: str | None = Field(None, max_length=40)
+    answered_elsewhere: bool = False
+    ignore_forwards: bool = False
+    alert_info: str | None = Field(None, max_length=100)
     # What callers hear while members ring: ringing, or hold music (the set
     # below, or the built-in one) (docs/PAGING_RECORDINGS.md §3.2).
     music: Literal["ring", "default"] = "ring"
@@ -92,6 +96,15 @@ class RingGroupIn(BaseModel):
         if not v.isdigit():
             raise ValueError("digits only")
         return v
+
+    @field_validator("alert_info")
+    @classmethod
+    def _alert(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        if not _ALERT_INFO_RE.match(v.strip()):
+            raise ValueError("one word, such as info=ring2 or <urn:alert:service:normal>")
+        return v.strip()
 
     @field_validator("caller_id_prefix")
     @classmethod
@@ -132,7 +145,15 @@ class RingGroupPatch(BaseModel):
     external_members: list[str] | None = Field(None, max_length=10)
     confirm_external: bool | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
+    answered_elsewhere: bool | None = None
+    ignore_forwards: bool | None = None
+    alert_info: str | None = Field(None, max_length=100)
     music: Literal["ring", "default"] | None = None
+
+    @field_validator("alert_info")
+    @classmethod
+    def _alert(cls, v: str | None) -> str | None:
+        return RingGroupIn._alert(v)
 
     @field_validator("external_members")
     @classmethod
@@ -168,6 +189,9 @@ class RingGroupOut(BaseModel):
     external_members: list[str] = []
     confirm_external: bool = False
     caller_id_prefix: str | None
+    answered_elsewhere: bool = False
+    ignore_forwards: bool = False
+    alert_info: str | None = None
     music: str
     moh_class_id: uuid.UUID | None
     moh_class_name: str | None
@@ -258,6 +282,9 @@ def _outs(db: Session, rows: list[RingGroup]) -> list[RingGroupOut]:
                 external_members=list(r.external_members or []),
                 confirm_external=r.confirm_external,
                 caller_id_prefix=r.caller_id_prefix,
+                answered_elsewhere=r.answered_elsewhere,
+                ignore_forwards=r.ignore_forwards,
+                alert_info=r.alert_info,
                 music=r.music,
                 moh_class_id=r.moh_class_id,
                 moh_class_name=moh_names.get(r.moh_class_id) if r.moh_class_id else None,
@@ -369,6 +396,9 @@ def create_group(
         external_members=body.external_members,
         confirm_external=body.confirm_external,
         caller_id_prefix=body.caller_id_prefix,
+        answered_elsewhere=body.answered_elsewhere,
+        ignore_forwards=body.ignore_forwards,
+        alert_info=body.alert_info,
         music=body.music,
         moh_class_id=body.moh_class_id,
         is_enabled=body.is_enabled,
@@ -429,6 +459,9 @@ def update_group(
         "external_members": list(group.external_members or []),
         "confirm_external": group.confirm_external,
         "caller_id_prefix": group.caller_id_prefix,
+        "answered_elsewhere": group.answered_elsewhere,
+        "ignore_forwards": group.ignore_forwards,
+        "alert_info": group.alert_info,
         "music": group.music,
         "moh_class_id": group.moh_class_id,
         "failover": destinations.as_input(destinations.ref_of(group, "failover")),
@@ -459,6 +492,9 @@ def update_group(
         "external_members",
         "confirm_external",
         "caller_id_prefix",
+        "answered_elsewhere",
+        "ignore_forwards",
+        "alert_info",
         "music",
         "moh_class_id",
         "is_enabled",

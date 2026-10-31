@@ -377,6 +377,24 @@ class VoicemailStore:
                 removed += len(old)
         return {"removed": removed}
 
+    def usage(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Messages and bytes of a box (issue #142); new means the INBOX."""
+        box = self._box_dir(args.get("context"), args.get("mailbox"))
+        new = messages = size = 0
+        for folder_name in FOLDERS:
+            folder = box / folder_name
+            if not folder.is_dir():
+                continue
+            count = len(self._messages(folder))
+            messages += count
+            if folder_name == "INBOX":
+                new = count
+            for f in folder.iterdir():
+                if f.is_file() and not f.is_symlink():
+                    with contextlib.suppress(FileNotFoundError):
+                        size += f.stat().st_size
+        return {"new": new, "messages": messages, "bytes": size}
+
     def copy(self, args: dict[str, Any]) -> dict[str, Any]:
         """Forward: copy a message into another mailbox's INBOX (same context
         or another), with a note of who forwarded it in the ``.txt``."""
@@ -486,6 +504,7 @@ class VoicemailStore:
         "delete": "delete",
         "delete_id": "delete_id",
         "prune": "prune",
+        "usage": "usage",
         "copy": "copy",
         "greetings": "greetings",
         "greeting_get": "greeting_get",

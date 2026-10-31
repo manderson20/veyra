@@ -4,7 +4,7 @@ summary: Give a team one number that rings several phones at once or in turn, an
 audience: admin
 section: Calls and call flows
 order: 10
-reviewed: 0.27.44
+reviewed: 0.27.67
 checked: 2026-10-30T15:10Z
 pages:
   - /ring-groups/
@@ -54,6 +54,9 @@ On the group's page:
 - **Skip a member after unanswered calls** (one-at-a-time strategies only): a member who lets this many calls in a row go unanswered (1 to 10) is passed over for **Skip for (minutes)**. Answering a call clears it. Leave it empty to never skip anyone.
 - **Ring members who are already on a call**: off, a member on a call is skipped. On, their phone gets a second call (call waiting).
 - **Caller ID prefix**: a short text shown before the caller's name on the ringing phones, for example `Front: `, so people know which group the call came in on. Letters, digits, spaces and `. ' & ( ) - :` only, at most 40 characters.
+- **Ring tone (Alert-Info)**: sent to the ringing phones so this group can ring differently. The value depends on the brand and its settings, for example `info=ring2` on many phones. Leave it empty for the normal ring.
+- **Show "answered elsewhere" on the other phones**: when someone answers, phones that support this don't list the call as missed.
+- **Ignore forwarding set on a member's phone**: a forward set on the phone itself is not followed. Forwarding set in Veyra is not affected.
 - **Callers hear**: **Ringing tone**, or **Music on hold** with a **Hold music set** (see [Manage audio and hold music](guide:audio-and-hold-music)).
 
 ## 3. Decide what happens when nobody answers

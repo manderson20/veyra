@@ -602,6 +602,36 @@ def create_box(
     return VoicemailBoxCreated(**out.model_dump(), pin=pin)
 
 
+class BoxUsageOut(BaseModel):
+    box_id: uuid.UUID
+    new: int
+    messages: int
+    bytes: int
+
+
+@router.get(
+    "/usage",
+    response_model=list[BoxUsageOut],
+    summary="Messages and storage of the given boxes; a box that cannot be read is left out",
+)
+def boxes_usage(
+    request: Request,
+    box_id: list[uuid.UUID] = Query(default_factory=list, max_length=200),
+    principal: Principal = Depends(require("voicemail.read")),
+    db: Session = Depends(get_db),
+) -> list[BoxUsageOut]:
+    c = vmsvc.client(request.app.state.settings)
+    out = []
+    for one in box_id:
+        box = _get(db, principal, one, "voicemail.read")
+        try:
+            context, mailbox = vmsvc.location(db, box)
+            out.append(BoxUsageOut(box_id=box.id, **c.usage(context, mailbox)))
+        except (ProblemError, vmsvc.StoreClientError):
+            continue
+    return out
+
+
 @router.get("/{box_id}", response_model=VoicemailBoxOut)
 def get_box(
     box_id: uuid.UUID,

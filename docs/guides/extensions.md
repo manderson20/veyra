@@ -4,7 +4,7 @@ summary: Create an extension for each phone, assign it to a person, and set its 
 audience: admin
 section: Getting started
 order: 50
-reviewed: 0.27.45
+reviewed: 0.27.67
 checked: 2026-10-29
 pages:
   - /extensions/
@@ -92,7 +92,7 @@ From the phone, the person dials `*97` for their greeting and messages. Email ne
 ### Phones
 
 - **Registered phones:** the phones connected as this extension right now, with their address, model and whether they are reachable.
-- **Phones that may register:** how many phones may use this extension at once, 1 to 16. Empty means as many as are provisioned with it. Raise it to let a softphone register beside the desk phone.
+- **Phones that may register:** how many phones may use this extension at once, 1 to 16. Empty means as many as are provisioned with it. Raise it to let a [softphone](guide:softphones) register beside the desk phone.
 - **Hotline number:** lifting the handset dials this number at once. Use it for elevator, lobby, door and emergency phones. With **Warm-line delay (seconds)** above 0, the phone first waits that long for a digit.
 - **Fax machine (T.38):** switch it on when a fax machine is plugged into an ATA port for this extension, and your trunk supports T.38. Off, the fax travels as audio, which works with any trunk. Set the ATA's fax mode to match.
 - **Phones:** the provisioned devices carrying this extension, as line 1 or as an extra line.

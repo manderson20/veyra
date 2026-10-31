@@ -80,6 +80,12 @@ class RingGroup(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     external_members: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     confirm_external: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
+    # Phones that stop ringing log "answered elsewhere", not a missed call.
+    answered_elsewhere: Mapped[bool] = mapped_column(Boolean, default=False)
+    # A forward (302) a member's phone answers with is not followed.
+    ignore_forwards: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Alert-Info header, which many phones map to a distinctive ring.
+    alert_info: Mapped[str | None] = mapped_column(String(100))
     # What callers hear while the members ring: ``ring`` (ringing) or
     # ``default`` (hold music: the set below, or the built-in one).
     music: Mapped[str] = mapped_column(String(16), default="ring")

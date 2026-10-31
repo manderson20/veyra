@@ -181,6 +181,7 @@ CONTEXT_EMERGENCY_NOTIFY = "veyra-emergency-notify"
 # Runs on the phone that answers a ring group or queue call (Dial U(), the
 # Queue gosub): remembers the outside caller for *32 (issue #135).
 CONTEXT_LASTCID = "veyra-lastcid"
+CONTEXT_ALERT_INFO = "veyra-alertinfo"
 # Hangup handler of a *70 call (issue #163): call waiting comes back.
 CONTEXT_CW_CLEAR = "veyra-cw-clear"
 ASTDB_CALLBACK = "veyra_ecb"
@@ -1371,6 +1372,7 @@ def _dialplan(
             }
             lines += _paging_contexts(part, prompts_dir)
     lines += _lastcid_context()
+    lines += _alert_info_context()
     lines += _rg_answered_context()
     lines += _cw_clear_context()
     lines += [
@@ -4189,6 +4191,18 @@ def _group_prologue(ctx: str, what: str, name: str, org: str) -> list[str]:
     ]
 
 
+def _alert_info_context() -> list[str]:
+    """Dial ``b()``: each ringing phone's INVITE carries the group's Alert-Info.
+    An outside member's Local leg has no SIP headers to set."""
+    return [
+        f"[{CONTEXT_ALERT_INFO}]",
+        'exten => s,1,ExecIf($["${CHANNEL(channeltype)}"="PJSIP"]'
+        "?Set(PJSIP_HEADER(add,Alert-Info)=${VEYRA_ALERT_INFO}))",
+        " same => n,Return()",
+        "",
+    ]
+
+
 def _lastcid_context() -> list[str]:
     """The answering phone of a group or queue call records the outside
     caller, as a direct call does in the extension's dialplan (*32)."""
@@ -4211,6 +4225,9 @@ def _group_epilogue(what: str, name: str, failover: Any) -> list[str]:
         " same => n,Playback(pbx-invalid)",
         " same => n,Hangup()",
     ]
+
+
+_ALERT_INFO_RE = re.compile(r"^[A-Za-z0-9:;=_.<>/@+-]{1,100}$")
 
 
 def _ring_group_contexts(
@@ -4272,8 +4289,20 @@ def _ring_group_contexts(
         if music == "default":
             moh_class = _moh_class(g.get("hold_music"), moh or {}, f"ring group {slug}", org)
             dial_opts = f",${{VEYRA_XFER}}U({CONTEXT_LASTCID})m({moh_class})"
+        # Dial options after ",": "c" and "i" are Asterisk's own letters.
+        extra = ("c" if g.get("answered_elsewhere") else "") + (
+            "i" if g.get("ignore_forwards") else ""
+        )
+        alert = str(g.get("alert_info") or "")
+        if alert and not _ALERT_INFO_RE.match(alert):
+            raise GenerationError(f"ring group {slug}: ring tone {alert!r} is not valid")
+        if alert:
+            extra += f"b({CONTEXT_ALERT_INFO}^s^1)"
+        dial_opts += extra
         ctx = engine_names.current().ring_group(slug)
         lines += _group_prologue(ctx, "ring group", name, org)
+        if alert:
+            lines.append(f" same => n,Set(__VEYRA_ALERT_INFO={alert})")
         lines += _record_for_group(recording or [], org, "ring_groups", slug, prompts_dir)
         prefix = g.get("caller_id_prefix")
         if prefix:

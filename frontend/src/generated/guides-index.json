@@ -82,8 +82,8 @@
    "summary": "Create an extension for each phone, assign it to a person, and set its caller ID, location, voicemail and phone options.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.67",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/extensions/",
     "/extensions/view/"
@@ -169,6 +169,19 @@
     "/devices/view/"
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Add-a-phone"
+  },
+  {
+   "slug": "softphones",
+   "title": "Use a softphone",
+   "summary": "Register a third-party SIP softphone app on a computer or mobile phone as an extension.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.67",
+   "reviewed_date": "2026-10-31",
+   "pages": [
+    "/extensions/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Use-a-softphone"
   },
   {
    "slug": "device-profiles",
@@ -297,8 +310,8 @@
    "summary": "Give a team one number that rings several phones at once or in turn, and decide where unanswered calls go.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.67",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/ring-groups/",
     "/ring-groups/view/"
@@ -595,8 +608,8 @@
    "summary": "Give extensions a voicemail box, set PINs and email delivery, and create shared inboxes that several phones watch.",
    "audience": "admin",
    "section": "Voicemail and fax",
-   "reviewed": "0.27.51",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.67",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/voicemail/"
    ],

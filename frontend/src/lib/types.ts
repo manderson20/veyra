@@ -1861,6 +1861,9 @@ export interface RingGroup {
   external_members?: string[];
   confirm_external?: boolean;
   caller_id_prefix: string | null;
+  answered_elsewhere?: boolean;
+  ignore_forwards?: boolean;
+  alert_info?: string | null;
   /** What callers hear while members ring. */
   music: QueueMusic;
   moh_class_id: string | null;
@@ -1887,6 +1890,9 @@ export interface RingGroupInput {
   external_members?: string[];
   confirm_external?: boolean;
   caller_id_prefix?: string | null;
+  answered_elsewhere?: boolean;
+  ignore_forwards?: boolean;
+  alert_info?: string | null;
   music?: QueueMusic;
   moh_class_id?: string | null;
   failover?: DestinationInput;

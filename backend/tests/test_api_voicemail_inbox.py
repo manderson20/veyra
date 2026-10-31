@@ -440,3 +440,18 @@ def test_keep_days_prunes_once_a_day(admin, app, helper):
     assert len(left) == 1
     r = admin.patch(f"/api/v1/voicemail/{box.json()['id']}", json={"keep_days": None})
     assert r.status_code == 200 and r.json()["keep_days"] is None
+
+
+def test_usage_counts_messages_and_storage(admin, helper):
+    mine = _ext(admin, "1001")
+    box = admin.post("/api/v1/voicemail", json={"extension_id": mine["id"]}).json()
+    empty = admin.post("/api/v1/voicemail", json={"extension_id": _ext(admin, "1002")["id"]}).json()
+    ctx = _context(admin)
+    _msg(helper / ctx / "1001" / "INBOX", 0, ctx, "1001")
+    _msg(helper / ctx / "1001" / "Old", 0, ctx, "1001")
+    r = admin.get("/api/v1/voicemail/usage", params={"box_id": [box["id"], empty["id"]]})
+    assert r.status_code == 200, r.text
+    rows = {x["box_id"]: x for x in r.json()}
+    assert rows[box["id"]]["messages"] == 2 and rows[box["id"]]["new"] == 1
+    assert rows[box["id"]]["bytes"] > 0
+    assert rows[empty["id"]]["messages"] == 0

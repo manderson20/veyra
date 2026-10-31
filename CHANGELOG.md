@@ -8,6 +8,15 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.67 — 2026-10-31
+
+Migration 0077 adds three ring group columns. Ring group changes need **Deploy changes**.
+
+### Added
+- **Ring group options** (#142): a ring tone sent as Alert-Info, "answered elsewhere" so other phones don't show a missed call, and ignoring a forward set on a member's phone.
+- **Voicemail usage** (#142): the Voicemail list shows each box's messages, new messages and storage.
+- **New guide: Use a softphone** (#142) explains how to register a third-party SIP app by hand. No particular app has been tested yet.
+
 ## 0.27.66 — 2026-10-31
 
 No migration.

@@ -4,7 +4,7 @@ summary: Give extensions a voicemail box, set PINs and email delivery, and creat
 audience: admin
 section: Voicemail and fax
 order: 10
-reviewed: 0.27.51
+reviewed: 0.27.67
 pages:
   - /voicemail/
 covers:
@@ -26,6 +26,10 @@ Voicemail boxes are listed under [Telephony → Voicemail](app:/voicemail/).
 
 - For new messages to be emailed, an SMTP server must be set up on the **Email delivery** card under [Settings](app:/settings/). Until then, the Voicemail page shows *Email delivery is not configured* and messages stay in the boxes.
 - You need permission to change voicemail (`voicemail.write`).
+
+## See how much a box holds
+
+The **Messages** column lists each box's messages, how many are new, and the storage they use. A dash means the count could not be read just then.
 
 ## Create a box for an extension
 

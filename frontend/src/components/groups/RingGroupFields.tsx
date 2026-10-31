@@ -22,6 +22,9 @@ export interface RingGroupDraft {
   external_members: string;
   confirm_external: boolean;
   caller_id_prefix: string;
+  answered_elsewhere: boolean;
+  ignore_forwards: boolean;
+  alert_info: string;
   music: QueueMusic;
   moh_class_id: string;
   failover: DestinationDraft;
@@ -43,6 +46,9 @@ export const EMPTY_RING_GROUP: RingGroupDraft = {
   external_members: "",
   confirm_external: false,
   caller_id_prefix: "",
+  answered_elsewhere: false,
+  ignore_forwards: false,
+  alert_info: "",
   music: "ring",
   moh_class_id: "",
   failover: HANGUP,
@@ -75,6 +81,9 @@ export function ringGroupDraft(g: RingGroup): RingGroupDraft {
     external_members: (g.external_members ?? []).join("\n"),
     confirm_external: g.confirm_external ?? false,
     caller_id_prefix: g.caller_id_prefix ?? "",
+    answered_elsewhere: g.answered_elsewhere ?? false,
+    ignore_forwards: g.ignore_forwards ?? false,
+    alert_info: g.alert_info ?? "",
     music: g.music ?? "ring",
     moh_class_id: g.moh_class_id ?? "",
     failover: destinationDraft(g.failover, HANGUP),
@@ -97,6 +106,9 @@ export function ringGroupBody(d: RingGroupDraft): RingGroupInput {
     external_members: d.external_members.split("\n").map((n) => n.trim()).filter(Boolean),
     confirm_external: d.confirm_external,
     caller_id_prefix: d.caller_id_prefix.trim() || null,
+    answered_elsewhere: d.answered_elsewhere,
+    ignore_forwards: d.ignore_forwards,
+    alert_info: d.alert_info.trim() || null,
     music: d.music,
     moh_class_id: d.music === "default" ? d.moh_class_id || null : null,
     failover: destinationBody(d.failover),
@@ -162,6 +174,10 @@ export function RingGroupFields({ draft, onChange, errors, organizationId, curre
       </div>
       <TextField label="Caller ID prefix" disabled={disabled} value={draft.caller_id_prefix} error={errors.caller_id_prefix} placeholder="e.g. Front: "
         help="Shown on the ringing phones before the caller's name, so users see which group the call came in on." onChange={(e) => onChange({ caller_id_prefix: e.target.value })} />
+      <TextField label="Ring tone (Alert-Info)" disabled={disabled} value={draft.alert_info} error={errors.alert_info} placeholder="e.g. info=ring2" spellCheck={false}
+        help="Sent to the ringing phones so this group can ring differently. The value depends on the phone's brand and settings." onChange={(e) => onChange({ alert_info: e.target.value })} />
+      <Checkbox label="Show “answered elsewhere” on the other phones" description="Phones that stop ringing because someone answered don't list it as a missed call, if they support this." checked={draft.answered_elsewhere} disabled={disabled} onChange={(e) => onChange({ answered_elsewhere: e.target.checked })} />
+      <Checkbox label="Ignore forwarding set on a member's phone" description="A call forward set on the phone itself is not followed. Forwarding set in Veyra is not affected." checked={draft.ignore_forwards} disabled={disabled} onChange={(e) => onChange({ ignore_forwards: e.target.checked })} />
       <div className="form-grid">
         <SelectField label="Callers hear" required disabled={disabled} value={draft.music} error={errors.music}
           options={[{ value: "ring", label: "Ringing tone" }, { value: "default", label: "Music on hold" }]}

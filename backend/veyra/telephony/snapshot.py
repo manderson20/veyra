@@ -1023,6 +1023,9 @@ def _groups(
                 "external_members": list(g.external_members or []),
                 "confirm_external": g.confirm_external,
                 "caller_id_prefix": g.caller_id_prefix,
+                "answered_elsewhere": g.answered_elsewhere,
+                "ignore_forwards": g.ignore_forwards,
+                "alert_info": g.alert_info,
                 "music": g.music,
                 "hold_music": moh_slug(g.moh_class_id, g.organization_id),
                 "members": [
