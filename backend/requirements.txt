@@ -1,5 +1,5 @@
 # Runtime dependencies (pinned; see docs/DEVELOPMENT.md "Dependency policy").
-fastapi==0.161.1
+fastapi==0.162.0
 starlette==1.8.0
 uvicorn==0.54.0
 sqlalchemy==2.1.4
