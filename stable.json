@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 93,
+  "sequence": 94,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.77",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Follow-me linked to a calendar",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "ce0b638c0b",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.77/veyra-0.27.77.tar.gz",
+        "sha256": "9529f8bfe27555946e5ecca2aeaf71458f5610ba30e99fd8966306bac8243d8f",
+        "size": 9577149
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1584,6 +1601,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T21:56:57+00:00",
-  "expires_at": "2027-01-29T21:56:57+00:00"
+  "generated_at": "2026-10-31T22:57:15+00:00",
+  "expires_at": "2027-01-29T22:57:15+00:00"
 }
