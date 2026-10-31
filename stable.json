@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 89,
+  "sequence": 90,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.73",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Limit an outbound route to a time condition",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "f5bb18c8e4",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.73/veyra-0.27.73.tar.gz",
+        "sha256": "d69f901a07fabde8b94ab2241875aa17fc1f865899a51d2bc2080a0c34b279d5",
+        "size": 9569892
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1516,6 +1533,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T19:36:46+00:00",
-  "expires_at": "2027-01-29T19:36:46+00:00"
+  "generated_at": "2026-10-31T20:09:21+00:00",
+  "expires_at": "2027-01-29T20:09:21+00:00"
 }
