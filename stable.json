@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 92,
+  "sequence": 93,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.76",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Forward another phone on busy or no answer",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "39ff2370ba",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.76/veyra-0.27.76.tar.gz",
+        "sha256": "02256091dd1bd157dc808c0ca009d34080ac3563511e8e62284f7ff03faec4e9",
+        "size": 9575528
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1567,6 +1584,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T21:00:50+00:00",
-  "expires_at": "2027-01-29T21:00:50+00:00"
+  "generated_at": "2026-10-31T21:56:57+00:00",
+  "expires_at": "2027-01-29T21:56:57+00:00"
 }
