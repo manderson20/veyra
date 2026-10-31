@@ -55,7 +55,7 @@ These are the defaults. Your installation may have changed some of them: the pag
 | `*67` | Hide your number on one call | Followed by the number. Emergency calls always show it. |
 | `*69` | Call back the last caller | Calls the last outside number that rang this phone directly. |
 | `*70` | Call waiting off for one call | Followed by the number. |
-| `*56` | Call waiting off | Until turned on again; callers hear busy. |
+| `*56` | Call waiting off | Until turned on again; a second caller gets your busy handling. |
 | `*57` | Call waiting on | |
 | `*77` | Refuse callers who hide their number | |
 | `*87` | Accept callers who hide their number | |
