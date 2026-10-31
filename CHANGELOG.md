@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.75 — 2026-11-01
+
+No migration.
+
+### Fixed
+- **Caller rules** (#142): a rule can now hang up from the route form; the API allowed it but the form didn't offer it.
+
+### Changed
+- Automated tests now render the forms changed in the last few releases, so a form that fails to draw is caught before release. They don't replace trying the forms in a browser.
+
 ## 0.27.74 — 2026-11-01
 
 Migration 0082 adds a table for caller rules. Using them needs **Deploy changes**.

@@ -185,7 +185,7 @@ export function InboundRouteFields({ draft, onChange, errors, organizationId, cu
                 {rule.match !== "anonymous" ? <TextField label="Number" required inputMode="tel" disabled={disabled} value={rule.number} placeholder="5735550100" onChange={(e) => set({ number: e.target.value })} /> : null}
               </div>
               <DestinationPicker label={`Rule ${i + 1}: send to`} idBase={`ir-rule-${i}`} draft={rule.destination} onChange={(destination) => set({ destination })} options={options}
-                error={errors[`caller_rules.${i}.destination`]} disabled={disabled} />
+                error={errors[`caller_rules.${i}.destination`]} disabled={disabled} allowHangup />
               <div><Button size="sm" disabled={disabled} onClick={() => onChange({ caller_rules: draft.caller_rules.filter((_, j) => j !== i) })}>Remove rule {i + 1}</Button></div>
             </div>
           );
