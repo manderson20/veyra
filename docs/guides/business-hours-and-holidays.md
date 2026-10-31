@@ -4,7 +4,7 @@ summary: Set opening hours, holidays and closed days, so calls outside them go t
 audience: admin
 section: Calls and call flows
 order: 40
-reviewed: 0.27.69
+reviewed: 0.27.73
 checked: 2026-10-30T15:10Z
 pages:
   - /routing/time-conditions/
@@ -79,6 +79,10 @@ On the time condition's page, the **Override** panel shows what the schedule say
 - The panel shows who forced it and when. The list shows a **Forced** badge.
 
 People can also do this from a phone. Give the time condition an **Override code index** from 0 to 99, unique within the organization. Phones then dial the time-condition override feature code (`*27` by default) followed by the index, for example `*271`, to force the opposite state until the schedule changes. Dialling it again clears it. A busy lamp field (BLF) key programmed with that code lights while the condition is forced. With an **Override PIN** (4 to 10 digits), the phone asks for the PIN first.
+
+## Limit outgoing calls by hours
+
+An outbound route can also use a time condition, so that it works only while the condition is open. See [Route outgoing calls](guide:route-outgoing-calls).
 
 ## Editing and deleting
 

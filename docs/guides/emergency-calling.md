@@ -4,7 +4,7 @@ summary: Set up 911 so it dials directly, sends the right number and location, a
 audience: admin
 section: Calls and call flows
 order: 80
-reviewed: 0.27.45
+reviewed: 0.27.73
 checked: 2026-10-29
 pages:
   - /system/emergency/
@@ -28,6 +28,8 @@ State laws may add requirements, and other countries have their own emergency nu
 
 Veyra handles this in four places. Work through them in order, then check the result at [System → Emergency Calling](app:/system/emergency/).
 
+
+An emergency route always works: a class of service or an hours limit can't block it, and Veyra refuses to save an hours limit on one.
 ## 1. Sites: address and emergency number
 
 Open [Directory → Sites](app:/sites/) and, for each site (each campus or building with its own address):

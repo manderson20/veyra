@@ -324,7 +324,7 @@
    "summary": "Decide where each of your phone numbers (DIDs) rings, with a different destination outside business hours.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.69",
+   "reviewed": "0.27.73",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/inbound/",
@@ -379,7 +379,7 @@
    "summary": "Set opening hours, holidays and closed days, so calls outside them go to a different destination.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.69",
+   "reviewed": "0.27.73",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/time-conditions/",
@@ -504,8 +504,8 @@
    "summary": "Set up 911 so it dials directly, sends the right number and location, alerts people on site, and reaches the caller on a callback.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.73",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/system/emergency/"
    ],
