@@ -504,8 +504,8 @@
    "summary": "Choose which calls are recorded and for how long, record a call on demand, and listen to recordings with every playback audited.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.50",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.66",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/recording/"
    ],

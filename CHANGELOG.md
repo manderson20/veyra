@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.66 — 2026-10-31
+
+No migration.
+
+### Added
+- **Recording after an attended transfer** (#123): when a caller who isn't being recorded is transferred to a phone whose policy records that kind of call, recording starts as the transfer completes. A policy with an announcement doesn't start mid-call, because the caller never heard it; Veyra logs this instead.
+
 ## 0.27.65 — 2026-10-31
 
 Migration 0076 adds one template column.

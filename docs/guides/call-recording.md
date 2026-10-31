@@ -4,7 +4,7 @@ summary: Choose which calls are recorded and for how long, record a call on dema
 audience: admin
 section: Calls and call flows
 order: 80
-reviewed: 0.27.50
+reviewed: 0.27.66
 pages:
   - /recording/
 covers:
@@ -109,3 +109,11 @@ Tick **Show deleted** to list deleted recordings too. They show *Deleted* with t
 - **The policy shows a note**: read it; a policy with no direction or nothing chosen records nothing.
 - **The browser cannot play the recording**: use **Download MP3**.
 - **`*1` gives an error tone**: the phone's class of service does not allow on-demand recording.
+
+## Transferred calls
+
+A call that is already being recorded stays in its one file through a transfer.
+
+If an attended transfer brings an unrecorded caller to a phone whose policy records that kind of call, recording starts when the transfer completes. Only the part after the transfer is in the file. The kind of call follows the original caller: from outside through a DID, from another extension, or an outgoing call.
+
+> **Important:** If that policy has an announcement, the transfer is **not** recorded, because the caller never heard it. Veyra writes this to its log. Use a policy without an announcement for phones that must record transferred calls, and only where your local recording laws allow it.

@@ -21,6 +21,7 @@ from typing import Any
 
 from veyra.core.callevents import CallEvent, CallEventHub
 from veyra.telephony.asterisk.ari import AriClient
+from veyra.telephony.asterisk.transfer_recording import is_attended_transfer
 
 log = logging.getLogger("veyra.events")
 
@@ -425,6 +426,19 @@ def _webhook(ce: CallEvent) -> None:
         log.exception("Could not queue a call webhook")
 
 
+def _transfer_recording(ari: AriClient, event: dict[str, Any]) -> None:
+    """Never raises: a recording problem must not stop the event stream."""
+    try:
+        from veyra.core.config import get_settings
+        from veyra.core.db import session_scope
+        from veyra.telephony.asterisk.transfer_recording import handle
+
+        with session_scope() as db:
+            handle(event, ari, db, str(get_settings().recordings_dir))
+    except Exception:
+        log.exception("Could not check a transferred call for recording")
+
+
 class AriEventListener:
     def __init__(self, ari: AriClient, hub: CallEventHub) -> None:
         self.ari = ari
@@ -500,6 +514,8 @@ class AriEventListener:
                             _fax(event)
                         elif event.get("type") == "ChannelDestroyed":
                             _fax_channel(event)
+                        elif is_attended_transfer(event):
+                            await asyncio.to_thread(_transfer_recording, self.ari, event)
                         for ce in self.translator.translate(event):
                             self.hub.publish(ce)
                             if ce.type in LIVE_WEBHOOK_EVENTS:

@@ -177,7 +177,9 @@ into `CDR(veyra_rec)` so the call record names the file, and starts
 `MixMonitor(<data>/recordings/<org>/<yyyy>/<mm>/<dd>/<id>.wav,b)` (`b`:
 only the bridged part, no ringing or hold music). Only one recording per
 call: the subroutine returns if `VEYRA_CALLREC` is already set (not `VEYRA_REC`, which the `*95` prompt recording already uses) (a transfer
-keeps recording into the same file).
+keeps recording into the same file). An attended transfer of an unrecorded
+caller to a phone whose policy records starts recording when it completes, in
+`telephony/asterisk/transfer_recording.py`, unless the policy has an announcement.
 
 After the call the worker finds the file through the call's `rec` field,
 converts it to **Opus** (or MP3 when the browser needs it, *spike*) with

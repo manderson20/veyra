@@ -506,3 +506,89 @@ def test_file_names_cannot_escape():
     assert stem == "2026-10-30_1432_inbound_etc_to_a-b"
     assert export.safe_cell("+15551234") == "+15551234"
     assert export.safe_cell("+cmd") == "'+cmd"
+
+
+class _FakeAri:
+    def __init__(self, **variables):
+        self.variables = variables
+        self.set = {}
+
+    def get_variable(self, channel_id, name):
+        return self.variables.get(name, "")
+
+    def set_variable(self, channel_id, name, value):
+        self.set[name] = value
+
+
+def test_attended_transfer_starts_the_target_policy_once(admin):
+    import uuid as _uuid
+
+    from test_api_devices import _ext, _org
+
+    from veyra.core.db import session_scope as scope
+    from veyra.core.models import Extension as Ext
+    from veyra.core.models import Organization as Org
+    from veyra.core.models import RecordingPolicy as Pol
+    from veyra.telephony.asterisk.transfer_recording import handle, is_attended_transfer
+
+    org = _org(admin)
+    target = _ext(admin, org["id"], "1501", "Recorded")
+    other = _ext(admin, org["id"], "1502", "Not recorded")
+    with scope() as db:
+        assert db.get(Org, _uuid.UUID(org["id"]))
+        policy = Pol(
+            organization_id=_uuid.UUID(org["id"]),
+            name="Selected inbound",
+            inbound=True,
+            outbound=False,
+            internal=False,
+            scope="selected",
+            extension_ids=[_uuid.UUID(target["id"])],
+        )
+        db.add(policy)
+        db.flush()
+        policy_id = policy.id
+        endpoint = db.get(Ext, _uuid.UUID(target["id"])).endpoint_name
+        other_endpoint = db.get(Ext, _uuid.UUID(other["id"])).endpoint_name
+        db.commit()
+
+    def event(to):
+        return {
+            "type": "BridgeAttendedTransfer",
+            "result": "Success",
+            "transferee": {"id": "1761.5", "name": "PJSIP/carrier-00000001"},
+            "transfer_target": {"name": f"PJSIP/{to}-00000002"},
+        }
+
+    assert is_attended_transfer(event(endpoint))
+    assert not is_attended_transfer({**event(endpoint), "result": "Fail"})
+    commands = []
+
+    def run(command):
+        commands.append(command)
+        return True, ""
+
+    with scope() as db:
+        ari = _FakeAri(VEYRA_DID="+15551234567")
+        assert handle(event(endpoint), ari, db, "/rec", run) == "1761.5"
+        assert commands == [
+            f"mixmonitor start PJSIP/carrier-00000001 /rec/incoming/1761.5--{policy_id}.wav,b"
+        ]
+        assert ari.set == {"__VEYRA_CALLREC": "1761.5", "CDR(veyra_rec)": "1761.5"}
+        commands.clear()
+        # Already recorded, another phone, the wrong direction, a failed start.
+        assert (
+            handle(event(endpoint), _FakeAri(VEYRA_CALLREC="x", VEYRA_DID="1"), db, "/rec", run)
+            is None
+        )
+        assert handle(event(other_endpoint), _FakeAri(VEYRA_DID="1"), db, "/rec", run) is None
+        assert handle(event(endpoint), _FakeAri(), db, "/rec", run) is None
+        assert commands == []
+        ari = _FakeAri(VEYRA_DID="1")
+        assert handle(event(endpoint), ari, db, "/rec", lambda c: (False, "no")) is None
+        assert ari.set == {}
+        # The caller never heard this policy's announcement.
+        db.get(Pol, policy_id).announcement_prompt_id = _uuid.uuid4()
+        with db.no_autoflush:
+            assert handle(event(endpoint), _FakeAri(VEYRA_DID="1"), db, "/rec", run) is None
+        db.rollback()
