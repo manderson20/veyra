@@ -532,8 +532,13 @@ def test_template_default_used_by_model_keys_and_brands(admin, app):
     assert phone.status_code == 201, phone.text
     assert phone.json()["profile_id"] == second["id"]  # the brand's default
     chosen_none = admin.post(
-        DEVICES, json={**body, "mac_address": "00:04:F2:00:01:02", "profile_id": None,
-                       "primary_extension_id": None}
+        DEVICES,
+        json={
+            **body,
+            "mac_address": "00:04:F2:00:01:02",
+            "profile_id": None,
+            "primary_extension_id": None,
+        },
     )
     assert chosen_none.json()["profile_id"] is None  # an explicit choice stands
 
