@@ -4,7 +4,7 @@ summary: Put Veyra on an Ubuntu server, open the setup wizard and create the fir
 audience: admin
 section: Getting started
 order: 5
-reviewed: 0.27.51
+reviewed: 0.27.59
 covers:
   - installer/install.sh
   - installer/preflight.sh
