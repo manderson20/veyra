@@ -173,7 +173,7 @@ export function InboundRouteFields({ draft, onChange, errors, organizationId, cu
       ) : null}
       <div className="stack stack--sm">
         <span className="field__label">Caller rules</span>
-        <p className="subtle">Checked in order, before the destination and hours above. The first match wins. They don't override emergency callbacks or the block list.</p>
+        <p className="subtle">Checked in order, before the destination and hours above. The first match wins. They don&apos;t override emergency callbacks or the block list.</p>
         {draft.caller_rules.map((rule, i) => {
           const set = (patch: Partial<CallerRuleDraft>) => onChange({ caller_rules: draft.caller_rules.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
           return (
