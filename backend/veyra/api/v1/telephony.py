@@ -179,7 +179,7 @@ def put_settings(
             raise ProblemError(
                 422,
                 "Settings not saved",
-                "Phones use SRTP over TLS on these device profiles: " + ", ".join(using) + ".",
+                "Phones use SRTP over TLS on these templates: " + ", ".join(using) + ".",
                 code="tls_in_use",
             )
     before = load_sip_settings(db).model_dump(mode="json")

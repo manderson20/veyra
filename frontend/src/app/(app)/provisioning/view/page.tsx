@@ -56,7 +56,7 @@ function StoredTemplateRepair({ templateKey, error, onFixed }: { templateKey: st
       setSources(d.sources);
     }
   });
-  if (stored.error) return <ErrorState title="Could not load template" error={error as { message: string }} onRetry={onFixed} />;
+  if (stored.error) return <ErrorState title="Could not load base file" error={error as { message: string }} onRetry={onFixed} />;
   if (!stored.data || manifest === null || sources === null) return <LoadingState />;
   const save = async () => {
     setBusy(true);
@@ -83,14 +83,14 @@ function StoredTemplateRepair({ templateKey, error, onFixed }: { templateKey: st
   };
   return (
     <div className="stack">
-      <PageHeader back={{ href: "/provisioning/", label: "Templates" }} title={templateKey} description="This template does not load, so phones cannot use it. Fix it here or delete it." />
+      <PageHeader back={{ href: "/provisioning/", label: "Base files" }} title={templateKey} description="This base file does not load, so phones cannot use it. Fix it here or delete it." />
       <Callout tone="danger" title="What is wrong"><ul style={{ margin: 0, paddingLeft: 18 }}>{stored.data.problems.map((m) => <li key={m}>{m}</li>)}</ul></Callout>
-      <Card title="Stored template">
+      <Card title="Stored base file">
         <div className="stack stack--sm">
           <TextArea label="Manifest (JSON)" value={manifest} rows={14} className="mono" onChange={(e) => setManifest(e.target.value)} />
           {Object.entries(sources).map(([name, text]) => <TextArea key={name} label={name} value={text} rows={12} className="mono" onChange={(e) => setSources({ ...sources, [name]: e.target.value })} />)}
           {problems ? <Callout tone="danger">{problems}</Callout> : null}
-          <div className="form-actions"><Button variant="danger" onClick={remove} disabled={busy}>Delete template</Button><Button variant="primary" onClick={save} loading={busy}>Save and check</Button></div>
+          <div className="form-actions"><Button variant="danger" onClick={remove} disabled={busy}>Delete base file</Button><Button variant="primary" onClick={save} loading={busy}>Save and check</Button></div>
         </div>
       </Card>
     </div>
@@ -112,8 +112,8 @@ function TemplateView() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  if (!key) return <ErrorState title="No template selected" error={{ message: "Open a template from the list." }} />;
-  if (detail.error) return can("provisioning.write") ? <StoredTemplateRepair templateKey={key} error={detail.error} onFixed={detail.reload} /> : <ErrorState title="Could not load template" error={detail.error} onRetry={detail.reload} />;
+  if (!key) return <ErrorState title="No base file selected" error={{ message: "Open a base file from the list." }} />;
+  if (detail.error) return can("provisioning.write") ? <StoredTemplateRepair templateKey={key} error={detail.error} onFixed={detail.reload} /> : <ErrorState title="Could not load base file" error={detail.error} onRetry={detail.reload} />;
   if (!detail.data) return <LoadingState />;
   const t = detail.data;
 
@@ -173,7 +173,7 @@ function TemplateView() {
   return (
     <div className="stack">
       <PageHeader
-        back={{ href: "/provisioning/", label: "Templates" }}
+        back={{ href: "/provisioning/", label: "Base files" }}
         title={t.name}
         description={
           <span className="row">
@@ -192,14 +192,14 @@ function TemplateView() {
         }
       />
       {t.parent_updated ? (
-        <Callout tone="info" title="The parent template has a new version">
-          <p style={{ marginTop: 0 }}>This template was made from <span className="mono">{t.parent}</span> version {t.parent_version}; it is now version {t.parent_current_version}. Phones already use the new version together with your changes. Check <strong>Preview</strong>, and when it is right, take the new version so that this note goes away.</p>
+        <Callout tone="info" title="The parent base file has a new version">
+          <p style={{ marginTop: 0 }}>This base file was made from <span className="mono">{t.parent}</span> version {t.parent_version}; it is now version {t.parent_current_version}. Phones already use the new version together with your changes. Check <strong>Preview</strong>, and when it is right, take the new version so that this note goes away.</p>
           {parentError ? <p>{parentError}</p> : null}
           {can("provisioning.write") ? <Button size="sm" loading={parentBusy} onClick={acceptParent}>Take version {t.parent_current_version}</Button> : null}
         </Callout>
       ) : null}
       {t.status === "experimental" ? (
-        <Callout tone="warn" title="Experimental template">This template has not yet been verified on hardware. Test it with a single phone before wider use.</Callout>
+        <Callout tone="warn" title="Experimental base file">This base file has not yet been verified on hardware. Test it with a single phone before wider use.</Callout>
       ) : null}
       {t.validation.length ? (
         <Callout tone="danger" title="Validation problems">
@@ -220,7 +220,7 @@ function TemplateView() {
             <Card title="Details">
               <dl className="dl">
                 <dt>Manufacturer</dt><dd>{t.manufacturer}</dd>
-                <dt>Models</dt><dd>{t.abstract ? "Base template (not assigned directly)" : t.models.join(", ")}</dd>
+                <dt>Models</dt><dd>{t.abstract ? "Family (serves the models under it)" : t.models.join(", ")}</dd>
                 <dt>Firmware</dt><dd>{t.firmware || "—"}</dd>
                 <dt>Features</dt><dd>{t.features.length ? <span className="row">{t.features.map((f) => <span key={f} className="kv-chip">{f}</span>)}</span> : "—"}</dd>
                 <dt>Description</dt><dd>{t.description || "—"}</dd>
@@ -271,7 +271,7 @@ function TemplateView() {
       </Dialog>
       <CustomizeDialog open={customizeOpen} template={t} onClose={() => setCustomizeOpen(false)} onCreated={(k) => router.push(`/provisioning/view/?key=${encodeURIComponent(k)}`)} />
       <ConfirmDialog open={deleting} title={`Delete the local template "${t.name}"?`} confirmLabel="Delete template" tone="danger" busy={deleteBusy} error={deleteError} onConfirm={remove} onCancel={() => { setDeleting(false); setDeleteError(null); }}>
-        <p>Templates used by a device profile or inherited by another template cannot be deleted.</p>
+        <p>Base files used by a template or inherited by another base file cannot be deleted.</p>
       </ConfirmDialog>
     </div>
   );

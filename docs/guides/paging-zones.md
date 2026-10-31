@@ -66,7 +66,7 @@ Zones are listed under [Telephony → Paging Zones](app:/paging-zones/).
 
 ## Make the phones hear the zone
 
-Poly phones listen to a zone only when their **device profile** subscribes them to it. Open [Device Profiles](app:/device-profiles/), choose the profile your phones use, and pick the zones its phones should hear. The **Profiles** column of the zones list shows which profiles use each zone. Phones pick up the change at their next provisioning check.
+Poly phones listen to a zone only when their **template** subscribes them to it. Open your phones' brand in the Provisioning menu, choose the template they use, and pick the zones its phones should hear. The **Profiles** column of the zones list shows which profiles use each zone. Phones pick up the change at their next provisioning check.
 
 Speakers need no change in Veyra: they already listen to their multicast address.
 
@@ -85,11 +85,11 @@ The **Status** column shows **Ready**, **Disabled**, or the first problem found,
 
 ## Delete a zone
 
-Use the bin icon on the zone's row. A zone that a device profile still uses cannot be deleted: remove it from the profiles first.
+Use the bin icon on the zone's row. A zone that a template still uses cannot be deleted: remove it from those templates first.
 
 ## If something doesn't work
 
-- **Speakers play but Poly phones do not:** check that the phones' device profile subscribes them to the zone, and that the phones have checked in since.
+- **Speakers play but Poly phones do not:** check that the phones' template subscribes them to the zone, and that the phones have checked in since.
 - **Phones play but speakers do not:** compare the **Speakers' multicast address** and **port** with the speaker's own settings. Multicast must be allowed between the server and the speakers on your network.
 - **"That number is already used":** another extension, group, page or zone has that number. Choose another.
 - **"Another zone of this organization already uses that Poly group number":** each zone needs its own group number.

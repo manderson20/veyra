@@ -22,7 +22,7 @@ interface Item {
 /** Global search: pages the user can open plus organizations and users from the API. */
 export function GlobalSearch() {
   const router = useRouter();
-  const { session, extensions } = useSession();
+  const { session, extensions, brands } = useSession();
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const [q, setQ] = useState("");
@@ -72,6 +72,7 @@ export function GlobalSearch() {
       permissions: session?.permissions ?? [],
       isPlatformAdmin: session?.is_platform_admin ?? false,
       extensions,
+      brands,
     })
       .flatMap((s) => s.items)
       .filter((i) => i.label.toLowerCase().includes(needle))
@@ -90,7 +91,7 @@ export function GlobalSearch() {
       icon: kinds[r.type]?.icon ?? "search",
     }));
     return [...pages, ...records];
-  }, [term, remoteResults, session, extensions]);
+  }, [term, remoteResults, session, extensions, brands]);
   const active = Math.min(activeRaw, Math.max(items.length - 1, 0));
 
   const go = (item: Item | undefined) => {

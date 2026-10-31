@@ -89,13 +89,13 @@ export const NAV: NavSection[] = [
       label: f.label, href: `/planned/?feature=${f.key}`, icon: f.icon, planned: { milestone: f.milestone }, group: "Coming later",
     })),
   ] },
-  { id: "provisioning", label: "Provisioning", icon: "device", description: "Phones, their profiles, configuration templates and firmware.", items: [
+  { id: "provisioning", label: "Provisioning", icon: "device", description: "Phones, the templates of each brand, base files and firmware.", items: [
     { label: "Devices", href: "/devices/", icon: "device", permissions: ["devices.read"], group: "Phones" },
-    { label: "Device Profiles", href: "/device-profiles/", icon: "settings", permissions: ["devices.read"], group: "Phones" },
     { label: "Requests", href: "/provisioning/requests/", icon: "history", permissions: ["devices.read"], group: "Phones" },
-    { label: "Templates", href: "/provisioning/", icon: "template", permissions: ["provisioning.read"], group: "Configuration" },
-    { label: "Variables", href: "/provisioning/variables/", icon: "settings", permissions: ["provisioning.read"], group: "Configuration" },
-    { label: "Firmware", href: "/firmware/", icon: "update", permissions: ["provisioning.read"], group: "Configuration" },
+    { label: "Add Brand", href: "/provisioning/brands/", icon: "plus", permissions: ["devices.read"], group: "Advanced" },
+    { label: "Base Files", href: "/provisioning/", icon: "template", permissions: ["provisioning.read"], group: "Advanced" },
+    { label: "Variables", href: "/provisioning/variables/", icon: "settings", permissions: ["provisioning.read"], group: "Advanced" },
+    { label: "Firmware", href: "/firmware/", icon: "update", permissions: ["provisioning.read"], group: "Advanced" },
   ] },
   { id: "modules", label: "Modules", icon: "modules", description: "Pages added by installed modules.", items: [] },
   { id: "system", label: "System", icon: "settings", description: "Health, alerts, diagnostics, the telephony engine, high availability, the firewall, sign-in, integrations, updates, modules, audit and settings.", items: [
@@ -126,6 +126,8 @@ export interface NavContext {
   permissions: string[];
   isPlatformAdmin: boolean;
   extensions?: UiExtension[];
+  /** Phone brands; each gets its own Provisioning menu entry. */
+  brands?: string[];
 }
 
 export function canSee(item: NavItem, ctx: NavContext): boolean {
@@ -145,6 +147,16 @@ export function moduleNavItems(extensions: UiExtension[] = []): NavItem[] {
       permissions: [n.permission],
     })),
   );
+}
+
+export function brandNavItems(brands: string[] = []): NavItem[] {
+  return brands.map((name) => ({
+    label: name,
+    href: `/provisioning/brands/view/?name=${encodeURIComponent(name)}`,
+    icon: "device",
+    permissions: ["devices.read"],
+    group: "Brands",
+  }));
 }
 
 export interface NavGroup {
@@ -168,7 +180,11 @@ export function groupItems(items: NavItem[]): NavGroup[] {
 export function buildNav(ctx: NavContext, sections: NavSection[] = NAV): NavSection[] {
   return sections
     .map((s) => {
-      const items = s.id === "modules" ? [...s.items, ...moduleNavItems(ctx.extensions)] : s.items;
+      let items = s.id === "modules" ? [...s.items, ...moduleNavItems(ctx.extensions)] : s.items;
+      if (s.id === "provisioning") {
+        const firstAdvanced = items.findIndex((i) => i.group === "Advanced");
+        items = [...items.slice(0, firstAdvanced), ...brandNavItems(ctx.brands), ...items.slice(firstAdvanced)];
+      }
       return { ...s, items: items.filter((i) => canSee(i, ctx)) };
     })
     .filter((s) => s.items.length > 0);

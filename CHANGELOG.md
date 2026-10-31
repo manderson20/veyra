@@ -8,6 +8,21 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.63 — 2026-10-31
+
+Migration 0074 adds two template columns. Nothing to convert.
+
+### Added
+- **EndPoint Manager workflow, part 1** (#372): the Provisioning menu now has one entry per phone brand. A brand's page lists its templates, with **Used By** chips for the extensions on each one or **Not in use**, and **New Template**.
+- **Default template for a brand**: new phones of that brand start on it.
+- **Available Phones** at the bottom of a template lists its models. A model can have its own line keys.
+- **Save and Update Phones** on a template asks its phones to re-read their configuration now.
+
+### Changed
+- **New names**: device profiles are now **templates**, and what were called templates are now **base files**. Existing profiles carry over as they are, and old links still work.
+- The redirect service help and MAC export moved from the Templates page to each brand's page.
+- A template with phones can no longer change to another brand's base file.
+
 ## 0.27.62 — 2026-10-31
 
 No migration.

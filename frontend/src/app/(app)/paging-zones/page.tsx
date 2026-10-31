@@ -65,7 +65,7 @@ export default function PagingZonesPage() {
   return (
     <div className="stack">
       <PageHeader title="Paging zones"
-        description="Each zone pairs the multicast group your speakers already listen to with the Poly group number the phones subscribe to. Device profiles subscribe phones to zones."
+        description="Each zone pairs the multicast group your speakers already listen to with the Poly group number the phones subscribe to. Templates subscribe phones to zones."
         actions={editable ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New paging zone</Button> : null} />
       <PendingChanges refreshKey={list.data} />
       <Callout tone="neutral">
@@ -86,7 +86,7 @@ export default function PagingZonesPage() {
       <PagingZoneDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => list.reload()} />
       <PagingZoneDialog open={!!editing} zone={editing} onClose={() => setEditing(undefined)} onSaved={() => list.reload()} />
       <ConfirmDialog open={!!deleting} title={`Delete the paging zone "${deleting?.name ?? ""}"?`} confirmLabel="Delete zone" tone="danger" busy={deleteBusy} error={deleteError} onConfirm={remove} onCancel={() => { setDeleting(undefined); setDeleteError(null); }}>
-        <p>Zones used by a device profile cannot be deleted; remove them from the profiles first.</p>
+        <p>Zones used by a template cannot be deleted; remove them from those templates first.</p>
       </ConfirmDialog>
     </div>
   );

@@ -718,7 +718,7 @@ def delete_template(
         raise ProblemError(
             409,
             "Template in use",
-            f"{used} device profile(s) and {len(children)} template(s) depend on {key}.",
+            f"{used} template(s) and {len(children)} base file(s) depend on {key}.",
             code="template_in_use",
         )
     for row in rows:

@@ -507,3 +507,60 @@ def test_a_phone_takes_only_a_profile_of_its_brand_and_lists_filter_by_brand(adm
     items = admin.get(DEVICES, params={"manufacturer": "yealink"}).json()["items"]
     assert len(items) == 2
     assert admin.get(DEVICES, params={"manufacturer": "poly"}).json()["items"] == []
+
+
+def test_template_default_used_by_model_keys_and_brands(admin, app):
+    org = _org(admin)
+    ext = _ext(admin, org["id"], "1201")
+    first = _profile(admin, org["id"], is_default=True)
+    second = _profile(admin, org["id"], "VVX, Building B", is_default=True)
+    yealink = _profile(admin, org["id"], "Yealink desks", "yealink.base", is_default=True)
+    url = "/api/v1/device-profiles"
+    # One default per brand: the newer one wins, another brand is untouched.
+    assert admin.get(f"{url}/{first['id']}").json()["is_default"] is False
+    assert admin.get(f"{url}/{second['id']}").json()["is_default"] is True
+    assert admin.get(f"{url}/{yealink['id']}").json()["is_default"] is True
+
+    body = {
+        "organization_id": org["id"],
+        "mac_address": "00:04:F2:00:01:01",
+        "manufacturer": "Poly",
+        "model": "VVX 411",
+        "primary_extension_id": ext["id"],
+    }
+    phone = admin.post(DEVICES, json=body)
+    assert phone.status_code == 201, phone.text
+    assert phone.json()["profile_id"] == second["id"]  # the brand's default
+    chosen_none = admin.post(
+        DEVICES, json={**body, "mac_address": "00:04:F2:00:01:02", "profile_id": None,
+                       "primary_extension_id": None}
+    )
+    assert chosen_none.json()["profile_id"] is None  # an explicit choice stands
+
+    row = admin.get(url, params={"manufacturer": "poly"}).json()["items"]
+    assert {p["name"] for p in row} == {"VVX, Building A", "VVX, Building B"}
+    used = next(p for p in row if p["id"] == second["id"])
+    assert [u["label"] for u in used["used_by"]] == ["1201"]
+
+    keys = [{"type": "speed_dial", "label": "Only on 411", "value": "1234"}]
+    r = admin.patch(f"{url}/{second['id']}", json={"model_keys": {"VVX 411": keys}})
+    assert r.status_code == 200, r.text
+    assert r.json()["model_keys"]["VVX 411"][0]["label"] == "Only on 411"
+    r = admin.patch(f"{url}/{second['id']}", json={"model_keys": {"T46U": keys}})
+    assert r.status_code == 422 and "does not serve T46U" in r.text
+    preview = admin.get(f"{DEVICES}/{phone.json()['id']}/preview")
+    assert preview.status_code == 200 and "Only on 411" in preview.text
+
+    # A template in use cannot move to another brand.
+    r = admin.patch(f"{url}/{second['id']}", json={"template_key": "yealink.base"})
+    assert r.status_code == 422 and "move them first" in r.text
+
+    brands = {b["name"]: b for b in admin.get(f"{url}/brands").json()}
+    assert brands["Poly"]["templates"] == 2 and brands["Poly"]["phones"] == 1
+    assert "VVX 411" in brands["Poly"]["models"]
+    assert brands["Yealink"]["templates"] == 1
+
+    asked = []
+    app.state.notify_phone = lambda action, endpoint: (asked.append(endpoint), (True, ""))[1]
+    r = admin.post(f"{url}/{second['id']}/update-phones")
+    assert r.json() == {"phones": 1, "asked": 1} and len(asked) == 1

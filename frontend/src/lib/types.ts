@@ -2219,12 +2219,23 @@ export interface DeviceProfile {
   models: Record<string, string>;
   values: Record<string, string | number | boolean>;
   keys: LineKey[];
+  /** Line keys of the models that do not use `keys`. */
+  model_keys: Record<string, LineKey[]>;
+  is_default: boolean;
   paging: PagingMembership[];
   firmware: FirmwareRef | null;
   devices: number;
+  used_by: { device_id: string; label: string }[];
   problems: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface PhoneBrand {
+  name: string;
+  models: string[];
+  templates: number;
+  phones: number;
 }
 
 export interface DeviceProfileInput {
@@ -2235,6 +2246,8 @@ export interface DeviceProfileInput {
   template_key?: string;
   values?: Record<string, string | number | boolean>;
   keys?: LineKey[];
+  model_keys?: Record<string, LineKey[]>;
+  is_default?: boolean;
   paging?: PagingMembershipInput[];
   firmware_image_id?: string | null;
 }

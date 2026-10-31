@@ -49,7 +49,7 @@ Choose **Save**, then **Deploy changes** in the top bar. The **On the phones** c
 
 ## Line keys for slots
 
-To give a receptionist a key per slot, add BLF keys with the slot numbers to the phone's line keys: on its device profile under [Provisioning → Device Profiles](app:/device-profiles/), or for one phone in the **Line keys** card of the device's page. The key lights while a call waits in that slot, and pressing it picks the call up.
+To give a receptionist a key per slot, add BLF keys with the slot numbers to the phone's line keys: on its template under its brand in the Provisioning menu, or for one phone in the **Line keys** card of the device's page. The key lights while a call waits in that slot, and pressing it picks the call up.
 
 ## When it does not work
 

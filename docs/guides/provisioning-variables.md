@@ -14,7 +14,7 @@ covers:
   - backend/veyra/provisioning/variables.py
 ---
 
-A **provisioning variable** is a named value that phones share. You define it once, and phones use it in their keys and templates. The same name can have a different value per building. That way one device profile can serve every building: each phone's all-call key pages its own building's zone.
+A **provisioning variable** is a named value that phones share. You define it once, and phones use it in their keys and templates. The same name can have a different value per building. That way one template can serve every building: each phone's all-call key pages its own building's zone.
 
 ## Where a phone gets the value
 
@@ -25,7 +25,7 @@ A variable can be defined for four scopes:
 | **Installation** | Every phone on this Veyra server. Only platform administrators can define it. |
 | **Organization** | The organization's phones. |
 | **Site** | Phones at that site (the phone's own site, or else its profile's site). |
-| **Profile** | Phones using that device profile. |
+| **Template** | Phones using that template. |
 
 When the same name is defined at several scopes, each phone takes the nearest one: profile first, then site, then organization, then installation. Define a value at the widest scope that shares it, and override it only where it differs.
 

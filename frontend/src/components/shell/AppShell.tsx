@@ -26,7 +26,7 @@ import { UserMenu } from "./UserMenu";
 const COLLAPSE_KEY = "veyra.sidebar.collapsed";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { session, loading, error, refresh, extensions } = useSession();
+  const { session, loading, error, refresh, extensions, brands } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams().toString();
@@ -67,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const toggleCollapsed = () => setCollapsedRaw(collapsed ? "0" : "1");
   const location = activeLocation(
-    buildNav({ permissions: session.permissions, isPlatformAdmin: session.is_platform_admin, extensions }),
+    buildNav({ permissions: session.permissions, isPlatformAdmin: session.is_platform_admin, extensions, brands }),
     pathname,
     search,
   );

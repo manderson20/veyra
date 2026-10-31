@@ -216,7 +216,7 @@ def references_in_use(db: Session, var: ProvisioningVariable) -> list[str]:
                 profiles[profile.id] = profile
         if profile is None:
             continue
-        keys = d.keys if d.keys is not None else profile.keys
+        keys = d.keys if d.keys is not None else profile.keys_for(d.model)
         if not any(str(k.get("value") or "").strip() == ref for k in (keys or [])):
             continue
         others = [
@@ -225,6 +225,6 @@ def references_in_use(db: Session, var: ProvisioningVariable) -> list[str]:
             if r.name == var.name and r.id != var.id
         ]
         if not others:
-            where = "own keys" if d.keys is not None else f"profile {profile.name}"
+            where = "own keys" if d.keys is not None else f"template {profile.name}"
             found.append(f"phone {d.mac_address} ({where})")
     return found

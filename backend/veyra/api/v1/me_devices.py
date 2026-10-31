@@ -106,7 +106,7 @@ def _raw_keys(db: Session, device: Device) -> list[dict[str, Any]]:
     if device.keys is not None:
         return list(device.keys)
     profile = db.get(DeviceProfile, device.profile_id) if device.profile_id else None
-    return list(profile.keys or []) if profile else []
+    return list(profile.keys_for(device.model)) if profile else []
 
 
 def _mac_display(mac: str) -> str:

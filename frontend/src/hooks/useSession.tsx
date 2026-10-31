@@ -3,11 +3,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, ApiError } from "@/lib/api";
-import type { SessionInfo, UiExtension } from "@/lib/types";
+import type { PhoneBrand, SessionInfo, UiExtension } from "@/lib/types";
 
 interface SessionState {
   session: SessionInfo | null;
   extensions: UiExtension[];
+  brands: string[];
   loading: boolean;
   error: unknown;
   refresh: () => Promise<void>;
@@ -19,6 +20,7 @@ const SessionContext = createContext<SessionState | null>(null);
 interface Loaded {
   session: SessionInfo | null;
   extensions: UiExtension[];
+  brands: string[];
   error: unknown;
 }
 
@@ -31,24 +33,34 @@ async function loadSession(): Promise<Loaded> {
     } catch {
       /* navigation from modules is optional */
     }
-    return { session, extensions, error: null };
+    let brands: string[] = [];
+    if (session.is_platform_admin || session.permissions.includes("devices.read") || session.permissions.includes("*")) {
+      try {
+        brands = (await api.get<PhoneBrand[]>("/device-profiles/brands", undefined, { noRedirect: true })).map((b) => b.name);
+      } catch {
+        /* the brand entries of the menu are optional */
+      }
+    }
+    return { session, extensions, brands, error: null };
   } catch (e) {
     // 401 means "not signed in"; a pending second factor (403 mfa_required)
     // is handled by the sign-in page; anything else is a real error.
     const signedOut = e instanceof ApiError && (e.status === 401 || e.code === "mfa_required");
-    return { session: null, extensions: [], error: signedOut ? null : e };
+    return { session: null, extensions: [], brands: [], error: signedOut ? null : e };
   }
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [extensions, setExtensions] = useState<UiExtension[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
 
   const apply = useCallback((r: Loaded) => {
     setSession(r.session);
     setExtensions(r.extensions);
+    setBrands(r.brands);
     setError(r.error);
     setLoading(false);
   }, []);
@@ -70,12 +82,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return {
       session,
       extensions,
+      brands,
       loading,
       error,
       refresh,
       can: (p: string) => Boolean(session?.is_platform_admin || perms.has(p) || perms.has("*")),
     };
-  }, [session, extensions, loading, error, refresh]);
+  }, [session, extensions, brands, loading, error, refresh]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

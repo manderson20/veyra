@@ -432,14 +432,14 @@ def _check_profile(
         return None
     profile = db.get(DeviceProfile, profile_id)
     if profile is None or profile.organization_id != organization_id:
-        raise common.validation("profile_id", "device profile not found in this organization")
+        raise common.validation("profile_id", "template not found in this organization")
     return profile
 
 
 def _check_brand(
     request: Request, db: Session, profile: DeviceProfile | None, manufacturer: str
 ) -> None:
-    """A phone takes only a profile of its own brand. A template that no longer
+    """A phone takes only a template of its own brand. A template that no longer
     loads is reported as a problem on the device, not here."""
     if profile is None:
         return
@@ -449,8 +449,25 @@ def _check_brand(
     brand = rec.manifest.template.manufacturer
     if brand.lower() != manufacturer.lower():
         raise common.validation(
-            "profile_id", f"this profile is for {brand} phones, and this phone is {manufacturer}"
+            "profile_id", f"this template is for {brand} phones, and this phone is {manufacturer}"
         )
+
+
+def _default_profile(
+    request: Request, db: Session, organization_id: uuid.UUID, manufacturer: str
+) -> uuid.UUID | None:
+    """The brand's default template, for a phone registered without choosing one."""
+    catalog = catalog_for(request, db)
+    for profile in db.scalars(
+        select(DeviceProfile).where(
+            DeviceProfile.organization_id == organization_id,
+            DeviceProfile.is_default.is_(True),
+        )
+    ):
+        rec = catalog.records.get(profile.template_key)
+        if rec and rec.manifest.template.manufacturer.lower() == manufacturer.lower():
+            return profile.id
+    return None
 
 
 def _check_extensions(
@@ -770,7 +787,10 @@ def create_device(
     if org is None:
         raise not_found("Organization")
     key = installation_key(request)
-    profile = _check_profile(db, org.id, body.profile_id)
+    profile_id = body.profile_id
+    if "profile_id" not in body.model_fields_set:
+        profile_id = _default_profile(request, db, org.id, body.manufacturer)
+    profile = _check_profile(db, org.id, profile_id)
     _check_brand(request, db, profile, body.manufacturer)
     _check_extensions(db, org.id, body.primary_extension_id, body.lines)
     common.check_site(db, org.id, body.site_id)
@@ -788,7 +808,7 @@ def create_device(
         label=body.label,
         building_id=body.building_id,
         location=body.location,
-        profile_id=body.profile_id,
+        profile_id=profile_id,
         primary_extension_id=body.primary_extension_id,
         lines=[{"extension_id": str(x)} for x in body.lines],
         keys=[k.model_dump() for k in body.keys] if body.keys is not None else None,

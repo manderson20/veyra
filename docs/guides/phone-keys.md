@@ -7,7 +7,7 @@ order: 40
 reviewed: 0.27.60
 checked: 2026-10-29
 pages:
-  - /device-profiles/view/
+  - /provisioning/brands/template/
   - /devices/view/
 covers:
   - frontend/src/components/devices/KeyListEditor.tsx
@@ -15,11 +15,11 @@ covers:
   - backend/veyra/api/v1/device_common.py
 ---
 
-Most desk phones have a row of buttons with a small light next to each one. Veyra sets these keys for you. You make the key list once in a [device profile](guide:device-profiles), and every phone of that profile gets the same keys in the same order.
+Most desk phones have a row of buttons with a small light next to each one. Veyra sets these keys for you. You make the key list once in a [template](guide:device-profiles), and every phone of that template gets the same keys in the same order.
 
 ## Edit the key list
 
-1. Open the profile under [Provisioning → Device Profiles](app:/device-profiles/). The **Line keys** heading holds the list.
+1. Open the template under its brand in the Provisioning menu. The **Line keys** heading holds the list.
 2. Choose **Add key**. A new key starts as a busy lamp (BLF).
 3. Pick the key type, fill in what it needs (below), and optionally a **Label**, the text shown next to the key. Without a label the phone shows the name of what the key calls.
 4. Use the up and down arrows to change the order, and the bin to remove a key.

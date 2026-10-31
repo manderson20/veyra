@@ -23,7 +23,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, drawer }: {
   onNavigate: () => void;
   drawer: boolean;
 }) {
-  const { session, extensions } = useSession();
+  const { session, extensions, brands } = useSession();
   const pathname = usePathname();
   const search = useSearchParams().toString();
   // The open category is remembered with the route it was opened on, so a
@@ -49,6 +49,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, onNavigate, drawer }: {
     permissions: session?.permissions ?? [],
     isPlatformAdmin: session?.is_platform_admin ?? false,
     extensions,
+    brands,
   });
   const current = activeLocation(sections, pathname, search);
 

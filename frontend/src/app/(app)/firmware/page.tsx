@@ -45,7 +45,7 @@ function UploadDialog({ open, onClose, onUploaded }: { open: boolean; onClose: (
       form.append("models", models.trim());
       form.append("notes", notes.trim());
       const image = await api.upload<FirmwareImage>("/provisioning/firmware", form);
-      toast.success(`Firmware ${image.version} uploaded`, "Assign it to a device profile to roll it out.");
+      toast.success(`Firmware ${image.version} uploaded`, "Assign it to a template to roll it out.");
       onClose();
       onUploaded();
     } catch (err) {
@@ -151,11 +151,11 @@ export default function FirmwarePage() {
   ];
   return (
     <div className="stack">
-      <PageHeader title="Firmware" description="Vendor firmware images served to phones. Assign an image to a device profile (or one phone); phones compare versions at their next check and update."
+      <PageHeader title="Firmware" description="Vendor firmware images served to phones. Assign an image to a template (or one phone); phones compare versions at their next check and update."
         actions={editable ? <Button variant="primary" icon="upload" onClick={() => setUploadOpen(true)}>Upload firmware</Button> : null} />
       <Card flush>
         <DataTable columns={columns} rows={list.data?.items} rowKey={(f) => f.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Firmware images"
-          empty={<EmptyState icon="update" title="No firmware uploaded">{editable ? "Upload the vendor's firmware file for the phones you manage, then assign it in a device profile." : null}</EmptyState>} />
+          empty={<EmptyState icon="update" title="No firmware uploaded">{editable ? "Upload the vendor's firmware file for the phones you manage, then assign it in a template." : null}</EmptyState>} />
       </Card>
       {editing ? <EditDialog key={editing.id} image={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.reload(); }} /> : null}
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={() => list.reload()} />

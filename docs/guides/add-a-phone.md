@@ -15,12 +15,12 @@ covers:
   - backend/veyra/api/v1/devices.py
 ---
 
-Veyra knows each phone by its **MAC address**, the hardware address printed on the label under the phone and on its box. When a phone asks for its configuration, Veyra looks up the MAC address, takes the phone's **device profile** and **extension**, and builds the files for that exact model.
+Veyra knows each phone by its **MAC address**, the hardware address printed on the label under the phone and on its box. When a phone asks for its configuration, Veyra looks up the MAC address, takes the phone's **template** and **extension**, and builds the files for that exact model.
 
 ## Before you start
 
 - The phones must know how to reach Veyra. See [Connect phones to Veyra](guide:connect-phones-to-veyra).
-- Create a device profile for this kind of phone first. See [Device profiles](guide:device-profiles).
+- Create a template for this kind of phone first. See [Phone templates](guide:device-profiles).
 - Create the extension the phone will use (under Telephony → Extensions).
 
 ## Register a phone
@@ -31,7 +31,7 @@ Veyra knows each phone by its **MAC address**, the hardware address printed on t
    - **MAC address** (required): from the phone's label. Colons or dashes are optional, so `00:04:f2:ab:cd:ef` and `0004F2ABCDEF` are both fine. Each MAC address can be registered only once.
    - **Manufacturer** and **Model** (required): the list shows the models Veyra has templates for. Pick the exact model, because the model decides which template is used.
    - **Label:** a name you will recognize, such as *Room 112*.
-   - **Device profile:** the profile with the settings and keys for this phone. Only profiles for the phone's manufacturer are listed. Without a profile, nothing is sent to the phone.
+   - **Template:** the settings and keys for this phone. Only templates for the phone's manufacturer are listed, and the brand's default template is already chosen. Without a template, nothing is sent to the phone.
    - **Extension (line 1):** the extension the phone registers as. Without it, the phone gets its configuration but does not register.
    - **Site:** leave it on **From the profile** to use the profile's site. The site sets the phone's time zone.
    - **Location (dispatchable):** the floor and room, used for emergency calls from this phone. It wins over the extension's location. You can change it later on the phone's page.
@@ -62,7 +62,7 @@ Here you change everything from the registration form, and also:
 
 Choose **Save changes**. The phone takes the change at its next check, or right away if you choose **Reprovision**.
 
-> **Note:** Changing the **Device profile** clears this phone's setting overrides, because they belong to the old template.
+> **Note:** Changing the **Template** clears this phone's setting overrides, because they belong to the old one.
 
 ### Line keys tab
 

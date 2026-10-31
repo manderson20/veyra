@@ -52,7 +52,7 @@ function DevicesList() {
     { key: "model", header: "Model", render: (d) => <span>{d.manufacturer} {d.model}</span> },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (d: Device) => <span>{d.organization_name}</span> }] : []),
     { key: "ext", header: "Extension", render: (d) => d.extension ? <span><span className="mono">{d.extension.number}</span> {d.extension.display_name}{d.lines.length ? <span className="subtle"> +{d.lines.length}</span> : null}</span> : <span className="subtle">None</span> },
-    { key: "profile", header: "Profile", render: (d) => d.profile_name ?? <span className="subtle">None</span> },
+    { key: "profile", header: "Template", render: (d) => d.profile_name ?? <span className="subtle">None</span> },
     { key: "status", header: "Status", render: (d) => <span><Badge tone={DEVICE_STATUS[d.status].tone}>{DEVICE_STATUS[d.status].label}</Badge>{d.last_seen_at ? <span className="table__secondary" style={{ display: "block" }}>{formatRelative(d.last_seen_at)}</span> : null}</span> },
     { key: "problems", header: "", render: (d) => d.problems.length ? <Badge tone="warn" icon="alert">{d.problems[0]}</Badge> : null },
   ];
@@ -67,7 +67,7 @@ function DevicesList() {
 
   return (
     <div className="stack">
-      <PageHeader title="Devices" description="Phones registered by MAC address. Each phone fetches its configuration from this server with its profile's template."
+      <PageHeader title="Devices" description="Phones registered by MAC address. Each phone fetches its configuration from this server from its template."
         actions={editable ? <Button variant="primary" icon="plus" onClick={() => { setSeen(undefined); setCreateOpen(true); }}>Register a phone</Button> : null} />
       {unregistered.data?.length ? (
         <Card title="Phones seen but not registered" subtitle="These phones asked for configuration with a valid enrollment credential in the last 7 days but have no device record yet." flush>
@@ -79,7 +79,7 @@ function DevicesList() {
           <SearchInput value={q} onChange={setQ} placeholder="Search by label, MAC, model or extension" label="Search devices" />
           {manyOrgs ? <SelectField label={<span className="sr-only">Organization</span>} value={org} placeholder="All organizations" options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setOffset(0); }} /> : null}
           <SelectField label={<span className="sr-only">Brand</span>} value={brand} placeholder="All brands" options={(models.data?.manufacturers ?? []).map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => { setBrand(e.target.value); setProfile(""); setOffset(0); }} />
-          <SelectField label={<span className="sr-only">Profile</span>} value={profile} placeholder="All profiles" options={(profiles.data?.items ?? []).filter((p) => !brand || sameBrand(p.manufacturer, brand)).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => { setProfile(e.target.value); setOffset(0); }} />
+          <SelectField label={<span className="sr-only">Template</span>} value={profile} placeholder="All templates" options={(profiles.data?.items ?? []).filter((p) => !brand || sameBrand(p.manufacturer, brand)).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => { setProfile(e.target.value); setOffset(0); }} />
         </div>
         {groups.length ? null : <DataTable columns={columns} rows={list.data?.items} rowKey={(d) => d.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Devices"
           onRowClick={(d) => router.push(`/devices/view/?id=${d.id}`)} rowLabel={(d) => `Open device ${d.label ?? d.mac_display}`}

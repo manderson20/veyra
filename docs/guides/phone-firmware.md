@@ -12,7 +12,7 @@ covers:
   - backend/veyra/api/v1/firmware.py
 ---
 
-Phones run software from their maker, called **firmware**. Veyra can keep your phones on the version you choose: you upload the vendor's firmware file once and assign it to a device profile. Each phone compares the version at its next check, updates itself and restarts.
+Phones run software from their maker, called **firmware**. Veyra can keep your phones on the version you choose: you upload the vendor's firmware file once and assign it to a template. Each phone compares the version at its next check, updates itself and restarts.
 
 If you assign nothing, Veyra leaves the phones' firmware alone.
 
@@ -35,7 +35,7 @@ The list shows each image with its file name, models, size, the start of its SHA
 ## Roll it out
 
 1. Test on one phone first: open the phone under [Provisioning → Devices](app:/devices/) and choose the image under **Firmware override** on the **Settings** tab. Save, then choose **Reprovision**.
-2. When it works, open the device profile under [Provisioning → Device Profiles](app:/device-profiles/), choose the image under **Firmware** and save. Every phone of the profile updates at its next daily check. To update one now, use **Reprovision** on its page.
+2. When it works, open the template under its brand in the Provisioning menu, choose the image under **Firmware** and save. Every phone of the template updates at its next daily check. To update one now, use **Reprovision** on its page.
 3. Remove the test phone's override again (set **Firmware override** back to **From the profile**).
 
 > **Warning:** A phone restarts to install firmware, which takes several minutes. It cannot make calls in the meantime. Roll out to a profile at a quiet time, or leave it to the phones' daily check, which runs at night by default.

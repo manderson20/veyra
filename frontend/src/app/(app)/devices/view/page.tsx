@@ -169,8 +169,8 @@ function DeviceView() {
               )}
             </div>
             <div className="form-grid">
-              <SelectField label="Device profile" disabled={!editable} value={draft.profile_id} error={errors.fields.profile_id} placeholder="No profile (nothing is served)"
-                help={`Profiles for ${draft.manufacturer} phones.`}
+              <SelectField label="Template" disabled={!editable} value={draft.profile_id} error={errors.fields.profile_id} placeholder="No template (nothing is served)"
+                help={`Templates for ${draft.manufacturer} phones.`}
                 options={(profiles.data?.items ?? []).filter((p) => p.id === draft.profile_id || sameBrand(p.manufacturer, draft.manufacturer)).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => set({ profile_id: e.target.value, values: {} })} />
               <SelectField label="Site" disabled={!editable} value={draft.site_id} error={errors.fields.site_id} placeholder="No site" options={options.sites.map((s) => ({ value: s.id, label: s.name }))} onChange={(e) => set({ site_id: e.target.value })} />
               <SelectField label="Building" disabled={!editable} value={draft.building_id} error={errors.fields.building_id} placeholder="No building"
@@ -191,24 +191,24 @@ function DeviceView() {
               {errors.fields.lines ? <p className="field__error">{errors.fields.lines}</p> : null}
               {editable && draft.lines.length < 7 ? <div><Button size="sm" icon="plus" onClick={() => set({ lines: [...draft.lines, extOptions[0]?.value ?? ""] })} disabled={!extOptions.length}>Add line</Button></div> : null}
             </div>
-            <SelectField label="Firmware override" disabled={!editable} value={draft.firmware_image_id} error={errors.fields.firmware_image_id} placeholder={d.firmware?.source === "profile" ? `From the profile: ${d.firmware.version}` : "From the profile"}
+            <SelectField label="Firmware override" disabled={!editable} value={draft.firmware_image_id} error={errors.fields.firmware_image_id} placeholder={d.firmware?.source === "profile" ? `From the template: ${d.firmware.version}` : "From the template"}
               options={options.firmware.filter((f) => f.manufacturer.toLowerCase() === draft.manufacturer.toLowerCase()).map((f) => ({ value: f.id, label: `${f.manufacturer} ${f.version}` }))} onChange={(e) => set({ firmware_image_id: e.target.value })} />
             {variables.length ? (
               <>
-                <h3 className="field__label" style={{ marginTop: 8 }}>Setting overrides <span className="subtle">(blank = the profile&apos;s value)</span></h3>
+                <h3 className="field__label" style={{ marginTop: 8 }}>Setting overrides <span className="subtle">(blank = the template&apos;s value)</span></h3>
                 {errors.fields.values ? <p className="field__error">{errors.fields.values}</p> : null}
                 <div className="form-grid">
                   {variables.map((v) => v.type === "boolean" ? (
                     <SelectField key={v.name} label={v.description || v.name} disabled={!editable} value={draft.values[v.name] ?? ""}
                       options={[
-                        { value: "", label: `As the profile (${yesNo(selectedProfile?.values[v.name] ?? options.template?.defaults[v.name])})` },
+                        { value: "", label: `As the template (${yesNo(selectedProfile?.values[v.name] ?? options.template?.defaults[v.name])})` },
                         { value: "true", label: "Yes" },
                         { value: "false", label: "No" },
                       ]}
                       help={<span className="mono">{v.name}</span>} onChange={(e) => set({ values: { ...draft.values, [v.name]: e.target.value } })} />
                   ) : (
                     <TextField key={v.name} label={v.description || v.name} disabled={!editable} type={v.sensitive ? "password" : v.type === "integer" ? "number" : "text"} autoComplete="off"
-                      value={draft.values[v.name] ?? ""} placeholder={selectedProfile?.values[v.name] !== undefined ? `Profile: ${String(selectedProfile.values[v.name])}` : options.template?.defaults[v.name] !== undefined ? `Default: ${String(options.template.defaults[v.name])}` : ""}
+                      value={draft.values[v.name] ?? ""} placeholder={selectedProfile?.values[v.name] !== undefined ? `Template: ${String(selectedProfile.values[v.name])}` : options.template?.defaults[v.name] !== undefined ? `Default: ${String(options.template.defaults[v.name])}` : ""}
                       help={<span className="mono">{v.name}</span>} onChange={(e) => set({ values: { ...draft.values, [v.name]: e.target.value } })} />
                   ))}
                 </div>
@@ -221,11 +221,11 @@ function DeviceView() {
         </Card>
       </TabPanel>
       <TabPanel idBase="dev" id="keys" active={tab}>
-        <Card title="Line keys" subtitle="By default the phone uses its profile's keys. Override them here for this phone only.">
+        <Card title="Line keys" subtitle="By default the phone uses its template's keys. Override them here for this phone only.">
           <div className="stack stack--sm">
-            <Checkbox label="Override the profile's keys for this phone" disabled={!editable} checked={draft.keys !== null} onChange={(e) => set({ keys: e.target.checked ? (selectedProfile?.keys ?? []) : null })} />
+            <Checkbox label="Override the template's keys for this phone" disabled={!editable} checked={draft.keys !== null} onChange={(e) => set({ keys: e.target.checked ? (selectedProfile?.model_keys[draft.model] ?? selectedProfile?.keys ?? []) : null })} />
             {draft.keys !== null ? <KeyListEditor keys={draft.keys} onChange={(keys) => set({ keys })} zones={options.zones} disabled={!editable} error={errors.fields.keys} /> : (
-              selectedProfile ? <KeyListEditor keys={selectedProfile.keys} onChange={() => undefined} zones={options.zones} disabled /> : <p className="muted">No profile selected.</p>
+              selectedProfile ? <KeyListEditor keys={selectedProfile.model_keys[draft.model] ?? selectedProfile.keys} onChange={() => undefined} zones={options.zones} disabled /> : <p className="muted">No template selected.</p>
             )}
             {editable ? <div className="form-actions"><Button variant="primary" loading={busy} disabled={!dirty} onClick={(e) => save(e as unknown as FormEvent)}>Save changes</Button></div> : null}
           </div>
@@ -285,7 +285,7 @@ function DeviceView() {
   );
 }
 
-/** A yes/no value as the profile or template has it. */
+/** A yes/no value as the template or base file has it. */
 function yesNo(value: unknown): string {
   const v = String(value ?? "").toLowerCase();
   return v === "true" ? "yes" : v === "false" ? "no" : "not set";
@@ -298,7 +298,7 @@ export default function Page() {
 /** The provisioning variables this phone resolves, and where each comes from. */
 function DeviceVariables({ deviceId }: { deviceId: string }) {
   const vars = useApiData<ResolvedVariable[]>(`/devices/${deviceId}/variables`);
-  const SCOPE: Record<string, string> = { installation: "Installation", organization: "Organization", site: "Site", profile: "Profile" };
+  const SCOPE: Record<string, string> = { installation: "Installation", organization: "Organization", site: "Site", profile: "Template" };
   return (
     <Card title="Variables" subtitle="Values this phone takes from Provisioning → Variables; the nearest scope wins." flush>
       <DataTable columns={[

@@ -26,13 +26,15 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
   const [label, setLabel] = useState("");
   const [location, setLocation] = useState("");
   const [siteId, setSiteId] = useState("");
-  const [profileId, setProfileId] = useState("");
+  const [chosenProfile, setProfileId] = useState<string | null>(null);
   const [extensionId, setExtensionId] = useState("");
   const [busy, setBusy] = useState(false);
   const effectiveOrg = org || (organizations.length === 1 ? organizations[0]!.id : "");
   const options = useProfileOptions(open ? effectiveOrg : "");
   const profiles = useApiData<Page<DeviceProfile>>(open && effectiveOrg ? "/device-profiles" : null, { organization_id: effectiveOrg, limit: 200 });
   const extensions = useApiData<Page<Extension>>(open && effectiveOrg ? "/extensions" : null, { organization_id: effectiveOrg, limit: 500 });
+  const brandDefault = (profiles.data?.items ?? []).find((p) => p.is_default && sameBrand(p.manufacturer, manufacturer))?.id ?? "";
+  const profileId = chosenProfile ?? brandDefault;
   const models = options.manufacturers.find((m) => m.name.toLowerCase() === manufacturer.toLowerCase())?.models ?? [];
 
   useOnChange(open, () => {
@@ -44,7 +46,7 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
       setLabel("");
       setLocation("");
       setSiteId("");
-      setProfileId("");
+      setProfileId(null);
       setExtensionId("");
       errors.clear();
     }
@@ -78,17 +80,17 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
 
   return (
     <Dialog open={open} onClose={onClose} busy={busy} title={seen ? `Register phone ${seen.mac_display}` : "Register a phone"}
-      description="The phone is identified by its MAC address. Its profile decides the template and paging zones; the extension is line 1."
+      description="The phone is identified by its MAC address. Its template decides the settings, keys and paging zones; the extension is line 1."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="device-form" loading={busy} disabled={!effectiveOrg || !mac.trim() || !manufacturer.trim() || !model.trim()}>Register phone</Button></>}>
       <form id="device-form" className="stack stack--sm" onSubmit={submit}>
         {organizations.length > 1 ? (
           <SelectField label="Organization" required value={effectiveOrg} error={errors.fields.organization_id} placeholder="Choose an organization"
-            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setSiteId(""); setProfileId(""); setExtensionId(""); }} />
+            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setSiteId(""); setProfileId(null); setExtensionId(""); }} />
         ) : null}
         <TextField label="MAC address" required autoFocus value={mac} error={errors.fields.mac_address} placeholder="00:04:f2:ab:cd:ef" help="Printed on the phone's label; separators are optional." onChange={(e) => setMac(e.target.value)} />
         <div className="form-grid">
           <SelectField label="Manufacturer" required value={options.manufacturers.some((m) => m.name === manufacturer) ? manufacturer : ""} error={errors.fields.manufacturer} placeholder="Choose"
-            options={options.manufacturers.map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => { setManufacturer(e.target.value); setModel(""); setProfileId(""); }} />
+            options={options.manufacturers.map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => { setManufacturer(e.target.value); setModel(""); setProfileId(null); }} />
           {models.length ? (
             <SelectField label="Model" required value={model} error={errors.fields.model} placeholder="Choose a model" options={models.map((m) => ({ value: m, label: m }))} onChange={(e) => setModel(e.target.value)} />
           ) : (
@@ -96,8 +98,8 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
           )}
         </div>
         <TextField label="Label" value={label} error={errors.fields.label} placeholder="e.g. Room 112" onChange={(e) => setLabel(e.target.value)} />
-        <SelectField label="Device profile" value={profileId} error={errors.fields.profile_id} placeholder="No profile yet (nothing is served)"
-          help={manufacturer ? `Profiles for ${manufacturer} phones.` : "Choose the manufacturer first."}
+        <SelectField label="Template" value={profileId} error={errors.fields.profile_id} placeholder="No template yet (nothing is served)"
+          help={manufacturer ? `Templates for ${manufacturer} phones.` : "Choose the manufacturer first."}
           options={(profiles.data?.items ?? []).filter((p) => sameBrand(p.manufacturer, manufacturer)).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => setProfileId(e.target.value)} />
         <div className="form-grid">
           <SelectField label="Extension (line 1)" value={extensionId} error={errors.fields.primary_extension_id} placeholder="No extension"

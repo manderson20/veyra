@@ -101,9 +101,17 @@ class DeviceProfile(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     # Line keys [{type, label, value}], see docs/DEVICE_PROVISIONING.md §4.2.
     keys: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    # {model: line keys} for the models that do not use ``keys``.
+    model_keys: Mapped[dict[str, list[dict[str, Any]]]] = mapped_column(JSONB, default=dict)
+    # New phones of this brand in the organization start on this template.
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     firmware_image_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("firmware_images.id", ondelete="SET NULL")
     )
+
+    def keys_for(self, model: str) -> list[dict[str, Any]]:
+        own = (self.model_keys or {}).get(model)
+        return own if own is not None else (self.keys or [])
 
 
 class DeviceProfilePaging(Base):

@@ -21,7 +21,7 @@ These templates are experimental: test one adapter before rolling out more (see 
 ## Set up an adapter
 
 1. Create one extension for each port you will use (under Telephony → Extensions).
-2. Create a [device profile](guide:device-profiles) with the template **Grandstream HT801 / HT802** or **Grandstream HT812 / HT814 / HT818**, or the family **Grandstream ATA (common settings)**.
+2. Create a [phone template](guide:device-profiles) with the base file **Grandstream HT801 / HT802** or **Grandstream HT812 / HT814 / HT818**, or the family **Grandstream ATA (common settings)**.
 3. Register the adapter under [Provisioning → Devices](app:/devices/) with its MAC address and model (see [Add a phone](guide:add-a-phone)).
 4. On the device's **Settings** tab, set **Extension (line 1)** to port 1's extension. Add the other ports with **Add line** under **Extra lines**: line 2 is port 2, line 3 is port 3, and so on.
 5. Point the adapter at Veyra: in its web page, Maintenance → Upgrade and Provisioning, choose HTTPS, the server `<your Veyra server>/provisioning`, and the organization's enrollment user name and password. Or use DHCP option 66. See [Connect phones to Veyra](guide:connect-phones-to-veyra).
@@ -53,7 +53,7 @@ To use T.38 for a fax machine:
 
 ## Other adapter settings
 
-These are in the device profile under **Settings**:
+These are in the template under **Settings**:
 
 | Setting | What it does |
 |---|---|

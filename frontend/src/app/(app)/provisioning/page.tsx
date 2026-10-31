@@ -16,9 +16,6 @@ import {
   PageHeader,
   type Column,
 } from "@/components/ui";
-import { CopyButton } from "@/components/common/CopyButton";
-import { buttonClass } from "@/components/ui/Button";
-import { API_BASE } from "@/lib/api";
 import { groupByBrand } from "@/lib/brands";
 import type { TemplateSummary } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -33,7 +30,7 @@ export default function ProvisioningPage() {
   const columns: Column<TemplateSummary>[] = [
     {
       key: "name",
-      header: "Template",
+      header: "Base file",
       render: (t) => (
         <span>
           <span className="table__primary" style={{ display: "block" }}>{t.name}</span>
@@ -61,65 +58,32 @@ export default function ProvisioningPage() {
   return (
     <div className="stack">
       <PageHeader
-        title="Provisioning templates"
-        description="Configuration templates that phones download to configure themselves."
-        actions={can("provisioning.write") ? <Button icon="upload" onClick={() => setImportOpen(true)}>Import template</Button> : null}
+        title="Base files"
+        description="The system defaults that phone configuration is built from. Each brand's templates choose from these."
+        actions={can("provisioning.write") ? <Button icon="upload" onClick={() => setImportOpen(true)}>Import base file</Button> : null}
       />
       <Callout tone="neutral">
-        Official templates are never modified. To change one, open it and choose <strong>Customize</strong>: Veyra makes a local copy
+        Official base files are never modified. To change one, open it and choose <strong>Customize</strong>: Veyra makes a local copy
         under it that overrides only what you change, for your organization (or the whole server for a platform-wide copy).
-        Phones get a template through their device profile.
+        Phones get a base file through their template.
       </Callout>
       {errors.length ? (
-        <Callout tone="warn" title="Some templates could not be loaded">
+        <Callout tone="warn" title="Some base files could not be loaded">
           <ul style={{ margin: 0, paddingLeft: 18 }}>{errors.map(([k, v]) => <li key={k}>{k.startsWith("db:") && can("provisioning.write") ? <Link className="mono" href={`/provisioning/view/?key=${encodeURIComponent(k.slice(3))}`}>{k.slice(3)}</Link> : <span className="mono">{k}</span>}: {v.join("; ")}</li>)}</ul>
         </Callout>
       ) : null}
-      <RedirectServices />
       {groups.length ? groups.map((g) => (
         <Card key={g.brand} title={g.brand} flush>
-          <DataTable columns={columns} rows={g.rows} rowKey={(t) => t.key} caption={`${g.brand} templates`}
+          <DataTable columns={columns} rows={g.rows} rowKey={(t) => t.key} caption={`${g.brand} base files`}
             onRowClick={(t) => router.push(`/provisioning/view/?key=${encodeURIComponent(t.key)}`)} rowLabel={(t) => `Open ${t.name}`} />
         </Card>
       )) : (
         <Card flush>
           <DataTable columns={columns} rows={list.data?.items} rowKey={(t) => t.key} loading={list.loading} error={list.error} onRetry={list.reload}
-            caption="Provisioning templates" empty={<EmptyState icon="template" title="No templates found" />} />
+            caption="Base files" empty={<EmptyState icon="template" title="No base files found" />} />
         </Card>
       )}
       <ImportTemplateDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={(key) => router.push(`/provisioning/view/?key=${encodeURIComponent(key)}`)} />
     </div>
-  );
-}
-
-const REDIRECT_VENDORS: { name: string; manufacturer: string; service: string; how: string }[] = [
-  { name: "Yealink", manufacturer: "Yealink", service: "Yealink RPS (Redirection and Provisioning Service)", how: "Add the MACs in the RPS portal with the provisioning URL as the server; the phones then find Veyra at first boot." },
-  { name: "Poly", manufacturer: "Poly", service: "Poly ZTP (Zero Touch Provisioning) in Poly Lens", how: "Register the MACs with the provisioning URL; or use DHCP option 160 on the voice VLAN." },
-  { name: "Algo", manufacturer: "Algo", service: "DHCP option 66 (Algo has no cloud redirect)", how: "Give the voice VLAN option 66 with the provisioning URL, or set the static server once in the device's web page." },
-  { name: "Grandstream", manufacturer: "Grandstream", service: "Grandstream GDMS", how: "Import the MACs in GDMS with the provisioning URL as the config server." },
-];
-
-/** Vendor redirect services (docs/PROVISIONING_BREADTH.md §6): how new phones
- * find Veyra, and the MAC export to register them in bulk. */
-function RedirectServices() {
-  const url = typeof window === "undefined" ? "/provisioning/" : `${window.location.origin}/provisioning/`;
-  return (
-    <Card title="Redirect services" subtitle="New phones find Veyra through their vendor's redirect service or DHCP; register them in bulk with the device export.">
-      <div className="stack stack--sm">
-        <p>Provisioning URL: <span className="mono">{url}</span> <CopyButton text={url} /></p>
-        <p className="subtle">Phones authenticate with their organization&apos;s enrollment credential (Directory → Organizations → the organization → Phone provisioning) the first time, then with their own.</p>
-        <ul className="stack stack--sm" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {REDIRECT_VENDORS.map((v) => (
-            <li key={v.name} className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
-              <span style={{ minWidth: 0 }}>
-                <span className="table__primary" style={{ display: "block" }}>{v.name}: {v.service}</span>
-                <span className="table__secondary">{v.how}</span>
-              </span>
-              <a className={buttonClass("secondary", "sm")} href={`${API_BASE}/devices/export.csv?manufacturer=${encodeURIComponent(v.manufacturer)}`} download>Export {v.name} MACs</a>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Card>
   );
 }

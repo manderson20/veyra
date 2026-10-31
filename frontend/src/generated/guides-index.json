@@ -172,17 +172,18 @@
   },
   {
    "slug": "device-profiles",
-   "title": "Device profiles",
-   "summary": "Group phones that share a template, settings, keys, paging zones and firmware, for example one profile per building.",
+   "title": "Phone templates",
+   "summary": "Each brand has its templates. A template holds the settings, line keys, paging zones and firmware that a group of phones share.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.62",
+   "reviewed": "0.27.63",
    "reviewed_date": "2026-10-31",
    "pages": [
-    "/device-profiles/",
-    "/device-profiles/view/"
+    "/provisioning/brands/",
+    "/provisioning/brands/view/",
+    "/provisioning/brands/template/"
    ],
-   "wiki": "https://github.com/manderson20/veyra/wiki/Device-profiles"
+   "wiki": "https://github.com/manderson20/veyra/wiki/Phone-templates"
   },
   {
    "slug": "phone-keys",
@@ -193,7 +194,7 @@
    "reviewed": "0.27.60",
    "reviewed_date": "2026-10-31",
    "pages": [
-    "/device-profiles/view/",
+    "/provisioning/brands/template/",
     "/devices/view/"
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Phone-keys"
@@ -211,17 +212,17 @@
   },
   {
    "slug": "customize-provisioning-templates",
-   "title": "Customize a provisioning template",
-   "summary": "Change what Veyra writes into phones' configuration files with your own template, edited in the browser, previewed, exported and imported.",
+   "title": "Customize a base file",
+   "summary": "Change what Veyra writes into phones' configuration files with your own base file, edited in the browser, previewed, exported and imported.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.62",
+   "reviewed": "0.27.63",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/provisioning/",
     "/provisioning/view/"
    ],
-   "wiki": "https://github.com/manderson20/veyra/wiki/Customize-a-provisioning-template"
+   "wiki": "https://github.com/manderson20/veyra/wiki/Customize-a-base-file"
   },
   {
    "slug": "provisioning-variables",
@@ -721,7 +722,7 @@
    "summary": "Send saved changes to the telephony engine, now or when calls have ended, and roll back to an earlier configuration.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.60",
+   "reviewed": "0.27.63",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/system/telephony/"
@@ -830,8 +831,8 @@
    "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.49",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.63",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/my-phone/"
    ],

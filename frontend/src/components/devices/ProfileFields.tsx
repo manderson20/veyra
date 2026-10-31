@@ -14,11 +14,13 @@ export interface ProfileDraft {
   template_key: string;
   values: Record<string, string>;
   keys: LineKey[];
+  model_keys: Record<string, LineKey[]>;
+  is_default: boolean;
   paging: Record<string, { subscribed: boolean; transmit: boolean; role: PagingRole }>;
   firmware_image_id: string;
 }
 
-export const EMPTY_PROFILE: ProfileDraft = { name: "", description: "", site_id: "", template_key: "", values: {}, keys: [], paging: {}, firmware_image_id: "" };
+export const EMPTY_PROFILE: ProfileDraft = { name: "", description: "", site_id: "", template_key: "", values: {}, keys: [], model_keys: {}, is_default: false, paging: {}, firmware_image_id: "" };
 
 export function profileDraft(p: DeviceProfile): ProfileDraft {
   return {
@@ -28,6 +30,8 @@ export function profileDraft(p: DeviceProfile): ProfileDraft {
     template_key: p.template_key,
     values: Object.fromEntries(Object.entries(p.values).map(([k, v]) => [k, String(v)])),
     keys: p.keys,
+    model_keys: p.model_keys,
+    is_default: p.is_default,
     paging: Object.fromEntries(p.paging.map((m) => [m.zone_id, { subscribed: m.subscribed, transmit: m.transmit, role: m.role }])),
     firmware_image_id: p.firmware?.id ?? "",
   };
@@ -42,6 +46,8 @@ export function profileBody(d: ProfileDraft): DeviceProfileInput {
     template_key: d.template_key,
     values: Object.fromEntries(Object.entries(d.values).filter(([, v]) => v.trim() !== "")),
     keys: d.keys,
+    model_keys: d.model_keys,
+    is_default: d.is_default,
     paging,
     firmware_image_id: d.firmware_image_id || null,
   };
@@ -49,8 +55,10 @@ export function profileBody(d: ProfileDraft): DeviceProfileInput {
 
 const ROLE_LABELS: Record<PagingRole, string> = { none: "—", default: "Default group", priority: "Priority group", emergency: "Emergency group" };
 
-/** The shared form of the profile dialog and page. */
-export function ProfileFields({ draft, onChange, templates, template, zones, sites, firmware, errors, disabled }: {
+/** The shared form of the template dialog and page. */
+export function ProfileFields({ brand: fixedBrand, draft, onChange, templates, template, zones, sites, firmware, errors, disabled }: {
+  /** The brand this template belongs to; without it the form asks. */
+  brand?: string | null;
   draft: ProfileDraft;
   onChange: (patch: Partial<ProfileDraft>) => void;
   templates: TemplateSummary[];
@@ -63,7 +71,7 @@ export function ProfileFields({ draft, onChange, templates, template, zones, sit
 }) {
   const [chosenBrand, setBrand] = useState("");
   const brands = [...new Set(templates.map((t) => t.manufacturer))].sort((a, b) => a.localeCompare(b));
-  const brand = chosenBrand || templates.find((t) => t.key === draft.template_key)?.manufacturer || "";
+  const brand = fixedBrand || chosenBrand || templates.find((t) => t.key === draft.template_key)?.manufacturer || "";
   const families = templates.filter((t) => t.abstract);
   const models = templates.filter((t) => !t.abstract);
   const manufacturer = template?.manufacturer;
@@ -81,11 +89,11 @@ export function ProfileFields({ draft, onChange, templates, template, zones, sit
         <SelectField label="Site (optional)" disabled={disabled} value={draft.site_id} error={errors.site_id} placeholder="No site" options={sites.map((s) => ({ value: s.id, label: s.name }))} onChange={(e) => onChange({ site_id: e.target.value })} />
       </div>
       <div className="form-grid">
-        <SelectField label="Brand" required disabled={disabled} value={brand} placeholder="Choose a brand"
+        {fixedBrand ? null : <SelectField label="Brand" required disabled={disabled} value={brand} placeholder="Choose a brand"
           options={brands.map((b) => ({ value: b, label: b }))}
-          onChange={(e) => { setBrand(e.target.value); onChange({ template_key: "", values: {} }); }} />
-        <SelectField label="Template" required disabled={disabled || !brand} value={draft.template_key} error={errors.template_key} placeholder={brand ? "Choose a template family or model" : "Choose a brand first"}
-          help="A family (base template) serves every model under it; a model template serves that model only."
+          onChange={(e) => { setBrand(e.target.value); onChange({ template_key: "", values: {} }); }} />}
+        <SelectField label="Base file" required disabled={disabled || !brand} value={draft.template_key} error={errors.template_key} placeholder={brand ? "Choose a family or a model" : "Choose a brand first"}
+          help="A family serves every model under it; a model's base file serves that model only."
           options={[
             ...families.filter((t) => sameBrand(t.manufacturer, brand)).map((t) => ({ value: t.key, label: `${t.name} (family)` })),
             ...models.filter((t) => sameBrand(t.manufacturer, brand)).map((t) => ({ value: t.key, label: `${t.name}: ${t.models.join(", ")}` })),
@@ -93,6 +101,7 @@ export function ProfileFields({ draft, onChange, templates, template, zones, sit
           onChange={(e) => onChange({ template_key: e.target.value, values: {} })} />
       </div>
       {template?.abstract === false ? <p className="muted">Serves {template.models.join(", ")} only.</p> : null}
+      <Checkbox label="Default template for this brand" disabled={disabled} checked={draft.is_default} onChange={(e) => onChange({ is_default: e.target.checked })} />
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} onChange={(e) => onChange({ description: e.target.value })} />
       <SelectField label="Firmware" disabled={disabled} value={draft.firmware_image_id} error={errors.firmware_image_id} placeholder="Keep the phones' current firmware"
         options={firmware.filter((f) => !manufacturer || f.manufacturer.toLowerCase() === manufacturer.toLowerCase()).map((f) => ({ value: f.id, label: `${f.manufacturer} ${f.version} (${f.models.join(", ") || "all models"})` }))}
@@ -100,7 +109,7 @@ export function ProfileFields({ draft, onChange, templates, template, zones, sit
 
       <h3 className="field__label" style={{ marginTop: 8 }}>Settings</h3>
       {errors.values ? <p className="field__error">{errors.values}</p> : null}
-      {variables.length === 0 ? <p className="muted">Choose a template to see its settings.</p> : null}
+      {variables.length === 0 ? <p className="muted">Choose a base file to see its settings.</p> : null}
       <div className="form-grid">
         {variables.map((v) => (
           v.type === "boolean" ? (
@@ -115,6 +124,7 @@ export function ProfileFields({ draft, onChange, templates, template, zones, sit
       </div>
 
       <h3 className="field__label" style={{ marginTop: 8 }}>Line keys</h3>
+      <p className="muted">For every model, unless Available Phones gives a model its own.</p>
       <KeyListEditor keys={draft.keys} onChange={(keys) => onChange({ keys })} zones={zones} disabled={disabled} error={errors.keys} />
 
       <h3 className="field__label" style={{ marginTop: 8 }}>Paging zones</h3>

@@ -10,7 +10,7 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
 
-const SCOPE_LABEL: Record<VariableScope, string> = { installation: "Installation", organization: "Organization", site: "Site", profile: "Profile" };
+const SCOPE_LABEL: Record<VariableScope, string> = { installation: "Installation", organization: "Organization", site: "Site", profile: "Template" };
 const SCOPE_ORDER: VariableScope[] = ["installation", "organization", "site", "profile"];
 
 /** Provisioning variables (docs/PROVISIONING_BREADTH.md §2): values defined
@@ -40,7 +40,7 @@ export default function VariablesPage() {
   return (
     <div className="stack">
       <PageHeader title="Provisioning variables"
-        description="Values phones share, defined once: an all-call zone per building, the time server, an admin password. Templates read them as {{ vars.name }}, line keys and paging zones as $name; each phone takes the value of its nearest scope (profile, then site, then organization, then installation). Changing a value asks the phones it reaches to re-read their configuration."
+        description="Values phones share, defined once: an all-call zone per building, the time server, an admin password. Base files read them as {{ vars.name }}, line keys and paging zones as $name; each phone takes the value of its nearest scope (template, then site, then organization, then installation). Changing a value asks the phones it reaches to re-read their configuration."
         actions={manage ? <Button variant="primary" icon="plus" onClick={() => setEditing("new")}>New variable</Button> : null} />
       <Card title="Defined variables" flush>
         {organizations.length > 1 ? (
@@ -51,7 +51,7 @@ export default function VariablesPage() {
         ) : null}
         <DataTable columns={columns} rows={defined} rowKey={(v) => v.id!} loading={list.loading} error={list.error} onRetry={list.reload}
           caption="Defined variables" onRowClick={manage ? (v) => setEditing(v) : undefined} rowLabel={(v) => `Edit ${v.name}`}
-          empty={<EmptyState compact icon="settings" title="No variables yet">{manage ? "Define a value once, for example all_call per site, and use $all_call on a page key of a profile." : "Nothing is defined yet."}</EmptyState>} />
+          empty={<EmptyState compact icon="settings" title="No variables yet">{manage ? "Define a value once, for example all_call per site, and use $all_call on a page key of a template." : "Nothing is defined yet."}</EmptyState>} />
       </Card>
       <Card title="Built-in values" subtitle="Every template has these from the phone, its extension and the server; they need no definition." flush>
         <DataTable columns={coreColumns} rows={core} rowKey={(v) => v.name} loading={list.loading} caption="Built-in values" />
@@ -152,8 +152,8 @@ function VariableDialog({ variable, isPlatform, onClose, onSaved }: { variable: 
                 onChange={(e) => { setOrg(e.target.value); setTarget(""); }} />
             ) : null}
             {needsTarget ? (
-              <SelectField label={scope === "site" ? "Site" : "Device profile"} required value={target} error={errors.fields.scope_id}
-                placeholder={targetOptions.length ? "Choose…" : scope === "site" ? "No sites (Organizations → Sites)" : "No device profiles"}
+              <SelectField label={scope === "site" ? "Site" : "Template"} required value={target} error={errors.fields.scope_id}
+                placeholder={targetOptions.length ? "Choose…" : scope === "site" ? "No sites (Organizations → Sites)" : "No templates"}
                 options={targetOptions} onChange={(e) => setTarget(e.target.value)} />
             ) : null}
           </>

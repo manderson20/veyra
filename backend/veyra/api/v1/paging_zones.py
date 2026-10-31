@@ -498,7 +498,7 @@ def delete_zone(
         raise ProblemError(
             409,
             "Paging zone in use",
-            "Device profiles still subscribe to this zone: "
+            "Templates still subscribe to this zone: "
             + ", ".join(p.name for p in used[:5])
             + ("…" if len(used) > 5 else "")
             + ".",

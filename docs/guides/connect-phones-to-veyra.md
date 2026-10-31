@@ -30,7 +30,7 @@ Then you register each phone by its MAC address. See [Add a phone](guide:add-a-p
 
 Phones download their files from `https://<your Veyra server>/provisioning/`. You can copy this address in two places:
 
-- [Provisioning → Templates](app:/provisioning/), in the **Redirect services** card (**Provisioning URL**).
+- The phone's brand in the Provisioning menu, in the **Connect new phones** card (**Provisioning URL**).
 - On the organization's page under Directory → Organizations, in the **Phone provisioning** card (**Server URL**).
 
 ## The enrollment credential
@@ -53,7 +53,7 @@ Pick one of these. You only need it for new or factory-reset phones, because a c
 
 - **DHCP option 66.** On the DHCP scope of the voice network, set option 66 to the provisioning URL. Poly phones also read option 160. You can put the credential in the address so nothing is typed on the phone: `https://veyra-yourorg:PASSWORD@pbx.example.org/provisioning/`.
 - **Typed on the phone.** In the phone's own menu or web page, set the provisioning server type to HTTPS, the server to the address without `https://`, and the enrollment user name and password.
-- **The vendor's redirect service.** Some brands ask the vendor's cloud where to go the first time they start. The **Redirect services** card on [Provisioning → Templates](app:/provisioning/) lists them:
+- **The vendor's redirect service.** Some brands ask the vendor's cloud where to go the first time they start. The **Connect new phones** card on each brand's page in the Provisioning menu names its service:
 
 | Brand | Service | What to do |
 |---|---|---|
@@ -81,7 +81,7 @@ When the bootstrap is on, the **Phone provisioning** card also shows the switch 
 
 > **Important:** Once a phone has downloaded its configuration over HTTPS, Veyra refuses to send it the plain-HTTP bootstrap again. This stops someone from tricking it back onto HTTP. If you factory-reset the phone, open its device page, go to the **Status** tab and choose **Allow bootstrap again**.
 
-**Grandstream and Algo.** These devices do not get the HTTP bootstrap. Point them straight at the **https** address. If a device refuses the certificate, download it from `https://<your Veyra server>/downloads/veyra-ca.crt` and add it in the device's web page as a trusted certificate. Grandstream's configuration from Veyra installs the Veyra CA by itself (setting `install_ca`) and leaves certificate checking off. Once the CA is installed you can turn checking on with the setting `validate_server_certificate` (see [Device profiles](guide:device-profiles)).
+**Grandstream and Algo.** These devices do not get the HTTP bootstrap. Point them straight at the **https** address. If a device refuses the certificate, download it from `https://<your Veyra server>/downloads/veyra-ca.crt` and add it in the device's web page as a trusted certificate. Grandstream's configuration from Veyra installs the Veyra CA by itself (setting `install_ca`) and leaves certificate checking off. Once the CA is installed you can turn checking on with the setting `validate_server_certificate` (see [Phone templates](guide:device-profiles)).
 
 > **Warning:** Whoever runs the server can set `VEYRA_PROVISIONING_HTTP_MODE=full` so that every file, SIP passwords included, is also sent over plain HTTP. Use it only for phones that cannot take the certificate any other way. The **Phone provisioning** card shows a warning while it is on.
 

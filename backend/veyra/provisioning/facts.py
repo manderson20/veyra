@@ -598,7 +598,7 @@ def build_facts(
         z.slug: z
         for z in db.scalars(select(PagingZone).where(PagingZone.organization_id == org.id))
     }
-    raw_keys = device.keys if device.keys is not None else profile.keys
+    raw_keys = device.keys if device.keys is not None else profile.keys_for(device.model)
     own_number = lines[0]["extension_number"] if lines else None
     keys = _keys(
         db,

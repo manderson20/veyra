@@ -13,7 +13,7 @@ covers:
   - frontend/src/app/(app)/provisioning/page.tsx
 ---
 
-Veyra configures a device through a **template** for its brand and model. The templates that come with Veyra are listed under [Provisioning → Templates](app:/provisioning/) with the source **Official**. Each official template lists the exact models it serves; the **Model** list in the phone form offers only those.
+Veyra configures a device through a **template** for its brand and model. The templates that come with Veyra are listed under [Provisioning → Base Files](app:/provisioning/) with the source **Official**. Each official template lists the exact models it serves; the **Model** list in the phone form offers only those.
 
 > **Important:** Every official template is marked **experimental** for now. They follow the vendors' documentation but have not yet been checked on real hardware. Before you roll out a model, set up one phone and test it: calls, keys, voicemail light, paging and the time. The template's page says so in an **Experimental template** box.
 
@@ -54,10 +54,10 @@ Each port is one line of the device: line 1 is port 1. See [Analog adapters and 
 
 Templates come in two kinds:
 
-- A **base template** (shown as *Base template* in the list) holds the settings a whole family shares, such as *Poly VVX (common settings)* or *Yealink (common settings)*. A device profile can point at it, and then serves every model of the family.
+- A **base template** (shown as *Family* in the list) holds the settings a whole family shares, such as *Poly VVX (common settings)* or *Yealink (common settings)*. A template can point at it, and then serves every model of the family.
 - A **model template** serves the models it lists and inherits everything else from its base template.
 
-Which you choose in a profile is explained in [Device profiles](guide:device-profiles).
+Which you choose in a template is explained in [Phone templates](guide:device-profiles).
 
 ## Firmware the templates expect
 
@@ -74,4 +74,4 @@ The **Redirect services** card on the same page shows the provisioning URL and e
 
 ## Encrypted calls
 
-Poly and Yealink phones can encrypt call audio with SRTP, set on the device profile. See [Device profiles](guide:device-profiles). Other families cannot yet.
+Poly and Yealink phones can encrypt call audio with SRTP, set on the template. See [Phone templates](guide:device-profiles). Other families cannot yet.
