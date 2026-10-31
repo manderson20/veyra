@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 79,
+  "sequence": 80,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.63",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Provisioning by brand: brand pages, templates with Used By, a default per brand, per-model line keys, Save and Update Phones.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "cc71014009",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.63/veyra-0.27.63.tar.gz",
+        "sha256": "db67ec54eef84836f235bb49903fac024694af00b239cb0d9b2725e231496cd6",
+        "size": 9499262
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1346,6 +1363,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T04:31:42+00:00",
-  "expires_at": "2027-01-29T04:31:42+00:00"
+  "generated_at": "2026-10-31T12:32:34+00:00",
+  "expires_at": "2027-01-29T12:32:34+00:00"
 }
