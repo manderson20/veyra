@@ -4,7 +4,7 @@ summary: Give staff a switch, on the web or on a phone key, that sends calls to 
 audience: admin
 section: Calls and call flows
 order: 50
-reviewed: 0.27.44
+reviewed: 0.27.69
 pages:
   - /routing/call-flows/
   - /routing/call-flows/view/
@@ -66,3 +66,7 @@ Switching takes effect immediately. No deployment is needed.
 - **Enabled** off leaves the call flow out of the phone system, and routes that point at it are flagged.
 - Renaming a call flow does not change its internal name (the **Context** shown under **Information**) or its phone code.
 - A call flow that is still used by a route, menu, group or announcement cannot be deleted. Change those first.
+
+## While a calendar event closes a time condition
+
+If a [time condition is closed by a calendar event](guide:business-hours-and-holidays), dialing its override code opens it until the schedule next changes.

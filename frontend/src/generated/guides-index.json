@@ -324,8 +324,8 @@
    "summary": "Decide where each of your phone numbers (DIDs) rings, with a different destination outside business hours.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.49",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.69",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/inbound/",
     "/routing/inbound/view/"
@@ -365,8 +365,8 @@
    "summary": "Decide which dialled numbers go out to the carrier, through which trunks, and with which caller ID.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.49",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.69",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/outbound/",
     "/routing/outbound/view/"
@@ -407,8 +407,8 @@
    "summary": "Give staff a switch, on the web or on a phone key, that sends calls to a second destination until it is switched back.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.69",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/call-flows/",
     "/routing/call-flows/view/"
