@@ -2363,7 +2363,7 @@
    "audience": "admin",
    "section": "Maintenance",
    "reviewed": "0.27.57",
-   "reviewed_date": null,
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/system/ha/"
    ],
