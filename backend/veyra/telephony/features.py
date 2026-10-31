@@ -247,6 +247,10 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
     ),
     FeatureCodeDef("acr_off", "*87", "Accept callers who hide their number", "", 22),
     FeatureCodeDef(
+        "cw_off", "*56", "Call waiting off", "Until turned on again; callers hear busy.", 22
+    ),
+    FeatureCodeDef("cw_on", "*57", "Call waiting on", "", 22),
+    FeatureCodeDef(
         "spy_listen",
         "*222",
         "Listen to a call (supervisor)",

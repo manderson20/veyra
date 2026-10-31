@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.72 — 2026-11-01
+
+No migration. The new codes need **Deploy changes**.
+
+### Added
+- **Call waiting codes** (#142): `*56` turns call waiting off until `*57` turns it on again, and the setting matches the extension page and My Phone.
+
 ## 0.27.71 — 2026-11-01
 
 Migration 0080 adds three queue columns. Changed queues need **Deploy changes**.

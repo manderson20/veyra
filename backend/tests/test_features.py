@@ -401,6 +401,30 @@ def test_class_destination_api(admin):
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "allowed_queue_ids"
 
 
+def test_call_waiting_codes_reach_the_row(admin, app):
+    feat = _section(
+        {
+            f.path: f.content
+            for f in generator.generate(_snapshot(feature_codes={"cw_off": "*56", "cw_on": "*57"}))
+        }["extensions.conf"],
+        "veyra-features",
+    )
+    key = "veyra/ext/${VEYRA_ORG}/${VEYRA_EXT}/nocw"
+    assert f"Set(DB({key})=1)" in feat and f"DB_DELETE({key})" in feat
+    assert "Field: nocw,Value: 1)" in feat and "Field: nocw,Value: )" in feat
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    r = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1001", "display_name": "A"},
+    )
+    assert r.status_code == 201, r.text
+    base = {"Org": org["slug"], "Extension": "1001", "Field": "nocw"}
+    with session_scope() as db:
+        assert extension_state.handle_userevent(db, {**base, "Value": "1"}).call_waiting_off
+        db.commit()
+        assert not extension_state.handle_userevent(db, {**base, "Value": ""}).call_waiting_off
+
+
 def test_personal_room_codes_and_profiles():
     files = {
         f.path: f.content

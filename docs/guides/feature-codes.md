@@ -4,7 +4,7 @@ summary: The star codes phones dial to forward calls, turn on Do Not Disturb, pi
 audience: admin
 section: Getting started
 order: 60
-reviewed: 0.27.70
+reviewed: 0.27.72
 checked: 2026-10-29
 pages:
   - /feature-codes/
@@ -55,6 +55,8 @@ These are the defaults. Your installation may have changed some of them: the pag
 | `*67` | Hide your number on one call | Followed by the number. Emergency calls always show it. |
 | `*69` | Call back the last caller | Calls the last outside number that rang this phone directly. |
 | `*70` | Call waiting off for one call | Followed by the number. |
+| `*56` | Call waiting off | Until turned on again; callers hear busy. |
+| `*57` | Call waiting on | |
 | `*77` | Refuse callers who hide their number | |
 | `*87` | Accept callers who hide their number | |
 | `*222` | Listen to a call (supervisor) | With an extension: hear its call without being heard. |

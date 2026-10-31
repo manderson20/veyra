@@ -1711,6 +1711,37 @@ def _acr_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     return lines
 
 
+def _call_waiting_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
+    """``*56``/``*57``: call waiting off and on until changed (issue #142). The
+    dialplan treats any stored value as off, so "on" removes the key."""
+    lines: list[str] = []
+    if "cw_off" in codes:
+        lines += _code_block(
+            f"exten => {codes['cw_off']},1,NoOp(Veyra call waiting off for ${{VEYRA_EXT}})",
+            [
+                f" same => n,Set(DB({STATE_KEY}/nocw)=1)",
+                _state_event("nocw", "1"),
+                " same => n,Playback(de-activated)",
+                " same => n,Hangup()",
+            ],
+            cos,
+            "cw_off",
+        )
+    if "cw_on" in codes:
+        lines += _code_block(
+            f"exten => {codes['cw_on']},1,NoOp(Veyra call waiting on for ${{VEYRA_EXT}})",
+            [
+                f" same => n,Set(VEYRA_GONE=${{DB_DELETE({STATE_KEY}/nocw)}})",
+                _state_event("nocw", ""),
+                " same => n,Playback(activated)",
+                " same => n,Hangup()",
+            ],
+            cos,
+            "cw_on",
+        )
+    return lines
+
+
 def _call_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     """``*67<number>``, ``*69`` and ``*70<number>`` (issue #163). Each places a
     call, so nothing answers the phone's channel first: the caller hears the
@@ -2492,6 +2523,7 @@ def _features(
         f"[{n.features}]",
         *_dnd_codes(codes, cos),
         *_acr_codes(codes, cos),
+        *_call_waiting_codes(codes, cos),
         *_presence_codes(codes, cos),
         *_forward_codes(codes, cos),
         *_remote_forward_codes(codes, boxes or [], cos),
