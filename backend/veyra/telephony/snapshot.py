@@ -309,9 +309,9 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     class_slug = {c.id: c.slug for c in classes}
     route_slug = {r.id: r.slug for r in db.scalars(select(OutboundRoute))}
     destination_slug = {
-        str(row.id): row.slug
+        str(row_id): slug
         for model in (RingGroup, CallQueue, ConferenceRoom)
-        for row in db.scalars(select(model))
+        for row_id, slug in db.execute(select(model.id, model.slug))
     }
     ext_by_id = {e.id: e for e in extensions}
     ring_seconds = {

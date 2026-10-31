@@ -109,8 +109,8 @@
    "summary": "The star codes phones dial to forward calls, turn on Do Not Disturb, pick up calls and more, and how to change them.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.68",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/feature-codes/"
    ],
@@ -149,7 +149,7 @@
    "summary": "Which phones, analog adapters and paging speakers Veyra can configure, and what to check before rolling them out.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.62",
+   "reviewed": "0.27.68",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/provisioning/"
@@ -189,7 +189,7 @@
    "summary": "Each brand has its templates. A template holds the settings, line keys, paging zones and firmware that a group of phones share.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.65",
+   "reviewed": "0.27.68",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/provisioning/brands/",
@@ -205,7 +205,7 @@
    "summary": "Set up the programmable keys on desk phones (lines, busy lamps, speed dials, paging, parking and more) and decide which keys users may change.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.60",
+   "reviewed": "0.27.68",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/provisioning/brands/template/",
@@ -464,8 +464,8 @@
    "summary": "Limit what groups of phones may dial, such as local calls only for classrooms, while 911 always works.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.68",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/routing/classes-of-service/"
    ],
@@ -858,8 +858,8 @@
    "summary": "Listen to your messages from your phone or the browser, record your greetings, set an away message for the holidays, and choose your PIN.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.51",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.68",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/my-phone/"
    ],
