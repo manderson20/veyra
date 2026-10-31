@@ -4,7 +4,7 @@ summary: Schedule verified, encrypted backups, copy them to a NAS, an SFTP serve
 audience: admin
 section: Maintenance
 order: 20
-reviewed: 0.27.56
+reviewed: 0.27.59
 checked: 2026-10-29
 pages:
   - /system/backups/
@@ -102,9 +102,25 @@ To keep a backup somewhere of your own, choose **Download** on a verified backup
 
 The file restores with the same console command as below, once copied to the server.
 
-## Restore a server
+## Go back to a backup on this server
 
-Restoring is done on the server console, as root, on a server with the **same Veyra release** installed. A freshly installed server is fine: see [Install Veyra](guide:install-veyra).
+To return this server to an earlier state, open **System → Backups** and choose **Restore** on a verified backup. Platform administrators can do this.
+
+1. Read the warning. Everything since that backup is lost, and everyone is signed out.
+2. If the backup is encrypted, paste your age private key. It starts with `AGE-SECRET-KEY-`. It is used for this restore only and is not stored.
+3. Type `RESTORE` and confirm.
+4. Keep the page open. Progress shows even while the rest of the web interface is stopped.
+5. Sign in again, check that phones register, and make a test call.
+
+Veyra checks the backup and takes a safety backup of the server first. If either fails, nothing changes. **System → Backups** then names the safety backup, which is kept on this server only and does not go to your destinations. Backups taken after the one you restored stay on the server but are no longer listed.
+
+The restore is refused while a backup or software update is running and on a server in a high availability pair.
+
+> **Note:** You can only choose backups already on this server. Files cannot be uploaded, because a crafted backup could take over the server. To restore a file, use the console, below.
+
+## Restore a server from a file
+
+Restoring a file is done on the server console, as root, on a server with the **same Veyra release or a newer one** installed. A freshly installed server is fine: see [Install Veyra](guide:install-veyra).
 
 1. Copy the backup file (`veyra-<date>-<time>.tar.age`) and your identity file onto the server.
 2. Run:
@@ -120,7 +136,7 @@ The database, configuration and secrets, engine files, data and voicemail come b
 
 Other console commands: `sudo veyra backup list` lists backups and `sudo veyra backup run` takes one. `--parts db,etc,engine,data,voicemail,recordings` restores only some parts.
 
-> **Note:** A backup from a newer Veyra release is refused; install that release first. A server that is part of a high availability pair cannot be restored directly; restore a standalone server and build the pair again.
+> **Note:** A backup from a newer Veyra release, including a newer patch release, is refused; install that release first. A server that is part of a high availability pair cannot be restored directly; restore a standalone server and build the pair again.
 
 ## When it does not work
 

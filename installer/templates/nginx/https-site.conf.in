@@ -62,6 +62,16 @@
         proxy_hide_header Cross-Origin-Opener-Policy;
     }
 
+    # A web restore's progress, while the API it would come from is stopped
+    # (docs/PRODUCTION_HARDENING.md §2.5). Holds no error text and no secret.
+    location = /restore-status.json {
+        alias /var/lib/veyra-restore/status.json;
+        types { }
+        default_type application/json;
+        include @VEYRA_ETC@/nginx-security-headers.conf;
+        add_header Cache-Control "no-store";
+    }
+
     location /api/ {
         proxy_pass http://veyra_api;
         include @VEYRA_ETC@/nginx-proxy.conf;

@@ -19,8 +19,8 @@ polkit.addRule(function (action, subject) {
         return polkit.Result.YES;
     }
     // Backups (docs/PRODUCTION_HARDENING.md §2.2): run, run-manual, delete-<uuid>,
-    // download-<uuid> and download-clean (only ever root reading into its own directory).
-    if (/^veyra-backup@(run|run-manual|recordings|download-clean|(delete|download)-[0-9a-f-]{36})\.service$/.test(unit) && verb === "start") {
+    // download-<uuid>, download-clean and restore-<uuid> (only from a backup in root's own store).
+    if (/^veyra-backup@(run|run-manual|recordings|download-clean|(delete|download|restore)-[0-9a-f-]{36})\.service$/.test(unit) && verb === "start") {
         return polkit.Result.YES;
     }
     // Installation key rotation (issue #125; docs/PRODUCTION_HARDENING.md §3.1).

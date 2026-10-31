@@ -14,16 +14,18 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from veyra.api.v1.extensions import installation_key
 from veyra.backups import destinations as dests
 from veyra.backups import policy, recording_archive, service
+from veyra.backups import restore as restore_lib
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, recent_auth, request_context, require
 from veyra.core.errors import ProblemError, not_found
-from veyra.core.models import Backup
+from veyra.core.models import AvailableUpdate, Backup, Installation
 from veyra.core.security.principal import Principal
 
 router = APIRouter(prefix="/backups", tags=["backups"])
@@ -317,6 +319,11 @@ def status(principal: Principal = Depends(require(READ))) -> dict[str, Any]:
     return service.status() or {"state": "idle"}
 
 
+@router.get("/restore", summary="The running or last restore from the web")
+def restore_status(principal: Principal = Depends(require(READ))) -> dict[str, Any]:
+    return service.restore_state() or {"state": "none"}
+
+
 @router.post("/run", status_code=202, summary="Take a backup now")
 def run_now(
     principal: Principal = Depends(require(MANAGE)),
@@ -425,6 +432,101 @@ def prepare_download(
     )
     db.commit()
     return _download_out(row)
+
+
+class RestoreIn(BaseModel):
+    # Checked in the route: a validation error would echo a private key back.
+    identity: str | None = None
+    confirm: str = ""
+
+
+@router.post(
+    "/{backup_id}/restore",
+    status_code=202,
+    dependencies=[Depends(recent_auth)],
+    summary="Restore this server from a backup kept on it",
+)
+def restore_backup(
+    backup_id: uuid.UUID,
+    body: RestoreIn,
+    principal: Principal = Depends(require(MANAGE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    row = db.get(Backup, backup_id)
+    if row is None:
+        raise not_found("Backup")
+    if body.confirm != "RESTORE":
+        raise ProblemError(422, "Not confirmed", "Type RESTORE to confirm.", code="not_confirmed")
+    if row.state != "verified":
+        raise ProblemError(
+            409, "Not available", "Only a verified backup can be restored.", code="not_verified"
+        )
+    inst = db.scalar(select(Installation))
+    if inst is not None and inst.deployment_mode != "standalone":
+        raise ProblemError(
+            409,
+            "Part of a pair",
+            "A server in a high availability pair cannot be restored. Take it out of the pair "
+            "first, restore it, then build the pair again.",
+            code="ha_enabled",
+        )
+    if service.running() or service.restore_running():
+        raise ProblemError(
+            409, "Busy", "A backup or a restore is running. Try again after it.", code="busy"
+        )
+    updating = db.scalar(
+        select(func.count())
+        .select_from(AvailableUpdate)
+        .where(AvailableUpdate.state.in_(("installing", "scheduled")))
+    )
+    if updating:
+        raise ProblemError(
+            409, "Busy", "A software update is installing or scheduled.", code="update_running"
+        )
+    identity = body.identity or ""
+    if len(identity) > restore_lib.REQUEST_MAX // 2:
+        raise ProblemError(422, "Private key", "That is not an age private key.", code="identity")
+    keys = restore_lib.identity_lines(identity)
+    if row.encrypted and not keys:
+        raise ProblemError(
+            422,
+            "Private key",
+            "This backup is encrypted: paste the age private key, which starts with "
+            "AGE-SECRET-KEY-.",
+            code="identity",
+        )
+    restore_id = str(uuid.uuid4())
+    # Written first and in the backup, in case the safety backup is ever restored.
+    _audit(
+        db,
+        principal,
+        ctx,
+        "backups.restore_start",
+        id=str(backup_id),
+        name=row.manifest.get("name"),
+    )
+    db.commit()
+    try:
+        service.write_restore_request(
+            {
+                "id": restore_id,
+                "backup_id": str(backup_id),
+                "identity": "\n".join(keys),
+                "actor": principal.label,
+                "ip": ctx.ip,
+            }
+        )
+    except OSError as e:
+        raise ProblemError(
+            503, "Backups", "The restore could not be handed over.", code="request_failed"
+        ) from e
+    try:
+        service.start(f"restore-{backup_id}")
+    except service.BackupError as e:
+        service.RESTORE_REQUEST.unlink(missing_ok=True)
+        raise _problem(e) from e
+    return {"id": restore_id}
 
 
 @router.get("/{backup_id}/download", summary="How the prepared download is doing")

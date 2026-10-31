@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.59 — 2026-10-31
+
+No migration. The update changes the nginx site and the API's service file.
+
+### Added
+- **Restore from the web** (#348): System → Backups → **Restore** on a verified backup, for platform administrators. The backup is checked and a safety backup is taken before anything changes, progress shows while the services are stopped, and the restore is in the audit log. Only backups already on the server can be chosen; restoring a file is still a console command.
+
+### Fixed
+- A restore now refuses a backup from a newer patch release. Before, only the minor version was compared, so the restore could fail at the migration step after it had already replaced the database.
+
 ## 0.27.58 — 2026-10-31
 
 No migration.

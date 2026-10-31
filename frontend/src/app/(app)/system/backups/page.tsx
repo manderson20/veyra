@@ -118,6 +118,105 @@ function Progress({ active, onFinished }: { active: boolean; onFinished: () => v
 interface DownloadState { state: "none" | "preparing" | "ready" | "failed"; filename: string | null; bytes: number | null; sha256: string | null; error: string | null }
 
 /** Root prepares a copy the web service can read; then the browser downloads it (issue #348). */
+interface RestoreState { id?: string; state: "none" | "running" | "finished" | "failed"; step?: string; stopped?: boolean; safety_backup?: string | null; backup?: string; error?: string | null; started_at?: string; finished_at?: string | null }
+
+const RESTORE_RECENT_MS = 7 * 24 * 3600 * 1000;
+
+function restoreConsoleHelp(state: RestoreState) {
+  return state.safety_backup ? <p>The server&apos;s state just before the restore is in the safety backup <code>{state.safety_backup}</code>. On the console: <code>sudo veyra backup restore /var/backups/veyra/{state.safety_backup}.tar.age --identity &lt;your identity file&gt;</code> (leave out <code>.tar.age</code> and <code>--identity</code> if backups are not encrypted).</p> : null;
+}
+
+function LastRestore({ state }: { state: RestoreState }) {
+  const [now] = useState(() => Date.now());
+  if (state.state === "none" || state.state === "running" || !state.finished_at) return null;
+  if (now - new Date(state.finished_at).getTime() > RESTORE_RECENT_MS) return null;
+  if (state.state === "finished") {
+    return <Callout tone="ok" title={`Restored ${formatRelative(state.finished_at)}`}>From <code>{state.backup}</code>. Backups taken after it stay on the server but are no longer listed.{state.safety_backup ? <> The state just before the restore is in <code>{state.safety_backup}</code>.</> : null}</Callout>;
+  }
+  return (
+    <Callout tone="danger" title={`A restore failed ${formatRelative(state.finished_at)}`}>
+      <p>{state.error}</p>
+      {state.stopped ? restoreConsoleHelp(state) : <p>The server was not changed.</p>}
+    </Callout>
+  );
+}
+
+function RestoreDialog({ backup, onClose }: { backup: BackupRow; onClose: () => void }) {
+  const [identity, setIdentity] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [restoreId, setRestoreId] = useState<string | null>(null);
+  const [state, setState] = useState<RestoreState | null>(null);
+  const done = state?.state === "finished" || state?.state === "failed";
+
+  // From nginx, not the API: the API is stopped for most of a restore.
+  useEffect(() => {
+    if (!restoreId || done) return;
+    const poll = async () => {
+      try {
+        const res = await fetch("/restore-status.json", { cache: "no-store" });
+        if (!res.ok) return;
+        const next = (await res.json()) as RestoreState;
+        if (next.id === restoreId) setState(next);
+      } catch {
+        // nginx answers throughout; a lost request is retried.
+      }
+    };
+    void poll();
+    const id = setInterval(() => void poll(), 2000);
+    return () => clearInterval(id);
+  }, [restoreId, done]);
+
+  const start = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await api.post<{ id: string }>(`/backups/${backup.id}/restore`, { identity: backup.encrypted ? identity : null, confirm });
+      setIdentity("");
+      setRestoreId(out.id);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (restoreId) {
+    return (
+      <Dialog open onClose={done ? onClose : () => undefined} title={state?.state === "finished" ? "Restore finished" : state?.state === "failed" ? "Restore failed" : "Restoring this server"}
+        footer={state?.state === "finished" ? <a className={buttonClass("primary", "md")} href="/">Sign in again</a> : state?.state === "failed" ? <Button onClick={() => window.location.reload()}>Reload the page</Button> : null}>
+        {state?.state === "finished" ? <p>The services are running again from the backup of {formatDateTime(backup.started_at)}. Check that phones register and make a test call.</p>
+          : state?.state === "failed" ? (
+            <div className="stack stack--sm">
+              {state.stopped ? <Callout tone="danger" title="The server may be incomplete">The restore stopped partway, after the services were stopped. Veyra tried to start them again.</Callout> : <Callout tone="warn" title="Nothing was changed">The backup was refused before anything on the server was touched.</Callout>}
+              {state.stopped ? restoreConsoleHelp(state) : null}
+              <p className="subtle">Reload the page to see the reason on this page.</p>
+            </div>
+          ) : (
+            <div className="stack stack--sm">
+              <p><StatusBadge status="degraded" label={state?.step ?? "Starting"} /></p>
+              <p className="subtle">Keep this page open. The rest of the web interface stops answering while the services are stopped. This can take a long time on a large backup.</p>
+            </div>
+          )}
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="Restore this backup" description={formatDateTime(backup.started_at)}
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="danger" onClick={start} loading={busy} disabled={confirm !== "RESTORE" || (backup.encrypted && !identity.trim())}>Restore this server</Button></>}>
+      <div className="stack stack--sm">
+        <Callout tone="danger" title="This replaces everything on this server">The database, configuration, phone system files, data, voicemail and recordings go back to {formatDateTime(backup.started_at)}. Everything since then is lost, and everyone is signed out. Calls may drop.</Callout>
+        <p>A safety backup of this server is taken first, and the chosen backup is checked. If either fails, nothing changes. The safety backup is kept on this server only.</p>
+        {backup.encrypted ? <TextArea label="Age private key" help="From the identity file you keep off this server. It starts with AGE-SECRET-KEY-. It is used for this restore only and is not stored." rows={3} value={identity} onChange={(e) => setIdentity(e.target.value)} autoComplete="off" spellCheck={false} /> : null}
+        <TextField label={<>Type <code>RESTORE</code> to confirm</>} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" />
+        {error ? <Callout tone="danger" title="Not started">{error}</Callout> : null}
+      </div>
+    </Dialog>
+  );
+}
+
 function BackupDownloadDialog({ backup, onClose }: { backup: BackupRow; onClose: () => void }) {
   const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +279,8 @@ export default function BackupsPage() {
     }
   };
   const [downloading, setDownloading] = useState<BackupRow | null>(null);
+  const [restoring, setRestoring] = useState<BackupRow | null>(null);
+  const lastRestore = useApiData<RestoreState>("/backups/restore");
   const doDelete = async () => {
     if (!remove) return;
     setBusy(true);
@@ -204,13 +305,14 @@ export default function BackupsPage() {
     { key: "enc", header: "Encrypted", render: (b) => b.encrypted ? <Badge tone="ok">age</Badge> : <Badge tone="warn">clear</Badge> },
     { key: "copies", header: "Copies", render: (b) => Object.entries(b.copies).length ? <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>{Object.entries(b.copies).map(([d, c]) => <Badge key={d} tone={c.state === "ok" ? "ok" : "danger"}>{c.name ?? "copy"}: {c.state === "ok" ? "ok" : "failed"}</Badge>)}</span> : <span className="subtle">local only</span> },
     { key: "ver", header: "Version", render: (b) => <span className="mono">{b.version ?? "—"}</span> },
-    { key: "actions", header: "", render: (b) => manage && b.state !== "running" && b.state !== "deleted" ? <span className="row" style={{ gap: 4 }}>{b.state === "verified" ? <Button size="sm" icon="download" onClick={() => setDownloading(b)}>Download</Button> : null}<Button size="sm" variant="danger" onClick={() => setRemove(b)}>Delete</Button></span> : null },
+    { key: "actions", header: "", render: (b) => manage && b.state !== "running" && b.state !== "deleted" ? <span className="row" style={{ gap: 4 }}>{b.state === "verified" ? <><Button size="sm" icon="download" onClick={() => setDownloading(b)}>Download</Button><Button size="sm" onClick={() => setRestoring(b)}>Restore</Button></> : null}<Button size="sm" variant="danger" onClick={() => setRemove(b)}>Delete</Button></span> : null },
   ];
 
   return (
     <div className="stack">
       <PageHeader title="Backups" description="Database, configuration and secrets, engine configuration, prompts, hold music, firmware, templates, modules, voicemail and (optionally) recordings; each backup is restored into a scratch database before it counts."
         actions={manage ? <Button variant="primary" icon="plus" onClick={runNow} loading={busy} disabled={running}>Back up now</Button> : null} />
+      {lastRestore.data ? <LastRestore state={lastRestore.data} /> : null}
       <Progress active={running} onFinished={() => { setRunning(false); list.reload(); }} />
       {summary ? (
         <div className="grid grid--3">
@@ -237,8 +339,9 @@ export default function BackupsPage() {
         )}
       </Card>
       {downloading ? <BackupDownloadDialog backup={downloading} onClose={() => setDownloading(null)} /> : null}
+      {restoring ? <RestoreDialog backup={restoring} onClose={() => { setRestoring(null); lastRestore.reload(); }} /> : null}
       <Card title="Restore">
-        <p className="subtle">On a server with the same Veyra release installed (a fresh install is fine), as root:</p>
+        <p className="subtle">To go back to a backup kept on this server, choose <strong>Restore</strong> in its row above. To restore a file on a server that does not list it (a fresh install is fine), on a server with the same Veyra release or newer, as root:</p>
         <pre className="mono" style={{ margin: 0 }}>{"sudo veyra backup restore /var/backups/veyra/<backup>.tar.age --identity ~/veyra-backup-identity.txt"}</pre>
         <p className="subtle">The database, configuration and secrets, engine files, data and voicemail come back, migrations run when the backup is older, and the services restart. The instance identity, keys and certificates are part of the backup, so phones and a central console keep recognising the server. The guide <Link href="/help/backups/">Backups and restore</Link> has the steps.</p>
       </Card>

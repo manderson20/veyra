@@ -754,6 +754,8 @@ do_services() {
     # the root runner's unit, started only through polkit; its status directory.
     run install -d -m 0750 -o root -g "$VEYRA_USER" /var/lib/veyra-backup
     run install -d -m 0700 -o root -g root /var/backups/veyra
+    # A web restore's progress, served by nginx while the API is stopped.
+    run install -d -m 0755 -o root -g root /var/lib/veyra-restore
     tmp="$(mktemp)"
     render_template "$SCRIPT_DIR/templates/systemd/veyra-backup@.service.in" "$tmp" \
         "VEYRA_PREFIX=$VEYRA_PREFIX" "VEYRA_ETC=$VEYRA_ETC"

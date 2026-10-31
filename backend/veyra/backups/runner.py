@@ -461,8 +461,11 @@ def run_backup(
     config_dir: Path = Path("/etc/veyra"),
     asterisk_etc: Path = ASTERISK_ETC,
     voicemail: Path = VOICEMAIL,
+    local_only: bool = False,
 ) -> dict[str, Any]:
-    """The whole sequence; returns the record payload."""
+    """The whole sequence; returns the record payload. ``local_only`` leaves the
+    keep policy and the destinations out: the safety backup before a restore
+    must not prune the very backup being restored."""
     run = run or subprocess_runner()
     status = Status(status_dir, kind)
     if settings is None:
@@ -501,8 +504,8 @@ def run_backup(
         artifact = b.encrypt()
         known = known_backups(run)
         status.update(step="Pruning")
-        removed = b.prune(known)
-        if settings.get("destinations"):
+        removed = [] if local_only else b.prune(known)
+        if settings.get("destinations") and not local_only:
             status.update(step="Copying to the destinations")
             b.copy(known)
         payload.update(

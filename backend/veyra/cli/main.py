@@ -1859,6 +1859,13 @@ def cmd_backup_unit(args: argparse.Namespace) -> int:
         result = runner.run_recording_archive(Path(get_settings().recordings_dir))
         print(json.dumps({k: len(v) for k, v in result.items()}))
         return 1 if result["errors"] else 0
+    if instance.startswith("restore-"):
+        from veyra.backups import restore
+
+        backup_id = str(uuid.UUID(instance[len("restore-") :]))
+        return (
+            0 if restore.restore_unit(backup_id, run=runner.subprocess_runner(timeout=7200)) else 1
+        )
     if instance == "download-clean":
         runner.clean_downloads()
         return 0
@@ -2046,6 +2053,26 @@ def cmd_backup_record(args: argparse.Namespace) -> int:
     with session_scope() as db:
         row = service.record(db, json.loads(args.json))
         print(json.dumps({"id": str(row.id), "state": row.state}))
+    return 0
+
+
+def cmd_backup_restore_note(args: argparse.Namespace) -> int:
+    """The restore's audit entry: the database it was started from is gone."""
+    import json
+
+    from veyra.core import audit
+    from veyra.core.db import session_scope
+
+    p = json.loads(args.json)
+    with session_scope() as db:
+        audit.record(
+            db,
+            action="backups.restore",
+            actor_label=str(p.get("actor") or "operator"),
+            target_type="backup",
+            ip_address=p.get("ip"),
+            details={k: p.get(k) for k in ("backup", "safety_backup", "parts")},
+        )
     return 0
 
 
@@ -2666,6 +2693,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = bk.add_parser("record", help="Internal: record a runner result")
     s.add_argument("--json", required=True)
     s.set_defaults(func=cmd_backup_record)
+    s = bk.add_parser("restore-note", help="Internal: the audit entry of a web restore")
+    s.add_argument("--json", required=True)
+    s.set_defaults(func=cmd_backup_restore_note)
     s = bk.add_parser("archive-work", help="Internal: the recording archive's work")
     s.set_defaults(func=cmd_backup_archive_work)
     s = bk.add_parser("archive-report", help="Internal: record a recording archive run")

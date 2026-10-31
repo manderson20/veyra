@@ -40,6 +40,10 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 ReadWritePaths=@VEYRA_DATA@ @VEYRA_LOG_DIR@
+# The hand-over of a web restore to the root job, on tmpfs (it holds a private
+# key for a moment) and removed whenever the API stops.
+RuntimeDirectory=veyra-restore
+RuntimeDirectoryMode=0700
 
 [Install]
 WantedBy=multi-user.target

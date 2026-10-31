@@ -7,6 +7,7 @@ database side, the API and the alert checks."""
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tarfile
 import time
@@ -18,9 +19,10 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import select
 
+from veyra import __version__
 from veyra.backups import policy, restore, runner, service
 from veyra.core.db import session_scope
-from veyra.core.models import AuditEvent, Backup
+from veyra.core.models import AuditEvent, Backup, Installation
 
 # ------------------------------------------------------------------ policy
 
@@ -301,6 +303,7 @@ def test_restore_manifest_checks():
     assert restore.check_manifest(ok, "0.23.0") == []
     assert restore.check_manifest(ok, "0.24.1") == []
     assert "newer" in restore.check_manifest({**ok, "version": "0.24.0"}, "0.23.0")[0]
+    assert "newer" in restore.check_manifest({**ok, "version": "0.23.1"}, "0.23.0")[0]
     assert "HA" in restore.check_manifest({**ok, "ha_role": "primary"}, "0.23.0")[0]
     assert "format" in restore.check_manifest({"format": 2}, "0.23.0")[0]
 
@@ -587,3 +590,246 @@ def test_clean_downloads_due(tmp_path):
 def test_delete_accepts_only_a_plain_name(tmp_path):
     with pytest.raises(runner.BackupError):
         runner.delete_backup("veyra-20261030-120000./../../victim", store=tmp_path)
+
+
+# ------------------------------------------------------------------ restore from the web
+
+
+NAME = "veyra-20261030-120000"
+BID = "0f0e0d0c-0b0a-0908-0706-050403020100"
+
+
+def _restore_world(tmp_path, *, version=__version__, identity=""):
+    """A backup directory in a store and a request from the service account."""
+    store = tmp_path / "store"
+    folder = store / NAME
+    folder.mkdir(parents=True)
+    (folder / "manifest.json").write_text(
+        json.dumps({"format": 1, "version": version, "name": NAME, "parts": []})
+    )
+    request = tmp_path / "request.json"
+    request.write_text(
+        json.dumps({"id": "r1", "backup_id": BID, "identity": identity, "actor": "a"})
+    )
+    calls = []
+
+    def run(argv):
+        argv = list(argv)
+        calls.append(argv)
+        if "list" in argv:
+            return runner.Result(0, json.dumps([{"id": BID, "name": NAME}]))
+        return runner.Result(0, "")
+
+    kw = {
+        "run": run,
+        "request": request,
+        "request_owner": None,
+        "store": store,
+        "status_dir": tmp_path / "status",
+        "public_dir": tmp_path / "public",
+    }
+    return kw, calls
+
+
+def _stopped(calls):
+    return any(c[:2] == ["systemctl", "stop"] and "veyra-api" in c for c in calls)
+
+
+def test_restore_unit_takes_a_safety_backup_then_restores(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "known_backups", lambda run: [{"id": BID, "name": NAME}])
+    monkeypatch.setattr(restore, "known_backups", lambda run: [{"id": BID, "name": NAME}])
+    kw, calls = _restore_world(tmp_path)
+    order = []
+
+    def safety(kind, **a):
+        assert a["local_only"] is True and not _stopped(calls)
+        order.append("safety")
+        return {"name": "veyra-20261031-010000", "state": "verified"}
+
+    assert restore.restore_unit(BID, backup=safety, **kw)
+    assert order == ["safety"] and _stopped(calls)
+    assert not kw["request"].exists()
+    state = json.loads((tmp_path / "status" / "restore.json").read_text())
+    assert state["state"] == "finished" and state["safety_backup"] == "veyra-20261031-010000"
+    public = json.loads((tmp_path / "public" / "status.json").read_text())
+    assert public["id"] == "r1" and "error" not in public
+    # The safety backup and the audit entry go into the restored database.
+    assert any("record" in c for c in calls) and any("restore-note" in c for c in calls)
+
+
+def test_restore_unit_failures_before_the_stop_change_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(restore, "known_backups", lambda run: [{"id": BID, "name": NAME}])
+    # A failed safety backup.
+    kw, calls = _restore_world(tmp_path / "a")
+    bad = lambda kind, **a: {"state": "failed", "error": "disk full"}  # noqa: E731
+    assert not restore.restore_unit(BID, backup=bad, **kw)
+    assert not _stopped(calls)
+    state = json.loads((tmp_path / "a" / "status" / "restore.json").read_text())
+    assert state["state"] == "failed" and "disk full" in state["error"] and not state["stopped"]
+    # A backup from a newer release: refused before even the safety backup.
+    kw, calls = _restore_world(tmp_path / "b", version="99.0.0")
+
+    def never(kind, **a):
+        raise AssertionError("no safety backup for a refused backup")
+
+    assert not restore.restore_unit(BID, backup=never, **kw)
+    assert not _stopped(calls)
+    # A request for another backup, or a name that is not a stamp.
+    kw, calls = _restore_world(tmp_path / "c")
+    assert not restore.restore_unit("00000000-0000-0000-0000-000000000000", backup=never, **kw)
+    monkeypatch.setattr(restore, "known_backups", lambda run: [{"id": BID, "name": "../../etc"}])
+    kw, calls = _restore_world(tmp_path / "d")
+    assert not restore.restore_unit(BID, backup=never, **kw)
+    assert not _stopped(calls)
+
+
+def test_restore_unit_restarts_the_services_after_a_late_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(restore, "known_backups", lambda run: [{"id": BID, "name": NAME}])
+    kw, calls = _restore_world(tmp_path)
+    (tmp_path / "store" / NAME / "manifest.json").write_text(
+        json.dumps(
+            {
+                "format": 1,
+                "version": __version__,
+                "name": NAME,
+                "parts": [{"name": "db.dump", "sha256": "x"}],
+            }
+        )
+    )
+    (tmp_path / "store" / NAME / "db.dump").write_bytes(b"d")
+    monkeypatch.setattr(restore, "verify_parts", lambda d, m: None)
+    inner = kw["run"]
+
+    def run(argv):
+        if "pg_restore" in " ".join(argv):
+            inner(argv)
+            return runner.Result(1, "", "boom")
+        return inner(argv)
+
+    kw["run"] = run
+    ok = lambda kind, **a: {"name": "veyra-20261031-010000", "state": "verified"}  # noqa: E731
+    assert not restore.restore_unit(BID, backup=ok, **kw)
+    state = json.loads((tmp_path / "status" / "restore.json").read_text())
+    assert state["state"] == "failed" and state["stopped"] and "boom" in state["error"]
+    assert state["safety_backup"] == "veyra-20261031-010000"
+    assert calls[-1][:2] == ["systemctl", "start"] and "veyra-api" in calls[-1]
+    # The public copy carries no error text.
+    assert "boom" not in (tmp_path / "public" / "status.json").read_text()
+
+
+def test_read_request_is_careful(tmp_path):
+    good = tmp_path / "r.json"
+    good.write_text('{"id": "1"}')
+    link = tmp_path / "l.json"
+    link.symlink_to(good)
+    with pytest.raises(runner.BackupError):
+        restore.read_request(link, owner=None)
+    assert good.exists()
+    assert restore.read_request(good, owner=None) == {"id": "1"}
+    assert not good.exists()
+    with pytest.raises(runner.BackupError):
+        restore.read_request(good, owner=None)
+    good.write_text('{"id": "1"}')
+    with pytest.raises(runner.BackupError):
+        restore.read_request(good, owner="root" if os.geteuid() else "nobody")
+    assert restore.identity_lines("# public key: age1x\nAGE-SECRET-KEY-1ABC\nrm -rf /\n") == [
+        "AGE-SECRET-KEY-1ABC"
+    ]
+
+
+def test_run_backup_local_only_leaves_the_keep_policy_alone(world):
+    (world["store"]).mkdir(parents=True, exist_ok=True)
+    old = world["store"] / "veyra-20200101-000000"
+    old.mkdir()
+    settings = {"keep": {"daily": 1, "weekly": 0, "monthly": 0}}
+    args = {
+        "run": world["sys"],
+        "store": world["store"],
+        "status_dir": world["status"],
+        "data_dir": world["data"],
+        "config_dir": world["etc"],
+        "asterisk_etc": world["ast"],
+        "voicemail": world["vm"],
+        "settings": settings,
+    }
+    out = runner.run_backup("manual", local_only=True, **args)
+    assert out["state"] == "verified" and out["removed"] == [] and old.exists()
+
+
+def test_restore_api(admin, monkeypatch, tmp_path):
+    request = tmp_path / "request.json"
+    monkeypatch.setattr(service, "RESTORE_REQUEST", request)
+    monkeypatch.setattr(service.write_restore_request, "__defaults__", (request,))
+    state_file = tmp_path / "restore.json"
+    monkeypatch.setattr(service.restore_state, "__defaults__", (state_file,))
+    monkeypatch.setattr(service.restore_running, "__defaults__", (state_file, None))
+    monkeypatch.setattr(service, "running", lambda *a: False)
+    started = []
+    monkeypatch.setattr(service, "start", started.append)
+    with session_scope() as db:
+        enc = Backup(kind="manual", state="verified", path="/x", encrypted=True, manifest={})
+        clear = Backup(kind="manual", state="verified", path="/x", encrypted=False, manifest={})
+        failed = Backup(kind="manual", state="failed", path="/x", encrypted=False, manifest={})
+        db.add_all([enc, clear, failed])
+        db.flush()
+        enc_id, clear_id, failed_id = enc.id, clear.id, failed.id
+    base = "/api/v1/backups"
+    key = "# public key: age1x\nAGE-SECRET-KEY-1ABC\n"
+    assert admin.get(f"{base}/restore").json() == {"state": "none"}
+    # Confirmation, state and the private key are all checked; nothing starts.
+    r = admin.post(f"{base}/{enc_id}/restore", json={"identity": key})
+    assert r.status_code == 422 and r.json()["code"] == "not_confirmed"
+    r = admin.post(f"{base}/{failed_id}/restore", json={"confirm": "RESTORE"})
+    assert r.status_code == 409 and r.json()["code"] == "not_verified"
+    r = admin.post(f"{base}/{enc_id}/restore", json={"confirm": "RESTORE", "identity": "nonsense"})
+    assert r.status_code == 422 and "nonsense" not in r.text
+    assert not started and not request.exists()
+    # Busy.
+    monkeypatch.setattr(service, "running", lambda *a: True)
+    r = admin.post(f"{base}/{clear_id}/restore", json={"confirm": "RESTORE"})
+    assert r.status_code == 409 and r.json()["code"] == "busy"
+    monkeypatch.setattr(service, "running", lambda *a: False)
+    state_file.write_text(
+        json.dumps({"state": "running", "started_at": datetime.now(UTC).isoformat()})
+    )
+    r = admin.post(f"{base}/{clear_id}/restore", json={"confirm": "RESTORE"})
+    assert r.status_code == 409 and r.json()["code"] == "busy"
+    state_file.unlink()
+    # A pair.
+    with session_scope() as db:
+        db.scalar(select(Installation)).deployment_mode = "ha"
+    r = admin.post(f"{base}/{clear_id}/restore", json={"confirm": "RESTORE"})
+    assert r.status_code == 409 and r.json()["code"] == "ha_enabled"
+    with session_scope() as db:
+        db.scalar(select(Installation)).deployment_mode = "standalone"
+    # Started: only the key lines reach root, and the file is the account's alone.
+    r = admin.post(f"{base}/{enc_id}/restore", json={"confirm": "RESTORE", "identity": key})
+    assert r.status_code == 202
+    assert started == [f"restore-{enc_id}"]
+    assert request.stat().st_mode & 0o777 == 0o600
+    sent = json.loads(request.read_text())
+    assert sent["identity"] == "AGE-SECRET-KEY-1ABC" and sent["id"] == r.json()["id"]
+    with session_scope() as db:
+        rows = db.scalars(select(AuditEvent).where(AuditEvent.action == "backups.restore_start"))
+        entry = rows.one()
+        assert "AGE-SECRET" not in json.dumps(entry.details)
+
+    # The unit cannot start: the private key does not stay behind.
+    def refuse(instance):
+        raise service.BackupError(503, "unit_failed", "no")
+
+    monkeypatch.setattr(service, "start", refuse)
+    assert admin.post(f"{base}/{clear_id}/restore", json={"confirm": "RESTORE"}).status_code == 503
+    assert not request.exists()
+
+
+def test_restore_note_writes_the_audit_entry(admin):
+    import argparse
+
+    from veyra.cli.main import cmd_backup_restore_note
+
+    note = {"backup": NAME, "safety_backup": "s", "actor": "owner", "ip": "10.0.0.9", "parts": []}
+    assert cmd_backup_restore_note(argparse.Namespace(json=json.dumps(note))) == 0
+    with session_scope() as db:
+        entry = db.scalars(select(AuditEvent).where(AuditEvent.action == "backups.restore")).one()
+        assert entry.actor_label == "owner" and entry.details["backup"] == NAME

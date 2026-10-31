@@ -85,8 +85,8 @@ over SSH remains the operator's option and needs nothing from Veyra.
 
 `sudo veyra backup restore <file-or-directory> [--parts db,etc,…] [--yes]`
 on a server where the same release is installed (a fresh `install.sh` is
-fine): checks the manifest's version against the running one (same minor
-or older; a newer dump is refused), decrypts with the administrator's
+fine): checks the manifest's version against the running one (the same
+release or older; a newer dump is refused), decrypts with the administrator's
 identity file (§3.2), stops the services, restores the database with
 `pg_restore --clean --if-exists`, the configuration, the engine files, the
 data, the voicemail and optionally the recordings, runs migrations when
@@ -95,6 +95,22 @@ certificates come back with `/etc/veyra`, so phones keep trusting the
 server and a central console keeps recognising it. The procedure is
 written in INSTALLATION.md and tested in §11. Restoring onto an HA node is
 refused; an HA pair is rebuilt from a restored standalone.
+
+**From the web** (`POST /backups/{id}/restore`, `backups.manage`, recent
+authentication, issue #348): the API writes a request to its own tmpfs
+directory `/run/veyra-restore` (with the pasted age identity, if any) and
+starts `veyra-backup@restore-<id>`. Root reads and removes the request without
+following links, resolves the id to a name that must be a plain stamp, and uses
+only that backup in the root-only store. **There is no upload:** an uploaded
+archive would let the web interface write as root under `/etc`. After the
+checks above, a safety backup is taken (no pruning, no destinations) before
+anything is stopped; a failure up to there changes nothing. Progress goes to
+`/var/lib/veyra-backup/restore.json` for the API and, without error text, to
+`/var/lib/veyra-restore/status.json`, which nginx serves as
+`/restore-status.json` while the API is stopped. The safety backup's record and
+the audit entry are written to the restored database. On a failure after the
+stop, the services are started again and the page names the safety backup; it
+is not restored automatically.
 
 ### 2.6 Interface and alerts
 

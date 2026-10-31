@@ -6,12 +6,13 @@ unit through polkit, and the status file for the page."""
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import time
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -31,6 +32,8 @@ STALE_RUNNING_HOURS = 8  # longer than TimeoutStartSec of the unit (6 h)
 STATUS_PATH = Path("/var/lib/veyra-backup/status.json")
 DOWNLOADS = Path("/var/lib/veyra-backup/download")
 DOWNLOAD_KEEP_SECONDS = 6 * 3600
+RESTORE_STATUS = Path("/var/lib/veyra-backup/restore.json")
+RESTORE_REQUEST = Path("/run/veyra-restore/request.json")
 STALE_AFTER = timedelta(days=2)
 # Tests replace this with a recorder.
 systemctl: Callable[[list[str]], Any] | None = None
@@ -449,6 +452,29 @@ def clean_downloads_due(directory: Path = DOWNLOADS, now: float | None = None) -
         return any(now - p.stat().st_mtime > DOWNLOAD_KEEP_SECONDS for p in directory.iterdir())
     except OSError:
         return False
+
+
+def restore_state(path: Path = RESTORE_STATUS) -> dict[str, Any] | None:
+    return status(path)
+
+
+def restore_running(path: Path = RESTORE_STATUS, now: datetime | None = None) -> bool:
+    state = restore_state(path)
+    if not state or state.get("state") != "running":
+        return False
+    try:
+        started = datetime.fromisoformat(str(state.get("started_at")))
+    except ValueError:
+        return False
+    return (now or datetime.now(UTC)) - started < timedelta(hours=STALE_RUNNING_HOURS)
+
+
+def write_restore_request(body: dict[str, Any], path: Path = RESTORE_REQUEST) -> None:
+    """For the root job, which reads and removes it; 0600 on the API's tmpfs."""
+    path.unlink(missing_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(body, f)
 
 
 def status(path: Path = STATUS_PATH) -> dict[str, Any] | None:
