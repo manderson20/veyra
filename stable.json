@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 80,
+  "sequence": 81,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.64",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Extension Mapping: one table of phones with status colours, inline template and model, Use Selected, Update Phones, Export and Import List.",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "6f49533c64",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.64/veyra-0.27.64.tar.gz",
+        "sha256": "65f8189d445142645188f79d2f85a11ea0e1d2f4eb1047018a09b30981511ad2",
+        "size": 9512997
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1363,6 +1380,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T12:32:34+00:00",
-  "expires_at": "2027-01-29T12:32:34+00:00"
+  "generated_at": "2026-10-31T13:15:50+00:00",
+  "expires_at": "2027-01-29T13:15:50+00:00"
 }
