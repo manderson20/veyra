@@ -48,6 +48,11 @@ class Names:
         # paging and parking, so an exact page or slot number is never shadowed.
         return self._p("call-codes")
 
+    @property
+    def personal_room(self) -> str:
+        """Stem of the namespace's personal conference rooms and their profiles."""
+        return self._p("personal-room")
+
     def voicemail_exit(self, number: str) -> str:
         """Where 0 and * go during a box's greeting (docs/CALL_FEATURES.md §3.7)."""
         return self._p(f"vmx-{number}")

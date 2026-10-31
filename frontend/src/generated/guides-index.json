@@ -109,8 +109,8 @@
    "summary": "The star codes phones dial to forward calls, turn on Do Not Disturb, pick up calls and more, and how to change them.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.68",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.70",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/feature-codes/"
    ],
@@ -845,8 +845,8 @@
    "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.64",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.70",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/my-phone/"
    ],

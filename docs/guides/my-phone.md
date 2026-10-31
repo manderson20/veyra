@@ -4,7 +4,7 @@ summary: Turn on Do Not Disturb, forward your calls, check voicemail, call peopl
 audience: user
 section: Using Veyra
 order: 10
-reviewed: 0.27.64
+reviewed: 0.27.70
 checked: 2026-10-30
 pages:
   - /my-phone/
@@ -92,6 +92,8 @@ Enter a **Label on the key** and choose **Save key**. The phone picks up the cha
 ## Send a fax
 
 The **Conference** widget lists the conference rooms your phone owns: who is in each one, with mute, remove, lock, end, recording and **Invite a number**. An administrator makes your phone an owner on the room's page.
+
+Everyone also has a personal room with no setup. Dial `*82` to open yours and tell colleagues to dial `*82` plus your extension. They hear hold music until you join, and the room ends when you hang up. It has no PIN and joins are announced, so anyone in your organization can join while you're in it: on your phone, `*2` locks the room and `*3` removes the last person who joined. It works only from phones in your organization and doesn't appear in this widget.
 
 The **Fax** widget sends a PDF as a fax, no fax machine needed.
 

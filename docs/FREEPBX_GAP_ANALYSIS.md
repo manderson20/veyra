@@ -1,6 +1,6 @@
 # FreePBX feature gap analysis
 
-Veyra 0.27.69 compared with FreePBX 16/17, every free module and every
+Veyra 0.27.70 compared with FreePBX 16/17, every free module and every
 Sangoma commercial module (FreePBX add-ons and PBXact), as of
 2026-10-31. First written before the public release (now Milestone 23) so that no
 FreePBX feature is left out of the roadmap only because the current
@@ -251,7 +251,7 @@ below are the reasons a FreePBX site would hesitate.
 | Q-Xact queue reports ($795) | report builder and queue report by queue, hour, day, agent and service level, agent logged-in and paused time, break-outs; no dedicated missed-call detail confirmed | ◐ | P2 |
 | Supervisor monitor/whisper/barge (Sangoma Desktop queue licences) | listen, whisper and join by `*222/*223/*224` and from Calls, per class of service, optional beep | ✔ | P2 |
 | **Conferences** (ConfBridge rooms, PINs, `*` menu, recording, max participants) | rooms with PINs, participant limit, wait for admin, recording; live control on the room page | ✔ | **P1** |
-| Conference Pro (user control from the portal, personal rooms, conference IVR) | room owners get live controls in a My Phone widget; no personal rooms, no conference IVR | ◐ | P2 |
+| Conference Pro (user control from the portal, personal rooms, conference IVR) | room owners get live controls in a My Phone widget; personal rooms by `*82`, phones only, no web controls or PIN; no conference IVR | ◐ | P2 |
 | **Parking** (lot, slots, BLF per slot, timeout return, courtesy tone) | lots, slots, lit BLF per slot, timeout return, courtesy tone, `*85<slot>` | ✔ | **P1** |
 | Park Pro (several lots, private lots, `*86`) and Park & Announce | several lots; no private lots, no `*86`, no Park & Announce | ◐ | P2 / P3 |
 | Paging groups, priority, pre-announcement, multicast, scheduler, calendar schedules (Page Pro) | yes: zones, multicast and Poly group pages in step, priority and emergency kinds, pre-tone, repeat, bell schedules from calendars, page log | ✔ ahead | |

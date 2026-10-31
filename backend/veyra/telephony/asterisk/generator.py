@@ -547,7 +547,14 @@ def _generate(
         _notify_conf(),
         _paging_json(snapshot.get("paging") or {}),
         _moh_conf(moh, _path(moh_dir, "hold music directory")),
-        _confbridge(rooms, moh, _path(recordings_dir, "recordings directory")),
+        _confbridge(
+            rooms,
+            moh,
+            _path(recordings_dir, "recordings directory"),
+            [Names(ns).personal_room for ns in _namespaces(snapshot)]
+            if (snapshot.get("feature_codes") or {}).get("personal_room")
+            else [],
+        ),
         _parking_conf(lots),
         _features_conf(_feature_codes(snapshot)),
         _directory_conf(snapshot, boxes),
@@ -2373,6 +2380,42 @@ def _forward_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     return lines
 
 
+def _personal_rooms(
+    extensions: list[dict[str, Any]], codes: dict[str, str], cos: Cos | None = None
+) -> list[str]:
+    """``*82`` your own room, ``*82<ext>`` a colleague's (issue #142): no room to
+    create or deploy. The owner's phone joins as administrator; the others wait
+    with hold music until then, and the room ends when the owner leaves."""
+    code = codes.get("personal_room")
+    if not code:
+        return []
+    stem = engine_names.current().personal_room
+    lines = _code_block(
+        f"exten => {code},1,NoOp(Veyra personal room of ${{VEYRA_EXT}})",
+        [f" same => n,Goto({code}${{VEYRA_EXT}},1)"],
+        cos,
+        "personal_room",
+    )
+    for e in sorted(extensions, key=lambda x: (len(str(x["number"])), str(x["number"]))):
+        number = _check_value(str(e["number"]), "extension number")
+        org = _slug(str(e.get("organization") or ""), "organization")
+        lines += _code_block(
+            f"exten => {code}{number},1,NoOp(Veyra personal room of {number})",
+            [
+                f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?nophone)',
+                f" same => n,Set(VEYRA_CONF_PROFILE={stem}-user)",
+                f' same => n,ExecIf($["${{VEYRA_EXT}}"="{number}"]'
+                f"?Set(VEYRA_CONF_PROFILE={stem}-admin))",
+                f" same => n,ConfBridge({stem}-{number},{stem}-bridge,"
+                f"${{VEYRA_CONF_PROFILE}},{stem}-menu)",
+                " same => n,Hangup()",
+            ],
+            cos,
+            "personal_room",
+        )
+    return lines
+
+
 def _remote_forward_codes(
     codes: dict[str, str], boxes: list[tuple[str, dict[str, Any]]], cos: Cos | None = None
 ) -> list[str]:
@@ -2452,6 +2495,7 @@ def _features(
         *_presence_codes(codes, cos),
         *_forward_codes(codes, cos),
         *_remote_forward_codes(codes, boxes or [], cos),
+        *_personal_rooms(extensions, codes, cos),
         *_follow_me_codes(codes, cos),
         *_intercom_code(codes, cos),
         *_voicemail_direct(codes, boxes or [], cos),
@@ -4063,8 +4107,41 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
     return lines
 
 
+def _personal_room_profiles(stem: str) -> list[str]:
+    """The one set of profiles behind a namespace's personal rooms."""
+    return [
+        f"[{stem}-bridge]",
+        "type=bridge",
+        "language=en",
+        f"[{stem}-user]",
+        "type=user",
+        "announce_join_leave=yes",
+        "wait_marked=yes",
+        "end_marked=yes",
+        "music_on_hold_when_empty=yes",
+        "dsp_drop_silence=yes",
+        f"[{stem}-admin]",
+        "type=user",
+        "admin=yes",
+        "marked=yes",
+        "announce_join_leave=yes",
+        "music_on_hold_when_empty=yes",
+        "dsp_drop_silence=yes",
+        f"[{stem}-menu]",
+        "type=menu",
+        "*1=toggle_mute",
+        "*2=admin_toggle_conference_lock",
+        "*3=admin_kick_last",
+        "*8=admin_toggle_mute_participants",
+        "",
+    ]
+
+
 def _confbridge(
-    rooms: list[dict[str, Any]], moh: MohSets | None, recordings_dir: str
+    rooms: list[dict[str, Any]],
+    moh: MohSets | None,
+    recordings_dir: str,
+    personal_stems: list[str] | None = None,
 ) -> GeneratedFile:
     """``confbridge.conf`` (docs/CALL_FEATURES.md §4.3): a bridge, a user and
     an administrator profile and the key menu of every enabled room; reloaded
@@ -4130,6 +4207,8 @@ def _confbridge(
             "*8=admin_toggle_mute_participants",
             "",
         ]
+    for stem in personal_stems or []:
+        lines += _personal_room_profiles(stem)
     return GeneratedFile(FILE_CONFBRIDGE, "\n".join(lines).rstrip("\n") + "\n")
 
 

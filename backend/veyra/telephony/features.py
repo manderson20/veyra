@@ -87,6 +87,15 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         18,
         True,
     ),
+    FeatureCodeDef(
+        "personal_room",
+        "*82",
+        "Personal conference room",
+        "Alone: your own room. With an extension: that person's room, which starts "
+        "when they join and ends when they leave.",
+        18,
+        True,
+    ),
     FeatureCodeDef("fmfm_toggle", "*21", "Find me / follow me toggle", "", 18),
     FeatureCodeDef(
         "intercom",

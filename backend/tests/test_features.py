@@ -401,6 +401,33 @@ def test_class_destination_api(admin):
     assert r.status_code == 422 and r.json()["errors"][0]["field"] == "allowed_queue_ids"
 
 
+def test_personal_room_codes_and_profiles():
+    files = {
+        f.path: f.content
+        for f in generator.generate(_snapshot(feature_codes={"personal_room": "*82"}))
+    }
+    feat = _section(files["extensions.conf"], "veyra-features")
+    assert "exten => *82,1," in feat and "Goto(*82${VEYRA_EXT},1)" in feat
+    own = feat[feat.index("exten => *821001,1,") :]
+    assert '"${VEYRA_ORG}"!="example"' in own
+    assert (
+        'ExecIf($["${VEYRA_EXT}"="1001"]?Set(VEYRA_CONF_PROFILE=veyra-personal-room-admin))' in own
+    )
+    assert (
+        "ConfBridge(veyra-personal-room-1001,veyra-personal-room-bridge,"
+        "${VEYRA_CONF_PROFILE},veyra-personal-room-menu)"
+    ) in own
+    conf = files["confbridge.conf"]
+    guest = conf[
+        conf.index("[veyra-personal-room-user]") : conf.index("[veyra-personal-room-admin]")
+    ]
+    assert "wait_marked=yes" in guest and "end_marked=yes" in guest
+    # The code turned off: no entries, no profiles.
+    files = {f.path: f.content for f in generator.generate(_snapshot())}
+    assert "personal-room" not in files["confbridge.conf"]
+    assert "personal-room" not in files["extensions.conf"]
+
+
 def test_remote_forward_codes_ask_for_the_targets_pin():
     box = {"number": "1001", "organization": "example", "pin": "4821"}
     snap = _snapshot(

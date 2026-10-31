@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.70 — 2026-11-01
+
+No migration. The new code needs **Deploy changes**.
+
+### Added
+- **Personal conference rooms** (#142): `*82` opens your own room and `*82` plus an extension joins a colleague's. Others wait with hold music until the owner joins, and the room ends when the owner leaves. Nothing to create, and a class of service can block the code. These rooms aren't shown on My Phone and can't be reached from outside.
+
 ## 0.27.69 — 2026-11-01
 
 Migration 0079 adds two time condition columns. **Deploy changes** once after updating.
