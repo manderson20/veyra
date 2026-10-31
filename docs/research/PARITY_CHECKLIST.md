@@ -91,9 +91,49 @@ Not targets: Zulu UC, XactView and XMPP, discontinued by Sangoma.
 - [ ] Beep and machine detection (M, real audio), save last N seconds of a call (M), follow a user's calls (S)
 - [ ] Text to speech, offline speech recognition (M each), call control by web server (M), event bus (M)
 
+**Other PBXs**, from the owner's list "PBX solutions: free and paid (Oct 2026)", reviewed 2026-11-01.
+Ranked for a school district. Evidence is thinner here: many products were read from search
+excerpts, and some documentation could not be opened, so check each when it is built.
+
+- [ ] Emergency alert that must be acknowledged, with who cleared it (Avaya Crisis Alert, ALE) (S-M)
+- [ ] Threat-call flag: mark a call, keep its details, alert staff (CUCM, Avaya) (S-M; key Lab)
+- [ ] Directory provisioning from Google or Entra: joiners and leavers (8x8, Teams, Yeastar, CUCM) (M)
+- [ ] Hot desking, with 911 still working when signed out (KAZOO, 3CX, CUCM) (M, Lab)
+- [ ] 988 and N11 short codes, handled and reported (CUCM) (S)
+- [ ] Voicemail broadcast to many boxes (VitalPBX, Yeastar, Grandstream) (S)
+- [ ] Search and legal hold across calls and voicemail (Google Vault, RingCentral) (M)
+- [ ] Student system and LMS link: caller lookup and rosters (RingCentral Canvas) (M; needs a sandbox)
+- [ ] Phone lock and scheduled lock to emergency calls only (VitalPBX, Avaya) (S-M)
+- [ ] Former-staff number intercept, default for unassigned numbers (BroadWorks, Teams) (S)
+- [ ] Leave word: light a message lamp without ringing (Avaya) (S, Lab)
+- [ ] Call-flow map, then visual editor (3CX, Yeastar, GoTo) (M read-only, L editor)
+- [ ] Route tester without placing a call (CUCM) (M)
+- [ ] Whisper page to someone on a call (Avaya) (S-M, Lab)
+- [ ] Pause or mask recording (KAZOO, Dialpad, Webex) (S)
+- [ ] Notes and assignment on shared voicemail (Quo) (M)
+- [ ] 911 location by network (Teams, Zoom, CUCM) (M, Lab)
+- [ ] Call screening (Vonage, NetSapiens, VitalPBX) (S)
+- [ ] Branch survivability (CUCM SRST, OpenScape Branch) (L, Lab)
+- [ ] Voice portal: one dial-in menu (BroadWorks, Webex) (S-M)
+- [ ] Call notify rules a user sets (BroadWorks) (S)
+- [ ] Custom widget on incoming call (Aircall, Switchvox) (M)
+- [ ] Door and relay control by code or event (Xorcom) (S for HTTP, M for relay; Lab)
+- [ ] Spam number blocking from a feed (Google Voice, Ooma, Teams) (M; needs a data source)
+- [ ] AI receptionist and voicemail triage (3CX, Yeastar, RingCentral) (L; owner decision on student data)
+- [ ] Call tags for reports (Aircall, Dialpad) (S)
+- [ ] Hold recall (CUCM) (S-M, Lab)
+- [ ] Protected voicemail: no forward or download (Teams) (S)
+- [ ] Peered PBXs: short dialing between servers (Switchvox, Yeastar, Allworx) (M, second server)
+- [ ] Configurable mid-call codes (KAZOO) (S-M)
+- [ ] Push-to-talk (Zoom, Webex, RingCentral) (M-L, Lab)
+- [ ] Personal contact link (Wildix Kite) (M)
+- [ ] Personal IVR, custom ringback, scheduled call (VitalPBX, BroadWorks, Grandstream) (S each)
+- [ ] Trunk switching on poor quality (CallHippo, Sippy) (M, Lab)
+
 ## Decisions for the owner
 
 These don't block stages 1 and 2:
 - Hosted services (relay, cloud fleet) would make Veyra depend on something you run.
 - Team chat, video and hotel features were skipped on purpose earlier; this goal brings them back.
 - Automatic failover, trunk seizure and emergency recording have safety or legal weight.
+- An AI receptionist would handle student data.
