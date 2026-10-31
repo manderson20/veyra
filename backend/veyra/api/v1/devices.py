@@ -436,6 +436,23 @@ def _check_profile(
     return profile
 
 
+def _check_brand(
+    request: Request, db: Session, profile: DeviceProfile | None, manufacturer: str
+) -> None:
+    """A phone takes only a profile of its own brand. A template that no longer
+    loads is reported as a problem on the device, not here."""
+    if profile is None:
+        return
+    rec = catalog_for(request, db).records.get(profile.template_key)
+    if rec is None:
+        return
+    brand = rec.manifest.template.manufacturer
+    if brand.lower() != manufacturer.lower():
+        raise common.validation(
+            "profile_id", f"this profile is for {brand} phones, and this phone is {manufacturer}"
+        )
+
+
 def _check_extensions(
     db: Session, organization_id: uuid.UUID, primary: uuid.UUID | None, lines: list[uuid.UUID]
 ) -> None:
@@ -646,12 +663,17 @@ def list_devices(
     site_id: uuid.UUID | None = None,
     profile_id: uuid.UUID | None = None,
     extension_id: uuid.UUID | None = None,
+    manufacturer: str | None = Query(None, max_length=64),
     q: str | None = Query(None, max_length=100),
     params: PageParams = Depends(page_params),
     principal: Principal = Depends(require(READ)),
     db: Session = Depends(get_db),
 ) -> Page[DeviceOut]:
-    stmt = _visible(principal, READ).order_by(Device.label, Device.mac_address)
+    stmt = _visible(principal, READ).order_by(
+        func.lower(Device.manufacturer), Device.label, Device.mac_address
+    )
+    if manufacturer:
+        stmt = stmt.where(func.lower(Device.manufacturer) == manufacturer.strip().lower())
     if organization_id:
         stmt = stmt.where(Device.organization_id == organization_id)
     if site_id:
@@ -749,6 +771,7 @@ def create_device(
         raise not_found("Organization")
     key = installation_key(request)
     profile = _check_profile(db, org.id, body.profile_id)
+    _check_brand(request, db, profile, body.manufacturer)
     _check_extensions(db, org.id, body.primary_extension_id, body.lines)
     common.check_site(db, org.id, body.site_id)
     common.check_firmware(db, body.firmware_image_id, body.manufacturer)
@@ -966,6 +989,8 @@ def update_device(
         if "profile_id" in changes
         else (db.get(DeviceProfile, device.profile_id) if device.profile_id else None)
     )
+    if "profile_id" in changes or "manufacturer" in changes:
+        _check_brand(request, db, profile, changes.get("manufacturer") or device.manufacturer)
     if "profile_id" in changes and changes["profile_id"] != device.profile_id:
         device.profile_id = changes["profile_id"]
         details["profile_id"] = str(changes["profile_id"]) if changes["profile_id"] else None

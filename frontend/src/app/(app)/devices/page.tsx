@@ -6,7 +6,8 @@ import { Suspense, useEffect, useState } from "react";
 import { DeviceDialog } from "@/components/devices/DeviceDialog";
 import { Badge, Button, Card, DataTable, EmptyState, LoadingState, PageHeader, Pagination, SearchInput, SelectField, type Column } from "@/components/ui";
 import { formatRelative } from "@/lib/format";
-import type { Device, DeviceProfile, DeviceStatus, Page, UnregisteredDevice } from "@/lib/types";
+import { groupByBrand, sameBrand } from "@/lib/brands";
+import type { CatalogModels, Device, DeviceProfile, DeviceStatus, Page, UnregisteredDevice } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
@@ -28,6 +29,7 @@ function DevicesList() {
   const [debounced, setDebounced] = useState("");
   const [org, setOrg] = useState("");
   const [profile, setProfile] = useState(params.get("profile") ?? "");
+  const [brand, setBrand] = useState("");
   const [offset, setOffset] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [seen, setSeen] = useState<UnregisteredDevice | undefined>();
@@ -37,7 +39,9 @@ function DevicesList() {
     return () => window.clearTimeout(t);
   }, [q]);
 
-  const list = useApiData<Page<Device>>("/devices", { q: debounced, organization_id: org || undefined, profile_id: profile || undefined, limit: LIMIT, offset });
+  const list = useApiData<Page<Device>>("/devices", { q: debounced, organization_id: org || undefined, profile_id: profile || undefined, manufacturer: brand || undefined, limit: LIMIT, offset });
+  const models = useApiData<CatalogModels>("/provisioning/models");
+  const groups = groupByBrand(list.data?.items ?? [], (d) => d.manufacturer);
   const unregistered = useApiData<UnregisteredDevice[]>("/devices/unregistered");
   const profiles = useApiData<Page<DeviceProfile>>("/device-profiles", { organization_id: org || undefined, limit: 200 });
   const editable = can("devices.write");
@@ -74,13 +78,20 @@ function DevicesList() {
         <div className="table-toolbar">
           <SearchInput value={q} onChange={setQ} placeholder="Search by label, MAC, model or extension" label="Search devices" />
           {manyOrgs ? <SelectField label={<span className="sr-only">Organization</span>} value={org} placeholder="All organizations" options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setOffset(0); }} /> : null}
-          <SelectField label={<span className="sr-only">Profile</span>} value={profile} placeholder="All profiles" options={(profiles.data?.items ?? []).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => { setProfile(e.target.value); setOffset(0); }} />
+          <SelectField label={<span className="sr-only">Brand</span>} value={brand} placeholder="All brands" options={(models.data?.manufacturers ?? []).map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => { setBrand(e.target.value); setProfile(""); setOffset(0); }} />
+          <SelectField label={<span className="sr-only">Profile</span>} value={profile} placeholder="All profiles" options={(profiles.data?.items ?? []).filter((p) => !brand || sameBrand(p.manufacturer, brand)).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => { setProfile(e.target.value); setOffset(0); }} />
         </div>
-        <DataTable columns={columns} rows={list.data?.items} rowKey={(d) => d.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Devices"
+        {groups.length ? null : <DataTable columns={columns} rows={list.data?.items} rowKey={(d) => d.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Devices"
           onRowClick={(d) => router.push(`/devices/view/?id=${d.id}`)} rowLabel={(d) => `Open device ${d.label ?? d.mac_display}`}
-          empty={<EmptyState icon="device" title={debounced || org || profile ? "No matching devices" : "No devices yet"}>{!debounced && !org && !profile && editable ? "Register a phone by its MAC address, or point a phone at this server and it appears above." : null}</EmptyState>}
-          pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null} />
+          empty={<EmptyState icon="device" title={debounced || org || profile || brand ? "No matching devices" : "No devices yet"}>{!debounced && !org && !profile && editable ? "Register a phone by its MAC address, or point a phone at this server and it appears above." : null}</EmptyState>} />}
       </Card>
+      {groups.map((g) => (
+        <Card key={g.brand} title={g.brand} flush>
+          <DataTable columns={columns} rows={g.rows} rowKey={(d) => d.id} caption={`${g.brand} devices`}
+            onRowClick={(d) => router.push(`/devices/view/?id=${d.id}`)} rowLabel={(d) => `Open device ${d.label ?? d.mac_display}`} />
+        </Card>
+      ))}
+      {list.data && list.data.total > LIMIT ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null}
       <DeviceDialog open={createOpen} seen={seen} onClose={() => setCreateOpen(false)} onCreated={(d) => { reload(); router.push(`/devices/view/?id=${d.id}`); }} />
     </div>
   );

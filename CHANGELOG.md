@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.62 — 2026-10-31
+
+No migration.
+
+### Changed
+- **Phones are organized by brand**: Templates, Device Profiles and Devices are grouped by brand, and Devices can be filtered by it. A new profile asks for the brand first and then lists only that brand's templates. A phone lists only the profiles for its manufacturer, and Veyra refuses a profile of another brand.
+
 ## 0.27.61 — 2026-10-31
 
 No migration. The update changes the nginx site.

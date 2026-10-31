@@ -135,8 +135,8 @@
    "summary": "How a new phone finds this server, signs in for its configuration, and learns to trust Veyra's certificate.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.55",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.62",
+   "reviewed_date": "2026-10-31",
    "pages": [
     "/devices/",
     "/provisioning/requests/"
@@ -149,7 +149,7 @@
    "summary": "Which phones, analog adapters and paging speakers Veyra can configure, and what to check before rolling them out.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.60",
+   "reviewed": "0.27.62",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/provisioning/"
@@ -162,7 +162,7 @@
    "summary": "Register a phone by its MAC address, give it a profile and extensions, and check that it picked up its configuration.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.60",
+   "reviewed": "0.27.62",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/devices/",
@@ -176,7 +176,7 @@
    "summary": "Group phones that share a template, settings, keys, paging zones and firmware, for example one profile per building.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.60",
+   "reviewed": "0.27.62",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/device-profiles/",
@@ -215,7 +215,7 @@
    "summary": "Change what Veyra writes into phones' configuration files with your own template, edited in the browser, previewed, exported and imported.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.60",
+   "reviewed": "0.27.62",
    "reviewed_date": "2026-10-31",
    "pages": [
     "/provisioning/",

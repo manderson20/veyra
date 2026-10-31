@@ -4,7 +4,7 @@ summary: Change what Veyra writes into phones' configuration files with your own
 audience: admin
 section: Phones and devices
 order: 60
-reviewed: 0.27.60
+reviewed: 0.27.62
 pages:
   - /provisioning/
   - /provisioning/view/
@@ -24,7 +24,7 @@ You never change an official template. You make a **local** template that inheri
 
 ## Look at a template
 
-Open [Provisioning → Templates](app:/provisioning/) and click a template. The list shows each template's models (or *Base template* for a family), version and source: **Official**, **Community** or **Local**, plus a status badge when it is not stable.
+Open [Provisioning → Templates](app:/provisioning/) and click a template. Templates are grouped by brand. The list shows each template's models (or *Base template* for a family), version and source: **Official**, **Community** or **Local**, plus a status badge when it is not stable.
 
 The template's page has these tabs:
 

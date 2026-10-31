@@ -19,6 +19,7 @@ import {
 import { CopyButton } from "@/components/common/CopyButton";
 import { buttonClass } from "@/components/ui/Button";
 import { API_BASE } from "@/lib/api";
+import { groupByBrand } from "@/lib/brands";
 import type { TemplateSummary } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useSession } from "@/hooks/useSession";
@@ -56,6 +57,7 @@ export default function ProvisioningPage() {
   ];
 
   const errors = Object.entries(list.data?.load_errors ?? {});
+  const groups = groupByBrand([...(list.data?.items ?? [])].sort((a, b) => Number(b.abstract) - Number(a.abstract)), (t) => t.manufacturer);
   return (
     <div className="stack">
       <PageHeader
@@ -74,11 +76,17 @@ export default function ProvisioningPage() {
         </Callout>
       ) : null}
       <RedirectServices />
-      <Card flush>
-        <DataTable columns={columns} rows={list.data?.items} rowKey={(t) => t.key} loading={list.loading} error={list.error} onRetry={list.reload}
-          caption="Provisioning templates" onRowClick={(t) => router.push(`/provisioning/view/?key=${encodeURIComponent(t.key)}`)}
-          rowLabel={(t) => `Open ${t.name}`} empty={<EmptyState icon="template" title="No templates found" />} />
-      </Card>
+      {groups.length ? groups.map((g) => (
+        <Card key={g.brand} title={g.brand} flush>
+          <DataTable columns={columns} rows={g.rows} rowKey={(t) => t.key} caption={`${g.brand} templates`}
+            onRowClick={(t) => router.push(`/provisioning/view/?key=${encodeURIComponent(t.key)}`)} rowLabel={(t) => `Open ${t.name}`} />
+        </Card>
+      )) : (
+        <Card flush>
+          <DataTable columns={columns} rows={list.data?.items} rowKey={(t) => t.key} loading={list.loading} error={list.error} onRetry={list.reload}
+            caption="Provisioning templates" empty={<EmptyState icon="template" title="No templates found" />} />
+        </Card>
+      )}
       <ImportTemplateDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={(key) => router.push(`/provisioning/view/?key=${encodeURIComponent(key)}`)} />
     </div>
   );

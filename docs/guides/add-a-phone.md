@@ -4,7 +4,7 @@ summary: Register a phone by its MAC address, give it a profile and extensions, 
 audience: admin
 section: Phones and devices
 order: 20
-reviewed: 0.27.60
+reviewed: 0.27.62
 pages:
   - /devices/
   - /devices/view/
@@ -31,7 +31,7 @@ Veyra knows each phone by its **MAC address**, the hardware address printed on t
    - **MAC address** (required): from the phone's label. Colons or dashes are optional, so `00:04:f2:ab:cd:ef` and `0004F2ABCDEF` are both fine. Each MAC address can be registered only once.
    - **Manufacturer** and **Model** (required): the list shows the models Veyra has templates for. Pick the exact model, because the model decides which template is used.
    - **Label:** a name you will recognize, such as *Room 112*.
-   - **Device profile:** the profile with the settings and keys for this phone. Without a profile, nothing is sent to the phone.
+   - **Device profile:** the profile with the settings and keys for this phone. Only profiles for the phone's manufacturer are listed. Without a profile, nothing is sent to the phone.
    - **Extension (line 1):** the extension the phone registers as. Without it, the phone gets its configuration but does not register.
    - **Site:** leave it on **From the profile** to use the profile's site. The site sets the phone's time zone.
    - **Location (dispatchable):** the floor and room, used for emergency calls from this phone. It wins over the extension's location. You can change it later on the phone's page.

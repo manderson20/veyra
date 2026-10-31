@@ -4,7 +4,7 @@ summary: Group phones that share a template, settings, keys, paging zones and fi
 audience: admin
 section: Phones and devices
 order: 30
-reviewed: 0.27.60
+reviewed: 0.27.62
 checked: 2026-10-29T20:28Z
 pages:
   - /device-profiles/
@@ -29,6 +29,7 @@ A good rule: one profile per kind of phone and per building, for example *VVX, B
    - **Organization:** shown only if you manage more than one.
    - **Name** (required): unique within the organization, for example *VVX, Building A*.
    - **Site (optional):** the building these phones are in. Phones registered with this profile take this site unless you choose another. The site sets the phones' time zone and the site's provisioning variables.
+   - **Brand** (required): the phone manufacturer. **Template** then lists only that brand's templates.
    - **Template** (required): choose a **family** or a single **model**:
      - A *family* (listed as *Manufacturer — Name (family)*) serves every model under it. One "Poly VVX" profile can hold VVX 411 and VVX 450 phones together. Veyra picks the right template for each phone's model.
      - A *model* template serves only the models listed next to it.

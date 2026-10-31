@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { EMPTY_PROFILE, ProfileFields, profileBody, type ProfileDraft } from "@/components/devices/ProfileFields";
 import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, PageHeader, Pagination, SearchInput, SelectField, useToast, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
+import { groupByBrand } from "@/lib/brands";
 import type { DeviceProfile, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -84,6 +85,7 @@ export default function DeviceProfilesPage() {
   }, [q]);
 
   const list = useApiData<Page<DeviceProfile>>("/device-profiles", { q: debounced, organization_id: org || undefined, limit: LIMIT, offset });
+  const groups = groupByBrand(list.data?.items ?? [], (p) => p.manufacturer);
   const editable = can("devices.write");
   const manyOrgs = organizations.length > 1;
   const columns: Column<DeviceProfile>[] = [
@@ -106,11 +108,17 @@ export default function DeviceProfilesPage() {
           <SearchInput value={q} onChange={setQ} placeholder="Search by name or template" label="Search device profiles" />
           {manyOrgs ? <SelectField label={<span className="sr-only">Organization</span>} value={org} placeholder="All organizations" options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setOffset(0); }} /> : null}
         </div>
-        <DataTable columns={columns} rows={list.data?.items} rowKey={(p) => p.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Device profiles"
+        {groups.length ? null : <DataTable columns={columns} rows={list.data?.items} rowKey={(p) => p.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Device profiles"
           onRowClick={(p) => router.push(`/device-profiles/view/?id=${p.id}`)} rowLabel={(p) => `Open profile ${p.name}`}
-          empty={<EmptyState icon="settings" title={debounced || org ? "No matching profiles" : "No device profiles yet"}>{!debounced && !org && editable ? "Create a profile for a family of phones (such as Poly VVX, Yealink or Grandstream), then register phones with it." : null}</EmptyState>}
-          pagination={list.data ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null} />
+          empty={<EmptyState icon="settings" title={debounced || org ? "No matching profiles" : "No device profiles yet"}>{!debounced && !org && editable ? "Create a profile for a family of phones (such as Poly VVX, Yealink or Grandstream), then register phones with it." : null}</EmptyState>} />}
       </Card>
+      {groups.map((g) => (
+        <Card key={g.brand} title={g.brand} flush>
+          <DataTable columns={columns} rows={g.rows} rowKey={(p) => p.id} caption={`${g.brand} device profiles`}
+            onRowClick={(p) => router.push(`/device-profiles/view/?id=${p.id}`)} rowLabel={(p) => `Open profile ${p.name}`} />
+        </Card>
+      ))}
+      {list.data && list.data.total > LIMIT ? <Pagination total={list.data.total} limit={LIMIT} offset={offset} onChange={setOffset} /> : null}
       <CreateProfileDialog open={createOpen} onClose={() => setCreateOpen(false)} onCreated={(p) => router.push(`/device-profiles/view/?id=${p.id}`)} />
     </div>
   );

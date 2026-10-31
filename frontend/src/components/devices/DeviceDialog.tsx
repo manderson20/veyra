@@ -4,6 +4,7 @@
 import { useState, type FormEvent } from "react";
 import { Button, Callout, Dialog, SelectField, TextField, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
+import { sameBrand } from "@/lib/brands";
 import type { Device, DeviceProfile, Extension, Page, UnregisteredDevice } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -87,7 +88,7 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
         <TextField label="MAC address" required autoFocus value={mac} error={errors.fields.mac_address} placeholder="00:04:f2:ab:cd:ef" help="Printed on the phone's label; separators are optional." onChange={(e) => setMac(e.target.value)} />
         <div className="form-grid">
           <SelectField label="Manufacturer" required value={options.manufacturers.some((m) => m.name === manufacturer) ? manufacturer : ""} error={errors.fields.manufacturer} placeholder="Choose"
-            options={options.manufacturers.map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => { setManufacturer(e.target.value); setModel(""); }} />
+            options={options.manufacturers.map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => { setManufacturer(e.target.value); setModel(""); setProfileId(""); }} />
           {models.length ? (
             <SelectField label="Model" required value={model} error={errors.fields.model} placeholder="Choose a model" options={models.map((m) => ({ value: m, label: m }))} onChange={(e) => setModel(e.target.value)} />
           ) : (
@@ -96,7 +97,8 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
         </div>
         <TextField label="Label" value={label} error={errors.fields.label} placeholder="e.g. Room 112" onChange={(e) => setLabel(e.target.value)} />
         <SelectField label="Device profile" value={profileId} error={errors.fields.profile_id} placeholder="No profile yet (nothing is served)"
-          options={(profiles.data?.items ?? []).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => setProfileId(e.target.value)} />
+          help={manufacturer ? `Profiles for ${manufacturer} phones.` : "Choose the manufacturer first."}
+          options={(profiles.data?.items ?? []).filter((p) => sameBrand(p.manufacturer, manufacturer)).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => setProfileId(e.target.value)} />
         <div className="form-grid">
           <SelectField label="Extension (line 1)" value={extensionId} error={errors.fields.primary_extension_id} placeholder="No extension"
             options={(extensions.data?.items ?? []).map((x) => ({ value: x.id, label: `${x.number} — ${x.display_name}` }))} onChange={(e) => setExtensionId(e.target.value)} />

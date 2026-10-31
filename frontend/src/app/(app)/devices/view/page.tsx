@@ -10,6 +10,7 @@ import { DEVICE_STATUS } from "@/app/(app)/devices/page";
 import { Badge, Button, Callout, Card, Checkbox, ConfirmDialog, DataTable, EmptyState, ErrorState, LoadingState, PageHeader, SelectField, Switch, TabPanel, Tabs, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
+import { sameBrand } from "@/lib/brands";
 import type { Building, Device, DeviceInput, DevicePreview, DeviceProfile, Extension, LineKey, Page, ReprovisionResult, ResolvedVariable } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -159,7 +160,7 @@ function DeviceView() {
             </div>
             <div className="form-grid">
               <SelectField label="Manufacturer" required disabled={!editable} value={options.manufacturers.some((m) => m.name === draft.manufacturer) ? draft.manufacturer : ""} error={errors.fields.manufacturer} placeholder={draft.manufacturer || "Choose"}
-                options={options.manufacturers.map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => set({ manufacturer: e.target.value, model: "" })} />
+                options={options.manufacturers.map((m) => ({ value: m.name, label: m.name }))} onChange={(e) => set({ manufacturer: e.target.value, model: "", ...(sameBrand(selectedProfile?.manufacturer, e.target.value) ? {} : { profile_id: "", values: {} }) })} />
               {(options.manufacturers.find((m) => m.name === draft.manufacturer)?.models ?? []).length ? (
                 <SelectField label="Model" required disabled={!editable} value={draft.model} error={errors.fields.model} placeholder="Choose a model"
                   options={(options.manufacturers.find((m) => m.name === draft.manufacturer)?.models ?? []).map((m) => ({ value: m, label: m }))} onChange={(e) => set({ model: e.target.value })} />
@@ -169,7 +170,8 @@ function DeviceView() {
             </div>
             <div className="form-grid">
               <SelectField label="Device profile" disabled={!editable} value={draft.profile_id} error={errors.fields.profile_id} placeholder="No profile (nothing is served)"
-                options={(profiles.data?.items ?? []).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => set({ profile_id: e.target.value, values: {} })} />
+                help={`Profiles for ${draft.manufacturer} phones.`}
+                options={(profiles.data?.items ?? []).filter((p) => p.id === draft.profile_id || sameBrand(p.manufacturer, draft.manufacturer)).map((p) => ({ value: p.id, label: p.name }))} onChange={(e) => set({ profile_id: e.target.value, values: {} })} />
               <SelectField label="Site" disabled={!editable} value={draft.site_id} error={errors.fields.site_id} placeholder="No site" options={options.sites.map((s) => ({ value: s.id, label: s.name }))} onChange={(e) => set({ site_id: e.target.value })} />
               <SelectField label="Building" disabled={!editable} value={draft.building_id} error={errors.fields.building_id} placeholder="No building"
                 options={[{ value: "", label: "No building" }, ...(buildings.data ?? []).filter((b) => !draft.site_id || b.site_id === draft.site_id).map((b) => ({ value: b.id, label: b.name }))]} onChange={(e) => set({ building_id: e.target.value })} />

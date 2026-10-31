@@ -469,3 +469,41 @@ def test_secret_template_values_are_never_returned(admin):
     admin.patch(f"{PROFILES}/{p['id']}", json={"values": {}})
     with session_scope() as db:
         assert "admin_password" not in db.get(DeviceProfile, p["id"]).values
+
+
+def test_a_phone_takes_only_a_profile_of_its_brand_and_lists_filter_by_brand(admin):
+    org = _org(admin)
+    poly = _profile(admin, org["id"])
+    yealink = _profile(admin, org["id"], "Yealink desks", "yealink.base")
+
+    def phone(mac, maker, model, profile):
+        return admin.post(
+            DEVICES,
+            json={
+                "organization_id": org["id"],
+                "mac_address": mac,
+                "manufacturer": maker,
+                "model": model,
+                "profile_id": profile,
+            },
+        )
+
+    r = phone("00:04:F2:00:00:0A", "Poly", "VVX 411", yealink["id"])
+    assert r.status_code == 422 and "for Yealink phones" in r.text
+    a = phone("00:04:F2:00:00:0B", "poly", "VVX 411", poly["id"])  # case does not matter
+    assert a.status_code == 201, a.text
+    b = phone("80:5E:C0:00:00:0C", "Yealink", "T46U", yealink["id"])
+    assert b.status_code == 201, b.text
+    url = f"{DEVICES}/{a.json()['id']}"
+    r = admin.patch(url, json={"profile_id": yealink["id"]})
+    assert r.status_code == 422 and "for Yealink phones" in r.text
+    # Changing the brand alone cannot leave the old profile behind.
+    r = admin.patch(url, json={"manufacturer": "Yealink"})
+    assert r.status_code == 422
+    r = admin.patch(url, json={"manufacturer": "Yealink", "model": "T46U", "profile_id": None})
+    assert r.status_code == 200, r.text
+    r = admin.patch(url, json={"label": "Room 1"})
+    assert r.status_code == 200, r.text
+    items = admin.get(DEVICES, params={"manufacturer": "yealink"}).json()["items"]
+    assert len(items) == 2
+    assert admin.get(DEVICES, params={"manufacturer": "poly"}).json()["items"] == []

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import { useState } from "react";
 import { KeyListEditor } from "@/components/devices/KeyListEditor";
 import { Checkbox, SelectField, TextArea, TextField } from "@/components/ui";
+import { sameBrand } from "@/lib/brands";
 import type { DeviceProfile, DeviceProfileInput, FirmwareImage, LineKey, PagingMembershipInput, PagingRole, PagingZone, Site, TemplateDetail, TemplateSummary } from "@/lib/types";
 
 export interface ProfileDraft {
@@ -59,6 +61,9 @@ export function ProfileFields({ draft, onChange, templates, template, zones, sit
   errors: Record<string, string>;
   disabled?: boolean;
 }) {
+  const [chosenBrand, setBrand] = useState("");
+  const brands = [...new Set(templates.map((t) => t.manufacturer))].sort((a, b) => a.localeCompare(b));
+  const brand = chosenBrand || templates.find((t) => t.key === draft.template_key)?.manufacturer || "";
   const families = templates.filter((t) => t.abstract);
   const models = templates.filter((t) => !t.abstract);
   const manufacturer = template?.manufacturer;
@@ -75,13 +80,18 @@ export function ProfileFields({ draft, onChange, templates, template, zones, sit
         <TextField label="Name" required disabled={disabled} value={draft.name} error={errors.name} placeholder="e.g. VVX, Building A" onChange={(e) => onChange({ name: e.target.value })} />
         <SelectField label="Site (optional)" disabled={disabled} value={draft.site_id} error={errors.site_id} placeholder="No site" options={sites.map((s) => ({ value: s.id, label: s.name }))} onChange={(e) => onChange({ site_id: e.target.value })} />
       </div>
-      <SelectField label="Template" required disabled={disabled} value={draft.template_key} error={errors.template_key} placeholder="Choose a template family or model"
-        help="A family (base template) serves every model under it; a model template serves that model only."
-        options={[
-          ...families.map((t) => ({ value: t.key, label: `${t.manufacturer} — ${t.name} (family)` })),
-          ...models.map((t) => ({ value: t.key, label: `${t.manufacturer} — ${t.name}: ${t.models.join(", ")}` })),
-        ]}
-        onChange={(e) => onChange({ template_key: e.target.value, values: {} })} />
+      <div className="form-grid">
+        <SelectField label="Brand" required disabled={disabled} value={brand} placeholder="Choose a brand"
+          options={brands.map((b) => ({ value: b, label: b }))}
+          onChange={(e) => { setBrand(e.target.value); onChange({ template_key: "", values: {} }); }} />
+        <SelectField label="Template" required disabled={disabled || !brand} value={draft.template_key} error={errors.template_key} placeholder={brand ? "Choose a template family or model" : "Choose a brand first"}
+          help="A family (base template) serves every model under it; a model template serves that model only."
+          options={[
+            ...families.filter((t) => sameBrand(t.manufacturer, brand)).map((t) => ({ value: t.key, label: `${t.name} (family)` })),
+            ...models.filter((t) => sameBrand(t.manufacturer, brand)).map((t) => ({ value: t.key, label: `${t.name}: ${t.models.join(", ")}` })),
+          ]}
+          onChange={(e) => onChange({ template_key: e.target.value, values: {} })} />
+      </div>
       {template?.abstract === false ? <p className="muted">Serves {template.models.join(", ")} only.</p> : null}
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} onChange={(e) => onChange({ description: e.target.value })} />
       <SelectField label="Firmware" disabled={disabled} value={draft.firmware_image_id} error={errors.firmware_image_id} placeholder="Keep the phones' current firmware"
