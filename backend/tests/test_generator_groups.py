@@ -45,7 +45,7 @@ def _group(slug="sales", **over):
 
 def test_queue_wait_options():
     def conf(**over):
-        return _files(_snapshot(queues=[_queue(**over)]))["queues.conf"]
+        return _files(_snapshot(queues=[_queue(**over)]))["queues.conf"].content
 
     plain = conf()
     assert "announce-holdtime=no" in plain and "reportholdtime=no" in plain
@@ -54,7 +54,7 @@ def test_queue_wait_options():
     on = conf(announce_position=False, announce_holdtime=True, report_holdtime=True, member_delay=3)
     assert "announce-holdtime=yes" in on and "announce-frequency=90" in on
     assert "reportholdtime=yes" in on and "memberdelay=3" in on
-    with pytest.raises(GenerationError, match="agent delay"):
+    with pytest.raises(generator.GenerationError, match="agent delay"):
         conf(member_delay=61)
 
 
@@ -251,6 +251,8 @@ def test_queue_context_and_queues_conf():
         "announce-position=yes\n"
         "announce-frequency=90\n"
         "announce-holdtime=no\n"
+        "reportholdtime=no\n"
+        "memberdelay=0\n"
         "periodic-announce=/var/lib/veyra/prompts/example/please-hold\n"
         "periodic-announce-frequency=60\n"
         "member => PJSIP/example-1001,0,Phone 1001,PJSIP/example-1001\n"
