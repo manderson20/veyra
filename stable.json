@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 84,
+  "sequence": 85,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.68",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Forward another phone by PIN, Record key, class of service limits for ring groups, queues, conference rooms and dialed paging",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "d0619a37fc",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.68/veyra-0.27.68.tar.gz",
+        "sha256": "67570ef1112c797a3d394b1e3daa95417ad59573a95da0dabd96e57aba189a03",
+        "size": 9554187
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1431,6 +1448,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T14:40:04+00:00",
-  "expires_at": "2027-01-29T14:40:04+00:00"
+  "generated_at": "2026-10-31T18:04:07+00:00",
+  "expires_at": "2027-01-29T18:04:07+00:00"
 }
