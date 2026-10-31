@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.71 — 2026-11-01
+
+Migration 0080 adds three queue columns. Changed queues need **Deploy changes**.
+
+### Added
+- **Queue wait options** (#142): a queue can announce the expected wait, tell the agent how long the caller waited, and delay connecting the agent by up to 60 seconds.
+
 ## 0.27.70 — 2026-11-01
 
 No migration. The new code needs **Deploy changes**.

@@ -4766,6 +4766,7 @@ def _queues(
         maxlen = int(q.get("max_callers") or 0)
         freq = int(q.get("announce_frequency") or 60)
         periodic = int(q.get("periodic_seconds") or 60)
+        delay = int(q.get("member_delay") or 0)
         for what, value, lo, hi in (
             ("agent ring time", timeout, 5, 60),
             ("retry", retry, 1, 30),
@@ -4773,11 +4774,13 @@ def _queues(
             ("maximum callers", maxlen, 0, 100),
             ("announcement frequency", freq, 15, 600),
             ("periodic announcement frequency", periodic, 15, 600),
+            ("agent delay", delay, 0, 60),
         ):
             if not lo <= value <= hi:
                 raise GenerationError(f"queue {slug}: {what} {value} is out of range")
         empty = "yes" if q.get("join_when_empty") else "strict"
         position = "yes" if q.get("announce_position") else "no"
+        holdtime = bool(q.get("announce_holdtime"))
         lines += [
             f"[{n.queue(slug)}]",
             f"; {name} ({org})",
@@ -4791,8 +4794,10 @@ def _queues(
             f"leavewhenempty={'no' if q.get('join_when_empty') else 'strict'}",
             f"musicclass={_moh_class(q.get('hold_music'), moh or {}, f'queue {slug}', org)}",
             f"announce-position={position}",
-            f"announce-frequency={freq if q.get('announce_position') else 0}",
-            "announce-holdtime=no",
+            f"announce-frequency={freq if q.get('announce_position') or holdtime else 0}",
+            f"announce-holdtime={'yes' if holdtime else 'no'}",
+            f"reportholdtime={'yes' if q.get('report_holdtime') else 'no'}",
+            f"memberdelay={delay}",
         ]
         prompt = q.get("periodic_prompt")
         if prompt:

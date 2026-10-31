@@ -149,6 +149,10 @@ class CallQueue(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     join_when_empty: Mapped[bool] = mapped_column(Boolean, default=False)
     announce_position: Mapped[bool] = mapped_column(Boolean, default=False)
     announce_frequency: Mapped[int] = mapped_column(Integer, default=60)
+    announce_holdtime: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # The agent hears how long the caller waited, after a delay of member_delay seconds.
+    report_holdtime: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    member_delay: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     announcement_prompt_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("prompts.id", ondelete="SET NULL")
     )

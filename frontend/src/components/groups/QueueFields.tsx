@@ -21,6 +21,9 @@ export interface QueueDraft {
   max_callers: string;
   join_when_empty: boolean;
   announce_position: boolean;
+  announce_holdtime: boolean;
+  report_holdtime: boolean;
+  member_delay: string;
   announce_frequency: string;
   announcement_prompt_id: string;
   periodic_prompt_id: string;
@@ -45,6 +48,9 @@ export const EMPTY_QUEUE: QueueDraft = {
   max_callers: "0",
   join_when_empty: false,
   announce_position: false,
+  announce_holdtime: false,
+  report_holdtime: false,
+  member_delay: "0",
   announce_frequency: "60",
   announcement_prompt_id: "",
   periodic_prompt_id: "",
@@ -84,6 +90,9 @@ export function queueDraft(q: CallQueue): QueueDraft {
     max_callers: String(q.max_callers),
     join_when_empty: q.join_when_empty,
     announce_position: q.announce_position,
+    announce_holdtime: q.announce_holdtime ?? false,
+    report_holdtime: q.report_holdtime ?? false,
+    member_delay: String(q.member_delay ?? 0),
     announce_frequency: String(q.announce_frequency),
     announcement_prompt_id: q.announcement_prompt_id ?? "",
     periodic_prompt_id: q.periodic_prompt_id ?? "",
@@ -110,6 +119,9 @@ export function queueBody(d: QueueDraft): QueueInput {
     max_callers: Number(d.max_callers),
     join_when_empty: d.join_when_empty,
     announce_position: d.announce_position,
+    announce_holdtime: d.announce_holdtime,
+    report_holdtime: d.report_holdtime,
+    member_delay: Number(d.member_delay),
     announce_frequency: Number(d.announce_frequency),
     announcement_prompt_id: d.announcement_prompt_id || null,
     periodic_prompt_id: d.periodic_prompt_id || null,
@@ -202,8 +214,12 @@ export function QueueFields({ draft, onChange, errors, organizationId, current, 
           onChange={(e) => onChange({ periodic_seconds: e.target.value })} />
       </div>
       <Checkbox label="Announce the caller's position in line" checked={draft.announce_position} disabled={disabled} onChange={(e) => onChange({ announce_position: e.target.checked })} />
-      {draft.announce_position ? (
-        <TextField label="Announce position every (seconds)" type="number" min={15} max={600} required disabled={disabled} value={draft.announce_frequency} error={errors.announce_frequency}
+      <Checkbox label="Announce the expected wait" checked={draft.announce_holdtime} disabled={disabled} onChange={(e) => onChange({ announce_holdtime: e.target.checked })} />
+      <Checkbox label="Tell the agent how long the caller waited" checked={draft.report_holdtime} disabled={disabled} onChange={(e) => onChange({ report_holdtime: e.target.checked })} />
+      <TextField label="Delay before connecting the agent (seconds)" type="number" min={0} max={60} required disabled={disabled} value={draft.member_delay} error={errors.member_delay}
+        help="0 to 60. Gives the agent a moment before the caller is heard." onChange={(e) => onChange({ member_delay: e.target.value })} />
+      {draft.announce_position || draft.announce_holdtime ? (
+        <TextField label="Announce every (seconds)" type="number" min={15} max={600} required disabled={disabled} value={draft.announce_frequency} error={errors.announce_frequency}
           onChange={(e) => onChange({ announce_frequency: e.target.value })} />
       ) : null}
       <DestinationPicker label="When the caller is not connected" idBase="q-failover" draft={draft.failover} onChange={(failover) => onChange({ failover })} options={options} allowHangup

@@ -4,7 +4,7 @@ summary: Let callers wait in line with music and announcements until an agent is
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.45
+reviewed: 0.27.71
 checked: 2026-10-29
 pages:
   - /queues/
@@ -64,6 +64,9 @@ Under **Agents**, choose an extension and click **Add**. A queue has at most 64 
 - **Announcement on joining**: played once before the caller starts waiting.
 - **Announcement while waiting** and **Repeat every (seconds)** (15 to 600): for example "All our staff are busy; your call is important to us".
 - **Announce the caller's position in line**, every 15 to 600 seconds.
+- **Announce the expected wait**, on the same timing. The estimate comes from recent calls in the queue.
+- **Tell the agent how long the caller waited**: the agent hears it just before being connected.
+- **Delay before connecting the agent (seconds)** (0 to 60): gives the agent a moment before the caller is heard.
 - **Maximum wait (seconds)**: 0 for no limit, otherwise 30 to 3600. After that the caller goes to the destination below.
 - **Maximum callers waiting**: 0 for no limit, up to 100. A caller beyond the limit goes straight to the destination below.
 - **Let callers wait when no agent is available**: off, a caller goes straight to the destination below when no agent is logged in or free.

@@ -43,6 +43,21 @@ def _group(slug="sales", **over):
     }
 
 
+def test_queue_wait_options():
+    def conf(**over):
+        return _files(_snapshot(queues=[_queue(**over)]))["queues.conf"]
+
+    plain = conf()
+    assert "announce-holdtime=no" in plain and "reportholdtime=no" in plain
+    assert "memberdelay=0" in plain
+    # The expected wait is announced on the position timer, so that must run.
+    on = conf(announce_position=False, announce_holdtime=True, report_holdtime=True, member_delay=3)
+    assert "announce-holdtime=yes" in on and "announce-frequency=90" in on
+    assert "reportholdtime=yes" in on and "memberdelay=3" in on
+    with pytest.raises(GenerationError, match="agent delay"):
+        conf(member_delay=61)
+
+
 def _queue(slug="support", **over):
     return {
         "slug": slug,

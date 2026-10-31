@@ -73,6 +73,9 @@ class QueueIn(BaseModel):
     join_when_empty: bool = False
     announce_position: bool = False
     announce_frequency: int = Field(60, ge=15, le=600)
+    announce_holdtime: bool = False
+    report_holdtime: bool = False
+    member_delay: int = Field(0, ge=0, le=60)
     announcement_prompt_id: uuid.UUID | None = None
     periodic_prompt_id: uuid.UUID | None = None
     periodic_seconds: int = Field(60, ge=15, le=600)
@@ -123,6 +126,9 @@ class QueuePatch(BaseModel):
     join_when_empty: bool | None = None
     announce_position: bool | None = None
     announce_frequency: int | None = Field(None, ge=15, le=600)
+    announce_holdtime: bool | None = None
+    report_holdtime: bool | None = None
+    member_delay: int | None = Field(None, ge=0, le=60)
     announcement_prompt_id: uuid.UUID | None = None
     periodic_prompt_id: uuid.UUID | None = None
     periodic_seconds: int | None = Field(None, ge=15, le=600)
@@ -153,6 +159,9 @@ class QueueOut(BaseModel):
     join_when_empty: bool
     announce_position: bool
     announce_frequency: int
+    announce_holdtime: bool = False
+    report_holdtime: bool = False
+    member_delay: int = 0
     announcement_prompt_id: uuid.UUID | None
     announcement_prompt_name: str | None
     periodic_prompt_id: uuid.UUID | None
@@ -266,6 +275,9 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
                 join_when_empty=r.join_when_empty,
                 announce_position=r.announce_position,
                 announce_frequency=r.announce_frequency,
+                announce_holdtime=r.announce_holdtime,
+                report_holdtime=r.report_holdtime,
+                member_delay=r.member_delay,
                 announcement_prompt_id=r.announcement_prompt_id,
                 announcement_prompt_name=ann.name if ann else None,
                 periodic_prompt_id=r.periodic_prompt_id,
@@ -364,6 +376,9 @@ _FIELDS = (
     "join_when_empty",
     "announce_position",
     "announce_frequency",
+    "announce_holdtime",
+    "report_holdtime",
+    "member_delay",
     "announcement_prompt_id",
     "periodic_prompt_id",
     "periodic_seconds",

@@ -1929,6 +1929,9 @@ export interface CallQueue {
   max_callers: number;
   join_when_empty: boolean;
   announce_position: boolean;
+  announce_holdtime?: boolean;
+  report_holdtime?: boolean;
+  member_delay?: number;
   announce_frequency: number;
   announcement_prompt_id: string | null;
   announcement_prompt_name: string | null;
@@ -1970,6 +1973,9 @@ export interface QueueInput {
   max_callers?: number;
   join_when_empty?: boolean;
   announce_position?: boolean;
+  announce_holdtime?: boolean;
+  report_holdtime?: boolean;
+  member_delay?: number;
   announce_frequency?: number;
   announcement_prompt_id?: string | null;
   periodic_prompt_id?: string | null;
