@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.58 — 2026-10-31
+
+No migration.
+
+### Security
+- Updated `pyasn1` to 0.6.5 for four newly published denial-of-service advisories (CVE-2026-119194 to CVE-2026-119197). Veyra uses it when it checks passkeys.
+
 ## 0.27.57 — 2026-10-31
 
 No migration.

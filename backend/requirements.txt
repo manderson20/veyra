@@ -31,6 +31,6 @@ httpx==0.28.1
 # (BSD-2-Clause) and pyOpenSSL (Apache-2.0) are its dependencies.
 webauthn==3.0.1
 cbor2==6.1.5
-pyasn1==0.6.4
+pyasn1==0.6.5
 pyasn1-modules==0.4.2
 pyOpenSSL==26.4.0
