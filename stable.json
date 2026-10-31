@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 91,
+  "sequence": 92,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.75",
+      "channel": "stable",
+      "category": "bugfix",
+      "release_notes": "Caller rules can hang up; tests now render the changed forms",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "dff51331c4",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.75/veyra-0.27.75.tar.gz",
+        "sha256": "9c4b2f2d27079e2f500bdfe9e66a62cc1eb977d113aa22e58fc6d454d6166eb0",
+        "size": 9571083
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1550,6 +1567,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T20:37:30+00:00",
-  "expires_at": "2027-01-29T20:37:30+00:00"
+  "generated_at": "2026-10-31T21:00:50+00:00",
+  "expires_at": "2027-01-29T21:00:50+00:00"
 }
