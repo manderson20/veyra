@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { Checkbox, TextArea, TextField } from "@/components/ui";
+import { Checkbox, SelectField, TextArea, TextField } from "@/components/ui";
+import { useApiData } from "@/hooks/useApiData";
 import { formatHoliday, holidayComplete, parseHoliday, type Holiday } from "@/lib/holidays";
-import type { TimeCondition, TimeConditionInput, TimeRange } from "@/lib/types";
+import type { CalendarSub, Page, TimeCondition, TimeConditionInput, TimeRange } from "@/lib/types";
 import { HolidaysEditor } from "./HolidaysEditor";
 import { DEFAULT_RANGE, RangesEditor } from "./RangesEditor";
 
@@ -13,6 +14,8 @@ export interface TimeConditionDraft {
   timezone: string;
   ranges: TimeRange[];
   holidays: Holiday[];
+  closed_calendar_id: string;
+  closed_calendar_match: string;
   /** Digits after the override code (*27<index>); empty: no code. */
   code_index: string;
   /** Typed to set or replace the PIN; empty: unchanged (edit) or none (create). */
@@ -26,6 +29,8 @@ export const EMPTY_TIME_CONDITION: TimeConditionDraft = {
   timezone: "",
   ranges: [{ ...DEFAULT_RANGE, days: [...DEFAULT_RANGE.days] }],
   holidays: [],
+  closed_calendar_id: "",
+  closed_calendar_match: "",
   code_index: "",
   pin: "",
   clear_pin: false,
@@ -39,6 +44,8 @@ export function timeConditionDraft(tc: TimeCondition, organizationTimezone?: str
     timezone: organizationTimezone && tc.timezone === organizationTimezone ? "" : tc.timezone,
     ranges: tc.ranges.map((r) => ({ ...r, days: [...r.days] })),
     holidays: tc.holidays.map(parseHoliday),
+    closed_calendar_id: tc.closed_calendar_id ?? "",
+    closed_calendar_match: tc.closed_calendar_match ?? "",
     code_index: tc.code_index === null ? "" : String(tc.code_index),
     pin: "",
     clear_pin: false,
@@ -52,6 +59,8 @@ export function timeConditionBody(d: TimeConditionDraft): TimeConditionInput {
     timezone: d.timezone.trim() || null,
     ranges: d.ranges,
     holidays: d.holidays.map(formatHoliday).filter(Boolean),
+    closed_calendar_id: d.closed_calendar_id || null,
+    closed_calendar_match: d.closed_calendar_id ? d.closed_calendar_match.trim() || null : null,
     code_index: d.code_index.trim() === "" ? null : Number(d.code_index),
     ...(d.clear_pin ? { pin: null } : d.pin.trim() ? { pin: d.pin.trim() } : {}),
   };
@@ -65,7 +74,7 @@ export function timeConditionValid(d: TimeConditionDraft): boolean {
     && (!d.pin.trim() || /^[0-9]{4,10}$/.test(d.pin.trim()));
 }
 
-export function TimeConditionFields({ draft, onChange, errors, timezonePlaceholder, disabled, autoFocus, current }: {
+export function TimeConditionFields({ draft, onChange, errors, timezonePlaceholder, disabled, autoFocus, current, organizationId }: {
   draft: TimeConditionDraft;
   onChange: (patch: Partial<TimeConditionDraft>) => void;
   errors: Record<string, string>;
@@ -73,7 +82,10 @@ export function TimeConditionFields({ draft, onChange, errors, timezonePlacehold
   disabled?: boolean;
   autoFocus?: boolean;
   current?: TimeCondition;
+  organizationId?: string;
 }) {
+  const org = current?.organization_id ?? organizationId;
+  const calendars = useApiData<Page<CalendarSub>>(org ? "/calendars" : null, { organization_id: org, limit: 100 });
   return (
     <>
       <div className="form-grid">
@@ -85,6 +97,16 @@ export function TimeConditionFields({ draft, onChange, errors, timezonePlacehold
       </div>
       <RangesEditor ranges={draft.ranges} onChange={(ranges) => onChange({ ranges })} error={errors.ranges} disabled={disabled} />
       <HolidaysEditor holidays={draft.holidays} onChange={(holidays) => onChange({ holidays })} error={errors.holidays} disabled={disabled} />
+      <div className="form-grid">
+        <SelectField label="Closed during events of a calendar" disabled={disabled} value={draft.closed_calendar_id} error={errors.closed_calendar_id}
+          options={[{ value: "", label: "No calendar" }, ...(calendars.data?.items ?? []).map((c) => ({ value: c.id, label: c.name }))]}
+          help="For closed days decided at short notice, such as snow days. Calendars are added under Calendars."
+          onChange={(e) => onChange({ closed_calendar_id: e.target.value })} />
+        {draft.closed_calendar_id ? (
+          <TextField label="Only events whose title contains" disabled={disabled} value={draft.closed_calendar_match} error={errors.closed_calendar_match} maxLength={100} placeholder="Any event"
+            help="Upper or lower case doesn't matter, for example: closed." onChange={(e) => onChange({ closed_calendar_match: e.target.value })} />
+        ) : null}
+      </div>
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />
       <div className="form-grid">
         <TextField label="Override code index" disabled={disabled} value={draft.code_index} error={errors.code_index} inputMode="numeric" placeholder="None"

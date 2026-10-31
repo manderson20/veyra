@@ -1301,6 +1301,10 @@ export interface TimeCondition {
   /** What the schedule says now; `effective_open` includes an override (docs/CALL_FEATURES.md §4.6). */
   open_now: boolean;
   effective_open: boolean;
+  closed_calendar_id?: string | null;
+  closed_calendar_match?: string | null;
+  /** An event of the linked calendar is on now. */
+  calendar_closed?: boolean;
   override: "open" | "closed" | null;
   override_temporary: boolean;
   override_by: string | null;
@@ -1325,6 +1329,8 @@ export interface TimeConditionInput {
   code_index?: number | null;
   /** Write-only; null removes the PIN. */
   pin?: string | null;
+  closed_calendar_id?: string | null;
+  closed_calendar_match?: string | null;
 }
 
 // ---------------------------------------------------------------- voicemail, prompts, IVR (Milestone 7)

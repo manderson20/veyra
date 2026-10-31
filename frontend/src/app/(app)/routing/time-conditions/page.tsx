@@ -145,7 +145,7 @@ function CreateTimeConditionDialog({ open, onClose, onCreated }: { open: boolean
           <SelectField label="Organization" required value={effectiveOrg} error={errors.fields.organization_id} placeholder="Choose an organization"
             options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => setOrg(e.target.value)} />
         ) : null}
-        <TimeConditionFields draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} errors={errors.fields} timezonePlaceholder={orgTimezone} autoFocus />
+        <TimeConditionFields draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} errors={errors.fields} timezonePlaceholder={orgTimezone} autoFocus organizationId={effectiveOrg} />
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>

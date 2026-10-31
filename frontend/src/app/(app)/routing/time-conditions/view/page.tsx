@@ -97,7 +97,7 @@ function TimeConditionView() {
         description={
           <span className="row">
             <span>{t.organization_name}</span>
-            <Badge tone={t.open_now ? "ok" : "neutral"} icon={t.open_now ? "checkCircle" : "clock"}>{t.open_now ? "Open now" : "Closed now"}</Badge>
+            <Badge tone={t.effective_open ? "ok" : "neutral"} icon={t.effective_open ? "checkCircle" : "clock"}>{t.effective_open ? "Open now" : "Closed now"}</Badge>
             <Badge tone="outline">{t.in_use_by ? `Used by ${t.in_use_by} ${t.in_use_by === 1 ? "route" : "routes"}` : "Not used"}</Badge>
           </span>
         }
@@ -116,7 +116,7 @@ function TimeConditionView() {
           <Card title="Override" subtitle="Force the condition open or closed right now; no deployment needed.">
             <dl className="dl">
               <dt>Schedule says</dt><dd><Badge tone={t.open_now ? "ok" : "neutral"}>{t.open_now ? "Open" : "Closed"}</Badge></dd>
-              <dt>Callers get</dt><dd><Badge tone={t.effective_open ? "ok" : "neutral"} icon={t.override ? "alert" : undefined}>{t.effective_open ? "Open" : "Closed"}{t.override ? ` (forced${t.override_temporary ? ", until the schedule changes" : ", until cleared"})` : ""}</Badge></dd>
+              <dt>Callers get</dt><dd><Badge tone={t.effective_open ? "ok" : "neutral"} icon={t.override ? "alert" : undefined}>{t.effective_open ? "Open" : "Closed"}{t.override ? ` (forced${t.override_temporary ? ", until the schedule changes" : ", until cleared"})` : t.calendar_closed ? " (calendar event)" : ""}</Badge></dd>
               {t.override ? <><dt>Forced by</dt><dd>{t.override_by ?? "—"}{t.override_at ? `, ${formatRelative(t.override_at)}` : ""}</dd></> : null}
               {t.code ? <><dt>Phone code</dt><dd><span className="mono">{t.code}</span>{t.has_pin ? " (PIN)" : ""}</dd></> : null}
             </dl>

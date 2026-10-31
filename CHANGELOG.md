@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.69 — 2026-11-01
+
+Migration 0079 adds two time condition columns. **Deploy changes** once after updating.
+
+### Added
+- **Close a time condition from a calendar** (#142): a time condition can stay closed while an event is on in a chosen calendar, optionally only events whose title contains a word. Calendars are read every few minutes, and an override from the page or a phone wins.
+
 ## 0.27.68 — 2026-10-31
 
 Migration 0078 adds four class of service columns. New codes, keys and class limits need **Deploy changes**.

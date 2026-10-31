@@ -3,15 +3,18 @@
 time-condition overrides, from the API and from phones, and the worker's
 sync and expiry."""
 
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from fake_adapter import FakeAdapter
 from test_api_ivr import _ext, _org
 
 from veyra.core.db import session_scope
-from veyra.core.models import CallFlow, TimeCondition
+from veyra.core.models import Calendar, CalendarEvent, CallFlow, TimeCondition
+from veyra.core.models.base import utcnow
 from veyra.telephony import switches
+from veyra.telephony.asterisk import generator
 
 FLOWS = "/api/v1/call-flows"
 TC = "/api/v1/routing/time-conditions"
@@ -157,6 +160,84 @@ def test_time_condition_override_from_api_and_phone(admin, app):
     with session_scope() as db:
         assert switches.sync(db, adapter) == 1
     assert ("flow", org["slug"], "ghost") not in adapter.switch_states
+
+
+def test_time_condition_closed_by_a_calendar(admin, app):
+    adapter = _fake(app)
+    org = _org(admin)
+    now = utcnow()
+    with session_scope() as db:
+        calendar = Calendar(
+            organization_id=uuid.UUID(org["id"]),
+            name="Closures",
+            url_ciphertext="x",
+            url_display="https://example.org",
+        )
+        db.add(calendar)
+        db.flush()
+        for uid, summary, start, end, all_day in (
+            ("a", "Closed: snow", now - timedelta(hours=1), now + timedelta(hours=1), False),
+            ("b", "Board meeting", now - timedelta(hours=1), now + timedelta(hours=1), False),
+            ("c", "Closed last week", now - timedelta(days=7), now - timedelta(days=6), False),
+        ):
+            db.add(
+                CalendarEvent(
+                    calendar_id=calendar.id,
+                    uid=uid,
+                    summary=summary,
+                    starts_at=start,
+                    ends_at=end,
+                    all_day=all_day,
+                )
+            )
+        calendar_id = str(calendar.id)
+    every = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    r = admin.post(
+        TC,
+        json={
+            "organization_id": org["id"],
+            "name": "Hours",
+            "timezone": "UTC",
+            "ranges": [{"days": every, "start": "00:00", "end": "23:59"}],
+            "closed_calendar_id": calendar_id,
+            "closed_calendar_match": "closed",
+        },
+    )
+    assert r.status_code == 201, r.text
+    t = r.json()
+    assert t["calendar_closed"] is True and t["effective_open"] is False
+    key = ("tc", org["slug"], t["id"])
+    with session_scope() as db:
+        switches.sync(db, adapter)
+    assert adapter.switches()[key] == "calendar"
+    # A title that doesn't match leaves it to the schedule, and clears the engine.
+    r = admin.patch(f"{TC}/{t['id']}", json={"closed_calendar_match": "holiday"})
+    assert r.json()["calendar_closed"] is False and r.json()["effective_open"] is True
+    with session_scope() as db:
+        switches.sync(db, adapter)
+    assert key not in adapter.switches()
+    # An override wins over the calendar.
+    admin.patch(f"{TC}/{t['id']}", json={"closed_calendar_match": None})
+    with session_scope() as db:
+        tc = db.get(TimeCondition, uuid.UUID(t["id"]))
+        switches.set_time_condition(db, tc, "open", temporary=False, by="test")
+    with session_scope() as db:
+        switches.sync(db, adapter)
+    assert adapter.switches()[key] == "open"
+    # A calendar that isn't the organization's is refused.
+    r = admin.patch(f"{TC}/{t['id']}", json={"closed_calendar_id": str(uuid.uuid4())})
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "closed_calendar_id"
+
+
+def test_generator_calendar_value_means_closed_and_the_code_opens_it():
+    assert switches.TC_CALENDAR == "calendar"
+    assert 'GotoIf($["${VEYRA_TC}"="calendar"]?closed)' in generator._CALENDAR_CLOSED[0]
+    codes = {"tc_override_prefix": "*27"}
+    lines = generator._tc_override_codes(
+        codes, [{"key": "abc", "organization": "example", "code_index": 1, "name": "Hours"}]
+    )
+    text = "\n".join(lines)
+    assert text.index('="calendar"]?isclosed') < text.index('!=""]?clear')
 
 
 def test_call_flow_userevent_and_sync(admin, app):

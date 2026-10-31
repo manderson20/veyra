@@ -94,6 +94,12 @@ class TimeCondition(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # Optional PIN before the phone overrides (installation key, purpose
     # ``time_condition.pin:<id>``).
     pin_ciphertext: Mapped[str | None] = mapped_column(Text)
+    # Closed while an event of this calendar is on (issue #142); the match is
+    # text the event's title must contain, None: any event.
+    closed_calendar_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("calendars.id", ondelete="SET NULL")
+    )
+    closed_calendar_match: Mapped[str | None] = mapped_column(String(100))
 
 
 class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

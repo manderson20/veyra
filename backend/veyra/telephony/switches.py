@@ -15,14 +15,14 @@ temporary time-condition overrides once the schedule itself has moved on.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from veyra.core.events import Event, bus
-from veyra.core.models import CallFlow, Organization, TimeCondition
+from veyra.core.models import Calendar, CalendarEvent, CallFlow, Organization, TimeCondition
 from veyra.core.models.base import utcnow
 from veyra.telephony import routing
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
@@ -35,6 +35,9 @@ KINDS = ("flow", "tc")
 LAMP_KINDS = ("agent", "agentpause")
 SWITCH_EVENT = "VeyraSwitch"
 TC_STATES = ("open", "closed")
+# The engine's value while a calendar event closes a condition: callers get
+# "closed", but the phone code forces it open instead of clearing it.
+TC_CALENDAR = "calendar"
 
 
 def device(kind: str, org: str, key: str) -> str:
@@ -213,7 +216,29 @@ def expire(db: Session, now: datetime | None = None) -> list[TimeCondition]:
     return cleared
 
 
-def wanted(db: Session) -> dict[tuple[str, str, str], str]:
+def calendar_closed(db: Session, tc: TimeCondition, now: datetime | None = None) -> bool:
+    """An event of the condition's enabled calendar is on now. An all-day event
+    without an end lasts a day; a timed one without an end has no length."""
+    if tc.closed_calendar_id is None:
+        return False
+    calendar = db.get(Calendar, tc.closed_calendar_id)
+    if calendar is None or not calendar.is_enabled:
+        return False
+    now = now or utcnow()
+    match = (tc.closed_calendar_match or "").casefold()
+    events = db.scalars(
+        select(CalendarEvent).where(
+            CalendarEvent.calendar_id == calendar.id, CalendarEvent.starts_at <= now
+        )
+    )
+    for e in events:
+        ends = e.ends_at or (e.starts_at + timedelta(days=1) if e.all_day else e.starts_at)
+        if now < ends and match in e.summary.casefold():
+            return True
+    return False
+
+
+def wanted(db: Session, now: datetime | None = None) -> dict[tuple[str, str, str], str]:
     """(kind, org, key) -> value for every switch that should be on."""
     slugs = {o.id: o.slug for o in db.scalars(select(Organization))}
     out: dict[tuple[str, str, str], str] = {}
@@ -222,6 +247,13 @@ def wanted(db: Session) -> dict[tuple[str, str, str], str]:
             out[("flow", slugs.get(flow.organization_id, ""), flow.slug)] = "1"
     for tc in db.scalars(select(TimeCondition).where(TimeCondition.override.is_not(None))):
         out[("tc", slugs.get(tc.organization_id, ""), tc_key(tc))] = str(tc.override)
+    for tc in db.scalars(
+        select(TimeCondition).where(
+            TimeCondition.override.is_(None), TimeCondition.closed_calendar_id.is_not(None)
+        )
+    ):
+        if calendar_closed(db, tc, now):
+            out[("tc", slugs.get(tc.organization_id, ""), tc_key(tc))] = TC_CALENDAR
     return out
 
 
@@ -235,7 +267,7 @@ def sync(db: Session, adapter: Any, now: datetime | None = None) -> int:
         have = adapter.switches()
     except (EngineUnavailable, NotSupported):
         return 0
-    want = wanted(db)
+    want = wanted(db, now)
     fixed = 0
     for key, value in want.items():
         if have.get(key) != value:

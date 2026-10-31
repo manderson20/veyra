@@ -2221,6 +2221,10 @@ def _vm_steps(number: str, flags: str) -> list[str]:
     ]
 
 
+# A calendar event closes the condition (the worker writes this value).
+_CALENDAR_CLOSED = [' same => n,GotoIf($["${VEYRA_TC}"="calendar"]?closed)']
+
+
 def _tc_open_contexts(conditions: list[dict[str, Any]], keys: set[str]) -> list[str]:
     """Per time condition used by an after-hours greeting: a Gosub that sets
     VEYRA_OPEN (1 open, 0 closed), the phone override first."""
@@ -2242,6 +2246,7 @@ def _tc_open_contexts(conditions: list[dict[str, Any]], keys: set[str]) -> list[
             f" same => n,Set(VEYRA_TC=${{DB({SWITCH_FAMILY}/tc/{org}/{key})}})",
             ' same => n,GotoIf($["${VEYRA_TC}"="open"]?open)',
             ' same => n,GotoIf($["${VEYRA_TC}"="closed"]?closed)',
+            *_CALENDAR_CLOSED,
             *[f" same => n,{app}" for app in closed],
             *[f" same => n,GotoIfTime({args}?open)" for args in opened],
             " same => n(closed),Return()",
@@ -3119,6 +3124,7 @@ def _destination_lines_of(r: dict[str, Any], conditions: dict[str, dict[str, Any
                 f" same => n,Set(VEYRA_TC=${{DB({SWITCH_FAMILY}/tc/{org}/{key})}})",
                 ' same => n,GotoIf($["${VEYRA_TC}"="open"]?open)',
                 ' same => n,GotoIf($["${VEYRA_TC}"="closed"]?closed)',
+                *_CALENDAR_CLOSED,
             ]
         out += [f" same => n,{app}" for app in closed]
         out += [f" same => n,GotoIfTime({args}?open)" for args in opened]
@@ -3719,6 +3725,8 @@ def _tc_override_codes(
         body = [
             f' same => n,GotoIf($["${{VEYRA_ORG}}"!="{org}"]?nophone)',
             *pin,
+            # Closed by a calendar event: the code opens it, as for any closed time.
+            f' same => n,GotoIf($["${{DB({store})}}"="calendar"]?isclosed)',
             f' same => n,GotoIf($["${{DB({store})}}"!=""]?clear)',
             *[f" same => n,{app}" for app in closed],
             *[f" same => n,GotoIfTime({args}?isopen)" for args in opened],

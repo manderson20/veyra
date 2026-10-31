@@ -4,7 +4,7 @@ summary: Set opening hours, holidays and closed days, so calls outside them go t
 audience: admin
 section: Calls and call flows
 order: 40
-reviewed: 0.27.49
+reviewed: 0.27.69
 checked: 2026-10-30T15:10Z
 pages:
   - /routing/time-conditions/
@@ -58,6 +58,17 @@ On these days the condition is closed all day, whatever the open hours say.
 Each holiday shows a plain description below it so you can check it. A time condition can have up to 100.
 
 > **Tip:** One-off closed days stay in the list after they pass. Remove old ones from time to time.
+
+## Close from a calendar
+
+A time condition can also close while an event is on in a [calendar](app:/calendars/), so staff can add a snow day to a shared calendar without opening Veyra.
+
+1. Add the calendar under **Calendars**.
+2. Under **Closed during events of a calendar**, choose it.
+3. To use only some events, fill in **Only events whose title contains**, such as *closed*. Empty means every event closes the condition.
+4. Save, then choose **Deploy changes** in the top bar.
+
+Veyra checks calendars every few minutes, so a new event can take that long to count. An override forced from this page or a phone wins over the calendar. If Veyra can't read the calendar, it keeps using the events it last read.
 
 ## Open or close early
 

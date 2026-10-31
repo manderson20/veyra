@@ -1,6 +1,6 @@
 # FreePBX feature gap analysis
 
-Veyra 0.27.68 compared with FreePBX 16/17, every free module and every
+Veyra 0.27.69 compared with FreePBX 16/17, every free module and every
 Sangoma commercial module (FreePBX add-ons and PBXact), as of
 2026-10-31. First written before the public release (now Milestone 23) so that no
 FreePBX feature is left out of the roadmap only because the current
@@ -228,7 +228,7 @@ below are the reasons a FreePBX site would hesitate.
 | Time conditions with time zone, holidays, "open now" | yes | ✔ | |
 | Reusable time groups | schedule lives in the condition | ◐ | P3 |
 | Floating holidays (fourth Thursday) and month-day ranges | yearly dates and ranges, one-off dates and ranges, weekday rules (0.27.1, #113) | ✔ | — |
-| Calendar-driven time conditions (Google, iCal, CalDAV, Outlook) | calendars exist and drive bells, not time conditions | ◐ | P2 (small: link the existing calendars) |
+| Calendar-driven time conditions (Google, iCal, CalDAV, Outlook) | a time condition closes during events of a linked iCal or Google calendar, optionally by title; no direct Outlook or CalDAV connection, only their ICS links | ✔ | P2 (small: link the existing calendars) |
 | **Time condition override** (feature code, BLF, temporary vs permanent, PIN) | `*27<index>`, lit BLF, temporary or permanent, optional PIN, also from the page | ✔ | **P1** |
 | **Call Flow Control** (day/night toggles `*28x`, BLF, 100 switches) | Telephony → Call Flows: `*28<index>` (0–99), lit BLF, optional PIN, also from the page and API | ✔ | **P1** |
 | Ring groups: ringall, sequential | yes | ✔ | |

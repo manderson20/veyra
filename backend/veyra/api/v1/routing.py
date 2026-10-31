@@ -30,6 +30,7 @@ from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
 from veyra.core.models import (
+    Calendar,
     Extension,
     InboundRoute,
     Organization,
@@ -130,6 +131,9 @@ class TimeConditionIn(BaseModel):
     timezone: str | None = Field(None, max_length=64)
     ranges: list[TimeRangeIn] = Field(min_length=1, max_length=50)
     holidays: list[str] = Field(default_factory=list, max_length=100)
+    # Closed while an event of this calendar is on; match: text in its title.
+    closed_calendar_id: uuid.UUID | None = None
+    closed_calendar_match: str | None = Field(None, max_length=100)
     # Override from a phone (docs/CALL_FEATURES.md §4.6): the digits after
     # the override code (*27<code_index>); None: no code. PIN is write-only.
     code_index: int | None = Field(None, ge=0, le=99)
@@ -177,6 +181,8 @@ class TimeConditionPatch(BaseModel):
     holidays: list[str] | None = Field(None, max_length=100)
     code_index: int | None = Field(None, ge=0, le=99)
     pin: str | None = Field(None, max_length=10)
+    closed_calendar_id: uuid.UUID | None = None
+    closed_calendar_match: str | None = Field(None, max_length=100)
 
 
 class TimeConditionOverrideIn(BaseModel):
@@ -198,6 +204,9 @@ class TimeConditionOut(BaseModel):
     # What the schedule says now, and what callers get (the override wins).
     open_now: bool
     effective_open: bool
+    closed_calendar_id: uuid.UUID | None = None
+    closed_calendar_match: str | None = None
+    calendar_closed: bool = False
     override: Literal["open", "closed"] | None
     override_temporary: bool
     override_by: str | None
@@ -236,7 +245,10 @@ def _tc_outs(db: Session, rows: list[TimeCondition]) -> list[TimeConditionOut]:
             ranges=[TimeRangeIn(**x) for x in (r.ranges or [])],
             holidays=list(r.holidays or []),
             open_now=open_now,
-            effective_open=(r.override == "open") if r.override else open_now,
+            effective_open=(r.override == "open") if r.override else open_now and not closed,
+            closed_calendar_id=r.closed_calendar_id,
+            closed_calendar_match=r.closed_calendar_match,
+            calendar_closed=closed,
             override=r.override,
             override_temporary=bool(r.override_temporary),
             override_by=r.override_by,
@@ -250,6 +262,7 @@ def _tc_outs(db: Session, rows: list[TimeCondition]) -> list[TimeConditionOut]:
         )
         for r in rows
         for open_now in [routing.is_open(list(r.ranges or []), list(r.holidays or []), r.timezone)]
+        for closed in [switches.calendar_closed(db, r)]
     ]
 
 
@@ -273,6 +286,16 @@ def _check_tc_index(
             code="code_index_in_use",
             errors=[{"field": "code_index", "message": "already used by another time condition"}],
         )
+
+
+def _check_tc_calendar(
+    db: Session, organization_id: uuid.UUID, calendar_id: uuid.UUID | None
+) -> None:
+    if calendar_id is None:
+        return
+    calendar = db.get(Calendar, calendar_id)
+    if calendar is None or calendar.organization_id != organization_id:
+        raise _validation("closed_calendar_id", "not a calendar of this organization")
 
 
 def _get_tc(db: Session, principal: Principal, tc_id: uuid.UUID, perm: str) -> TimeCondition:
@@ -319,6 +342,7 @@ def create_time_condition(
 ) -> TimeConditionOut:
     org = _org_for_write(db, principal, body.organization_id)
     _check_tc_index(db, org.id, body.code_index, None)
+    _check_tc_calendar(db, org.id, body.closed_calendar_id)
     tc = TimeCondition(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -328,6 +352,8 @@ def create_time_condition(
         ranges=[r.model_dump() for r in body.ranges],
         holidays=body.holidays,
         code_index=body.code_index,
+        closed_calendar_id=body.closed_calendar_id,
+        closed_calendar_match=(body.closed_calendar_match or "").strip() or None,
     )
     if body.pin:
         tc.pin_ciphertext = installation_key(request).encrypt(
@@ -382,6 +408,16 @@ def update_time_condition(
         _check_tc_index(db, tc.organization_id, changes["code_index"], tc.id)
         tc.code_index = changes["code_index"]
         details["code_index"] = changes["code_index"]
+    if "closed_calendar_id" in changes:
+        _check_tc_calendar(db, tc.organization_id, changes["closed_calendar_id"])
+        if changes["closed_calendar_id"] != tc.closed_calendar_id:
+            tc.closed_calendar_id = changes["closed_calendar_id"]
+            details["closed_calendar_id"] = str(changes["closed_calendar_id"])
+    if "closed_calendar_match" in changes:
+        match = (changes["closed_calendar_match"] or "").strip() or None
+        if match != tc.closed_calendar_match:
+            tc.closed_calendar_match = match
+            details["closed_calendar_match"] = match
     if "pin" in changes:
         pin = (changes["pin"] or "").strip() or None
         if pin and not _TC_PIN_RE.match(pin):
