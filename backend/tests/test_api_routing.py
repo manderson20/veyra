@@ -334,6 +334,39 @@ def test_inbound_routes_crud_validation_and_did_uniqueness(admin):
     assert admin.delete(f"{INBOUND}/{route['id']}").status_code == 204
 
 
+def test_outbound_route_hours_need_an_organization_and_spare_911(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    every = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    tc = admin.post(
+        "/api/v1/routing/time-conditions",
+        json={
+            "organization_id": org["id"],
+            "name": "Route hours",
+            "timezone": "UTC",
+            "ranges": [{"days": every, "start": "08:00", "end": "16:00"}],
+        },
+    ).json()
+    trunk = _trunk(admin)
+    base = {
+        "patterns": [{"prefix": "", "match": "NXXNXXXXXX", "prepend": ""}],
+        "trunk_ids": [trunk["id"]],
+        "time_condition_id": tc["id"],
+    }
+    url = "/api/v1/routing/outbound"
+    r = admin.post(url, json={**base, "name": "No org"})
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "time_condition_id"
+    r = admin.post(
+        url, json={**base, "name": "E", "organization_id": org["id"], "is_emergency": True}
+    )
+    assert r.status_code == 422 and "emergency" in r.json()["detail"]
+    r = admin.post(url, json={**base, "name": "LD", "organization_id": org["id"]})
+    assert r.status_code == 201, r.text
+    assert r.json()["time_condition_id"] == tc["id"]
+    assert admin.get(f"/api/v1/routing/time-conditions/{tc['id']}").json()["in_use_by"] == 1
+    r = admin.patch(f"{url}/{r.json()['id']}", json={"is_emergency": True})
+    assert r.status_code == 422
+
+
 def test_outbound_routes_order_warnings_and_trunk_links(admin):
     a = _trunk(admin, "Carrier A")
     b = _trunk(admin, "Backup", auth_mode="ip", username=None, password=None, host="198.51.100.7")

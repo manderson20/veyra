@@ -4,7 +4,7 @@ summary: Decide which dialled numbers go out to the carrier, through which trunk
 audience: admin
 section: Calls and call flows
 order: 30
-reviewed: 0.27.69
+reviewed: 0.27.73
 checked: 2026-10-30T15:10Z
 pages:
   - /routing/outbound/
@@ -107,6 +107,12 @@ Veyra checks the routes and lists problems under **Check these routes**:
 - **No enabled emergency route**: 911 dialled from a phone will not reach a carrier. Fix this first.
 - **Extensions with no emergency caller ID**: enabled extensions with no emergency caller ID of their own or on their site, while an emergency route has no caller ID number. The trunk's default number is sent for their emergency calls. See [Emergency calling (911)](guide:emergency-calling).
 - **Route … has no enabled trunk**: its calls will fail. A disabled trunk is shown struck through in the **Trunks** column.
+
+## Limit a route to certain hours
+
+A route used by one organization can work only while a [time condition](guide:business-hours-and-holidays) is open, for example no long distance after hours. Under **Used by**, choose the organization, then choose the time condition under **Only while this time condition is open**. Save and deploy.
+
+Outside those hours, callers hear that the call is invalid, and Call History marks it as refused. The call doesn't try the next route, so check that no other route should have carried it. Emergency routes can't be limited, and a route used by every organization can't have this setting.
 
 ## Who may use which route
 

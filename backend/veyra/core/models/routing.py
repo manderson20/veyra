@@ -212,6 +212,10 @@ class OutboundRoute(UUIDPrimaryKey, Timestamps, Base):
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
+    # Refused while this time condition is closed; never on an emergency route.
+    time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("time_conditions.id", ondelete="SET NULL")
+    )
 
 
 class OutboundRouteTrunk(Base):

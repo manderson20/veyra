@@ -1245,6 +1245,7 @@ export interface OutboundRoute {
   description: string | null;
   position: number;
   is_emergency: boolean;
+  time_condition_id?: string | null;
   site_id?: string | null;
   is_enabled: boolean;
   patterns: OutboundPattern[];
@@ -1270,6 +1271,7 @@ export interface OutboundRouteInput {
   name?: string;
   description?: string | null;
   is_emergency?: boolean;
+  time_condition_id?: string | null;
   site_id?: string | null;
   is_enabled?: boolean;
   patterns?: OutboundPattern[];

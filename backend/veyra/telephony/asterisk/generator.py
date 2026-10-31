@@ -1398,7 +1398,9 @@ def _dialplan(
         " same => n,Hangup()",
         "",
     ]
-    lines += _outbound_contexts(outbound, trunk_info, recording, prompts_dir, spaces, cos_all)
+    lines += _outbound_contexts(
+        outbound, trunk_info, recording, prompts_dir, spaces, cos_all, conditions
+    )
     policies = {
         str(p.get("organization") or ""): p for p in (snapshot.get("caller_block_policies") or [])
     }
@@ -2881,6 +2883,34 @@ def _internal(
     return lines
 
 
+def _route_hours(cond: dict[str, Any] | None) -> list[str]:
+    """An outbound route limited to a time condition (issue #142): refused while
+    closed, the override and a closing calendar event counted as for inbound."""
+    if cond is None:
+        return []
+    key = _check_value(str(cond["key"]), "time condition key")
+    org = _slug(cond.get("organization") or "", f"organization of time condition {key}")
+    tz = routing.check_timezone(str(cond.get("timezone") or "UTC"))
+    opened = routing.gotoiftime_args(routing.check_ranges(list(cond.get("ranges") or [])), tz)
+    closed = routing.holiday_apps(
+        routing.check_holidays(list(cond.get("holidays") or [])), tz, "hoursclosed"
+    )
+    return [
+        f" same => n,Set(VEYRA_TC=${{DB({SWITCH_FAMILY}/tc/{org}/{key})}})",
+        ' same => n,GotoIf($["${VEYRA_TC}"="open"]?hoursopen)',
+        ' same => n,GotoIf($["${VEYRA_TC}"="closed"]?hoursclosed)',
+        ' same => n,GotoIf($["${VEYRA_TC}"="calendar"]?hoursclosed)',
+        *[f" same => n,{app}" for app in closed],
+        *[f" same => n,GotoIfTime({args}?hoursopen)" for args in opened],
+        " same => n(hoursclosed),NoOp(Veyra: this route is closed at this time)",
+        " same => n,Set(CDR(veyra_flag)=denied)",
+        " same => n,Answer()",
+        " same => n,Playback(pbx-invalid)",
+        " same => n,Hangup(21)",
+        " same => n(hoursopen),NoOp()",
+    ]
+
+
 def _outbound_contexts(
     routes: list[dict[str, Any]],
     trunks: dict[str, dict[str, Any]],
@@ -2888,6 +2918,7 @@ def _outbound_contexts(
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
     spaces: list[str] | None = None,
     cos: Cos | None = None,
+    conditions: dict[str, dict[str, Any]] | None = None,
 ) -> list[str]:
     """``veyra-outbound`` of each namespace and one shared ``veyra-out-<slug>``
     per route, emergency routes first (docs/TRUNKS_ROUTING.md §4, §6, §7). A
@@ -2950,6 +2981,11 @@ def _outbound_contexts(
                 # The class of service (docs/CALL_FEATURES.md §3.8) never blocks an emergency route.
                 *(cos_guard if not emergency else []),
                 *(cos_limits if not emergency else []),
+                *(
+                    _route_hours((conditions or {}).get(str(r.get("time_condition"))))
+                    if not emergency
+                    else []
+                ),
                 *_record_outbound(recording or [], prompts_dir),
             ]
             if emergency:

@@ -1,6 +1,6 @@
 # FreePBX feature gap analysis
 
-Veyra 0.27.72 compared with FreePBX 16/17, every free module and every
+Veyra 0.27.73 compared with FreePBX 16/17, every free module and every
 Sangoma commercial module (FreePBX add-ons and PBXact), as of
 2026-10-31. First written before the public release (now Milestone 23) so that no
 FreePBX feature is left out of the roadmap only because the current
@@ -203,7 +203,7 @@ below are the reasons a FreePBX site would hesitate.
 | PIN sets (prompt for PIN, record in CDR) and Pinset Pro (per-extension pinless dialing, PIN reports) | no | ✘ | P2 |
 | **Class of Service** (allow/deny routes, feature codes, groups, queues, conferences, paging per class of extensions) and **Extension Routing** (allowed extensions per route) | classes of service per organization: allowed outbound routes and feature codes, outside forwards and follow-me, intercom, fax, monitoring, outside-call cap; chosen ring groups, queues and conference rooms; dialled paging on or off per class, not per zone | ✔ | **P1** |
 | Intra-company route type | no | ✘ | P3 |
-| Time group restriction on a route | no | ✘ | P2 |
+| Time group restriction on a route | a route of one organization can require an open time condition; the call is refused, it does not fall to the next route | ◐ | P2 |
 | Music on hold on outbound | no | ✘ | P3 |
 | Destination on congestion, Route Congestion Messages | all-circuits-busy prompt and congestion tone; no destination or per-route message | ◐ | P3 |
 | Dial pattern wizards (local NPA-NXX, toll-free, N11, 911/933 with prefixes) | no wizard; a pattern editor with an example | ✘ | P3 |

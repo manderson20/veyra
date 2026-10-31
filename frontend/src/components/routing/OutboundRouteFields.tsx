@@ -3,7 +3,7 @@
 
 import { Checkbox, SelectField, Switch, TextArea, TextField } from "@/components/ui";
 import { useApiData } from "@/hooks/useApiData";
-import type { Page, Site } from "@/lib/types";
+import type { Page, Site, TimeCondition } from "@/lib/types";
 import type { OutboundPattern, OutboundRoute, OutboundRouteInput } from "@/lib/types";
 import { EMPTY_PATTERN, PatternsEditor } from "./PatternsEditor";
 import { TrunkOrderEditor, type TrunkOption } from "./TrunkOrderEditor";
@@ -12,6 +12,8 @@ export interface OutboundRouteDraft {
   name: string;
   description: string;
   is_emergency: boolean;
+  /** Refused while this condition is closed; needs the route's organization. */
+  time_condition_id: string;
   is_enabled: boolean;
   patterns: OutboundPattern[];
   trunk_ids: string[];
@@ -27,6 +29,7 @@ export const EMPTY_OUTBOUND_ROUTE: OutboundRouteDraft = {
   name: "",
   description: "",
   is_emergency: false,
+  time_condition_id: "",
   is_enabled: true,
   patterns: [{ ...EMPTY_PATTERN }],
   trunk_ids: [],
@@ -41,6 +44,7 @@ export function outboundRouteDraft(r: OutboundRoute): OutboundRouteDraft {
     name: r.name,
     description: r.description ?? "",
     is_emergency: r.is_emergency,
+    time_condition_id: r.time_condition_id ?? "",
     is_enabled: r.is_enabled,
     patterns: r.patterns.map((p) => ({ ...p })),
     trunk_ids: r.trunks.map((t) => t.id),
@@ -56,6 +60,7 @@ export function outboundRouteBody(d: OutboundRouteDraft): OutboundRouteInput {
     name: d.name.trim(),
     description: d.description.trim() || null,
     is_emergency: d.is_emergency,
+    time_condition_id: !d.is_emergency && d.organization_id ? d.time_condition_id || null : null,
     is_enabled: d.is_enabled,
     patterns: d.patterns.map((p) => ({ prefix: p.prefix.trim(), match: p.match.trim(), prepend: p.prepend.trim() })),
     trunk_ids: d.trunk_ids,
@@ -81,6 +86,7 @@ export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled,
   organizations?: { id: string; name: string }[];
 }) {
   const sites = useApiData<Page<Site>>(draft.is_emergency ? "/sites" : null, { limit: 200 });
+  const conditions = useApiData<Page<TimeCondition>>(!draft.is_emergency && draft.organization_id ? "/routing/time-conditions" : null, { organization_id: draft.organization_id, limit: 200 });
   return (
     <>
       <div className="form-grid">
@@ -98,6 +104,12 @@ export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled,
           options={[{ value: "", label: "All organizations" }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]}
           help="A route of one organization is never used by the others' phones."
           onChange={(e) => onChange({ organization_id: e.target.value })} />
+      ) : null}
+      {!draft.is_emergency && draft.organization_id ? (
+        <SelectField label="Only while this time condition is open" disabled={disabled} value={draft.time_condition_id} error={errors.time_condition_id}
+          options={[{ value: "", label: "Any time" }, ...(conditions.data?.items ?? []).map((c) => ({ value: c.id, label: c.name }))]}
+          help="Outside those hours, calls matching this route are refused; they don't try the next route."
+          onChange={(e) => onChange({ time_condition_id: e.target.value })} />
       ) : null}
       <Checkbox label="Emergency route" description="Emergency routes are evaluated before all others and cannot be moved below them. Use for 911 and similar numbers." checked={draft.is_emergency} disabled={disabled}
         onChange={(e) => onChange({ is_emergency: e.target.checked })} />

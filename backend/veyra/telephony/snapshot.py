@@ -1150,6 +1150,7 @@ def _routing(
             )
         )
     )
+    used_conditions |= {r.time_condition_id for r in outbound if r.time_condition_id}
     inbound_out = []
     for r in inbound:
         if r.organization_id not in active_orgs:
@@ -1217,6 +1218,7 @@ def _routing(
                 "caller_id_force": bool(r.caller_id_force),
                 # None: every organization (docs/MULTI_TENANCY.md §4).
                 "organization": org_slug.get(r.organization_id) if r.organization_id else None,
+                "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
             }
             for r in outbound
             if r.organization_id is None or r.organization_id in active_orgs

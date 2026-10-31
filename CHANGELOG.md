@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.73 — 2026-11-01
+
+Migration 0081 adds one outbound route column. Limiting a route needs **Deploy changes**.
+
+### Added
+- **Outbound routes limited by hours** (#142): a route of one organization can work only while a chosen time condition is open, for example no long distance after hours. Calls are refused outside those hours and don't try the next route. Emergency routes can't be limited.
+
 ## 0.27.72 — 2026-11-01
 
 No migration. The new codes need **Deploy changes**.

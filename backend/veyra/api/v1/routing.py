@@ -234,6 +234,13 @@ def _tc_outs(db: Session, rows: list[TimeCondition]) -> list[TimeConditionOut]:
         ):
             if cid is not None:
                 counts[cid] = n
+        for cid, n in db.execute(
+            select(OutboundRoute.time_condition_id, func.count())
+            .where(OutboundRoute.time_condition_id.in_(ids))
+            .group_by(OutboundRoute.time_condition_id)
+        ):
+            if cid is not None:
+                counts[cid] = counts.get(cid, 0) + n
     return [
         TimeConditionOut(
             id=r.id,
@@ -1119,6 +1126,8 @@ class OutboundRouteIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str | None = Field(None, max_length=2000)
     is_emergency: bool = False
+    # Refused while this time condition is closed.
+    time_condition_id: uuid.UUID | None = None
     # An emergency route bound to one site (docs/PRODUCTION_HARDENING.md §6).
     site_id: uuid.UUID | None = None
     is_enabled: bool = True
@@ -1180,6 +1189,7 @@ class OutboundRoutePatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, max_length=2000)
     is_emergency: bool | None = None
+    time_condition_id: uuid.UUID | None = None
     site_id: uuid.UUID | None = None
     is_enabled: bool | None = None
     patterns: list[PatternIn] | None = Field(None, min_length=1, max_length=50)
@@ -1203,6 +1213,7 @@ class OutboundRouteOut(BaseModel):
     description: str | None
     position: int
     is_emergency: bool
+    time_condition_id: uuid.UUID | None = None
     site_id: uuid.UUID | None = None
     is_enabled: bool
     patterns: list[PatternIn]
@@ -1255,6 +1266,7 @@ def _or_outs(db: Session, rows: list[OutboundRoute]) -> list[OutboundRouteOut]:
             description=r.description,
             position=r.position,
             is_emergency=r.is_emergency,
+            time_condition_id=r.time_condition_id,
             site_id=r.site_id,
             is_enabled=r.is_enabled,
             patterns=[PatternIn(**p) for p in (r.patterns or [])],
@@ -1363,6 +1375,19 @@ def list_outbound(
     return OutboundRoutesOut(items=outs, warnings=_warnings(db, outs))
 
 
+def _check_route_hours(db: Session, body: OutboundRouteIn) -> None:
+    """Time conditions belong to one organization, and 911 is never refused."""
+    if body.time_condition_id is None:
+        return
+    if body.is_emergency:
+        raise _validation("time_condition_id", "an emergency route always works")
+    tc = db.get(TimeCondition, body.time_condition_id)
+    if tc is None or tc.organization_id != body.organization_id:
+        raise _validation(
+            "time_condition_id", "choose an organization and one of its time conditions"
+        )
+
+
 @router.post(
     "/outbound",
     response_model=OutboundRouteOut,
@@ -1378,6 +1403,7 @@ def create_outbound(
     if db.scalar(select(OutboundRoute.id).where(OutboundRoute.name == body.name)) is not None:
         raise conflict(f"An outbound route named {body.name!r} already exists.", "name_in_use")
     _check_route_org(db, body.organization_id)
+    _check_route_hours(db, body)
     position = (db.scalar(select(func.max(OutboundRoute.position))) or 0) + 1
     route = OutboundRoute(
         id=uuid.uuid4(),
@@ -1386,6 +1412,7 @@ def create_outbound(
         description=(body.description or "").strip() or None,
         position=position,
         is_emergency=body.is_emergency,
+        time_condition_id=body.time_condition_id,
         site_id=body.site_id,
         is_enabled=body.is_enabled,
         patterns=[p.model_dump() for p in body.patterns],
@@ -1477,6 +1504,7 @@ def update_outbound(
         "name": route.name,
         "description": route.description,
         "is_emergency": route.is_emergency,
+        "time_condition_id": route.time_condition_id,
         "is_enabled": route.is_enabled,
         "patterns": route.patterns,
         "trunk_ids": [t.id for t in _route_trunks(db, [route])[route.id]],
@@ -1497,8 +1525,10 @@ def update_outbound(
         details["description"] = True
     if "organization_id" in changes:
         _check_route_org(db, validated.organization_id)
+    _check_route_hours(db, validated)
     for field in (
         "is_emergency",
+        "time_condition_id",
         "is_enabled",
         "caller_id_number",
         "caller_id_force",

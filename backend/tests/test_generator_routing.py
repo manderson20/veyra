@@ -36,6 +36,40 @@ def _trunk(slug="carrier", **over):
     return t
 
 
+def test_route_hours_refuse_but_never_on_an_emergency_route():
+    cond = {
+        "key": "abc",
+        "organization": "example",
+        "timezone": "UTC",
+        "ranges": [{"days": ["mon"], "start": "08:00", "end": "16:00"}],
+        "holidays": [],
+    }
+    lines = generator._route_hours(cond)
+    text = "\n".join(lines)
+    assert "veyra/switch/tc/example/abc" in text
+    assert text.index("?hoursopen)") < text.index("n(hoursclosed),") < text.index("n(hoursopen),")
+    assert generator._route_hours(None) == []
+    routes = [
+        {
+            "slug": "ld",
+            "patterns": [{"prefix": "", "match": "NXXNXXXXXX", "prepend": ""}],
+            "trunks": [],
+            "time_condition": "abc",
+        },
+        {
+            "slug": "e911",
+            "is_emergency": True,
+            "patterns": [{"prefix": "", "match": "911", "prepend": ""}],
+            "trunks": [],
+            "time_condition": "abc",
+        },
+    ]
+    out = "\n".join(generator._outbound_contexts(routes, {}, conditions={"abc": cond}))
+    start = out.index("[veyra-out-ld]")
+    assert "n(hoursclosed)," in out[start:]
+    assert "n(hoursclosed)," not in out[out.index("[veyra-out-e911]") : start]
+
+
 def _route(slug="local", **over):
     r = {
         "slug": slug,
