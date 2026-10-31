@@ -1,6 +1,6 @@
 # FreePBX feature gap analysis
 
-Veyra 0.27.73 compared with FreePBX 16/17, every free module and every
+Veyra 0.27.74 compared with FreePBX 16/17, every free module and every
 Sangoma commercial module (FreePBX add-ons and PBXact), as of
 2026-10-31. First written before the public release (now Milestone 23) so that no
 FreePBX feature is left out of the roadmap only because the current
@@ -174,7 +174,7 @@ below are the reasons a FreePBX site would hesitate.
 |---|---|---|---|
 | DID match, catch-all, per-trunk restriction | yes, with NANP aliasing | ✔ | |
 | DID patterns (`_1NXX...`) | exact DIDs only | ◐ | P3 |
-| Caller-ID based routing (CID number, anonymous/blocked/unknown) | no | ✘ | P2 |
+| Caller-ID based routing (CID number, anonymous/blocked/unknown) | ordered rules on an inbound route: hidden number, exact number or starting digits, to any destination | ✔ | P2 |
 | CID priority routes | no | ✘ | P3 |
 | Alert-Info (distinctive ring, auto-answer) | ring groups send Alert-Info; none on the route, no auto-answer option | ◐ | P2 |
 | CID name prefix | yes | ✔ | |

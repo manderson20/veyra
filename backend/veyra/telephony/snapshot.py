@@ -38,6 +38,7 @@ from veyra.core.models import (
     ExtensionState,
     FaxInbox,
     FollowMe,
+    InboundCallerRule,
     InboundRoute,
     Installation,
     IvrEntry,
@@ -1151,6 +1152,9 @@ def _routing(
         )
     )
     used_conditions |= {r.time_condition_id for r in outbound if r.time_condition_id}
+    caller_rules: dict[Any, list[InboundCallerRule]] = {}
+    for rule in db.scalars(select(InboundCallerRule).order_by(InboundCallerRule.position)):
+        caller_rules.setdefault(rule.route_id, []).append(rule)
     inbound_out = []
     for r in inbound:
         if r.organization_id not in active_orgs:
@@ -1169,6 +1173,12 @@ def _routing(
                 ),
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
                 "caller_id_prefix": r.caller_id_prefix,
+                # A rule whose target was deleted is skipped: the call takes the route.
+                "caller_rules": [
+                    {"match": c.match, "number": c.number, "destination": dest}
+                    for c in caller_rules.get(r.id, [])
+                    if (dest := targets.dest(c, "destination")).get("type") != "missing"
+                ],
                 "organization": str(r.organization_id),
                 "organization_slug": org_slug.get(r.organization_id, ""),
             }

@@ -3211,11 +3211,44 @@ def _destination_lines(r: dict[str, Any], conditions: dict[str, dict[str, Any]])
         return _destination_lines_of(r, conditions)
 
 
+def _caller_rules(rules: list[dict[str, Any]]) -> list[str]:
+    """Inbound caller ID rules (issue #142), first match wins. A number matches
+    with or without the carrier's + and country code 1."""
+    out: list[str] = []
+    for i, rule in enumerate(rules, 1):
+        kind = str(rule.get("match") or "")
+        if kind == "anonymous":
+            tests = " | ".join(
+                f'"${{TOLOWER(${{CALLERID(num)}})}}"="{v}"' for v in ANONYMOUS_VALUES
+            )
+            cond = (
+                f'{tests} | "${{CALLERID(num)}}"="" | "${{CALLERID(pres)}}"="prohib_passed_screen"'
+                ' | "${CALLERID(pres)}"="prohib_failed_screen" | "${CALLERID(pres)}"="prohib"'
+                ' | "${CALLERID(pres)}"="prohib_not_screened"'
+            )
+        elif kind in ("number", "prefix"):
+            number = str(rule.get("number") or "")
+            if not re.fullmatch(r"[0-9]{1,20}", number):
+                raise GenerationError(f"caller rule: number {number!r} is not valid")
+            tail = "$" if kind == "number" else ""
+            cond = f'${{REGEX("^\\+?1?{number}{tail}" ${{CALLERID(num)}})}}'
+        else:
+            raise GenerationError(f"caller rule: unknown match {kind!r}")
+        out += [
+            f" same => n,GotoIf($[{cond}]?cidrule{i}:cidnext{i})",
+            f" same => n(cidrule{i}),NoOp(Veyra: caller rule {i} for ${{CALLERID(num)}})",
+            *_goto(rule.get("destination")),
+            f" same => n(cidnext{i}),NoOp()",
+        ]
+    return out
+
+
 def _destination_lines_of(r: dict[str, Any], conditions: dict[str, dict[str, Any]]) -> list[str]:
     out = []
     prefix = r.get("caller_id_prefix")
     if prefix:
         out.append(f" same => n,Set(CALLERID(name)={_prefix(str(prefix))}${{CALLERID(name)}})")
+    out += _caller_rules(list(r.get("caller_rules") or []))
     dest = r.get("destination")
     after = r.get("after_hours")
     cond_key = r.get("time_condition")

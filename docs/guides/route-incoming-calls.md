@@ -4,7 +4,7 @@ summary: Decide where each of your phone numbers (DIDs) rings, with a different 
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.73
+reviewed: 0.27.74
 checked: 2026-10-30T15:10Z
 pages:
   - /routing/inbound/
@@ -63,6 +63,18 @@ Inbound routes are at [Telephony → Inbound Routes](app:/routing/inbound/). You
 - **North American numbers in any form.** A ten-digit DID also answers calls the carrier sends as `1` + ten digits or `+1` + ten digits, and the other way round. You cannot create two routes for the same number in different forms with the same trunk setting. The route's page shows the forms under **Matches**. Numbers of other lengths must match exactly.
 - **One route per number per trunk setting.** You can have one route for a number on **Any trunk** and another for the same number on a specific trunk. On that trunk, the trunk's own route wins.
 - **The catch-all.** An `any` route only takes calls whose number has no route of its own.
+
+## Caller rules
+
+**Caller rules** send some callers somewhere else, for example callers who hide their number to voicemail, or one number to a person. Choose **Add caller rule**, then who it matches and where to send them:
+
+- **Who hide their number**: callers with a withheld or missing number.
+- **With this number**: one number. Enter it with or without the leading 1.
+- **Whose number starts with**: an area code or exchange, such as `573555`.
+
+Rules are checked in order and the first match wins. They run before the route's destination and business hours, so a matching caller goes to the rule's destination at any hour. Calls refused by the [block list](guide:block-callers) never reach them, and neither does a 911 center calling back within the callback window.
+
+Caller ID can be faked, so don't use a rule to give a caller extra access. Save, then choose **Deploy changes**.
 
 ## Business hours
 

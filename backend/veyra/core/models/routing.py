@@ -189,6 +189,53 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class InboundCallerRule(UUIDPrimaryKey, Base):
+    """Sends some callers of an inbound route elsewhere (issue #142), in order,
+    before the route's own destination and hours."""
+
+    __tablename__ = "inbound_caller_rules"
+
+    route_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("inbound_routes.id", ondelete="CASCADE"), index=True
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    position: Mapped[int] = mapped_column(Integer)
+    # "anonymous", "number" (exactly) or "prefix".
+    match: Mapped[str] = mapped_column(String(16))
+    number: Mapped[str | None] = mapped_column(String(24))
+    destination_type: Mapped[str] = mapped_column(String(16))
+    destination_extension_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extensions.id", ondelete="SET NULL")
+    )
+    destination_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL")
+    )
+    destination_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL")
+    )
+    destination_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL")
+    )
+    destination_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL")
+    )
+    destination_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL")
+    )
+    destination_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL")
+    )
+    destination_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL")
+    )
+    destination_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL")
+    )
+    destination_custom_context: Mapped[str | None] = mapped_column(String(64))
+
+
 class OutboundRoute(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "outbound_routes"
 

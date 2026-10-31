@@ -36,6 +36,37 @@ def _trunk(slug="carrier", **over):
     return t
 
 
+def test_caller_rules_come_after_the_callback_and_before_the_destination():
+    lines = generator._caller_rules(
+        [
+            {"match": "anonymous", "destination": {"type": "hangup"}},
+            {"match": "number", "number": "5735550100", "destination": {"type": "hangup"}},
+            {"match": "prefix", "number": "573", "destination": {"type": "hangup"}},
+        ]
+    )
+    text = "\n".join(lines)
+    assert "?cidrule1:cidnext1)" in text and '"${CALLERID(num)}"=""' in text
+    assert 'REGEX("^\\+?1?5735550100$" ${CALLERID(num)})' in text
+    assert 'REGEX("^\\+?1?573" ${CALLERID(num)})' in text
+    assert text.index("n(cidrule1),") < text.index("n(cidnext1),") < text.index("n(cidrule2),")
+    with pytest.raises(generator.GenerationError):
+        generator._caller_rules([{"match": "number", "number": "1;x"}])
+    route = {
+        "did": "5735550100",
+        "organization_slug": "example",
+        "destination": {"type": "extension", "number": "1001"},
+        "caller_rules": [{"match": "anonymous", "destination": {"type": "hangup"}}],
+    }
+    site = {
+        "slug": "main",
+        "organization": "example",
+        "emergency_caller_id_number": "5735550100",
+        "callback_minutes": 30,
+    }
+    out = "\n".join(generator._inbound_contexts([route], {}, [], sites=[site]))
+    assert out.index("VEYRA_ECB=") < out.index("?cidrule1:") < out.index("Goto(veyra-internal,1001")
+
+
 def test_route_hours_refuse_but_never_on_an_emergency_route():
     cond = {
         "key": "abc",

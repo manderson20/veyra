@@ -89,6 +89,7 @@ from veyra.core.models.provisioning import (
 )
 from veyra.core.models.recording import CallRecording, RecordingPolicy
 from veyra.core.models.routing import (
+    InboundCallerRule,
     InboundRoute,
     OutboundRoute,
     OutboundRouteTrunk,
@@ -172,6 +173,7 @@ __all__ = [
     "FirmwareImage",
     "FollowMe",
     "IdentityProvider",
+    "InboundCallerRule",
     "InboundRoute",
     "Installation",
     "InstalledModule",

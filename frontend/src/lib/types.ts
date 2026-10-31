@@ -1146,7 +1146,14 @@ export interface DestinationInput {
 
 export type RouteDestinationType = Exclude<DestinationType, "hangup">;
 
+export interface CallerRule {
+  match: "anonymous" | "number" | "prefix";
+  number: string | null;
+  destination: Destination;
+}
+
 export interface InboundRoute {
+  caller_rules?: CallerRule[];
   id: string;
   organization_id: string;
   organization_name: string;
@@ -1194,6 +1201,7 @@ export interface InboundRoute {
 }
 
 export interface InboundRouteInput {
+  caller_rules?: { match: CallerRule["match"]; number: string | null; destination: DestinationInput }[];
   organization_id?: string;
   did?: string;
   trunk_id?: string | null;

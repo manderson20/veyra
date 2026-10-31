@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.74 — 2026-11-01
+
+Migration 0082 adds a table for caller rules. Using them needs **Deploy changes**.
+
+### Added
+- **Caller ID routing** (#142): an inbound route can send callers who hide their number, one number, or numbers starting with given digits to another destination. Rules run in order after the block list and emergency callback, and before the route's destination and hours.
+
 ## 0.27.73 — 2026-11-01
 
 Migration 0081 adds one outbound route column. Limiting a route needs **Deploy changes**.

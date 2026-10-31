@@ -15,8 +15,8 @@ from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Select, func, or_, select
+from pydantic import BaseModel, Field, field_validator, model_validator
+from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,6 +32,7 @@ from veyra.core.events import Event, bus
 from veyra.core.models import (
     Calendar,
     Extension,
+    InboundCallerRule,
     InboundRoute,
     Organization,
     OutboundRoute,
@@ -121,6 +122,7 @@ class TimeRangeIn(BaseModel):
     end: str
 
 
+MAX_CALLER_RULES = 20
 _TC_PIN_RE = re.compile(r"^[0-9]{4,10}$")
 
 
@@ -599,8 +601,34 @@ DestinationType = Literal[
 ]
 
 
+class CallerRuleIn(BaseModel):
+    match: Literal["anonymous", "number", "prefix"]
+    number: str | None = Field(None, max_length=32)
+    destination: DestinationIn
+
+    @model_validator(mode="after")
+    def _number(self) -> CallerRuleIn:
+        if self.match == "anonymous":
+            self.number = None
+            return self
+        digits = re.sub(r"[\s().+-]", "", self.number or "")
+        if not re.fullmatch(r"[0-9]{1,20}", digits):
+            raise ValueError("enter the caller's number in digits")
+        # 1 and 10 digits: the same North American number either way.
+        self.number = digits[1:] if len(digits) == 11 and digits[0] == "1" else digits
+        return self
+
+
+class CallerRuleOut(BaseModel):
+    match: str
+    number: str | None
+    destination: DestinationOut
+
+
 class InboundRouteIn(BaseModel):
     organization_id: uuid.UUID
+    # In order, before the route's own destination and hours.
+    caller_rules: list[CallerRuleIn] = Field(default_factory=list, max_length=MAX_CALLER_RULES)
     did: str = Field(min_length=1, max_length=40)
     trunk_id: uuid.UUID | None = None
     description: str | None = Field(None, max_length=2000)
@@ -649,6 +677,7 @@ class InboundRouteIn(BaseModel):
 
 
 class InboundRoutePatch(BaseModel):
+    caller_rules: list[CallerRuleIn] | None = Field(None, max_length=MAX_CALLER_RULES)
     did: str | None = Field(None, min_length=1, max_length=40)
     trunk_id: uuid.UUID | None = None
     description: str | None = Field(None, max_length=2000)
@@ -680,6 +709,7 @@ class InboundRoutePatch(BaseModel):
 
 
 class InboundRouteOut(BaseModel):
+    caller_rules: list[CallerRuleOut] = Field(default_factory=list)
     id: uuid.UUID
     organization_id: uuid.UUID
     organization_name: str
@@ -730,9 +760,17 @@ class InboundRouteOut(BaseModel):
 def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
     orgs = _org_names(db, {r.organization_id for r in rows})
     resolver = Resolver(db)
+    rules: dict[uuid.UUID, list[InboundCallerRule]] = {}
+    for rule in db.scalars(
+        select(InboundCallerRule)
+        .where(InboundCallerRule.route_id.in_([r.id for r in rows]))
+        .order_by(InboundCallerRule.position)
+    ):
+        rules.setdefault(rule.route_id, []).append(rule)
     resolver.load(
         [destinations.ref_of(r, "destination") for r in rows]
         + [destinations.ref_of(r, "after_hours") for r in rows]
+        + [destinations.ref_of(c, "destination") for cs in rules.values() for c in cs]
     )
     exts = resolver.extensions
     trunk_ids = {r.trunk_id for r in rows if r.trunk_id}
@@ -769,6 +807,14 @@ def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
                 aliases=routing.did_aliases(r.did),
                 trunk_id=r.trunk_id,
                 trunk_name=trunk.name if trunk else None,
+                caller_rules=[
+                    CallerRuleOut(
+                        match=c.match,
+                        number=c.number,
+                        destination=resolver.out_ref(destinations.ref_of(c, "destination")),
+                    )
+                    for c in rules.get(r.id, [])
+                ],
                 description=r.description,
                 destination_type=r.destination_type,
                 destination_extension_id=r.destination_extension_id,
@@ -862,6 +908,31 @@ def _check_destinations(db: Session, org_id: uuid.UUID, route: InboundRoute) -> 
         raise _validation("trunk_id", "trunk not found")
 
 
+def _set_caller_rules(
+    db: Session, route: InboundRoute, rules: list[CallerRuleIn], org_id: uuid.UUID
+) -> None:
+    for i, rule in enumerate(rules):
+        check_destination(
+            db,
+            org_id,
+            rule.destination,
+            field=f"caller_rules.{i}.destination",
+            allow_hangup=True,
+        )
+    db.execute(delete(InboundCallerRule).where(InboundCallerRule.route_id == route.id))
+    for i, rule in enumerate(rules):
+        row = InboundCallerRule(
+            id=uuid.uuid4(),
+            route_id=route.id,
+            organization_id=org_id,
+            position=i,
+            match=rule.match,
+            number=rule.number,
+        )
+        destinations.apply(row, "destination", rule.destination)
+        db.add(row)
+
+
 def _did_conflict(did: str) -> ProblemError:
     return conflict(f"DID {did} is already routed (for this trunk restriction).", "did_in_use")
 
@@ -936,6 +1007,8 @@ def create_inbound(
     except IntegrityError as e:
         db.rollback()
         raise _did_conflict(body.did) from e
+    _set_caller_rules(db, route, body.caller_rules, org.id)
+    db.flush()
     _audit(
         db,
         ctx,
@@ -1065,6 +1138,9 @@ def update_inbound(
             route.description = desc
             details["description"] = True
     _check_destinations(db, route.organization_id, route)
+    if changes.get("caller_rules") is not None:
+        _set_caller_rules(db, route, body.caller_rules or [], route.organization_id)
+        details["caller_rules"] = len(body.caller_rules or [])
     if not details:
         return _ir_outs(db, [route])[0]
     try:

@@ -334,6 +334,61 @@ def test_inbound_routes_crud_validation_and_did_uniqueness(admin):
     assert admin.delete(f"{INBOUND}/{route['id']}").status_code == 204
 
 
+def test_inbound_caller_rules(admin):
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    ext = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1601", "display_name": "Rules"},
+    ).json()
+    dest = {"type": "extension", "extension_id": ext["id"]}
+    r = admin.post(
+        "/api/v1/routing/inbound",
+        json={
+            "organization_id": org["id"],
+            "did": "5735550177",
+            "destination_type": "extension",
+            "destination_extension_id": ext["id"],
+            "caller_rules": [
+                {"match": "anonymous", "number": "9", "destination": {"type": "hangup"}},
+                {"match": "number", "number": "+1 (573) 555-0100", "destination": dest},
+            ],
+        },
+    )
+    assert r.status_code == 201, r.text
+    route = r.json()
+    rules = route["caller_rules"]
+    assert [x["number"] for x in rules] == [None, "5735550100"]
+    assert rules[1]["destination"]["extension_id"] == ext["id"]
+    url = f"/api/v1/routing/inbound/{route['id']}"
+    other = admin.post(
+        "/api/v1/ring-groups",
+        json={"organization_id": org["id"], "name": "Rule group", "number": "6601"},
+    ).json()
+    r = admin.patch(
+        url,
+        json={
+            "caller_rules": [
+                {
+                    "match": "prefix",
+                    "number": "573",
+                    "destination": {"type": "ring_group", "ring_group_id": other["id"]},
+                }
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    # The rule holds its target: the group can't be deleted from under it.
+    r = admin.delete(f"/api/v1/ring-groups/{other['id']}")
+    assert r.status_code == 409 and "caller rule" in r.text
+    r = admin.patch(url, json={"caller_rules": []})
+    assert r.status_code == 200 and r.json()["caller_rules"] == []
+    r = admin.patch(url, json={"caller_rules": [{"match": "number", "destination": dest}]})
+    assert r.status_code == 422
+    bad = {"type": "extension", "extension_id": str(route["id"])}
+    r = admin.patch(url, json={"caller_rules": [{"match": "anonymous", "destination": bad}]})
+    assert r.status_code == 422
+
+
 def test_outbound_route_hours_need_an_organization_and_spare_911(admin):
     org = admin.get("/api/v1/organizations").json()["items"][0]
     every = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]

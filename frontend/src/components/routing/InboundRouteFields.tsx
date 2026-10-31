@@ -2,12 +2,19 @@
 "use client";
 
 import { DestinationPicker, useDestinationOptions } from "@/components/routing/DestinationPicker";
-import { SelectField, Switch, TextArea, TextField } from "@/components/ui";
+import { Button, SelectField, Switch, TextArea, TextField } from "@/components/ui";
 import { destinationBody, destinationComplete, destinationDraft, EMPTY_DESTINATION, type DestinationDraft } from "@/lib/routing";
-import type { InboundRoute, InboundRouteInput, Page, RouteDestinationType, TimeCondition, TrunkPage } from "@/lib/types";
+import type { CallerRule, InboundRoute, InboundRouteInput, Page, RouteDestinationType, TimeCondition, TrunkPage } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 
+export interface CallerRuleDraft {
+  match: CallerRule["match"];
+  number: string;
+  destination: DestinationDraft;
+}
+
 export interface InboundRouteDraft {
+  caller_rules: CallerRuleDraft[];
   did: string;
   trunk_id: string;
   description: string;
@@ -19,6 +26,7 @@ export interface InboundRouteDraft {
 }
 
 export const EMPTY_INBOUND_ROUTE: InboundRouteDraft = {
+  caller_rules: [],
   did: "",
   trunk_id: "",
   description: "",
@@ -31,6 +39,7 @@ export const EMPTY_INBOUND_ROUTE: InboundRouteDraft = {
 
 export function inboundRouteDraft(r: InboundRoute): InboundRouteDraft {
   return {
+    caller_rules: (r.caller_rules ?? []).map((c) => ({ match: c.match, number: c.number ?? "", destination: destinationDraft(c.destination) })),
     did: r.did,
     trunk_id: r.trunk_id ?? "",
     description: r.description ?? "",
@@ -72,6 +81,7 @@ export function inboundRouteBody(d: InboundRouteDraft): InboundRouteInput {
   const dest = destinationBody(d.destination);
   const after = d.time_condition_id ? destinationBody(d.after_hours) : null;
   return {
+    caller_rules: d.caller_rules.map((c) => ({ match: c.match, number: c.match === "anonymous" ? null : c.number.trim(), destination: destinationBody(c.destination) })),
     did: d.did.trim(),
     trunk_id: d.trunk_id || null,
     description: d.description.trim() || null,
@@ -104,7 +114,7 @@ export function inboundRouteBody(d: InboundRouteDraft): InboundRouteInput {
 }
 
 export function inboundRouteValid(d: InboundRouteDraft): boolean {
-  return d.did.trim().length > 0 && destinationComplete(d.destination) && (!d.time_condition_id || destinationComplete(d.after_hours));
+  return d.did.trim().length > 0 && d.caller_rules.every((c) => destinationComplete(c.destination) && (c.match === "anonymous" || c.number.trim().length > 0)) && destinationComplete(d.destination) && (!d.time_condition_id || destinationComplete(d.after_hours));
 }
 
 /**
@@ -161,6 +171,27 @@ export function InboundRouteFields({ draft, onChange, errors, organizationId, cu
         <DestinationPicker label="After-hours destination" idBase="ir-after" draft={draft.after_hours} onChange={(after_hours) => onChange({ after_hours })} options={options}
           current={current?.after_hours} error={afterError} disabled={disabled} />
       ) : null}
+      <div className="stack stack--sm">
+        <span className="field__label">Caller rules</span>
+        <p className="subtle">Checked in order, before the destination and hours above. The first match wins. They don't override emergency callbacks or the block list.</p>
+        {draft.caller_rules.map((rule, i) => {
+          const set = (patch: Partial<CallerRuleDraft>) => onChange({ caller_rules: draft.caller_rules.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+          return (
+            <div key={i} className="stack stack--sm">
+              <div className="form-grid">
+                <SelectField label={`Rule ${i + 1}: callers`} disabled={disabled} value={rule.match} error={errors[`caller_rules.${i}.number`]}
+                  options={[{ value: "anonymous", label: "Who hide their number" }, { value: "number", label: "With this number" }, { value: "prefix", label: "Whose number starts with" }]}
+                  onChange={(e) => set({ match: e.target.value as CallerRule["match"] })} />
+                {rule.match !== "anonymous" ? <TextField label="Number" required inputMode="tel" disabled={disabled} value={rule.number} placeholder="5735550100" onChange={(e) => set({ number: e.target.value })} /> : null}
+              </div>
+              <DestinationPicker label={`Rule ${i + 1}: send to`} idBase={`ir-rule-${i}`} draft={rule.destination} onChange={(destination) => set({ destination })} options={options}
+                error={errors[`caller_rules.${i}.destination`]} disabled={disabled} />
+              <div><Button size="sm" disabled={disabled} onClick={() => onChange({ caller_rules: draft.caller_rules.filter((_, j) => j !== i) })}>Remove rule {i + 1}</Button></div>
+            </div>
+          );
+        })}
+        <div><Button size="sm" disabled={disabled || !organizationId || draft.caller_rules.length >= 20} onClick={() => onChange({ caller_rules: [...draft.caller_rules, { match: "anonymous", number: "", destination: EMPTY_DESTINATION }] })}>Add caller rule</Button></div>
+      </div>
       <TextField label="Caller ID prefix" disabled={disabled} value={draft.caller_id_prefix} error={errors.caller_id_prefix} placeholder="e.g. Sales:" autoComplete="off"
         help="Text put in front of the caller's name so the answering phone shows which number was called." onChange={(e) => onChange({ caller_id_prefix: e.target.value })} />
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />

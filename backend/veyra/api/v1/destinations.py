@@ -608,6 +608,7 @@ def _holders() -> list[tuple[Any, str, str]]:
         Announcement,
         CallFlow,
         CallQueue,
+        InboundCallerRule,
         InboundRoute,
         IvrEntry,
         IvrMenu,
@@ -617,6 +618,7 @@ def _holders() -> list[tuple[Any, str, str]]:
     return [
         (InboundRoute, "destination", "inbound route"),
         (InboundRoute, "after_hours", "inbound route"),
+        (InboundCallerRule, "destination", "caller rule of inbound route"),
         (IvrMenu, "timeout", "menu"),
         (IvrMenu, "invalid", "menu"),
         (IvrEntry, "destination", "menu"),
@@ -703,7 +705,7 @@ def describe_uses(
     """Human labels of everything pointing at ``target`` ("inbound route
     5551234", "menu Main menu", "ring group Sales"), without duplicates;
     ``exclude_self`` leaves out references from the object itself."""
-    from veyra.core.models import IvrEntry, IvrMenu
+    from veyra.core.models import InboundCallerRule, InboundRoute, IvrEntry, IvrMenu
 
     column = TARGET_FIELDS[kind]
     found: list[str] = []
@@ -719,6 +721,16 @@ def describe_uses(
             if exclude_self is not None:
                 stmt = stmt.where(IvrMenu.id != exclude_self)
             names = db.scalars(stmt.order_by(IvrMenu.name)).all()
+        elif model is InboundCallerRule:
+            names = db.scalars(
+                select(InboundRoute.did)
+                .where(
+                    InboundRoute.id.in_(
+                        select(InboundCallerRule.route_id).where(col_type == kind, col_id == target)
+                    )
+                )
+                .order_by(InboundRoute.did)
+            ).all()
         else:
             name_col = model.did if hasattr(model, "did") else model.name
             stmt = select(name_col).where(col_type == kind, col_id == target)
