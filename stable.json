@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 85,
+  "sequence": 86,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.69",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Close a time condition during events of a calendar",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "eec43a562d",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.69/veyra-0.27.69.tar.gz",
+        "sha256": "8ad52b6ea9c78d856df176c48e0eedfec6dee681bbef679629721afc5ec2259f",
+        "size": 9561944
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1448,6 +1465,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T18:04:07+00:00",
-  "expires_at": "2027-01-29T18:04:07+00:00"
+  "generated_at": "2026-10-31T18:22:34+00:00",
+  "expires_at": "2027-01-29T18:22:34+00:00"
 }
