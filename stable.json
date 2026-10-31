@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 76,
+  "sequence": 77,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.60",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Encrypted call audio: SRTP per device profile on Poly and Yealink, with TLS",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "087d58dee1",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.60/veyra-0.27.60.tar.gz",
+        "sha256": "b7a2e313beb1b3cb33bca8839e56cd7cff800b0ff26f7b152d75f63b5ec0abaa",
+        "size": 9471533
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1295,6 +1312,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T03:24:00+00:00",
-  "expires_at": "2027-01-29T03:24:00+00:00"
+  "generated_at": "2026-10-31T03:50:15+00:00",
+  "expires_at": "2027-01-29T03:50:15+00:00"
 }
