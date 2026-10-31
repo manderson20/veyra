@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 86,
+  "sequence": 87,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.70",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Personal conference rooms by feature code",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "464bb7a027",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.70/veyra-0.27.70.tar.gz",
+        "sha256": "b6ae9efc823e130be940f695e9aae6d4864700fbf694c912ced9e20f3dc84070",
+        "size": 9559987
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1465,6 +1482,6 @@
       }
     }
   ],
-  "generated_at": "2026-10-31T18:22:34+00:00",
-  "expires_at": "2027-01-29T18:22:34+00:00"
+  "generated_at": "2026-10-31T18:42:26+00:00",
+  "expires_at": "2027-01-29T18:42:26+00:00"
 }
