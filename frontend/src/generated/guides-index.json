@@ -18,7 +18,7 @@
    "summary": "Put Veyra on an Ubuntu server, open the setup wizard and create the first administrator.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.59",
+   "reviewed": "0.27.60",
    "reviewed_date": "2026-10-31",
    "pages": [],
    "wiki": "https://github.com/manderson20/veyra/wiki/Install-Veyra"
