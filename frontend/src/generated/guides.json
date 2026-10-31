@@ -1144,7 +1144,7 @@
    "summary": "Set opening hours, holidays and closed days, so calls outside them go to a different destination.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.74",
+   "reviewed": "0.27.77",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/time-conditions/",
@@ -1230,7 +1230,7 @@
    "summary": "Give staff a switch, on the web or on a phone key, that sends calls to a second destination until it is switched back.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.69",
+   "reviewed": "0.27.77",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/call-flows/",
@@ -2663,7 +2663,7 @@
    "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.70",
+   "reviewed": "0.27.77",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/my-phone/"
