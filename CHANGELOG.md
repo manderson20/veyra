@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.76 — 2026-11-01
+
+No migration. The new codes need **Deploy changes**.
+
+### Added
+- **Forward another phone on busy or no answer** (#142, #392): `*83` and `*84` set and clear the busy forward, `*81` and `*89` the no-answer forward, after that extension's voicemail PIN.
+
 ## 0.27.75 — 2026-11-01
 
 No migration.

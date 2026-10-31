@@ -1,6 +1,6 @@
 # FreePBX feature gap analysis
 
-Veyra 0.27.75 compared with FreePBX 16/17, every free module and every
+Veyra 0.27.76 compared with FreePBX 16/17, every free module and every
 Sangoma commercial module (FreePBX add-ons and PBXact), as of
 2026-10-31. First written before the public release (now Milestone 23) so that no
 FreePBX feature is left out of the roadmap only because the current
@@ -122,7 +122,7 @@ below are the reasons a FreePBX site would hesitate.
 | **Outbound caller ID per extension** (`"name" <number>` on trunks) | outbound number and name per extension, checked against the organization's DIDs or an allow list; precedence emergency → forced route → extension → route → trunk default | ✔ | **P1** |
 | Emergency caller ID per extension | yes, plus ELIN per site, location per extension and device, readiness checks | ✔ ahead | |
 | Do Not Disturb (`*78/*79/*76`, portal, presence-driven) | `*78/*79/*76`, extension page, My Phone and presence rules; lit BLF key; callers who still ring, per phone and per organization | ✔ | **P1** |
-| Call forwarding unconditional, busy, no-answer (`*72/*73`, `*90/*91`, `*52/*53`, remote variants, ring timer) | always, busy, no answer and offline, with ring time; `*72/*73`, `*90/*91`, `*52/*53`, extension page, My Phone; another extension's forward all with `*94/*96` and its voicemail PIN; no remote codes for busy or no answer | ◐ | **P1** |
+| Call forwarding unconditional, busy, no-answer (`*72/*73`, `*90/*91`, `*52/*53`, remote variants, ring timer) | always, busy, no answer and offline, with ring time; `*72/*73`, `*90/*91`, `*52/*53`, extension page, My Phone; another extension's forwards with its voicemail PIN: all `*94/*96`, busy `*83/*84`, no answer `*81/*89` | ✔ | **P1** |
 | Find Me / Follow Me (external numbers, strategies, confirm calls, calendar-linked, `*21`) | ring-all or in-turn legs, external numbers, desk phone first, press-1 confirm, caller ID mode, no-answer destination, `*21`; not calendar-linked | ◐ | **P1** |
 | Call waiting toggle (`*70/*71`) | switch on the call handling card, `*56`/`*57` from the phone (FreePBX `*70`/`*71` differ) and `*70<number>` for one call | ✔ | P2 |
 | Internal auto-answer / intercom per extension | `*80<ext>` with auto-answer headers, allow or deny per extension with an organization default; base files set the phone's auto-answer | ✔ | **P1** (with intercom, §3.5) |

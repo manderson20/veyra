@@ -11,7 +11,7 @@ comparison (PR #162) and a code-checked review of the Grandstream UCM6300 manual
 
 ## Stage 1: small call and voicemail items (S)
 
-- [ ] Remote forward codes for busy and no answer (FreePBX)
+- [x] Remote forward codes for busy and no answer (FreePBX)
 - [ ] Follow-me linked to a calendar (FreePBX, P1)
 - [ ] Pause reason codes (VQ Plus)
 - [ ] Queue auto-pause on no answer, written to the database row (FreeSWITCH, FreePBX)

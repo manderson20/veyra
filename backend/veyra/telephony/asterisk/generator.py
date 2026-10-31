@@ -2449,17 +2449,23 @@ def _personal_rooms(
     return lines
 
 
+_CF_REMOTE_CODES = {
+    "cf_always": ("cf_remote_on", "cf_remote_off"),
+    "cf_busy": ("cfb_remote_on", "cfb_remote_off"),
+    "cf_no_answer": ("cfu_remote_on", "cfu_remote_off"),
+}
+
+
 def _remote_forward_codes(
     codes: dict[str, str], boxes: list[tuple[str, dict[str, Any]]], cos: Cos | None = None
 ) -> list[str]:
-    """``*94<ext>`` / ``*96<ext>``: another phone's forward all, from any phone
-    of the organization, against that extension's voicemail PIN (asterisk
-    accepts any password for a box without one, so such a box gets no code).
-    One exact entry per box, as ``_voicemail_direct``. The target's own class
-    still decides at call time whether it may forward outside."""
+    """``*94<ext>`` / ``*96<ext>`` and the busy and no-answer pairs: another
+    phone's forward, from any phone of the organization, against that
+    extension's voicemail PIN (asterisk accepts any password for a box without
+    one, so such a box gets no code). One exact entry per box, as
+    ``_voicemail_direct``. The target's own class still decides at call time
+    whether it may forward outside."""
     n = engine_names.current()
-    on, off = codes.get("cf_remote_on"), codes.get("cf_remote_off")
-    prompt = _CF_PROMPTS["cf_always"]
     lines: list[str] = []
     for number, b in sorted(boxes, key=lambda kv: (len(kv[0]), kv[0])):
         if not b.get("pin") or b.get("shared"):
@@ -2471,38 +2477,42 @@ def _remote_forward_codes(
             f" same => n,NoOp(Veyra: ${{CALLERID(num)}} changes the forward of {number})",
             f" same => n,Set(VEYRA_EXT={number})",
         ]
-        if on:
-            lines += _code_block(
-                f"exten => {on}{number},1,NoOp(Veyra remote forward of {number})",
-                [
-                    *unlock,
-                    f" same => n,Read(VEYRA_NUM,{prompt}&vm-enter-num-to-call,20,,2,10)",
-                    ' same => n,GotoIf($[${REGEX("^\\+?[0-9]{2,20}$" ${VEYRA_NUM})}]?store:bad)',
-                    f" same => n(store),Set(DB({STATE_KEY}/cf_always)=${{VEYRA_NUM}})",
-                    _CF_LAMP,
-                    _state_event("cf_always", "${VEYRA_NUM}"),
-                    f" same => n,Playback({prompt}&activated)",
-                    " same => n,Hangup()",
-                    " same => n(bad),Playback(pbx-invalid)",
-                    " same => n,Hangup()",
-                ],
-                cos,
-                "cf_remote_on",
-            )
-        if off:
-            lines += _code_block(
-                f"exten => {off}{number},1,NoOp(Veyra remote forward of {number} off)",
-                [
-                    *unlock,
-                    f" same => n,Set(VEYRA_GONE=${{DB_DELETE({STATE_KEY}/cf_always)}})",
-                    _CF_LAMP,
-                    _state_event("cf_always", ""),
-                    f" same => n,Playback({prompt}&de-activated)",
-                    " same => n,Hangup()",
-                ],
-                cos,
-                "cf_remote_off",
-            )
+        for field, (on_key, off_key) in _CF_REMOTE_CODES.items():
+            prompt = _CF_PROMPTS[field]
+            on, off = codes.get(on_key), codes.get(off_key)
+            if on:
+                lines += _code_block(
+                    f"exten => {on}{number},1,NoOp(Veyra remote forward {field} of {number})",
+                    [
+                        *unlock,
+                        f" same => n,Read(VEYRA_NUM,{prompt}&vm-enter-num-to-call,20,,2,10)",
+                        ' same => n,GotoIf($[${REGEX("^\\+?[0-9]{2,20}$" ${VEYRA_NUM})}]'
+                        "?store:bad)",
+                        f" same => n(store),Set(DB({STATE_KEY}/{field})=${{VEYRA_NUM}})",
+                        _CF_LAMP,
+                        _state_event(field, "${VEYRA_NUM}"),
+                        f" same => n,Playback({prompt}&activated)",
+                        " same => n,Hangup()",
+                        " same => n(bad),Playback(pbx-invalid)",
+                        " same => n,Hangup()",
+                    ],
+                    cos,
+                    on_key,
+                )
+            if off:
+                lines += _code_block(
+                    f"exten => {off}{number},1,NoOp(Veyra remote forward {field} of {number} off)",
+                    [
+                        *unlock,
+                        f" same => n,Set(VEYRA_GONE=${{DB_DELETE({STATE_KEY}/{field})}})",
+                        _CF_LAMP,
+                        _state_event(field, ""),
+                        f" same => n,Playback({prompt}&de-activated)",
+                        " same => n,Hangup()",
+                    ],
+                    cos,
+                    off_key,
+                )
     return lines
 
 

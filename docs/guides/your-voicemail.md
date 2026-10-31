@@ -4,7 +4,7 @@ summary: Listen to your messages from your phone or the browser, record your gre
 audience: user
 section: Using Veyra
 order: 20
-reviewed: 0.27.72
+reviewed: 0.27.76
 checked: 2026-11-01
 pages:
   - /my-phone/

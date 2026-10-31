@@ -474,6 +474,24 @@ def test_remote_forward_codes_ask_for_the_targets_pin():
     assert "exten => *961001,1," in feat and "Field: cf_always,Value: )" in feat
     # Asterisk would let anyone into a box without a PIN.
     assert "*941002" not in feat and "*961002" not in feat
+    files = {
+        f.path: f.content
+        for f in generator.generate(
+            {
+                **snap,
+                "feature_codes": {
+                    "cfb_remote_on": "*83",
+                    "cfb_remote_off": "*84",
+                    "cfu_remote_on": "*81",
+                    "cfu_remote_off": "*89",
+                },
+            }
+        )
+    }
+    feat = _section(files["extensions.conf"], "veyra-features")
+    busy = feat[feat.index("exten => *831001,1,") : feat.index("exten => *841001,1,")]
+    assert busy.index("VMAuthenticate") < busy.index("cf_busy)=${VEYRA_NUM}")
+    assert "exten => *811001,1," in feat and "Field: cf_no_answer,Value: )" in feat
 
 
 def test_forward_api_and_phone_event(admin, app):

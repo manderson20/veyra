@@ -109,7 +109,7 @@
    "summary": "The star codes phones dial to forward calls, turn on Do Not Disturb, pick up calls and more, and how to change them.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.72",
+   "reviewed": "0.27.76",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/feature-codes/"
@@ -858,7 +858,7 @@
    "summary": "Listen to your messages from your phone or the browser, record your greetings, set an away message for the holidays, and choose your PIN.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.72",
+   "reviewed": "0.27.76",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/my-phone/"
