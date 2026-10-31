@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.61 — 2026-10-31
+
+No migration. The update changes the nginx site.
+
+### Fixed
+- Opening **Provisioning → Templates, Requests or Variables** could bring up a browser password prompt, on a direct visit or a page reload and possibly from the menu. The web server sent those pages to the service that hands out phone files. Phone files themselves are unchanged.
+
 ## 0.27.60 — 2026-10-31
 
 No migration.
