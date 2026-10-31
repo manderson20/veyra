@@ -47,6 +47,7 @@ render_template "$HERE/../templates/nginx/security-headers.conf.in" "$TMP/header
 t "security headers render script hashes into the CSP" grep -q "^set \$veyra_csp_scripts \" 'sha256-abc='\";" "$TMP/headers.conf"
 t "security headers expand the hash variable" grep -q "script-src 'self'\${veyra_csp_scripts};" "$TMP/headers.conf"
 t "security headers set Permissions-Policy once" test "$(grep -c 'Permissions-Policy' "$TMP/headers.conf")" = 1
+# shellcheck disable=SC2016  # The dollar signs are nginx's, matched literally.
 t "nginx serves the web interface's provisioning pages before the phones' files" grep -q 'try_files $uri/index.html $uri @provisioning;' "$TMP/nginx.conf"
 t "nginx template includes the security headers in the server block" grep -q '^    include /etc/veyra/nginx-security-headers.conf;' "$TMP/nginx.conf"
 # Every location with an add_header of its own re-includes the set (nginx
