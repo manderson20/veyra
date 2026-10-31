@@ -34,11 +34,14 @@
     "vitest": "5.0.5"
   },
   "overrides": {
+    "minimatch": "11.0.3",
     "eslint-plugin-jsx-a11y": {
-      "eslint": "$eslint"
+      "eslint": "$eslint",
+      "minimatch": "3.1.5"
     },
     "eslint-plugin-react": {
-      "eslint": "$eslint"
+      "eslint": "$eslint",
+      "minimatch": "3.1.5"
     }
   }
 }

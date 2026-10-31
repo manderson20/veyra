@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Security
+- Frontend build tools only, nothing installed on a server: `zod` moves to 4.6.7 and ESLint's `minimatch` to 11.0.3. Two ESLint plugins stay on `minimatch` 3.1.5, which they require and which lacks the affected code.
+
 ## 0.27.64 — 2026-10-31
 
 Migration 0075 adds one phone column.
