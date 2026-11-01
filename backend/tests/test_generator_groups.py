@@ -256,6 +256,7 @@ def test_queue_context_and_queues_conf():
         "announce-holdtime=no\n"
         "reportholdtime=no\n"
         "memberdelay=0\n"
+        "weight=0\n"
         "periodic-announce=/var/lib/veyra/prompts/example/please-hold\n"
         "periodic-announce-frequency=60\n"
         "member => PJSIP/example-1001,0,Phone 1001,PJSIP/example-1001\n"
