@@ -101,6 +101,7 @@ export const DESTINATION_LABELS: Record<DestinationType, string> = {
   conference: "Conference room",
   call_flow: "Call flow",
   fax: "Fax to email",
+  disa: "Outside line access",
   custom: "Custom dialplan",
   directory: "Dial-by-name directory",
   hangup: "Hang up",
@@ -172,6 +173,7 @@ export function destinationTargetField(type: DestinationType): DestinationTarget
       return "call_flow_id";
     case "fax":
       return "fax_inbox_id";
+    case "disa":
     case "custom":
       return "custom_context";
     default:

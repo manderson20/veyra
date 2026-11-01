@@ -189,6 +189,28 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class DisaLine(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """Outside line access (issue #392): a caller from outside enters the PIN
+    and dials out with this class of service and caller ID. A destination
+    points at one by slug, held in the destination's custom context column."""
+
+    __tablename__ = "disa_lines"
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    slug: Mapped[str] = mapped_column(String(40), unique=True)
+    # Installation key, purpose ``disa.pin:<id>``.
+    pin_ciphertext: Mapped[str] = mapped_column(Text)
+    class_of_service_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("classes_of_service.id", ondelete="RESTRICT")
+    )
+    caller_id_number: Mapped[str] = mapped_column(String(32))
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class InboundCallerRule(UUIDPrimaryKey, Base):
     """Sends some callers of an inbound route elsewhere (issue #142), in order,
     before the route's own destination and hours."""

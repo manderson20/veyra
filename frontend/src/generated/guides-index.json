@@ -324,7 +324,7 @@
    "summary": "Decide where each of your phone numbers (DIDs) rings, with a different destination outside business hours.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.75",
+   "reviewed": "0.27.81",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/inbound/",
@@ -400,6 +400,19 @@
     "/parking/view/"
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Park-calls"
+  },
+  {
+   "slug": "outside-line-access",
+   "title": "Let staff call out from outside",
+   "summary": "Give people away from the building a number and PIN that let them dial out through your phone lines (DISA).",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.81",
+   "reviewed_date": "2026-11-01",
+   "pages": [
+    "/disa/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Let-staff-call-out-from-outside"
   },
   {
    "slug": "day-night-switches",

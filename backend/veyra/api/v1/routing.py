@@ -596,6 +596,7 @@ DestinationType = Literal[
     "conference",
     "call_flow",
     "fax",
+    "disa",
     "custom",
     "directory",
 ]

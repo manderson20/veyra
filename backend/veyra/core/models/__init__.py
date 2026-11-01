@@ -90,6 +90,7 @@ from veyra.core.models.provisioning import (
 )
 from veyra.core.models.recording import CallRecording, RecordingPolicy
 from veyra.core.models.routing import (
+    DisaLine,
     InboundCallerRule,
     InboundRoute,
     OutboundRoute,
@@ -161,6 +162,7 @@ __all__ = [
     "DeviceProfilePaging",
     "DirectoryEntry",
     "DirectorySettings",
+    "DisaLine",
     "EmergencyCall",
     "Extension",
     "ExtensionState",

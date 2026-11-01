@@ -1262,6 +1262,7 @@ def _dialplan(
     flows = list(snapshot.get("call_flows") or [])
     lots = list(snapshot.get("parking_lots") or [])
     fax_inboxes = list(snapshot.get("fax_inboxes") or [])
+    disa_lines = list(snapshot.get("disa_lines") or [])
     boxes = boxes if boxes is not None else {}
     tcs = list(snapshot.get("time_conditions") or [])
     conditions = {str(c["key"]): c for c in tcs}
@@ -1399,7 +1400,7 @@ def _dialplan(
         "",
     ]
     lines += _outbound_contexts(
-        outbound, trunk_info, recording, prompts_dir, spaces, cos_all, conditions
+        outbound, trunk_info, recording, prompts_dir, spaces, cos_all, conditions, bool(disa_lines)
     )
     policies = {
         str(p.get("organization") or ""): p for p in (snapshot.get("caller_block_policies") or [])
@@ -1420,6 +1421,7 @@ def _dialplan(
             lines += _conference_contexts(mine(rooms, ns), _cos_for(snapshot, ns))
             lines += _call_flow_contexts(mine(flows, ns))
             lines += _fax_contexts(mine(fax_inboxes, ns), fax_dir)
+            lines += _disa_contexts(mine(disa_lines, ns))
             lines += _agent_contexts(codes, mine(queues, ns))
             lines += _parking_contexts(mine(lots, ns))
             lines += _directory_context(_directory_operator(snapshot, ns))
@@ -2929,6 +2931,7 @@ def _outbound_contexts(
     spaces: list[str] | None = None,
     cos: Cos | None = None,
     conditions: dict[str, dict[str, Any]] | None = None,
+    has_disa: bool = False,
 ) -> list[str]:
     """``veyra-outbound`` of each namespace and one shared ``veyra-out-<slug>``
     per route, emergency routes first (docs/TRUNKS_ROUTING.md §4, §6, §7). A
@@ -2999,6 +3002,14 @@ def _outbound_contexts(
                 *_record_outbound(recording or [], prompts_dir),
             ]
             if emergency:
+                if has_disa:
+                    # Outside line access has no location: the 911 centre
+                    # would get the wrong address (issue #392).
+                    refused = '$["${VEYRA_DISA}"="1"]'
+                    lines += [
+                        f" same => n,ExecIf({refused}?Playback(cannot-complete-as-dialed))",
+                        f" same => n,ExecIf({refused}?Hangup())",
+                    ]
                 site = str(r.get("site") or "")
                 if site:
                     if not _SITE_RE.match(site):
@@ -3329,6 +3340,9 @@ def _goto(dest: Any) -> list[str]:
     if kind == "call_flow":
         slug = _slug(dest.get("call_flow"), "call flow slug")
         ctx = engine_names.current().call_flow(slug)
+        return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
+    if kind == "disa":
+        ctx = engine_names.current().disa(_slug(dest.get("disa"), "outside line slug"))
         return [f" same => n,Goto({ctx},s,1)", " same => n,Hangup()"]
     if kind == "fax":
         slug = _slug(dest.get("fax_inbox"), "fax inbox slug")
@@ -3975,6 +3989,71 @@ def _switch_hints(
             org = _slug(c.get("organization") or "", "organization")
             hints.append(f"exten => {prefix}{_code_index(c, key)},hint,Custom:veyra-tc-{org}-{key}")
     return hints
+
+
+# Wrong PINs in a row, across calls, before a line locks for DISA_LOCK_SECONDS.
+DISA_MAX_FAILS = 5
+DISA_LOCK_SECONDS = 900
+DISA_FAMILY = "veyra/disa"
+
+
+def _disa_contexts(disa_lines: list[dict[str, Any]]) -> list[str]:
+    """Outside line access (issue #392): the PIN, then a dial tone into the
+    organization's outbound routes as the line's class of service. Only the
+    routes are reachable, never phones or feature codes. Hanging up between
+    tries doesn't reset the count, so PINs can't be guessed quickly."""
+    n = engine_names.current()
+    lines: list[str] = []
+    for d in disa_lines:
+        slug = _slug(d["slug"], "outside line slug")
+        org = _slug(d.get("organization") or "", "organization")
+        name = _check_value(str(d.get("name") or slug), "outside line name")
+        pin = str(d.get("pin") or "")
+        if not _PIN_RE.match(pin):
+            raise GenerationError(f"outside line {slug}: the PIN is not valid")
+        cid = str(d.get("caller_id_number") or "")
+        if not _NUMBER_RE.match(cid):
+            raise GenerationError(f"outside line {slug}: caller ID {cid!r} is not valid")
+        cos = _slug(d.get("class_of_service"), "class of service")
+        key = f"{DISA_FAMILY}/{org}/{slug}"
+        out = n.outbound
+        lines += [
+            f"[{n.disa(slug)}]",
+            f"; {name} ({org})",
+            f"exten => s,1,NoOp(Veyra outside line access {slug})",
+            " same => n,Answer()",
+            f" same => n,GotoIf($[${{EPOCH}} < 0${{DB({key}/locked)}}]?locked)",
+            " same => n(pin),Read(VEYRA_PIN,agent-pass,10,,1,10)",
+            f' same => n,GotoIf($["${{VEYRA_PIN}}"="{pin}"]?ok)',
+            f" same => n,Set(DB({key}/fails)=$[0${{DB({key}/fails)}} + 1])",
+            f" same => n,Log(WARNING,Veyra outside line {slug}: wrong PIN from ${{CALLERID(num)}})",
+            f" same => n,GotoIf($[${{DB({key}/fails)}} >= {DISA_MAX_FAILS}]?lock)",
+            " same => n,Playback(auth-incorrect)",
+            " same => n,Goto(pin)",
+            f" same => n(lock),Set(DB({key}/locked)=$[${{EPOCH}} + {DISA_LOCK_SECONDS}])",
+            f" same => n,Set(VEYRA_DEL=${{DB_DELETE({key}/fails)}})",
+            f" same => n,Log(WARNING,Veyra outside line {slug}: locked for {DISA_LOCK_SECONDS} s)",
+            " same => n(locked),Playback(auth-incorrect)",
+            " same => n,Hangup()",
+            f" same => n(ok),Set(VEYRA_DEL=${{DB_DELETE({key}/fails)}})",
+            f" same => n,Set(__VEYRA_ORG={org})",
+            f" same => n,Set(VEYRA_COS={cos})",
+            " same => n,Set(VEYRA_DISA=1)",
+            f" same => n,Set(VEYRA_OUT_CID={cid})",
+            # The caller has proved the PIN, so the outside-to-outside guard stands aside.
+            " same => n,Set(__VEYRA_HOPS=0)",
+            " same => n,Set(VEYRA_TRIES=0)",
+            " same => n(dial),Read(VEYRA_NUM,dial,20,i,1,8)",
+            " same => n,Set(VEYRA_NUM=${FILTER(0-9,${VEYRA_NUM})})",
+            f" same => n,GotoIf(${{DIALPLAN_EXISTS({out},${{VEYRA_NUM}},1)}}"
+            f"?{out},${{VEYRA_NUM}},1)",
+            " same => n,Set(VEYRA_TRIES=$[${VEYRA_TRIES} + 1])",
+            " same => n,Playback(cannot-complete-as-dialed)",
+            " same => n,GotoIf($[${VEYRA_TRIES} < 3]?dial)",
+            " same => n,Hangup()",
+            "",
+        ]
+    return lines
 
 
 def _call_flow_contexts(flows: list[dict[str, Any]]) -> list[str]:

@@ -22,6 +22,7 @@ from veyra.core.models import (
     CallFlow,
     CallQueue,
     ConferenceRoom,
+    DisaLine,
     Extension,
     FaxInbox,
     IvrMenu,
@@ -41,6 +42,7 @@ DestinationType = Literal[
     "conference",
     "call_flow",
     "fax",
+    "disa",
     "custom",
     "directory",
     "hangup",
@@ -57,6 +59,8 @@ TARGET_FIELDS: dict[str, str] = {
     "conference": "conference_id",
     "call_flow": "call_flow_id",
     "fax": "fax_inbox_id",
+    # By slug, so no holder needs another column.
+    "disa": "custom_context",
     "custom": "custom_context",
 }
 # Kinds that need no target row: the dial-by-name directory of the
@@ -249,6 +253,13 @@ def check_destination(
     if dest.type == "custom":
         _check_custom(db, organization_id, dest, field)
         return
+    if dest.type == "disa":
+        line = db.scalar(select(DisaLine).where(DisaLine.slug == dest.custom_context))
+        if line is None or line.organization_id != organization_id:
+            raise validation(field, "outside line access not found in this organization")
+        if not line.is_enabled:
+            raise validation(field, f"the outside line access {line.name} is disabled")
+        return
     if dest.type == "fax":
         if dest.fax_inbox_id is None:
             raise validation(field, "choose the fax inbox")
@@ -422,6 +433,16 @@ class Resolver:
         custom_context: Any = None,
     ) -> DestinationOut:
         kind = kind or "extension"
+        if kind == "disa":
+            line = self.db.scalar(select(DisaLine).where(DisaLine.slug == custom_context))
+            return DestinationOut(
+                type="disa",
+                extension_id=None,
+                ivr_id=None,
+                custom_context=custom_context,
+                label=f"Outside line access: {line.name}" if line else None,
+                missing=line is None or not line.is_enabled,
+            )
         if kind == "custom":
             if self._custom is None:
                 self._custom = set(

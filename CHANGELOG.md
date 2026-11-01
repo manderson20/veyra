@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.81 — 2026-11-01
+
+Migration 0087 adds the outside line access table. Deploy the configuration after adding one.
+
+### Added
+- **Outside line access (DISA)** (#392): under **Routing**, add a line with a PIN, a class of service and a caller ID, then point an inbound route or menu key at it. Callers enter the PIN, hear a dial tone and call out through the routes the class allows. A PIN is required and weak ones are refused. Five wrong PINs in a row lock the line for 15 minutes, even if the caller hangs up between tries. Emergency numbers are refused because the call has no location. Nothing changes unless you add one.
+
 ## 0.27.80 — 2026-11-01
 
 Migration 0086 adds one queue column. Deploy the configuration to apply a weight.

@@ -17,7 +17,7 @@ comparison (PR #162) and a code-checked review of the Grandstream UCM6300 manual
 - [x] Queue auto-pause on no answer, written to the database row (FreeSWITCH, FreePBX)
 - [x] Queue weight (FreeSWITCH, FreePBX)
 - [ ] Caller importance: priority set per inbound route or menu, moves a caller up the line (FreeSWITCH, FreePBX)
-- [ ] DISA (FreePBX, Grandstream)
+- [x] DISA (FreePBX, Grandstream)
 - [ ] Wake-up calls (Grandstream, FreePBX Hotel)
 - [ ] Extension-to-extension allow list (Grandstream)
 - [ ] IVR multi-digit, allow and block lists, key by time (FreePBX, Grandstream)

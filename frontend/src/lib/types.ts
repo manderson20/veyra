@@ -1110,7 +1110,7 @@ export interface TrunkInput {
   register_max_retries?: number | null;
 }
 
-export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "call_flow" | "fax" | "custom" | "directory" | "hangup";
+export type DestinationType = "extension" | "voicemail" | "voicemail_box" | "ivr" | "ring_group" | "queue" | "announcement" | "conference" | "call_flow" | "fax" | "disa" | "custom" | "directory" | "hangup";
 
 /** A call destination as the API reports it (docs/VOICEMAIL_IVR.md §6, RING_GROUPS_QUEUES.md §5). */
 export interface Destination {
@@ -3769,4 +3769,17 @@ export interface QueuePauseReason {
   organization_id: string;
   code: number;
   label: string;
+}
+
+/** Outside line access (issue #392): a caller from outside enters a PIN and dials out. The PIN is never returned. */
+export interface DisaLine {
+  id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  class_of_service_id: string;
+  class_of_service_name: string;
+  caller_id_number: string;
+  is_enabled: boolean;
+  in_use_by: string[];
 }

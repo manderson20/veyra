@@ -965,7 +965,7 @@
    "summary": "Decide where each of your phone numbers (DIDs) rings, with a different destination outside business hours.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.75",
+   "reviewed": "0.27.81",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/inbound/",
@@ -1223,6 +1223,38 @@
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Park-calls",
    "html": "<p>Parking puts a call on hold in a numbered <em>slot</em> that every phone can reach. The secretary answers a call for the principal, parks it, pages \"call for Mrs Lee on 71\", and Mrs Lee picks it up from the phone nearest to her.</p>\n<h2 id=\"how-people-use-it\">How people use it</h2>\n<table><thead><tr><th>To</th><th>Do this</th></tr></thead><tbody><tr><td>Park a call</td><td>Transfer it to the lot's <strong>park extension</strong> (for example <code>70</code>). The phone system reads back the slot number, for example 71.</td></tr><tr><td>Pick up a parked call</td><td>Dial the slot number (for example <code>71</code>) from any phone. <code>*85</code> and the slot number does the same.</td></tr><tr><td>See waiting calls</td><td>A line key (BLF) set to a slot number lights while a call waits there.</td></tr></tbody></table>\n<p>If nobody picks the call up in time, the phone that parked it rings again. If that phone does not answer either, the call goes to the lot's destination.</p>\n<h2 id=\"create-a-parking-lot\">Create a parking lot</h2>\n<p>You need permission to change ring groups, queues and conference rooms (organization and site administrators by default).</p>\n<ol><li>Open <a href=\"/parking/\">Telephony → Parking</a> and choose <strong>New parking lot</strong>.</li><li>If you manage several organizations, choose the <strong>Organization</strong>.</li><li>Enter a <strong>Name</strong>, the <strong>Park extension</strong>, the <strong>First slot</strong> and the <strong>Last slot</strong>. The suggested <code>70</code> with slots <code>71</code> to <code>79</code> suits most sites. Every one of these numbers must be free in the organization: not an extension, group or other number. The park extension must not lie inside the slot range, and a lot has at most 50 slots.</li><li>Choose <strong>Create lot</strong>. Veyra opens the lot's page.</li></ol>\n<h2 id=\"set-the-timeout\">Set the timeout</h2>\n<p>On the lot's page:</p>\n<ul><li><strong>Parked call times out after (seconds)</strong>: 10 to 1800. Then the phone that parked the call rings.</li><li><strong>Ring the parker for (seconds)</strong>: 5 to 120.</li><li><strong>When the parker does not answer</strong>: where the call goes then, for example the reception ring group or the main menu, or <strong>Hang up</strong>.</li><li><strong>Play a courtesy tone when a call is picked up</strong>.</li><li><strong>Enabled</strong>: a disabled lot is left out of the phone system.</li></ul>\n<p>Choose <strong>Save</strong>, then <strong>Deploy changes</strong> in the top bar. The <strong>On the phones</strong> card sums up what users do with the lot.</p>\n<h2 id=\"line-keys-for-slots\">Line keys for slots</h2>\n<p>To give a receptionist a key per slot, add BLF keys with the slot numbers to the phone's line keys: on its template under its brand in the Provisioning menu, or for one phone in the <strong>Line keys</strong> card of the device's page. The key lights while a call waits in that slot, and pressing it picks the call up.</p>\n<h2 id=\"when-it-does-not-work\">When it does not work</h2>\n<ul><li><strong>\"Number in use\" when creating the lot</strong>: one of the numbers is already used. Choose another range.</li><li><strong>The transfer to the park extension fails</strong>: the lot is disabled or the change has not been deployed.</li><li><strong>The parked call disappears</strong>: it timed out, rang the parker, then went to the lot's destination. Check the destination, or make the timeout longer.</li><li><strong>Deleting a lot</strong>: its numbers become free again, and the lot leaves the phone system at the next deployment.</li></ul>"
+  },
+  {
+   "slug": "outside-line-access",
+   "title": "Let staff call out from outside",
+   "summary": "Give people away from the building a number and PIN that let them dial out through your phone lines (DISA).",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.81",
+   "reviewed_date": "2026-11-01",
+   "pages": [
+    "/disa/"
+   ],
+   "headings": [
+    {
+     "id": "before-you-start",
+     "title": "Before you start"
+    },
+    {
+     "id": "set-it-up",
+     "title": "Set it up"
+    },
+    {
+     "id": "what-protects-it",
+     "title": "What protects it"
+    },
+    {
+     "id": "limits",
+     "title": "Limits"
+    }
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Let-staff-call-out-from-outside",
+   "html": "<p><strong>Outside line access</strong> (often called DISA) lets someone call a number from outside, enter a PIN, hear a dial tone and make a call through your lines. The person they call sees your number, not theirs.</p>\n<div class=\"help-note help-note--note\"><strong>Risk:</strong> anyone who gets the PIN can run up call charges on your account. This is a common target for phone fraud. Only add it if people really need it, and limit what it can reach.</div>\n<h2 id=\"before-you-start\">Before you start</h2>\n<p>Create a <a href=\"/help/classes-of-service/\">class of service</a> just for this. Allow only the outbound routes it needs, set a limit on simultaneous calls, and leave out international routes. A call through outside line access can only use what this class allows.</p>\n<h2 id=\"set-it-up\">Set it up</h2>\n<ol><li>Go to <a href=\"/disa/\">Outside Line Access</a> and choose <strong>New outside line access</strong>.</li><li>Enter a <strong>Name</strong> and a <strong>PIN</strong> of 6 to 10 digits. Repeated digits and runs such as <code>123456</code> are refused. Veyra can't show the PIN again, so note it somewhere safe.</li><li>Choose the <strong>Class of service</strong>.</li><li>Enter the <strong>Caller ID number</strong> these calls should show. A route that forces its own number overrides it.</li><li>Save, then point an <a href=\"/help/route-incoming-calls/\">inbound route</a> or a <a href=\"/help/phone-menus/\">menu</a> key at it by choosing <strong>Outside line access</strong> as the destination.</li><li><a href=\"/help/deploy-changes/\">Deploy the configuration</a>.</li></ol>\n<p>To use it, call the number, enter the PIN when asked, wait for the dial tone and dial the number as you would from a desk phone.</p>\n<h2 id=\"what-protects-it\">What protects it</h2>\n<ul><li><strong>Lock-out:</strong> five wrong PINs in a row lock that line for 15 minutes, even if the caller hangs up between tries. During a lock-out the right PIN doesn't work either, so someone guessing can keep staff out for a while. Wrong PINs and lock-outs are written to the Asterisk log.</li><li><strong>Only outside calls:</strong> the caller can reach your outbound routes, but not your phones, voicemail or feature codes.</li><li><strong>Audit log:</strong> adding or changing a line is recorded; the PIN isn't.</li></ul>\n<h2 id=\"limits\">Limits</h2>\n<ul><li><strong>No 911:</strong> emergency numbers are refused, because the 911 center would get the wrong address or none. Callers must use their own phone's emergency service. Tell the people you give this to.</li><li><strong>PIN sharing:</strong> there's one PIN per line, so Call History can't show which person made a call. Give groups their own line if you need to tell them apart.</li><li><strong>Import and export:</strong> routes that point here export as <code>disa</code>, and that value can't be imported. Set those routes by hand after importing.</li></ul>"
   },
   {
    "slug": "day-night-switches",

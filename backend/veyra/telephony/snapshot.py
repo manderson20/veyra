@@ -34,6 +34,7 @@ from veyra.core.models import (
     DeviceProfile,
     DirectoryEntry,
     DirectorySettings,
+    DisaLine,
     Extension,
     ExtensionState,
     FaxInbox,
@@ -90,6 +91,10 @@ def trunk_secret_purpose(trunk_id: Any) -> str:
 def call_flow_pin_purpose(flow_id: Any) -> str:
     """Encryption purpose of a call flow's toggle PIN."""
     return f"call_flow.pin:{flow_id}"
+
+
+def disa_pin_purpose(line_id: Any) -> str:
+    return f"disa.pin:{line_id}"
 
 
 def time_condition_pin_purpose(tc_id: Any) -> str:
@@ -406,6 +411,13 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         for i in db.scalars(select(FaxInbox).order_by(FaxInbox.slug)).all()
         if i.is_enabled and i.organization_id in active
     ]
+    # Outside line access: an enabled line needs its class to still exist.
+    cos_slugs = {c.id: c.slug for c in db.scalars(select(ClassOfService))}
+    disa = [
+        d
+        for d in db.scalars(select(DisaLine).order_by(DisaLine.slug)).all()
+        if d.is_enabled and d.organization_id in active and d.class_of_service_id in cos_slugs
+    ]
     targets = Targets(
         number_of={e.id: e.number for e in extensions},
         box_numbers=set(),
@@ -417,6 +429,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         call_flow_slug={f.id: f.slug for f in flows},
         fax_inbox_slug={i.id: i.slug for i in inboxes},
         custom_contexts=custom_dialplan.entry_contexts(custom_dialplan.load(db)["text"]),
+        disa_slugs={d.slug for d in disa},
     )
     voicemail = _voicemail_ivr(
         db, key, active, extensions, org_slug, org_tz, targets, ring_groups, queues, rooms
@@ -489,6 +502,17 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "directory_entries": directory_entries.get(o.id, []),
             }
             for o in orgs
+        ],
+        "disa_lines": [
+            {
+                "slug": d.slug,
+                "name": d.name,
+                "organization": org_slug.get(d.organization_id, ""),
+                "pin": _switch_pin(d, disa_pin_purpose(d.id), f"outside line {d.name}", key),
+                "class_of_service": cos_slugs[d.class_of_service_id],
+                "caller_id_number": d.caller_id_number,
+            }
+            for d in disa
         ],
         "fax_inboxes": [
             {
@@ -770,6 +794,7 @@ class Targets:
         call_flow_slug: dict[Any, str] | None = None,
         fax_inbox_slug: dict[Any, str] | None = None,
         custom_contexts: list[str] | None = None,
+        disa_slugs: set[str] | None = None,
     ) -> None:
         self.number_of = number_of
         self.box_numbers = box_numbers
@@ -783,6 +808,7 @@ class Targets:
         self.call_flow_slug = call_flow_slug if call_flow_slug is not None else {}
         self.fax_inbox_slug = fax_inbox_slug if fax_inbox_slug is not None else {}
         self.custom_contexts = custom_contexts if custom_contexts is not None else []
+        self.disa_slugs = disa_slugs if disa_slugs is not None else set()
 
     def dest(self, obj: Any, prefix: str) -> dict[str, Any]:
         """The engine-neutral form of the destination stored in
@@ -805,6 +831,11 @@ class Targets:
         if kind == "call_flow":
             slug = self.call_flow_slug.get(getattr(obj, f"{prefix}_call_flow_id", None))
             return {"type": "call_flow", "call_flow": slug} if slug else {"type": "missing"}
+        if kind == "disa":
+            slug = getattr(obj, f"{prefix}_custom_context", None)
+            return (
+                {"type": "disa", "disa": slug} if slug in self.disa_slugs else {"type": "missing"}
+            )
         if kind == "custom":
             context = getattr(obj, f"{prefix}_custom_context", None)
             if context in self.custom_contexts:
