@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 97,
+  "sequence": 98,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.81",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Outside line access (DISA)",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "52a181b12e",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.81/veyra-0.27.81.tar.gz",
+        "sha256": "ff8c721ba8418dd234fc9489833eb8833fce6f4911f1f2ddebe76d706200ef04",
+        "size": 9608904
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1652,6 +1669,6 @@
       }
     }
   ],
-  "generated_at": "2026-11-01T14:22:04+00:00",
-  "expires_at": "2027-01-30T14:22:04+00:00"
+  "generated_at": "2026-11-01T15:07:13+00:00",
+  "expires_at": "2027-01-30T15:07:13+00:00"
 }
