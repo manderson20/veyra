@@ -370,6 +370,25 @@ def _agent(event: dict[str, Any]) -> None:
         log.exception("Could not handle the agent event")
 
 
+WAKEUP_EVENT = "VeyraWakeup"
+
+
+def is_wakeup_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == WAKEUP_EVENT
+
+
+def _wakeup(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraWakeup)``: a wake-up call answered, set or cancelled."""
+    try:
+        from veyra.core.db import session_scope
+        from veyra.telephony import wakeup
+
+        with session_scope() as db:
+            wakeup.handle_event(db, event.get("userevent") or {})
+    except Exception:
+        log.exception("Could not handle the wake-up event")
+
+
 FAX_EVENT = "VeyraFax"
 
 
@@ -510,6 +529,8 @@ class AriEventListener:
                             _blacklist(event)
                         elif is_agent_event(event):
                             _agent(event)
+                        elif is_wakeup_event(event):
+                            _wakeup(event)
                         elif is_fax_event(event):
                             _fax(event)
                         elif event.get("type") == "ChannelDestroyed":

@@ -18,7 +18,7 @@ comparison (PR #162) and a code-checked review of the Grandstream UCM6300 manual
 - [x] Queue weight (FreeSWITCH, FreePBX)
 - [ ] Caller importance: priority set per inbound route or menu, moves a caller up the line (FreeSWITCH, FreePBX)
 - [x] DISA (FreePBX, Grandstream)
-- [ ] Wake-up calls (Grandstream, FreePBX Hotel)
+- [x] Wake-up calls (Grandstream, FreePBX Hotel)
 - [ ] Extension-to-extension allow list (Grandstream)
 - [ ] IVR multi-digit, allow and block lists, key by time (FreePBX, Grandstream)
 - [ ] Voicemail: automatic extra recipients, per-box quota, alternate greeting, spoken intro on forward (FreeSWITCH)

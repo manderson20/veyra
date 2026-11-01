@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from veyra.api.v1 import wakeup_shared
 from veyra.api.v1.extensions import (
     FollowMeIn,
     RegistrationOut,
@@ -231,6 +232,47 @@ def _check_forward_limits(db: Session, ext: Extension, changes: dict[str, Any]) 
                 code="cos_denied",
                 errors=[{"field": field, "message": "outside numbers are not allowed"}],
             )
+
+
+@router.get("/extensions/{extension_id}/wakeup-calls", summary="Your phone's wake-up calls")
+def my_wakeup_calls(
+    extension_id: uuid.UUID,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> list[wakeup_shared.WakeupOut]:
+    return wakeup_shared.listing(db, _own_extension(db, principal, extension_id))
+
+
+@router.post(
+    "/extensions/{extension_id}/wakeup-calls", status_code=201, summary="Add a wake-up call"
+)
+def add_my_wakeup_call(
+    extension_id: uuid.UUID,
+    body: wakeup_shared.WakeupIn,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> wakeup_shared.WakeupOut:
+    ext = _own_extension(db, principal, extension_id)
+    row = wakeup_shared.add(db, ext, body, principal.label)
+    _own_audit(db, ctx, principal, "extension.wakeup_add", ext, {"time": row.time})
+    db.commit()
+    return row
+
+
+@router.delete("/extensions/{extension_id}/wakeup-calls/{call_id}", status_code=204)
+def delete_my_wakeup_call(
+    extension_id: uuid.UUID,
+    call_id: uuid.UUID,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    ext = _own_extension(db, principal, extension_id)
+    wakeup_shared.remove(db, ext, call_id)
+    _own_audit(db, ctx, principal, "extension.wakeup_delete", ext, {})
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/extensions/{extension_id}/follow-me", summary="Your phone's find me / follow me")

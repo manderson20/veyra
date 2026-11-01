@@ -10,6 +10,7 @@ import { DevicesCard } from "@/components/extensions/DevicesCard";
 import { VoicemailCard } from "@/components/extensions/VoicemailCard";
 import { CallHandlingCard } from "@/components/extensions/CallHandlingCard";
 import { FollowMeCard } from "@/components/extensions/FollowMeCard";
+import { WakeupCard } from "@/components/extensions/WakeupCard";
 import { EMPTY_PLACE, PlaceFields, placeBody, placeOf, samePlace, type Place } from "@/components/extensions/PlaceFields";
 import { CopyButton } from "@/components/common/CopyButton";
 import {
@@ -302,6 +303,7 @@ function ExtensionView() {
 
       <TabPanel idBase="ext" id="followme" active={tab}>
         <FollowMeCard base={`/extensions/${x.id}`} editable={editable} onDirty={followMeDirty} organizationId={x.organization_id} />
+        <WakeupCard base={`/extensions/${x.id}`} editable={editable} />
       </TabPanel>
 
       {can("voicemail.read") ? (

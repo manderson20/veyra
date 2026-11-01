@@ -22,6 +22,7 @@ from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1 import wakeup_shared
 from veyra.api.v1.group_helpers import MembershipOut
 from veyra.configmgmt import service as configmgmt
 from veyra.core import audit
@@ -1284,6 +1285,46 @@ def put_follow_me_calendar(
     )
     db.commit()
     return _follow_me_out(row, extension_state.get(db, ext.id))
+
+
+@router.get("/{extension_id}/wakeup-calls", summary="List a phone's wake-up calls")
+def list_wakeup_calls(
+    extension_id: uuid.UUID,
+    principal: Principal = Depends(require("extensions.read")),
+    db: Session = Depends(get_db),
+) -> list[wakeup_shared.WakeupOut]:
+    return wakeup_shared.listing(db, _get_visible(db, principal, extension_id, "extensions.read"))
+
+
+@router.post("/{extension_id}/wakeup-calls", status_code=201, summary="Add a wake-up call")
+def add_wakeup_call(
+    extension_id: uuid.UUID,
+    body: wakeup_shared.WakeupIn,
+    principal: Principal = Depends(require("extensions.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> wakeup_shared.WakeupOut:
+    """Takes effect at once; no deployment is needed."""
+    ext = _get_visible(db, principal, extension_id, "extensions.write")
+    row = wakeup_shared.add(db, ext, body, principal.label)
+    _record(db, ctx, principal, "extension.wakeup_add", ext, {"time": row.time})
+    db.commit()
+    return row
+
+
+@router.delete("/{extension_id}/wakeup-calls/{call_id}", status_code=204)
+def delete_wakeup_call(
+    extension_id: uuid.UUID,
+    call_id: uuid.UUID,
+    principal: Principal = Depends(require("extensions.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    ext = _get_visible(db, principal, extension_id, "extensions.write")
+    wakeup_shared.remove(db, ext, call_id)
+    _record(db, ctx, principal, "extension.wakeup_delete", ext, {})
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.put("/{extension_id}/follow-me", summary="Change find me / follow me")

@@ -15,7 +15,7 @@ from veyra.core.models.callflow import (
     DirectorySettings,
     ParkingLot,
 )
-from veyra.core.models.calls import CallLeg, CallRecord, QueueEvent
+from veyra.core.models.calls import CallLeg, CallRecord, QueueEvent, WakeupCall
 from veyra.core.models.catalog import CatalogSource
 from veyra.core.models.central import (
     CentralCommand,
@@ -233,6 +233,7 @@ __all__ = [
     "UserSession",
     "VoicemailBox",
     "VoicemailBoxMember",
+    "WakeupCall",
     "Webhook",
     "WebhookDelivery",
 ]

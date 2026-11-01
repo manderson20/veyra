@@ -3,6 +3,7 @@
 
 import { CallHandlingCard } from "@/components/extensions/CallHandlingCard";
 import { FollowMeCard } from "@/components/extensions/FollowMeCard";
+import { WakeupCard } from "@/components/extensions/WakeupCard";
 import { ColleaguesCard } from "@/components/portal/ColleaguesCard";
 import { ConferenceCard } from "@/components/portal/ConferenceCard";
 import { ContactsCard } from "@/components/portal/ContactsCard";
@@ -42,6 +43,7 @@ export function WidgetRenderer({ placed, extensions, boxes, announcement }: { pl
             </div>
             <CallHandlingCard base={`/me/extensions/${x.id}`} editable={x.is_enabled} ringTime={false} />
             <FollowMeCard base={`/me/extensions/${x.id}`} editable={x.is_enabled} />
+            <WakeupCard base={`/me/extensions/${x.id}`} editable={x.is_enabled} />
           </div>
         </Card>
       );

@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.82 — 2026-11-01
+
+Migration 0088 adds the wake-up call table. Deploy the configuration for the phone codes and the wake-up message.
+
+### Added
+- **Wake-up calls** (#392): dial `*64` and a four-digit time, or use the **Wake-up calls** card on the extension page or in My Phone, which can also repeat daily. The phone rings at that time in the organization's time zone and plays a message. An unanswered call is tried three times, five minutes apart. Cancel from the card, or with `*65`.
+
 ## 0.27.81 — 2026-11-01
 
 Migration 0087 adds the outside line access table. Deploy the configuration after adding one.

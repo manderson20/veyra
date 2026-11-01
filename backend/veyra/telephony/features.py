@@ -128,6 +128,22 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         18,
         True,
     ),
+    FeatureCodeDef(
+        "wakeup_set",
+        "*64",
+        "Wake-up call",
+        "Asks for a time as four digits, such as 0630 or 1415, and rings this phone then.",
+        19,
+        True,
+    ),
+    FeatureCodeDef(
+        "wakeup_cancel",
+        "*65",
+        "Cancel wake-up calls",
+        "Removes this phone's wake-up calls.",
+        19,
+        True,
+    ),
     FeatureCodeDef("fmfm_toggle", "*21", "Find me / follow me toggle", "", 18),
     FeatureCodeDef(
         "intercom",

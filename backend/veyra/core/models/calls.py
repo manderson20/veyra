@@ -10,10 +10,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from veyra.core.models.base import Base, TenantScoped, UUIDPrimaryKey, utcnow
+from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey, utcnow
 
 
 class CallRecord(UUIDPrimaryKey, TenantScoped, Base):
@@ -108,3 +108,22 @@ class QueueEvent(UUIDPrimaryKey, Base):
     data1: Mapped[str] = mapped_column(String(64), default="")
     data2: Mapped[str] = mapped_column(String(64), default="")
     data3: Mapped[str] = mapped_column(String(64), default="")
+
+
+class WakeupCall(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """A phone rung at a chosen time, in the organization's time zone
+    (issue #392). ``next_at`` is empty once a one-time call has been missed."""
+
+    __tablename__ = "wakeup_calls"
+    __table_args__ = (UniqueConstraint("extension_id", "hhmm"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    extension_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("extensions.id", ondelete="CASCADE"))
+    hhmm: Mapped[str] = mapped_column(String(4))
+    daily: Mapped[bool] = mapped_column(Boolean, default=False)
+    next_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_result: Mapped[str | None] = mapped_column(String(16))
+    created_by: Mapped[str | None] = mapped_column(String(320))

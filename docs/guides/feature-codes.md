@@ -47,6 +47,8 @@ These are the defaults. Your installation may have changed some of them: the pag
 | `*30` | Block a caller | Enter a number; it is refused for the whole organization. |
 | `*31` | Unblock a caller | Enter a number to remove it. |
 | `*32` | Block the last caller | Blocks the last outside number that rang this phone directly. |
+| `*64` | Wake-up call | Enter a time as four digits, such as `0630` or `1415`. See [Wake-up calls](guide:wake-up-calls). |
+| `*65` | Cancel wake-up calls | Removes all of this phone's wake-up calls. |
 | `*45` | Queue log in / log out | Alone: every queue this phone may join. With a queue number: that queue only. |
 | `*46` | Queue pause / unpause | Alone, with a queue number, or with `**` and a pause reason's number. |
 | `*47` | Queue waiting count | With a queue number: says how many callers are waiting. |

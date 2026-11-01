@@ -1569,6 +1569,10 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     fax_service.tick(db, settings, get_adapter(settings))
+                from veyra.telephony import wakeup
+
+                with session_scope() as db:
+                    wakeup.tick(db, get_adapter(settings))
             # Outgoing webhooks (docs/INTEGRATIONS.md §3.5): voicemail
             # notifications in, due deliveries out.
             deliver_webhooks(settings, log)

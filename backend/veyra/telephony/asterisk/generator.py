@@ -150,6 +150,7 @@ ANONYMOUS_VALUES = ("", "anonymous", "restricted", "unavailable", "unknown", "pr
 # Queue dynamic agents (docs/CALL_FEATURES.md §4.9).
 AGENT_FAMILY = "veyra/agent"
 AGENT_EVENT = "VeyraAgent"
+WAKEUP_EVENT = "VeyraWakeup"
 FAX_EVENT = "VeyraFax"
 _FAX_STATION_RE = re.compile(r"^[0-9+ ]{1,32}$")
 # In-call codes (docs/CALL_FEATURES.md §4.11): the applicationmap feature and
@@ -1422,6 +1423,7 @@ def _dialplan(
             lines += _call_flow_contexts(mine(flows, ns))
             lines += _fax_contexts(mine(fax_inboxes, ns), fax_dir)
             lines += _disa_contexts(mine(disa_lines, ns))
+            lines += _wakeup_context()
             lines += _agent_contexts(codes, mine(queues, ns))
             lines += _parking_contexts(mine(lots, ns))
             lines += _directory_context(_directory_operator(snapshot, ns))
@@ -2542,6 +2544,7 @@ def _features(
         *_forward_codes(codes, cos),
         *_remote_forward_codes(codes, boxes or [], cos),
         *_personal_rooms(extensions, codes, cos),
+        *_wakeup_codes(codes, cos),
         *_follow_me_codes(codes, cos),
         *_intercom_code(codes, cos),
         *_voicemail_direct(codes, boxes or [], cos),
@@ -3989,6 +3992,56 @@ def _switch_hints(
             org = _slug(c.get("organization") or "", "organization")
             hints.append(f"exten => {prefix}{_code_index(c, key)},hint,Custom:veyra-tc-{org}-{key}")
     return hints
+
+
+def _wakeup_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
+    """``*64`` asks for a time and ``*65`` removes this phone's calls; the
+    backend keeps the rows (issue #392). A time the backend can't read is
+    caught here, so the caller hears it at once."""
+    lines: list[str] = []
+    event = f"UserEvent({WAKEUP_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},Action:"
+    code = codes.get("wakeup_set")
+    if code:
+        head = f"exten => {code},1,NoOp(Veyra wake-up call for ${{VEYRA_EXT}})"
+        body = [
+            " same => n(ask),Read(VEYRA_TIME,enter-a-time,4,,2,10)",
+            " same => n,Set(VEYRA_TIME=${FILTER(0-9,${VEYRA_TIME})})",
+            " same => n,GotoIf($[${LEN(${VEYRA_TIME})} != 4]?bad)",
+            " same => n,GotoIf($[${VEYRA_TIME:0:2} > 23 | ${VEYRA_TIME:2:2} > 59]?bad)",
+            f" same => n,{event} set,Time: ${{VEYRA_TIME}})",
+            " same => n,Playback(rqsted-wakeup-for)",
+            " same => n,SayDigits(${VEYRA_TIME})",
+            " same => n,Hangup()",
+            " same => n(bad),Playback(invalid)",
+            " same => n,Hangup()",
+        ]
+        lines += _code_block(head, body, cos, "wakeup_set")
+    code = codes.get("wakeup_cancel")
+    if code:
+        head = f"exten => {code},1,NoOp(Veyra wake-up calls cancelled for ${{VEYRA_EXT}})"
+        body = [
+            f" same => n,{event} cancel)",
+            " same => n,Playback(wakeup-call-cancelled)",
+            " same => n,Hangup()",
+        ]
+        lines += _code_block(head, body, cos, "wakeup_cancel")
+    return lines
+
+
+def _wakeup_context() -> list[str]:
+    """Where the worker's wake-up call goes once answered (issue #392). The
+    answer is reported first, so hanging up during the message still counts."""
+    return [
+        f"[{engine_names.current().wakeup}]",
+        "exten => s,1,Answer()",
+        f" same => n,UserEvent({WAKEUP_EVENT},Action: answered,Id: ${{VEYRA_WAKE_ID}})",
+        " same => n,Wait(1)",
+        " same => n,Playback(this-is-yr-wakeup-call)",
+        " same => n,Wait(1)",
+        " same => n,Playback(this-is-yr-wakeup-call)",
+        " same => n,Hangup()",
+        "",
+    ]
 
 
 # Wrong PINs in a row, across calls, before a line locks for DISA_LOCK_SECONDS.

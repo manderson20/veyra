@@ -111,6 +111,11 @@ class Names:
         """A day/night switch's routing context (docs/CALL_FEATURES.md §4.5)."""
         return self._p(f"flow-{slug}")
 
+    @property
+    def wakeup(self) -> str:
+        """What a wake-up call plays when answered (issue #392)."""
+        return self._p("wakeup")
+
     def disa(self, slug: str) -> str:
         """Outside line access: the PIN, then a dial tone (issue #392)."""
         return self._p(f"disa-{slug}")
