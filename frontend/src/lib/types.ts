@@ -1943,6 +1943,7 @@ export interface CallQueue {
   announce_holdtime?: boolean;
   report_holdtime?: boolean;
   member_delay?: number;
+  weight?: number;
   auto_pause_misses?: number;
   announce_frequency: number;
   announcement_prompt_id: string | null;
@@ -1988,6 +1989,7 @@ export interface QueueInput {
   announce_holdtime?: boolean;
   report_holdtime?: boolean;
   member_delay?: number;
+  weight?: number;
   auto_pause_misses?: number;
   announce_frequency?: number;
   announcement_prompt_id?: string | null;

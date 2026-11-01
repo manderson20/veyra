@@ -49,7 +49,10 @@ def test_queue_wait_options():
 
     plain = conf()
     assert "announce-holdtime=no" in plain and "reportholdtime=no" in plain
-    assert "memberdelay=0" in plain
+    assert "memberdelay=0" in plain and "weight=0" in plain
+    assert "weight=7" in conf(weight=7)
+    with pytest.raises(generator.GenerationError, match="weight"):
+        conf(weight=11)
     # The expected wait is announced on the position timer, so that must run.
     on = conf(announce_position=False, announce_holdtime=True, report_holdtime=True, member_delay=3)
     assert "announce-holdtime=yes" in on and "announce-frequency=90" in on

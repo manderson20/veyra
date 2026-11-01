@@ -4,7 +4,7 @@ summary: Let callers wait in line with music and announcements until an agent is
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.79
+reviewed: 0.27.80
 checked: 2026-10-29
 pages:
   - /queues/
@@ -68,6 +68,7 @@ Under **Agents**, choose an extension and click **Add**. A queue has at most 64 
 - **Tell the agent how long the caller waited**: the agent hears it just before being connected.
 - **Pause an agent after this many missed calls in a row** (0 to 10): for agents who log in and out, so callers don't keep ringing an empty desk. A pause applied this way shows on the **Agents** card, and the agent resumes with the pause code or from that card. It works from the queue log, so it can take a few minutes. Agents who are always in the queue aren't paused.
 - **Delay before connecting the agent (seconds)** (0 to 60): gives the agent a moment before the caller is heard.
+- **Queue weight** (0 to 10): for agents in more than one queue. When both queues have callers waiting, the agent gets the caller from the queue with the higher weight first. If every queue is 0, there is no preference. A high weight can leave callers in lower-weight queues waiting for a long time.
 - **Maximum wait (seconds)**: 0 for no limit, otherwise 30 to 3600. After that the caller goes to the destination below.
 - **Maximum callers waiting**: 0 for no limit, up to 100. A caller beyond the limit goes straight to the destination below.
 - **Let callers wait when no agent is available**: off, a caller goes straight to the destination below when no agent is logged in or free.

@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.80 — 2026-11-01
+
+Migration 0086 adds one queue column. Deploy the configuration to apply a weight.
+
+### Added
+- **Queue weight** (#392): an agent in several queues gets the caller from the queue with the higher weight first. Every queue starts at 0, which keeps today's behavior.
+
 ## 0.27.79 — 2026-11-01
 
 Migration 0085 adds the pause reason table and one queue member column. Deploy the configuration for the new phone codes; reasons added on the web need no deployment.

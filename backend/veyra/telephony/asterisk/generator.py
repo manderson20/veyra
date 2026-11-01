@@ -4928,6 +4928,7 @@ def _queues(
         freq = int(q.get("announce_frequency") or 60)
         periodic = int(q.get("periodic_seconds") or 60)
         delay = int(q.get("member_delay") or 0)
+        weight = int(q.get("weight") or 0)
         for what, value, lo, hi in (
             ("agent ring time", timeout, 5, 60),
             ("retry", retry, 1, 30),
@@ -4936,6 +4937,7 @@ def _queues(
             ("announcement frequency", freq, 15, 600),
             ("periodic announcement frequency", periodic, 15, 600),
             ("agent delay", delay, 0, 60),
+            ("weight", weight, 0, 10),
         ):
             if not lo <= value <= hi:
                 raise GenerationError(f"queue {slug}: {what} {value} is out of range")
@@ -4959,6 +4961,7 @@ def _queues(
             f"announce-holdtime={'yes' if holdtime else 'no'}",
             f"reportholdtime={'yes' if q.get('report_holdtime') else 'no'}",
             f"memberdelay={delay}",
+            f"weight={weight}",
         ]
         prompt = q.get("periodic_prompt")
         if prompt:

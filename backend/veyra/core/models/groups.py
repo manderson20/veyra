@@ -153,6 +153,8 @@ class CallQueue(UUIDPrimaryKey, Timestamps, TenantScoped, _Failover, Base):
     # The agent hears how long the caller waited, after a delay of member_delay seconds.
     report_holdtime: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     member_delay: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # An agent in several queues gets the higher weight's caller first.
+    weight: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Pause a logged-in dynamic agent after this many calls in a row rang out; 0: never.
     auto_pause_misses: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     announcement_prompt_id: Mapped[uuid.UUID | None] = mapped_column(

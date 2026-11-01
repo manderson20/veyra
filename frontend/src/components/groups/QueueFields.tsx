@@ -24,6 +24,7 @@ export interface QueueDraft {
   announce_holdtime: boolean;
   report_holdtime: boolean;
   member_delay: string;
+  weight: string;
   auto_pause_misses: string;
   announce_frequency: string;
   announcement_prompt_id: string;
@@ -52,6 +53,7 @@ export const EMPTY_QUEUE: QueueDraft = {
   announce_holdtime: false,
   report_holdtime: false,
   member_delay: "0",
+  weight: "0",
   auto_pause_misses: "0",
   announce_frequency: "60",
   announcement_prompt_id: "",
@@ -95,6 +97,7 @@ export function queueDraft(q: CallQueue): QueueDraft {
     announce_holdtime: q.announce_holdtime ?? false,
     report_holdtime: q.report_holdtime ?? false,
     member_delay: String(q.member_delay ?? 0),
+    weight: String(q.weight ?? 0),
     auto_pause_misses: String(q.auto_pause_misses ?? 0),
     announce_frequency: String(q.announce_frequency),
     announcement_prompt_id: q.announcement_prompt_id ?? "",
@@ -125,6 +128,7 @@ export function queueBody(d: QueueDraft): QueueInput {
     announce_holdtime: d.announce_holdtime,
     report_holdtime: d.report_holdtime,
     member_delay: Number(d.member_delay),
+    weight: Number(d.weight),
     auto_pause_misses: Number(d.auto_pause_misses),
     announce_frequency: Number(d.announce_frequency),
     announcement_prompt_id: d.announcement_prompt_id || null,
@@ -222,6 +226,8 @@ export function QueueFields({ draft, onChange, errors, organizationId, current, 
       <Checkbox label="Tell the agent how long the caller waited" checked={draft.report_holdtime} disabled={disabled} onChange={(e) => onChange({ report_holdtime: e.target.checked })} />
       <TextField label="Delay before connecting the agent (seconds)" type="number" min={0} max={60} required disabled={disabled} value={draft.member_delay} error={errors.member_delay}
         help="0 to 60. Gives the agent a moment before the caller is heard." onChange={(e) => onChange({ member_delay: e.target.value })} />
+      <TextField label="Queue weight" type="number" min={0} max={10} required disabled={disabled} value={draft.weight} error={errors.weight}
+        help="0 to 10. An agent in several queues gets the caller from the queue with the higher weight first." onChange={(e) => onChange({ weight: e.target.value })} />
       <TextField label="Pause an agent after this many missed calls in a row" type="number" min={0} max={10} required disabled={disabled} value={draft.auto_pause_misses} error={errors.auto_pause_misses}
         help="0 = never. Logged-in agents only; they resume with the pause code or the Agents card. It can take a few minutes." onChange={(e) => onChange({ auto_pause_misses: e.target.value })} />
       {draft.announce_position || draft.announce_holdtime ? (

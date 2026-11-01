@@ -94,6 +94,7 @@ class QueueIn(BaseModel):
     announce_holdtime: bool = False
     report_holdtime: bool = False
     member_delay: int = Field(0, ge=0, le=60)
+    weight: int = Field(0, ge=0, le=10)
     auto_pause_misses: int = Field(0, ge=0, le=10)
     announcement_prompt_id: uuid.UUID | None = None
     periodic_prompt_id: uuid.UUID | None = None
@@ -148,6 +149,7 @@ class QueuePatch(BaseModel):
     announce_holdtime: bool | None = None
     report_holdtime: bool | None = None
     member_delay: int | None = Field(None, ge=0, le=60)
+    weight: int | None = Field(None, ge=0, le=10)
     auto_pause_misses: int | None = Field(None, ge=0, le=10)
     announcement_prompt_id: uuid.UUID | None = None
     periodic_prompt_id: uuid.UUID | None = None
@@ -182,6 +184,7 @@ class QueueOut(BaseModel):
     announce_holdtime: bool = False
     report_holdtime: bool = False
     member_delay: int = 0
+    weight: int = 0
     auto_pause_misses: int = 0
     announcement_prompt_id: uuid.UUID | None
     announcement_prompt_name: str | None
@@ -309,6 +312,7 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
                 announce_holdtime=r.announce_holdtime,
                 report_holdtime=r.report_holdtime,
                 member_delay=r.member_delay,
+                weight=r.weight,
                 auto_pause_misses=r.auto_pause_misses,
                 announcement_prompt_id=r.announcement_prompt_id,
                 announcement_prompt_name=ann.name if ann else None,
@@ -412,6 +416,7 @@ _FIELDS = (
     "announce_holdtime",
     "report_holdtime",
     "member_delay",
+    "weight",
     "auto_pause_misses",
     "announcement_prompt_id",
     "periodic_prompt_id",

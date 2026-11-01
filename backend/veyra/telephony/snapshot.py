@@ -1068,6 +1068,7 @@ def _groups(
                 "announce_holdtime": q.announce_holdtime,
                 "report_holdtime": q.report_holdtime,
                 "member_delay": q.member_delay,
+                "weight": q.weight,
                 "announce_frequency": q.announce_frequency,
                 "announcement_prompt": prompt_slug(q.announcement_prompt_id, q.organization_id),
                 "periodic_prompt": prompt_slug(q.periodic_prompt_id, q.organization_id),
