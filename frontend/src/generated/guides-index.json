@@ -296,8 +296,8 @@
    "summary": "Connect Veyra to your phone carrier so calls can reach and leave the building.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.81",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/trunks/",
     "/trunks/view/"
@@ -310,8 +310,8 @@
    "summary": "Give a team one number that rings several phones at once or in turn, and decide where unanswered calls go.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.67",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.81",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/ring-groups/",
     "/ring-groups/view/"
@@ -365,7 +365,7 @@
    "summary": "Decide which dialled numbers go out to the carrier, through which trunks, and with which caller ID.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.74",
+   "reviewed": "0.27.81",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/outbound/",
@@ -379,7 +379,7 @@
    "summary": "Set opening hours, holidays and closed days, so calls outside them go to a different destination.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.77",
+   "reviewed": "0.27.81",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/routing/time-conditions/",
@@ -517,7 +517,7 @@
    "summary": "Set up 911 so it dials directly, sends the right number and location, alerts people on site, and reaches the caller on a callback.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.73",
+   "reviewed": "0.27.81",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/system/emergency/"

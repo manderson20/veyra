@@ -4,7 +4,7 @@ summary: Connect Veyra to your phone carrier so calls can reach and leave the bu
 audience: admin
 section: Calls and call flows
 order: 10
-reviewed: 0.27.45
+reviewed: 0.27.81
 checked: 2026-10-30T15:10Z
 pages:
   - /trunks/

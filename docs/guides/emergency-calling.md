@@ -4,7 +4,7 @@ summary: Set up 911 so it dials directly, sends the right number and location, a
 audience: admin
 section: Calls and call flows
 order: 80
-reviewed: 0.27.73
+reviewed: 0.27.81
 checked: 2026-10-29
 pages:
   - /system/emergency/
@@ -123,3 +123,7 @@ The **Sites** table shows each site as **ready** or how many checks are **missin
 - **Extensions missing a location**: the readiness check lists up to ten of them; fill in their **Location (dispatchable)** or **Building**.
 - **The notification test fails**: check that email is set up, and that the extensions listed under **Ring these extensions** exist in the site's organization.
 - **The 911 center sees the wrong address**: the address registered with the carrier for that number is wrong. Correct it with the carrier, then test again.
+
+## Calls through outside line access
+
+[Outside line access](guide:outside-line-access) refuses emergency numbers, because the 911 center would get the wrong address or none. Anyone using it must call 911 from their own phone's service.

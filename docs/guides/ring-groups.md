@@ -4,7 +4,7 @@ summary: Give a team one number that rings several phones at once or in turn, an
 audience: admin
 section: Calls and call flows
 order: 10
-reviewed: 0.27.67
+reviewed: 0.27.81
 checked: 2026-10-30T15:10Z
 pages:
   - /ring-groups/
