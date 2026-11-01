@@ -216,6 +216,7 @@ def test_queue_crud_prompts_and_in_use(admin, app):
             "dynamic": False,
             "logged_in": True,
             "paused": False,
+            "pause_reason": None,
             "state_by": None,
             "state_at": None,
         }
