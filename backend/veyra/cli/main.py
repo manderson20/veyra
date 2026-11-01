@@ -462,6 +462,27 @@ def cmd_updates_check(args: argparse.Namespace) -> int:
     return 0 if outcome in ("ok", "not_configured") else 1
 
 
+def _deploy_after_install() -> int:
+    """Deploy what the new release generates. A new process, because this one
+    still runs the old release's code (owner request 2026-11-01)."""
+    import shutil
+    import subprocess
+
+    command = shutil.which("veyra") or "/usr/local/bin/veyra"
+    print("Deploying the configuration…", flush=True)
+    done = subprocess.run(
+        [command, "config", "generate", "--deploy", "--if-changed", "--wait"], check=False
+    )
+    if done.returncode != 0:
+        print(
+            "The release is installed, but the configuration was not deployed. "
+            "See Telephony → Deploy, or run: sudo veyra config status",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 def cmd_updates_install(args: argparse.Namespace) -> int:
     """Install a release from the update feed without the web interface
     (owner request 2026-10-20): check, download, approve and start exactly as
@@ -551,6 +572,8 @@ def cmd_updates_install(args: argparse.Namespace) -> int:
         version, approved_at = row.version, row.approved_at
     print("Started; System → Updates shows the same progress.")
     if args.no_wait:
+        if not args.no_deploy:
+            print("--no-wait: the configuration is not deployed; do that once it has finished.")
         return 0
     step, deadline = None, time.monotonic() + args.timeout
     while time.monotonic() < deadline:
@@ -587,10 +610,12 @@ def cmd_updates_install(args: argparse.Namespace) -> int:
             )
         if state not in ("approved", "installing"):
             print(f"{version}: {state}.")
-            return 0 if state == "installed" else 1
+            if state != "installed":
+                return 1
+            return 0 if args.no_deploy else _deploy_after_install()
         time.sleep(3)
     print(f"{version} installed; the worker has not recorded it yet.")
-    return 0
+    return 0 if args.no_deploy else _deploy_after_install()
 
 
 def cmd_updates_record(args: argparse.Namespace) -> int:
@@ -917,6 +942,15 @@ def cmd_config_generate(args: argparse.Namespace) -> int:
     settings = get_settings()
     adapter = get_adapter(settings)
     key = try_load_installation_key(settings)
+    if args.if_changed:
+        with session_scope() as db:
+            waiting = service.pending_change(db)
+            pending = service.changes_pending(db, adapter, key)
+        if not pending:
+            print("No configuration changes to deploy.")
+            return 0
+        if waiting:
+            print(f"Includes a change not yet deployed: {waiting.get('what')}")
     with session_scope() as db:
         generated = service.create_revision(db, adapter, created_by="cli", key=key)
         rev = generated.revision
@@ -932,7 +966,7 @@ def cmd_config_generate(args: argparse.Namespace) -> int:
         )
         if args.deploy and rev.state == "validated":
             service.request_deploy(db, rev)
-        seq, state = rev.sequence, rev.state
+        seq, state, rev_id = rev.sequence, rev.state, rev.id
         errors, unchanged, changed = (
             list(rev.validation_errors),
             generated.unchanged,
@@ -945,9 +979,33 @@ def cmd_config_generate(args: argparse.Namespace) -> int:
         print("  no change from the deployed configuration")
     elif changed:
         print("  changed files: " + ", ".join(changed))
+    if state == "deploying" and args.wait:
+        return _wait_for_deploy(rev_id, seq)
     if state == "deploying":
         print("  queued for the deployer (watch: journalctl -u veyra-deployer)")
+    if args.deploy and args.wait:
+        return 1  # asked for a deployment and none could be queued
     return 0 if state in ("validated", "deploying") else 1
+
+
+def _wait_for_deploy(rev_id: Any, sequence: int, timeout: int = 180) -> int:
+    """Follow the deployer until it has dealt with the revision."""
+    import time
+
+    from veyra.core.db import session_scope
+    from veyra.core.models import ConfigRevision
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with session_scope() as db:
+            rev = db.get(ConfigRevision, rev_id)
+            state = rev.state if rev else "gone"
+        if state != "deploying":
+            print(f"revision #{sequence}: {state}")
+            return 0 if state == "deployed" else 1
+        time.sleep(2)
+    print(f"revision #{sequence} is still deploying; check: veyra config status", file=sys.stderr)
+    return 1
 
 
 def cmd_config_deploy(args: argparse.Namespace) -> int:
@@ -2563,6 +2621,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("version", nargs="?", help="A specific offered version (default: newest)")
     s.add_argument("--no-check", action="store_true", help="Do not check the feed first")
     s.add_argument("--no-wait", action="store_true", help="Return once the installer started")
+    s.add_argument(
+        "--no-deploy", action="store_true", help="Do not deploy the configuration afterwards"
+    )
     s.add_argument("--timeout", type=int, default=1800, help="Seconds to follow it (default 1800)")
     s.set_defaults(func=cmd_updates_install)
     s = upd.add_parser("record", help="Record an update applied by upgrade.sh")
@@ -2618,6 +2679,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_config_status)
     s = cfg.add_parser("generate", help="Generate and validate a revision from the database")
     s.add_argument("--deploy", action="store_true", help="Queue it for deployment when valid")
+    s.add_argument(
+        "--if-changed",
+        action="store_true",
+        help="Do nothing when the database matches the deployed configuration",
+    )
+    s.add_argument("--wait", action="store_true", help="Wait for the deployer's result")
     s.set_defaults(func=cmd_config_generate)
     s = cfg.add_parser("deploy", help="Queue a revision for deployment (rollback: an older one)")
     s.add_argument(

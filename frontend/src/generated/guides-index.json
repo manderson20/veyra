@@ -736,8 +736,8 @@
    "summary": "Install new Veyra releases and operating system updates, now or in a maintenance window, from the web page or the server console.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.83",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/updates/"
    ],

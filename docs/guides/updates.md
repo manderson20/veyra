@@ -4,7 +4,7 @@ summary: Install new Veyra releases and operating system updates, now or in a ma
 audience: admin
 section: Maintenance
 order: 10
-reviewed: 0.27.44
+reviewed: 0.27.83
 checked: 2026-10-29
 pages:
   - /updates/
@@ -46,10 +46,15 @@ If the web interface is not available, or you prefer the console, run on the ser
 sudo veyra updates install
 ```
 
-It checks the feed, downloads and verifies the newest release, approves it and starts the installation, exactly as the web page does, and prints each step until it finishes. The web page shows the same progress and history. Useful options:
+It checks the feed, downloads and verifies the newest release, approves it and starts the installation, exactly as the web page does, and prints each step until it finishes. The web page shows the same progress and history.
+
+When the installation succeeds, the command also [deploys the configuration](guide:deploy-changes) if anything needs it, and prints the result. **Any change waiting to be deployed goes live too**, including changes someone else made and hasn't deployed yet. The deployment starts right away; it doesn't wait for calls to end. If it fails, the release stays installed and the command says so. Installing from the web page doesn't deploy; do that yourself afterwards.
+
+Useful options:
 
 - `sudo veyra updates install 0.27.44` installs that offered version instead of the newest.
-- `--no-wait` returns as soon as the installation has started.
+- `--no-deploy` skips the deployment, for example when someone has changes they aren't ready to apply.
+- `--no-wait` returns as soon as the installation has started, and doesn't deploy.
 - `sudo veyra updates check` only checks; it never installs.
 
 The approval is recorded in the audit log as done by `cli (<your user name>)`.

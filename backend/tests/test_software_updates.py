@@ -523,10 +523,22 @@ def test_cli_install_uses_the_same_states(admin, app, tmp_path, served, monkeypa
         return Done()
 
     monkeypatch.setattr(manager.subprocess, "run", run)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/local/bin/veyra")
     assert cli(["updates", "install", "--timeout", "3"]) == 0
     out = capsys.readouterr().out
     assert f"Installing {NEW}" in out and "Finished" in out, out
-    assert calls == [["systemctl", "start", "--no-block", f"veyra-upgrade@{NEW}.service"]]
+    assert calls == [
+        ["systemctl", "start", "--no-block", f"veyra-upgrade@{NEW}.service"],
+        # In a new process: the new release's code generates the configuration.
+        [
+            "/usr/local/bin/veyra",
+            "config",
+            "generate",
+            "--deploy",
+            "--if-changed",
+            "--wait",
+        ],
+    ]
     upd = admin.get("/api/v1/updates/available").json()[0]
     assert upd["state"] == "installing" and upd["approved_by"] == "cli (owner)"
     with session_scope() as db:
@@ -596,3 +608,30 @@ def test_failure_after_the_switch_says_the_new_version_runs(admin, settings, mon
         assert row.state == "failed"
         assert f"Veyra {NEW} is installed and running" in (row.error or "")
         db.delete(row)
+
+
+def test_failed_deploy_after_install_is_reported(monkeypatch, capsys):
+    from veyra.cli import main as cli_main
+
+    class Failed:
+        returncode = 1
+
+    monkeypatch.setattr("subprocess.run", lambda cmd, check: Failed())
+    assert cli_main._deploy_after_install() == 1
+    assert "not deployed" in capsys.readouterr().err
+
+
+def test_generate_if_changed_does_nothing_without_changes(app, monkeypatch, capsys):
+    from fake_adapter import FakeAdapter
+
+    from veyra.configmgmt import service
+    from veyra.core.models import ConfigRevision
+
+    monkeypatch.setattr("veyra.telephony.get_adapter", lambda settings: FakeAdapter())
+    monkeypatch.setattr(service, "changes_pending", lambda db, adapter, key: False)
+    with session_scope() as db:
+        before = db.query(ConfigRevision).count()
+    assert cli(["config", "generate", "--deploy", "--if-changed", "--wait"]) == 0
+    assert "No configuration changes" in capsys.readouterr().out
+    with session_scope() as db:
+        assert db.query(ConfigRevision).count() == before

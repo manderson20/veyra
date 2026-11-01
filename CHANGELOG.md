@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.83 — 2026-11-01
+
+### Changed
+- **`sudo veyra updates install` also deploys the configuration** when it succeeds, if anything needs deploying, and prints the result. Any change waiting to be deployed goes live with it. Use `--no-deploy` to skip it. This starts with the next install after this one, because the installed version runs the command. Installing from the web page doesn't deploy.
+
 ## 0.27.82 — 2026-11-01
 
 Migration 0088 adds the wake-up call table. Deploy the configuration for the phone codes and the wake-up message.
