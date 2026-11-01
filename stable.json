@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 99,
+  "sequence": 100,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.83",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Command-line install also deploys the configuration",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "881579ff7e",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.83/veyra-0.27.83.tar.gz",
+        "sha256": "b55f01b83cfd6fb8cb39a7c2446a3621c0593671fcbfbe58c0d874ef0c750ccb",
+        "size": 9620801
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1686,6 +1703,6 @@
       }
     }
   ],
-  "generated_at": "2026-11-01T15:35:11+00:00",
-  "expires_at": "2027-01-30T15:35:11+00:00"
+  "generated_at": "2026-11-01T16:11:22+00:00",
+  "expires_at": "2027-01-30T16:11:22+00:00"
 }
