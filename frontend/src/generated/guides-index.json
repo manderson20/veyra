@@ -82,7 +82,7 @@
    "summary": "Create an extension for each phone, assign it to a person, and set its caller ID, location, voicemail and phone options.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.77",
+   "reviewed": "0.27.82",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/extensions/",
@@ -413,6 +413,19 @@
     "/disa/"
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Let-staff-call-out-from-outside"
+  },
+  {
+   "slug": "wake-up-calls",
+   "title": "Wake-up calls",
+   "summary": "Have a phone ring at a chosen time and play a message, once or every day.",
+   "audience": "user",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.82",
+   "reviewed_date": "2026-11-01",
+   "pages": [
+    "/extensions/view/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Wake-up-calls"
   },
   {
    "slug": "day-night-switches",
@@ -858,7 +871,7 @@
    "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.77",
+   "reviewed": "0.27.82",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/my-phone/"
@@ -871,7 +884,7 @@
    "summary": "Listen to your messages from your phone or the browser, record your greetings, set an away message for the holidays, and choose your PIN.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.79",
+   "reviewed": "0.27.82",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/my-phone/"

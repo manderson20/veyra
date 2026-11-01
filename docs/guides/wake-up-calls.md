@@ -1,7 +1,7 @@
 ---
 title: Wake-up calls
 summary: Have a phone ring at a chosen time and play a message, once or every day.
-audience: all
+audience: user
 section: Calls and call flows
 order: 46
 reviewed: 0.27.82

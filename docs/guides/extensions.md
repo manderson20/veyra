@@ -4,7 +4,7 @@ summary: Create an extension for each phone, assign it to a person, and set its 
 audience: admin
 section: Getting started
 order: 50
-reviewed: 0.27.77
+reviewed: 0.27.82
 checked: 2026-10-29
 pages:
   - /extensions/
