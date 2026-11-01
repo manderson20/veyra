@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 98,
+  "sequence": 99,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.82",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Wake-up calls",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "9133dfc4ad",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.82/veyra-0.27.82.tar.gz",
+        "sha256": "3eb622b050c7d55689a04bbcb97edcc7c14a7357c2b8aa9a3b10e8c585cef8e6",
+        "size": 9617452
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1669,6 +1686,6 @@
       }
     }
   ],
-  "generated_at": "2026-11-01T15:07:13+00:00",
-  "expires_at": "2027-01-30T15:07:13+00:00"
+  "generated_at": "2026-11-01T15:35:11+00:00",
+  "expires_at": "2027-01-30T15:35:11+00:00"
 }
