@@ -470,7 +470,7 @@ def _deploy_after_install() -> int:
 
     command = shutil.which("veyra") or "/usr/local/bin/veyra"
     print("Deploying the configuration…", flush=True)
-    done = subprocess.run(
+    done = subprocess.run(  # noqa: S603 - our own command, fixed arguments
         [command, "config", "generate", "--deploy", "--if-changed", "--wait"], check=False
     )
     if done.returncode != 0:
