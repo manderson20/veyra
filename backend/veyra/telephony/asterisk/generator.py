@@ -3656,7 +3656,8 @@ def _agent_contexts(codes: dict[str, str], queues: list[dict[str, Any]]) -> list
 def _agent_codes(
     codes: dict[str, str], queues: list[dict[str, Any]], cos: Cos | None = None
 ) -> list[str]:
-    """``*45[<queue>]`` log in / out, ``*46`` pause / unpause, ``*47<queue>``
+    """``*45[<queue>]`` log in / out, ``*46[<queue>]`` pause / unpause, ``*46**<code>``
+    pause with a reason, ``*47<queue>``
     waiting count (docs/CALL_FEATURES.md §4.9)."""
     n = engine_names.current()
     lines: list[str] = []
@@ -3703,6 +3704,55 @@ def _agent_codes(
             " same => n,Hangup()",
         ]
         lines += _code_block(head, body, cos, "queue_pause")
+        # A pause with a reason: the backend turns the code into its label,
+        # and the queue log keeps the code for the reports.
+        cut = len(pause) + 2
+        head = f"exten => _{pause}**X.,1,NoOp(Veyra queue pause with a reason for ${{VEYRA_EXT}})"
+        body = [
+            f' same => n,GotoIf($["${{DB({key})}}"!="1"]?notin)',
+            f" same => n,Set(VEYRA_REASON=${{FILTER(0-9,${{EXTEN:{cut}}})}})",
+            " same => n,PauseQueueMember(,PJSIP/${CHANNEL(endpoint)},,${VEYRA_REASON})",
+            f" same => n,Set(DB({key}/paused)=1)",
+            f" same => n,Set(DEVICE_STATE({device})=INUSE)",
+            f" same => n,UserEvent({AGENT_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},"
+            "Action: pause,Reason: ${VEYRA_REASON})",
+            " same => n,Playback(dictate/pause)",
+            " same => n,Hangup()",
+            " same => n(notin),Playback(agent-loggedoff)",
+            " same => n,Hangup()",
+        ]
+        lines += _code_block(head, body, cos, "queue_pause")
+        # One queue: the engine says whether the agent is paused there; the
+        # worker's sync sets the all-queues lamp afterwards.
+        for q in queues:
+            if not any(m.get("dynamic") for m in q.get("members") or []):
+                continue
+            slug = _slug(q["slug"], "queue slug")
+            qname = n.queue(slug)
+            iface = "PJSIP/${CHANNEL(endpoint)}"
+            head = (
+                f"exten => {pause}{q['number']},1,NoOp(Veyra queue {slug} pause toggle "
+                "for ${VEYRA_EXT})"
+            )
+            event = (
+                f"UserEvent({AGENT_EVENT},Org: ${{VEYRA_ORG}},Extension: ${{VEYRA_EXT}},"
+                f"Queue: {slug},Action:"
+            )
+            body = [
+                f' same => n,GotoIf($["${{DB({key}/{slug})}}"!="1"]?notin)',
+                f' same => n,GotoIf($["${{QUEUE_MEMBER({qname},paused,{iface})}}"="1"]?unpause)',
+                f" same => n,PauseQueueMember({qname},{iface},,veyra)",
+                f" same => n,{event} pause)",
+                " same => n,Playback(dictate/pause)",
+                " same => n,Hangup()",
+                f" same => n(unpause),UnpauseQueueMember({qname},{iface})",
+                f" same => n,{event} unpause)",
+                " same => n,Playback(agent-loginok)",
+                " same => n,Hangup()",
+                " same => n(notin),Playback(agent-loggedoff)",
+                " same => n,Hangup()",
+            ]
+            lines += _code_block(head, body, cos, "queue_pause")
     count = codes.get("queue_count")
     if count:
         for q in queues:

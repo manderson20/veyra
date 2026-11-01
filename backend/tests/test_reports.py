@@ -148,10 +148,12 @@ def test_queue_log_and_queue_report(admin, app):
         "garbage",
         # Agent states (issue #135): a logs in, pauses 60 s, logs out.
         f"{base + 10}|NONE|veyra-{slug}|PJSIP/{a}|ADDMEMBER|",
-        f"{base + 200}|NONE|veyra-{slug}|PJSIP/{a}|PAUSE|lunch",
+        f"{base + 200}|NONE|veyra-{slug}|PJSIP/{a}|PAUSE|1",
         f"{base + 260}|NONE|veyra-{slug}|PJSIP/{a}|UNPAUSE|",
         f"{base + 310}|NONE|veyra-{slug}|PJSIP/{a}|REMOVEMEMBER|",
     ]
+    reason = {"organization_id": org["id"], "label": "Lunch"}
+    assert admin.post("/api/v1/queues/pause-reasons", json=reason).json()["code"] == 1
     with session_scope() as db:
         assert queues.ingest(db, log) == 13
         assert db.query(QueueEvent).count() == 13
@@ -163,6 +165,7 @@ def test_queue_log_and_queue_report(admin, app):
     assert [x["agent"] for x in r["agents"]] == ["1001 Front Office", "1002 Nurse"]
     a_row = r["agents"][0]
     assert (a_row["logged_in_seconds"], a_row["paused_seconds"]) == (300, 60)
+    assert a_row["paused_reasons"] == [{"reason": "Lunch", "seconds": 60}]
     assert r["agents"][1]["logged_in_seconds"] is None
     assert r["left_with_key"] == 1
 

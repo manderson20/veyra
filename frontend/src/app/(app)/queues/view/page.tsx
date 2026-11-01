@@ -6,10 +6,11 @@ import { Suspense, useState, type FormEvent } from "react";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
 import { EMPTY_QUEUE, QUEUE_MUSIC_LABELS, QUEUE_STRATEGY_LABELS, QueueFields, queueBody, queueDraft, queueValid, type QueueDraft } from "@/components/groups/QueueFields";
 import { DestinationLabel } from "@/components/routing/DestinationPicker";
-import { Badge, Button, Callout, Card, ConfirmDialog, ErrorState, LoadingState, PageHeader, useToast } from "@/components/ui";
+import { PauseReasonsCard } from "@/components/groups/PauseReasonsCard";
+import { Badge, Button, Callout, Card, ConfirmDialog, Dialog, ErrorState, LoadingState, PageHeader, SelectField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatDateTime, formatRelative } from "@/lib/format";
-import type { CallQueue } from "@/lib/types";
+import type { CallQueue, QueuePauseReason } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
@@ -30,6 +31,9 @@ function QueueView() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [changed, setChanged] = useState(0);
   const [agentBusy, setAgentBusy] = useState<string | null>(null);
+  const [pausing, setPausing] = useState<string | null>(null);
+  const [pauseReason, setPauseReason] = useState("");
+  const reasons = useApiData<QueuePauseReason[]>(queue.data ? "/queues/pause-reasons" : null, { organization_id: queue.data?.organization_id });
 
   useOnChange(queue.data, (q) => {
     if (q) setDraft(queueDraft(q));
@@ -70,7 +74,7 @@ function QueueView() {
   };
 
   const agents = q.members.length;
-  const setAgent = async (extensionId: string, body: { logged_in?: boolean; paused?: boolean }, kind: string) => {
+  const setAgent = async (extensionId: string, body: { logged_in?: boolean; paused?: boolean; pause_reason_id?: string }, kind: string) => {
     setAgentBusy(`${extensionId}:${kind}`);
     try {
       queue.setData(await api.post<CallQueue>(`/queues/${q.id}/agents/${extensionId}/state`, body));
@@ -117,13 +121,13 @@ function QueueView() {
                   <li key={m.extension_id} className="list-row" style={{ padding: "var(--space-2) 0" }}>
                     <span className="row" style={{ gap: 8 }}>
                       <span className="table__primary">{m.number} — {m.display_name}</span>
-                      <Badge tone={m.logged_in ? (m.paused ? "warn" : "ok") : "neutral"}>{m.logged_in ? (m.paused ? "Paused" : "Logged in") : "Logged out"}</Badge>
+                      <Badge tone={m.logged_in ? (m.paused ? "warn" : "ok") : "neutral"}>{m.logged_in ? (m.paused ? (m.pause_reason ? `Paused: ${m.pause_reason}` : "Paused") : "Logged in") : "Logged out"}</Badge>
                       {m.state_at ? <span className="subtle">{formatRelative(m.state_at)}{m.state_by ? ` by ${m.state_by}` : ""}</span> : null}
                     </span>
                     {editable ? (
                       <span className="row" style={{ gap: 4 }}>
                         <Button size="sm" loading={agentBusy === `${m.extension_id}:login`} disabled={agentBusy !== null} onClick={() => setAgent(m.extension_id, { logged_in: !m.logged_in }, "login")}>{m.logged_in ? "Log out" : "Log in"}</Button>
-                        <Button size="sm" variant="ghost" loading={agentBusy === `${m.extension_id}:pause`} disabled={agentBusy !== null || !m.logged_in} onClick={() => setAgent(m.extension_id, { paused: !m.paused }, "pause")}>{m.paused ? "Resume" : "Pause"}</Button>
+                        <Button size="sm" variant="ghost" loading={agentBusy === `${m.extension_id}:pause`} disabled={agentBusy !== null || !m.logged_in} onClick={() => { if (!m.paused && reasons.data?.length) { setPauseReason(""); setPausing(m.extension_id); } else void setAgent(m.extension_id, { paused: !m.paused }, "pause"); }}>{m.paused ? "Resume" : "Pause"}</Button>
                       </span>
                     ) : null}
                   </li>
@@ -131,6 +135,7 @@ function QueueView() {
               </ul>
             </Card>
           ) : null}
+          <PauseReasonsCard organizationId={q.organization_id} reasons={reasons.data ?? []} editable={editable} onChange={reasons.reload} />
           <Card title="As deployed" subtitle="What the phone system does with this queue after the next deployment.">
             <dl className="dl">
               <dt>Dial</dt><dd><span className="mono">{q.number}</span></dd>
@@ -152,6 +157,17 @@ function QueueView() {
           </Card>
         </div>
       </div>
+      <Dialog
+        open={pausing !== null}
+        onClose={() => setPausing(null)}
+        title="Pause this agent"
+        footer={<>
+          <Button onClick={() => setPausing(null)}>Cancel</Button>
+          <Button variant="primary" onClick={() => { const ext = pausing; setPausing(null); if (ext) void setAgent(ext, pauseReason ? { paused: true, pause_reason_id: pauseReason } : { paused: true }, "pause"); }}>Pause</Button>
+        </>}
+      >
+        <SelectField label="Reason" value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} options={[{ value: "", label: "No reason" }, ...(reasons.data ?? []).map((r) => ({ value: r.id, label: r.label }))]} />
+      </Dialog>
       <ConfirmDialog open={deleting} title={`Delete the queue "${q.name}"?`} confirmLabel="Delete queue" tone="danger" busy={deleteBusy} error={deleteError} onConfirm={remove} onCancel={() => { setDeleting(false); setDeleteError(null); }}>
         <p>Routes, menus, groups and queues that point at it must be changed first. The number stops working at the next deployment.</p>
       </ConfirmDialog>

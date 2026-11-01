@@ -75,6 +75,7 @@ class FakeAdapter(TelephonyAdapter):
         self.store_calls: list[tuple[str, str, str | None]] = []
         self.queue_state: dict[str, dict[str, dict[str, Any]]] = {}
         self.queue_calls: list[tuple[str, str, bool, bool]] = []
+        self.queue_reasons: list[str] = []
         # trunk section -> registration status word, as "the engine" reports it.
         self.trunk_regs: dict[str, str] = {}
 
@@ -193,7 +194,9 @@ class FakeAdapter(TelephonyAdapter):
         paused: bool = False,
         penalty: int = 0,
         name: str = "",
+        reason: str = "",
     ) -> None:
+        self.queue_reasons.append(reason)
         self.queue_calls.append((queue, interface, present, paused))
         members = self.queue_state.setdefault(queue, {})
         if present:

@@ -174,6 +174,65 @@ def test_auto_pause_after_missed_calls_in_a_row(admin, app):
     assert adapter.queue_calls[-1][-1] is True
 
 
+def test_pause_reasons(admin, app):
+    adapter = _fake(app)
+    org = _org(admin)
+    a = _ext(admin, org["id"], "6021", "Reasons")
+    q = _queue(
+        admin,
+        org,
+        [{"extension_id": a["id"], "penalty": 0, "dynamic": True}],
+        name="Why",
+        number="2421",
+    )
+    reasons = f"{QUEUES}/pause-reasons"
+    lunch = admin.post(reasons, json={"organization_id": org["id"], "label": "Lunch"}).json()
+    desk = admin.post(reasons, json={"organization_id": org["id"], "label": "Desk"}).json()
+    assert (lunch["code"], desk["code"]) == (1, 2)
+    taken = admin.post(reasons, json={"organization_id": org["id"], "label": "x", "code": 2})
+    assert taken.status_code == 409
+    listed = admin.get(reasons, params={"organization_id": org["id"]}).json()
+    assert [r["label"] for r in listed] == ["Lunch", "Desk"]
+
+    url = f"{QUEUES}/{q['id']}/agents/{a['id']}/state"
+    assert admin.post(url, json={"logged_in": True}).status_code == 200
+
+    def member():
+        return admin.get(f"{QUEUES}/{q['id']}").json()["members"][0]
+
+    # From the web: the engine gets the code, a new reason replaces the old.
+    admin.post(url, json={"paused": True, "pause_reason_id": lunch["id"]})
+    assert member()["pause_reason"] == "Lunch"
+    assert adapter.queue_reasons[-1] == "1"
+    admin.post(url, json={"paused": True, "pause_reason_id": desk["id"]})
+    assert member()["pause_reason"] == "Desk"
+    admin.post(url, json={"paused": False})
+    assert member()["pause_reason"] is None
+
+    # A reason that isn't this organization's is refused.
+    bad = admin.post(
+        url, json={"paused": True, "pause_reason_id": "00000000-0000-0000-0000-000000000001"}
+    )
+    assert bad.status_code == 404
+
+    # From the phone: the code becomes the label; an unknown code still pauses.
+    event = {"Org": org["slug"], "Extension": "6021", "Action": "pause", "Reason": "1"}
+    with session_scope() as db:
+        assert agents.handle_userevent(db, event) == 1
+    assert member()["pause_reason"] == "Lunch"
+    with session_scope() as db:
+        agents.handle_userevent(db, {**event, "Action": "unpause"})
+        agents.handle_userevent(db, {**event, "Reason": "77"})
+    got = member()
+    assert got["paused"] is True and got["pause_reason"] is None
+
+    # Deleting a reason keeps the agent paused, without it.
+    admin.post(url, json={"paused": True, "pause_reason_id": desk["id"]})
+    assert admin.delete(f"{reasons}/{desk['id']}").status_code == 204
+    got = member()
+    assert got["paused"] is True and got["pause_reason"] is None
+
+
 def test_breakout_menu_is_validated_and_rendered(admin, app):
     org = _org(admin)
     a = _ext(admin, org["id"], "6003")
@@ -288,6 +347,13 @@ def test_generated_queue_agents_and_breakout():
     )
     assert "PauseQueueMember(,PJSIP/${CHANNEL(endpoint)},,veyra)" in features
     assert "QUEUE_WAITING_COUNT(veyra-support)" in features
+    # A pause with a reason, and a pause in one queue.
+    assert "exten => _*46**X.,1,NoOp(Veyra queue pause with a reason" in features
+    assert "PauseQueueMember(,PJSIP/${CHANNEL(endpoint)},,${VEYRA_REASON})" in features
+    assert "Action: pause,Reason: ${VEYRA_REASON})" in features
+    assert "exten => *462400,1,NoOp(Veyra queue support pause toggle" in features
+    assert "QUEUE_MEMBER(veyra-support,paused,PJSIP/${CHANNEL(endpoint)})" in features
+    assert "Queue: support,Action: unpause)" in features
     internal = _context(dp, "veyra-internal")
     assert "exten => *45*1001,hint,Custom:veyra-agent-example-1001" in internal
     assert "exten => *46*1001,hint,Custom:veyra-agentpause-example-1001" in internal

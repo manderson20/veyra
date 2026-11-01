@@ -200,8 +200,25 @@ class QueueMember(Base):
     dynamic: Mapped[bool] = mapped_column(Boolean, default=False)
     logged_in: Mapped[bool] = mapped_column(Boolean, default=False)
     paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    pause_reason_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("queue_pause_reasons.id", ondelete="SET NULL")
+    )
     state_by: Mapped[str | None] = mapped_column(String(200))
     state_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class QueuePauseReason(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
+    """Why an agent paused (issue #392); the phone dials the pause code, ``**``
+    and ``code``, and the queue log carries the code for the reports."""
+
+    __tablename__ = "queue_pause_reasons"
+    __table_args__ = (UniqueConstraint("organization_id", "code"),)
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
+    )
+    code: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str] = mapped_column(String(60))
 
 
 class PickupGroup(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

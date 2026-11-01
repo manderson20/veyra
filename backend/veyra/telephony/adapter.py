@@ -221,6 +221,7 @@ class TelephonyAdapter(ABC):
         paused: bool = False,
         penalty: int = 0,
         name: str = "",
+        reason: str = "",
     ) -> None:
         """Log a dynamic agent in or out of a queue and set its pause state live."""
         raise NotSupported("queue members are not supported by this engine")

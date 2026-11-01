@@ -33,6 +33,7 @@ from veyra.core.models.groups import (
     PickupGroup,
     PickupGroupMember,
     QueueMember,
+    QueuePauseReason,
     RingGroup,
     RingGroupMember,
 )
@@ -206,6 +207,7 @@ __all__ = [
     "ProvisioningVariable",
     "QueueEvent",
     "QueueMember",
+    "QueuePauseReason",
     "RecordingPolicy",
     "RingGroup",
     "RingGroupMember",

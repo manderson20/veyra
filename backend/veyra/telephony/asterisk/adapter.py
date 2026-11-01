@@ -438,6 +438,7 @@ class AsteriskAdapter(TelephonyAdapter):
         paused: bool = False,
         penalty: int = 0,
         name: str = "",
+        reason: str = "",
     ) -> None:
         q = _check_section_name(queue)
         iface = _check_interface(interface)
@@ -450,7 +451,8 @@ class AsteriskAdapter(TelephonyAdapter):
             if not ok or ("Unable" in out and "Already" not in out):
                 raise EngineUnavailable(f"could not add {iface} to {q}: {out[:200]}")
             verb = "pause" if paused else "unpause"
-            ok, out = cli.run(f"queue {verb} member {iface} queue {q} reason veyra")
+            why = reason if re.fullmatch(r"[A-Za-z0-9_-]{1,40}", reason) else "veyra"
+            ok, out = cli.run(f"queue {verb} member {iface} queue {q} reason {why}")
             if not ok or "Unable" in out:
                 raise EngineUnavailable(f"could not {verb} {iface} in {q}: {out[:200]}")
         else:

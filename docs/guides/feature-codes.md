@@ -4,7 +4,7 @@ summary: The star codes phones dial to forward calls, turn on Do Not Disturb, pi
 audience: admin
 section: Getting started
 order: 60
-reviewed: 0.27.76
+reviewed: 0.27.79
 checked: 2026-11-01
 pages:
   - /feature-codes/
@@ -48,7 +48,7 @@ These are the defaults. Your installation may have changed some of them: the pag
 | `*31` | Unblock a caller | Enter a number to remove it. |
 | `*32` | Block the last caller | Blocks the last outside number that rang this phone directly. |
 | `*45` | Queue log in / log out | Alone: every queue this phone may join. With a queue number: that queue only. |
-| `*46` | Queue pause / unpause | Alone or with a queue number. |
+| `*46` | Queue pause / unpause | Alone, with a queue number, or with `**` and a pause reason's number. |
 | `*47` | Queue waiting count | With a queue number: says how many callers are waiting. |
 | `*1` | Record this call | During a call: starts recording (a beep); again, stops it. |
 | `*2` | Attended transfer | During a call, then the number: talk first, hang up to connect. |

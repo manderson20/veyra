@@ -20,6 +20,7 @@ from veyra.core.models import (
     CallSample,
     Extension,
     QueueEvent,
+    QueuePauseReason,
     SipTrunk,
 )
 from veyra.core.models.base import utcnow
@@ -273,14 +274,17 @@ STATE_LOOKBACK = timedelta(days=7)
 
 def _agent_states(
     db: Session, queues: set[str], since: datetime, until: datetime
-) -> dict[tuple[str, str], tuple[int, int]]:
+) -> tuple[dict[tuple[str, str], tuple[int, int]], dict[tuple[str, str], dict[str, int]]]:
     """(queue, agent) → (seconds logged in, seconds paused) within the period,
+    and the paused seconds by the engine's reason (a pause reason's code),
     replayed from ADDMEMBER/REMOVEMEMBER/PAUSE/UNPAUSE (state before the
     period comes from up to a week earlier; a state still open at the end
     counts up to the end, or now)."""
     end = min(until, utcnow())
     events = db.execute(
-        select(QueueEvent.queue, QueueEvent.agent, QueueEvent.event, QueueEvent.at)
+        select(
+            QueueEvent.queue, QueueEvent.agent, QueueEvent.event, QueueEvent.at, QueueEvent.data1
+        )
         .where(
             QueueEvent.at >= since - STATE_LOOKBACK,
             QueueEvent.at < until,
@@ -291,6 +295,8 @@ def _agent_states(
     ).all()
     out: dict[tuple[str, str], tuple[int, int]] = {}
     state: dict[tuple[str, str], dict[str, datetime | None]] = {}
+    why: dict[tuple[str, str], str] = {}
+    by_reason: dict[tuple[str, str], dict[str, int]] = {}
 
     def span(a: datetime | None, b: datetime) -> int:
         if a is None:
@@ -298,7 +304,14 @@ def _agent_states(
         lo, hi = max(a, since), min(b, end)
         return max(0, int((hi - lo).total_seconds()))
 
-    for queue, agent, event, at in events:
+    def close_pause(key: tuple[str, str], at: datetime) -> int:
+        seconds = span(state[key]["pause"], at)
+        if seconds:
+            reasons = by_reason.setdefault(key, {})
+            reasons[why.get(key, "")] = reasons.get(why.get(key, ""), 0) + seconds
+        return seconds
+
+    for queue, agent, event, at, data1 in events:
         key = (queue, agent)
         st = state.setdefault(key, {"in": None, "pause": None})
         logged, paused = out.get(key, (0, 0))
@@ -306,18 +319,21 @@ def _agent_states(
             st["in"] = at
         elif event == "REMOVEMEMBER":
             logged += span(st["in"], at)
-            paused += span(st["pause"], at)
+            paused += close_pause(key, at)
             st["in"] = st["pause"] = None
-        elif event == "PAUSE" and st["pause"] is None:
-            st["pause"] = at
+        elif event == "PAUSE":
+            # Paused again with another reason: the time so far was the old one's.
+            if st["pause"] is None or why.get(key) != data1:
+                paused += close_pause(key, at)
+                st["pause"], why[key] = at, data1
         elif event == "UNPAUSE":
-            paused += span(st["pause"], at)
+            paused += close_pause(key, at)
             st["pause"] = None
         out[key] = (logged, paused)
     for key, st in state.items():
         logged, paused = out.get(key, (0, 0))
-        out[key] = (logged + span(st["in"], end), paused + span(st["pause"], end))
-    return out
+        out[key] = (logged + span(st["in"], end), paused + close_pause(key, end))
+    return out, by_reason
 
 
 def queues_report(
@@ -368,7 +384,16 @@ def queues_report(
         .group_by(QueueEvent.queue, QueueEvent.agent)
     ).all()
     by_endpoint = {e.endpoint_name: e for e in db.scalars(select(Extension))}
-    states = _agent_states(db, set(queues), since, until)
+    states, by_reason = _agent_states(db, set(queues), since, until)
+    labels = {
+        (slug, str(code)): label
+        for slug, code, label in db.execute(
+            select(CallQueue.slug, QueuePauseReason.code, QueuePauseReason.label).join(
+                QueuePauseReason,
+                QueuePauseReason.organization_id == CallQueue.organization_id,
+            )
+        )
+    }
     per_agent: dict[str, list[dict[str, Any]]] = defaultdict(list)
     answered = {(q, a): n for q, a, n in agents}
     for queue, agent in sorted(set(answered) | set(states)):
@@ -382,6 +407,11 @@ def queues_report(
                 # events seen (a static member, or before 0.27.31).
                 "logged_in_seconds": logged,
                 "paused_seconds": paused,
+                "paused_reasons": [
+                    {"reason": labels[(queue, code)], "seconds": seconds}
+                    for code, seconds in sorted(by_reason.get((queue, agent), {}).items())
+                    if (queue, code) in labels
+                ],
             }
         )
     keyed = dict(

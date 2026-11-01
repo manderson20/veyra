@@ -1849,6 +1849,7 @@ export interface GroupMember {
   dynamic?: boolean;
   logged_in?: boolean;
   paused?: boolean;
+  pause_reason?: string | null;
   state_by?: string | null;
   state_at?: string | null;
   /** Ring group members (issue #166): this member's ring time; null: the group's. */
@@ -3758,4 +3759,12 @@ export interface ExtensionTemplateApply {
   dry_run: boolean;
   extensions: { extension_id: string; number: string; changes: Record<string, { from: unknown; to: unknown }> }[];
   needs_deployment: boolean;
+}
+
+/** Why an agent paused (issue #392); the phone dials the pause code, ** and the code. */
+export interface QueuePauseReason {
+  id: string;
+  organization_id: string;
+  code: number;
+  label: string;
 }

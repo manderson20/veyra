@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.79 — 2026-11-01
+
+Migration 0085 adds the pause reason table and one queue member column. Deploy the configuration for the new phone codes; reasons added on the web need no deployment.
+
+### Added
+- **Queue pause reasons** (#392): an organization can list reasons such as Lunch or Training. Agents dial `*46**` and the reason's number, or an administrator picks one on the **Agents** card. The card shows the reason, and the queue report shows each agent's paused time by reason.
+
+### Fixed
+- **Pausing in one queue**: `*46` and a queue number was documented but never worked. It now pauses or resumes the phone in that queue only.
+
 ## 0.27.78 — 2026-11-01
 
 Migration 0084 adds one queue column. No deployment is needed.

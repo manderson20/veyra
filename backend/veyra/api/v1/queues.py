@@ -23,7 +23,7 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import conflict, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import CallQueue, IvrMenu, Prompt, QueueMember
+from veyra.core.models import CallQueue, IvrMenu, Prompt, QueueMember, QueuePauseReason
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
@@ -49,12 +49,30 @@ class AgentIn(BaseModel):
 class AgentStateIn(BaseModel):
     logged_in: bool | None = None
     paused: bool | None = None
+    pause_reason_id: uuid.UUID | None = None
+
+
+class PauseReasonIn(BaseModel):
+    organization_id: uuid.UUID
+    label: str = Field(min_length=1, max_length=60)
+    # The digits dialed after the pause code; the next free one when left out.
+    code: int | None = Field(None, ge=1, le=99)
+
+
+class PauseReasonOut(BaseModel):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    code: int
+    label: str
+
+    model_config = {"from_attributes": True}
 
 
 class AgentOut(MemberOut):
     dynamic: bool = False
     logged_in: bool = True
     paused: bool = False
+    pause_reason: str | None = None
     state_by: str | None = None
     state_at: datetime | None = None
 
@@ -209,6 +227,15 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
     exts = helpers.extensions_by_id(
         db, {m.extension_id for rows_ in members.values() for m in rows_}
     )
+    reason_ids = {m.pause_reason_id for ms in members.values() for m in ms if m.pause_reason_id}
+    reasons = (
+        {
+            x.id: x.label
+            for x in db.scalars(select(QueuePauseReason).where(QueuePauseReason.id.in_(reason_ids)))
+        }
+        if reason_ids
+        else {}
+    )
     prompt_ids = {r.announcement_prompt_id for r in rows} | {r.periodic_prompt_id for r in rows}
     menu_ids = {r.breakout_ivr_id for r in rows if r.breakout_ivr_id}
     menus = (
@@ -243,6 +270,7 @@ def _outs(db: Session, rows: list[CallQueue]) -> list[QueueOut]:
                     dynamic=bool(m.dynamic),
                     logged_in=bool(m.logged_in) if m.dynamic else True,
                     paused=bool(m.paused) if m.dynamic else False,
+                    pause_reason=reasons.get(m.pause_reason_id) if m.pause_reason_id else None,
                     state_by=m.state_by,
                     state_at=m.state_at,
                 )
@@ -315,7 +343,7 @@ def _get(db: Session, principal: Principal, queue_id: uuid.UUID, perm: str) -> C
 def _set_members(db: Session, queue: CallQueue, agents: list[AgentIn]) -> None:
     """Replace the members; a dynamic agent that stays keeps its login state."""
     state = {
-        m.extension_id: (m.logged_in, m.paused, m.state_by, m.state_at)
+        m.extension_id: (m.logged_in, m.paused, m.state_by, m.state_at, m.pause_reason_id)
         for m in db.scalars(select(QueueMember).where(QueueMember.queue_id == queue.id))
         if m.dynamic
     }
@@ -334,6 +362,7 @@ def _set_members(db: Session, queue: CallQueue, agents: list[AgentIn]) -> None:
                 paused=kept[1] if kept else False,
                 state_by=kept[2] if kept else None,
                 state_at=kept[3] if kept else None,
+                pause_reason_id=kept[4] if kept else None,
             )
         )
     db.flush()
@@ -395,6 +424,23 @@ _FIELDS = (
 
 
 # ----------------------------------------------------------------- routes
+
+
+def _audit_reason(
+    db: Session, ctx: RequestContext, principal: Principal, action: str, reason: QueuePauseReason
+) -> None:
+    audit.record(
+        db,
+        action=action,
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        organization_id=reason.organization_id,
+        target_type="queue_pause_reason",
+        target_id=reason.id,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"code": reason.code, "label": reason.label},
+    )
 
 
 @router.get("", response_model=Page[QueueOut], summary="List call queues")
@@ -459,6 +505,70 @@ def create_queue(
     db.commit()
     bus.publish(Event("queue.created", {"id": str(queue.id), "number": queue.number}))
     return _outs(db, [queue])[0]
+
+
+@router.get("/pause-reasons", response_model=list[PauseReasonOut], summary="List pause reasons")
+def list_pause_reasons(
+    organization_id: uuid.UUID,
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> list[QueuePauseReason]:
+    stmt = helpers.org_filter(
+        select(QueuePauseReason), QueuePauseReason.organization_id, principal, READ
+    )
+    stmt = stmt.where(QueuePauseReason.organization_id == organization_id)
+    return list(db.scalars(stmt.order_by(QueuePauseReason.code)))
+
+
+@router.post(
+    "/pause-reasons",
+    response_model=PauseReasonOut,
+    status_code=201,
+    summary="Add a pause reason",
+)
+def create_pause_reason(
+    body: PauseReasonIn,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> QueuePauseReason:
+    """Takes effect at once; no deployment is needed."""
+    org = helpers.org_for_write(db, principal, body.organization_id)
+    used = set(
+        db.scalars(select(QueuePauseReason.code).where(QueuePauseReason.organization_id == org.id))
+    )
+    code = body.code or next((c for c in range(1, 100) if c not in used), None)
+    if code is None or code in used:
+        raise conflict("That pause reason code is already in use.", "pause_code_in_use")
+    reason = QueuePauseReason(
+        id=uuid.uuid4(), organization_id=org.id, code=code, label=body.label.strip()
+    )
+    db.add(reason)
+    db.flush()
+    _audit_reason(db, ctx, principal, "queue.pause_reason_create", reason)
+    db.commit()
+    return reason
+
+
+@router.delete("/pause-reasons/{reason_id}", status_code=204, summary="Delete a pause reason")
+def delete_pause_reason(
+    reason_id: uuid.UUID,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    """An agent paused for this reason stays paused, without a reason."""
+    reason = db.scalar(
+        helpers.org_filter(
+            select(QueuePauseReason), QueuePauseReason.organization_id, principal, WRITE
+        ).where(QueuePauseReason.id == reason_id)
+    )
+    if reason is None:
+        raise not_found("Pause reason")
+    _audit_reason(db, ctx, principal, "queue.pause_reason_delete", reason)
+    db.delete(reason)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/{queue_id}", response_model=QueueOut)
@@ -567,12 +677,17 @@ def set_agent_state(
         raise not_found("Agent")
     if not member.dynamic:
         raise conflict("A static agent is always in the queue.", "agent_not_dynamic")
+    if body.pause_reason_id is not None:
+        reason = db.get(QueuePauseReason, body.pause_reason_id)
+        if reason is None or reason.organization_id != queue.organization_id:
+            raise not_found("Pause reason")
     changed = agents.set_state(
         db,
         queue,
         ext,
         logged_in=body.logged_in,
         paused=body.paused,
+        reason_id=body.pause_reason_id,
         by=principal.label,
         adapter=request.app.state.telephony,
     )
@@ -592,6 +707,7 @@ def set_agent_state(
                 "extension": ext.number,
                 "logged_in": bool(changed.logged_in),
                 "paused": bool(changed.paused),
+                "pause_reason_id": str(body.pause_reason_id) if body.pause_reason_id else None,
             },
         )
         db.commit()

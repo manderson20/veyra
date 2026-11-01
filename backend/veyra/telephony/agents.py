@@ -13,13 +13,14 @@ and ``Custom:veyra-agentpause-<org>-<ext>``)."""
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from veyra.core.events import Event, bus
-from veyra.core.models import CallQueue, Extension, Organization, QueueMember
+from veyra.core.models import CallQueue, Extension, Organization, QueueMember, QueuePauseReason
 from veyra.core.models.base import utcnow
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 from veyra.telephony.asterisk import names as engine_names
@@ -52,7 +53,12 @@ def _members_of(db: Session, extension: Extension) -> list[tuple[QueueMember, Ca
 
 
 def _write_member(
-    adapter: Any, org_slug: str, queue: CallQueue, ext: Extension, member: QueueMember
+    adapter: Any,
+    org_slug: str,
+    queue: CallQueue,
+    ext: Extension,
+    member: QueueMember,
+    reason: str = "",
 ) -> None:
     if not supports(adapter):
         return
@@ -64,6 +70,7 @@ def _write_member(
             paused=bool(member.paused),
             penalty=int(member.penalty or 0),
             name=ext.display_name,
+            reason=reason,
         )
         # The per-queue mark the phone's *45<queue> toggle reads
         # (generator._agent_codes), so a login from the page or the API and
@@ -102,6 +109,7 @@ def set_state(
     *,
     logged_in: bool | None = None,
     paused: bool | None = None,
+    reason_id: uuid.UUID | None = None,
     by: str,
     adapter: Any = None,
 ) -> QueueMember | None:
@@ -120,9 +128,13 @@ def set_state(
         changed = True
         if not logged_in and member.paused:
             member.paused = False
-    if paused is not None and bool(member.paused) != paused and member.logged_in:
-        member.paused = paused
-        changed = True
+            member.pause_reason_id = None
+    if paused is not None and member.logged_in:
+        wanted = reason_id if paused else None
+        if bool(member.paused) != paused or member.pause_reason_id != wanted:
+            member.paused = paused
+            member.pause_reason_id = wanted
+            changed = True
     if not changed:
         return None
     member.state_by = by
@@ -130,7 +142,8 @@ def set_state(
     db.flush()
     org = db.get(Organization, queue.organization_id)
     slug = org.slug if org else ""
-    _write_member(adapter, slug, queue, extension, member)
+    why = db.get(QueuePauseReason, member.pause_reason_id) if member.pause_reason_id else None
+    _write_member(adapter, slug, queue, extension, member, str(why.code) if why else "")
     _write_lamps(adapter, slug, extension, [m for m, _ in _members_of(db, extension)])
     bus.publish(
         Event(
@@ -154,6 +167,7 @@ def set_all(
     *,
     logged_in: bool | None = None,
     paused: bool | None = None,
+    reason_id: uuid.UUID | None = None,
     by: str,
     adapter: Any = None,
 ) -> int:
@@ -161,7 +175,14 @@ def set_all(
     n = 0
     for _, queue in _members_of(db, extension):
         if set_state(
-            db, queue, extension, logged_in=logged_in, paused=paused, by=by, adapter=adapter
+            db,
+            queue,
+            extension,
+            logged_in=logged_in,
+            paused=paused,
+            reason_id=reason_id,
+            by=by,
+            adapter=adapter,
         ):
             n += 1
     return n
@@ -173,10 +194,11 @@ def set_all(
 def handle_userevent(db: Session, userevent: dict[str, Any]) -> int:
     """A phone logged in or out or paused (the dialplan already told the queue
     engine); only the rows and the event remain. Fields: Org, Extension,
-    Action (login | logout | pause | unpause), Queue (slug, optional)."""
+    Action (login | logout | pause | unpause), Queue (slug, optional), Reason
+    (a pause reason's code, optional; an unknown code is a pause without one)."""
     f = {
         k.lower(): str(userevent.get(k) or userevent.get(k.lower()) or "").strip()
-        for k in ("Org", "Extension", "Action", "Queue")
+        for k in ("Org", "Extension", "Action", "Queue", "Reason")
     }
     org = db.scalar(select(Organization).where(Organization.slug == f["org"]))
     if org is None or not f["extension"]:
@@ -193,6 +215,13 @@ def handle_userevent(db: Session, userevent: dict[str, Any]) -> int:
         kwargs["logged_in"] = f["action"] == "login"
     elif f["action"] in ("pause", "unpause"):
         kwargs["paused"] = f["action"] == "pause"
+        if f["action"] == "pause" and f["reason"].isdigit():
+            kwargs["reason_id"] = db.scalar(
+                select(QueuePauseReason.id).where(
+                    QueuePauseReason.organization_id == org.id,
+                    QueuePauseReason.code == int(f["reason"]),
+                )
+            )
     else:
         return 0
     if f["queue"]:
@@ -217,6 +246,7 @@ def sync(db: Session, adapter: Any) -> int:
         return 0
     slugs = {o.id: o.slug for o in db.scalars(select(Organization))}
     exts = {e.id: e for e in db.scalars(select(Extension).where(Extension.is_enabled.is_(True)))}
+    codes = {r.id: str(r.code) for r in db.scalars(select(QueuePauseReason))}
     fixed = 0
     rows = db.execute(
         select(QueueMember, CallQueue)
@@ -245,7 +275,14 @@ def sync(db: Session, adapter: Any) -> int:
         for iface, (m, ext) in wanted.items():
             state = have.get(iface)
             if state is None or bool(state.get("paused")) != bool(m.paused):
-                _write_member(adapter, slug, queue, ext, m)
+                _write_member(
+                    adapter,
+                    slug,
+                    queue,
+                    ext,
+                    m,
+                    codes.get(m.pause_reason_id, "") if m.pause_reason_id else "",
+                )
                 fixed += 1
         for iface, state in have.items():
             if state.get("dynamic") and iface not in wanted:

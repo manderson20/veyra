@@ -4,7 +4,7 @@ summary: Let callers wait in line with music and announcements until an agent is
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.78
+reviewed: 0.27.79
 checked: 2026-10-29
 pages:
   - /queues/
@@ -94,11 +94,14 @@ Dynamic agents (those with **Logs in** ticked) are only in the queue while logge
 | `*45` and the queue number | Log in or out of that queue only |
 | `*46` | Pause or resume in the queues (stay logged in, take no calls for a while) |
 | `*46` and the queue number | Pause or resume in that queue only |
+| `*46**` and a reason's number | Pause in the queues and say why, for example `*46**1` (see below); `*46` resumes |
 | `*47` and the queue number | Hear how many callers are waiting |
 
 **From the web**: the **Agents** card on the queue's page lists the dynamic agents as **Logged in**, **Paused** or **Logged out**. Next to the state it shows when it last changed and who changed it: a person's name for a change made on the web, or *phone* when the agent used a code. Use **Log in** / **Log out** and **Pause** / **Resume** to change an agent, for example when someone forgot to log out before going home. Every change is written to the audit log.
 
 Agents who are always in the queue (**Logs in** not ticked) cannot be logged out or paused.
+
+**Pause reasons**: add reasons such as Lunch or Training on the **Pause reasons** card of any queue's page. The list belongs to the whole organization and each reason gets a number for the phone. Adding one takes effect at once. Once a list exists, **Pause** on the **Agents** card asks for a reason, though you can choose **No reason**. The card shows the reason next to **Paused**, and [Reports](app:/reports/) shows each agent's paused time by reason. A number that isn't on the list still pauses the phone, without a reason.
 
 ## See how the queue is doing
 

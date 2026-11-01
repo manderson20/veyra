@@ -109,7 +109,7 @@
    "summary": "The star codes phones dial to forward calls, turn on Do Not Disturb, pick up calls and more, and how to change them.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.76",
+   "reviewed": "0.27.79",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/feature-codes/"
@@ -338,7 +338,7 @@
    "summary": "Let callers wait in line with music and announcements until an agent is free, and let agents log in and out.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.78",
+   "reviewed": "0.27.79",
    "reviewed_date": "2026-11-01",
    "pages": [
     "/queues/",
@@ -543,8 +543,8 @@
    "summary": "Look up any call, export the history, build your own reports and have them emailed on a schedule.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.50",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.79",
+   "reviewed_date": "2026-11-01",
    "pages": [
     "/call-history/",
     "/reports/"

@@ -45,7 +45,7 @@ interface QueueRow {
   service_level_seconds: number;
   /** Callers who left through the break-out menu (#135). */
   left_with_key?: number;
-  agents: { agent: string; answered: number; logged_in_seconds?: number | null; paused_seconds?: number | null }[];
+  agents: { agent: string; answered: number; logged_in_seconds?: number | null; paused_seconds?: number | null; paused_reasons?: { reason: string; seconds: number }[] }[];
 }
 
 const PERIODS = [
@@ -106,7 +106,7 @@ export function ReportsOverview() {
           {q.agents.map((a) => (
             <li key={a.agent}>
               {a.agent}: {a.answered} answered
-              {a.logged_in_seconds != null ? <span className="subtle"> · logged in {clock(a.logged_in_seconds)}{a.paused_seconds ? `, paused ${clock(a.paused_seconds)}` : ""}</span> : null}
+              {a.logged_in_seconds != null ? <span className="subtle"> · logged in {clock(a.logged_in_seconds)}{a.paused_seconds ? `, paused ${clock(a.paused_seconds)}` : ""}{a.paused_reasons?.length ? ` (${a.paused_reasons.map((r) => `${r.reason} ${clock(r.seconds)}`).join(", ")})` : ""}</span> : null}
             </li>
           ))}
         </ul>

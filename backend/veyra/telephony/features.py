@@ -186,7 +186,7 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         "*46",
         "Queue pause / unpause",
         "Pauses or resumes this phone in its queues; followed by a queue number, "
-        "in that queue only.",
+        "in that queue only; followed by ** and a pause reason's number, with that reason.",
         19,
         True,
     ),

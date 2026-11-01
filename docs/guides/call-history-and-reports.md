@@ -4,7 +4,7 @@ summary: Look up any call, export the history, build your own reports and have t
 audience: admin
 section: Calls and call flows
 order: 100
-reviewed: 0.27.50
+reviewed: 0.27.79
 pages:
   - /call-history/
   - /reports/
@@ -64,7 +64,7 @@ Veyra keeps the call history for 400 days by default. A platform administrator c
 - **Calls per day** by direction, and **Busiest hours** by weekday and hour.
 - **Extensions**: answered, missed and talk time per extension.
 - **Trunks**: inbound and outbound calls per carrier connection, and **Most at once**, the most calls up at the same time. Compare it with the number of channels your carrier sells you.
-- **Queues**: callers, answered, **Hung up waiting**, **Average wait**, **Answered within 20 s**, **Left by the menu** (callers who used the break-out menu), and per agent the calls answered and time logged in and paused.
+- **Queues**: callers, answered, **Hung up waiting**, **Average wait**, **Answered within 20 s**, **Left by the menu** (callers who used the break-out menu), and per agent the calls answered and time logged in and paused, with paused time split by [pause reason](guide:call-queues) when one was given.
 
 Days and hours are in the organization's time zone.
 
