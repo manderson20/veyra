@@ -58,6 +58,8 @@ Inbound routes are at [Telephony → Inbound Routes](app:/routing/inbound/). You
 | **Custom dialplan** | A custom context (platform administrators only; see [Deploy changes](guide:deploy-changes)) |
 | **Dial-by-name directory** | Callers spell a name on the keypad |
 
+**Caller importance in queues** (0 to 10) puts callers on this number ahead of callers with a lower number in a queue's line. See [call queues](guide:call-queues).
+
 ## How numbers are matched
 
 - **North American numbers in any form.** A ten-digit DID also answers calls the carrier sends as `1` + ten digits or `+1` + ten digits, and the other way round. You cannot create two routes for the same number in different forms with the same trunk setting. The route's page shows the forms under **Matches**. Numbers of other lengths must match exactly.
