@@ -314,6 +314,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     classes = list(db.scalars(select(ClassOfService).order_by(ClassOfService.slug)))
     class_slug = {c.id: c.slug for c in classes}
     route_slug = {r.id: r.slug for r in db.scalars(select(OutboundRoute))}
+    extension_number = {str(e.id): e.number for e in extensions}
     destination_slug = {
         str(row_id): slug
         for model in (RingGroup, CallQueue, ConferenceRoom)
@@ -473,6 +474,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "allowed_ring_groups": _class_slugs(c.allowed_ring_group_ids, destination_slug),
                 "allowed_queues": _class_slugs(c.allowed_queue_ids, destination_slug),
                 "allowed_conferences": _class_slugs(c.allowed_conference_ids, destination_slug),
+                "allowed_extensions": _class_slugs(c.allowed_extension_ids, extension_number),
                 "allow_paging": c.allow_paging,
                 "allow_external_forwards": c.allow_external_forwards,
                 "allow_external_follow_me": c.allow_external_follow_me,

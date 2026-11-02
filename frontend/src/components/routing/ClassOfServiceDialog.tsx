@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useDeferredValue, useState, type FormEvent } from "react";
 import { Button, Callout, Checkbox, Dialog, SelectField, Switch, TextArea, TextField, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { CallQueue, ClassOfService, ClassOfServiceInput, ConferenceRoom, FeatureCodes, OutboundRoutes, Page, RingGroup } from "@/lib/types";
+import type { CallQueue, ClassOfService, ClassOfServiceInput, ConferenceRoom, Extension, FeatureCodes, OutboundRoutes, Page, RingGroup } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
+
+type ListedExtension = NonNullable<ClassOfService["allowed_extensions"]>[number];
 
 /** Create or edit a class of service (docs/CALL_FEATURES.md §3.8). */
 export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: boolean; onClose: () => void; cls?: ClassOfService; onSaved: (c: ClassOfService) => void }) {
@@ -34,6 +36,10 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
   const [ringGroupIds, setRingGroupIds] = useState<string[] | null>(null);
   const [queueIds, setQueueIds] = useState<string[] | null>(null);
   const [roomIds, setRoomIds] = useState<string[] | null>(null);
+  // Extensions can far outnumber a page, so they are searched, not listed.
+  const [listed, setListed] = useState<ListedExtension[] | null>(null);
+  const [extSearch, setExtSearch] = useState("");
+  const deferredSearch = useDeferredValue(extSearch.trim());
   const [busy, setBusy] = useState(false);
   const effectiveOrg = cls?.organization_id ?? (org || (organizations.length === 1 ? organizations[0]!.id : ""));
   const routeList = useApiData<OutboundRoutes>(open ? "/routing/outbound" : null);
@@ -42,6 +48,7 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
   const ringGroups = useApiData<Page<RingGroup>>(orgQuery ? "/ring-groups" : null, orgQuery);
   const queues = useApiData<Page<CallQueue>>(orgQuery ? "/queues" : null, orgQuery);
   const rooms = useApiData<Page<ConferenceRoom>>(orgQuery ? "/conferences" : null, orgQuery);
+  const found = useApiData<Page<Extension>>(orgQuery && listed !== null && deferredSearch ? "/extensions" : null, { ...orgQuery, q: deferredSearch, limit: 20 });
 
   useOnChange(open, () => {
     if (open) {
@@ -62,6 +69,8 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
       setRingGroupIds(cls?.allowed_ring_group_ids ?? null);
       setQueueIds(cls?.allowed_queue_ids ?? null);
       setRoomIds(cls?.allowed_conference_ids ?? null);
+      setListed(cls?.allowed_extensions ?? null);
+      setExtSearch("");
       errors.clear();
     }
   });
@@ -88,6 +97,7 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
         allowed_ring_group_ids: ringGroupIds,
         allowed_queue_ids: queueIds,
         allowed_conference_ids: roomIds,
+        allowed_extension_ids: listed === null ? null : listed.map((x) => x.id),
         ...(allCodes ? (cls ? { all_feature_codes: true } : { allowed_feature_code_keys: null }) : { allowed_feature_code_keys: codes }),
         ...(maxCalls.trim() ? { max_outbound_calls: Number(maxCalls) } : (cls ? { no_call_limit: true } : {})),
       };
@@ -111,7 +121,7 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
       <form id="cos-form" className="stack stack--sm" onSubmit={submit}>
         {!cls && organizations.length > 1 ? (
           <SelectField label="Organization" required value={effectiveOrg} error={errors.fields.organization_id} placeholder="Choose an organization"
-            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setRoutes([]); setRingGroupIds(null); setQueueIds(null); setRoomIds(null); }} />
+            options={organizations.map((o) => ({ value: o.id, label: o.name }))} onChange={(e) => { setOrg(e.target.value); setRoutes([]); setRingGroupIds(null); setQueueIds(null); setRoomIds(null); setListed(null); }} />
         ) : null}
         <TextField label="Name" required autoFocus value={name} error={errors.fields.name} placeholder="e.g. Classrooms" onChange={(e) => setName(e.target.value)} />
         <TextArea label="Description" rows={2} value={description} error={errors.fields.description} onChange={(e) => setDescription(e.target.value)} />
@@ -143,6 +153,21 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
             ) : null}
           </div>
         ))}
+        <div className="stack stack--sm">
+          <Switch label="Every extension" checked={listed === null} onChange={(e) => { setListed(e.target.checked ? null : []); setExtSearch(""); }}
+            description="Off: the class's phones may call only the extensions ticked here, and their own. Outside callers are not affected, and a forward or transfer can still reach other extensions." />
+          {listed !== null ? (
+            <fieldset className="stack stack--sm">
+              <legend className="field__label">Allowed extensions</legend>
+              {listed.length ? listed.map((x) => <Checkbox key={x.id} label={`${x.number} ${x.name}`} checked onChange={() => setListed(listed.filter((y) => y.id !== x.id))} />) : <p className="subtle">None ticked: these phones can call only themselves.</p>}
+              <TextField label="Add an extension" value={extSearch} placeholder="Search by number or name" onChange={(e) => setExtSearch(e.target.value)} />
+              {deferredSearch ? (found.data?.items ?? []).filter((x) => !listed.some((y) => y.id === x.id)).map((x) => (
+                <Checkbox key={x.id} label={`${x.number} ${x.display_name}`} checked={false} onChange={() => setListed([...listed, { id: x.id, number: x.number, name: x.display_name }])} />
+              )) : null}
+              {errors.fields.allowed_extension_ids ? <p className="field__error" role="alert">{errors.fields.allowed_extension_ids}</p> : null}
+            </fieldset>
+          ) : null}
+        </div>
         <div className="grid grid--2">
           <Checkbox label="May page by dialing a zone or page number" checked={paging} onChange={(e) => setPaging(e.target.checked)}
             description="A page's own Who may page setting still applies. A phone's paging keys send directly and are set on its template." />

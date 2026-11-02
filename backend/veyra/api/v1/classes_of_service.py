@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Classes of service (docs/CALL_FEATURES.md §3.8): per organization, which
 outbound routes and feature codes a phone may use, whether its forwards
-and follow-me may leave the building, intercom, and how many outside calls
-the class may have up at once. An extension without a class may do
+and follow-me may leave the building, intercom, which extensions, and how many outside
+calls the class may have up at once. An extension without a class may do
 everything, so nothing changes until an administrator restricts."""
 
 from __future__ import annotations
@@ -70,6 +70,7 @@ class ClassIn(BaseModel):
     allowed_ring_group_ids: list[uuid.UUID] | None = Field(None, max_length=500)
     allowed_queue_ids: list[uuid.UUID] | None = Field(None, max_length=500)
     allowed_conference_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+    allowed_extension_ids: list[uuid.UUID] | None = Field(None, max_length=5000)
     allow_paging: bool = True
 
     @field_validator("name")
@@ -114,11 +115,18 @@ class ClassPatch(BaseModel):
     allowed_ring_group_ids: list[uuid.UUID] | None = Field(None, max_length=500)
     allowed_queue_ids: list[uuid.UUID] | None = Field(None, max_length=500)
     allowed_conference_ids: list[uuid.UUID] | None = Field(None, max_length=500)
+    allowed_extension_ids: list[uuid.UUID] | None = Field(None, max_length=5000)
     allow_paging: bool | None = None
 
 
 class RouteRef(BaseModel):
     id: uuid.UUID
+    name: str
+
+
+class ExtensionRef(BaseModel):
+    id: uuid.UUID
+    number: str
     name: str
 
 
@@ -141,6 +149,8 @@ class ClassOut(BaseModel):
     allowed_ring_group_ids: list[uuid.UUID] | None = None
     allowed_queue_ids: list[uuid.UUID] | None = None
     allowed_conference_ids: list[uuid.UUID] | None = None
+    # None: all of them; one deleted since is left out.
+    allowed_extensions: list[ExtensionRef] | None = None
     allow_paging: bool = True
     extensions: int
     created_at: datetime
@@ -162,6 +172,15 @@ def _outs(db: Session, rows: list[ClassOfService]) -> list[ClassOut]:
             for r in db.scalars(select(OutboundRoute).where(OutboundRoute.id.in_(route_ids)))
         }
         if route_ids
+        else {}
+    )
+    listed = {uuid.UUID(x) for r in rows for x in (r.allowed_extension_ids or [])}
+    listed_refs = (
+        {
+            e.id: ExtensionRef(id=e.id, number=e.number, name=e.display_name)
+            for e in db.scalars(select(Extension).where(Extension.id.in_(listed)))
+        }
+        if listed
         else {}
     )
     counts = dict(
@@ -195,6 +214,18 @@ def _outs(db: Session, rows: list[ClassOfService]) -> list[ClassOut]:
             allowed_ring_group_ids=_uuids(r.allowed_ring_group_ids),
             allowed_queue_ids=_uuids(r.allowed_queue_ids),
             allowed_conference_ids=_uuids(r.allowed_conference_ids),
+            allowed_extensions=(
+                None
+                if r.allowed_extension_ids is None
+                else sorted(
+                    (
+                        listed_refs[uuid.UUID(x)]
+                        for x in r.allowed_extension_ids
+                        if uuid.UUID(x) in listed_refs
+                    ),
+                    key=lambda e: e.number,
+                )
+            ),
             allow_paging=r.allow_paging,
             extensions=int(counts.get(r.id, 0)),
             created_at=r.created_at,
@@ -249,13 +280,15 @@ DESTINATIONS: dict[str, Any] = {
     "allowed_ring_group_ids": RingGroup,
     "allowed_queue_ids": CallQueue,
     "allowed_conference_ids": ConferenceRoom,
+    "allowed_extension_ids": Extension,
 }
 
 
 def _check_destinations(
     db: Session, organization_id: uuid.UUID, field: str, ids: list[uuid.UUID] | None
 ) -> list[str] | None:
-    """The organization's own ring groups, queues or rooms; None stays all."""
+    """The organization's own ring groups, queues, rooms or extensions; None
+    stays all."""
     if ids is None:
         return None
     model = DESTINATIONS[field]

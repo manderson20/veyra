@@ -61,6 +61,7 @@ export default function ClassesOfServicePage() {
       {!c.allow_external_forwards ? <Badge tone="warn">No outside forwards</Badge> : null}
       {!c.allow_external_follow_me ? <Badge tone="warn">No outside follow-me</Badge> : null}
       {!c.allow_intercom ? <Badge tone="warn">No intercom</Badge> : null}
+      {c.allowed_extensions ? <Badge tone="warn">{c.allowed_extensions.length} extension{c.allowed_extensions.length === 1 ? "" : "s"} only</Badge> : null}
       {!c.allow_fax ? <Badge tone="warn">No fax</Badge> : null}
       {c.allow_monitor ? <Badge tone="info">Supervisor codes</Badge> : null}
       {c.monitor_protected ? <Badge tone="neutral">Never monitored</Badge> : null}

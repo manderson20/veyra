@@ -39,7 +39,8 @@ The office phones could simply have no class at all.
 4. Under **Outbound routes the class may use**, tick the routes. Emergency routes are not listed because they are always allowed. With no route ticked, the phones can call extensions and 911 only.
 5. **Every feature code**: leave it on to allow every star code, or turn it off and tick the codes the class may dial.
 6. **Every one of the ring groups**, **queues** and **conference rooms**: leave these on, or turn one off and tick the ones the class's phones may call. Calls from outside are not affected, even when they reach a ring group through a menu.
-7. Set the other permissions:
+7. **Every extension**: leave it on, or turn it off and search for the extensions the class's phones may call. A phone can always call itself, and 911 is not affected. This limits what the phone dials, including intercom and direct-to-voicemail. If a menu key or a ring group's fallback would send one of these phones to an extension that isn't ticked, the call is refused too. It doesn't stop a colleague transferring a call to them or a forward reaching them, and it doesn't limit calls from outside.
+8. Set the other permissions:
 
 | Setting | When ticked |
 |---|---|
@@ -51,19 +52,20 @@ The office phones could simply have no class at all.
 | **May listen to, whisper on and join calls (supervisor codes)** | The phone may use `*222`, `*223` and `*224` plus an extension. Off by default. Check your state's rules on call monitoring and consent before turning it on |
 | **Never monitored** | Nobody can listen to these phones' calls, with a supervisor code or from the web. Use it for counselors, nurses and others whose calls must stay private |
 
-8. **Outside calls at once (empty: no limit)**: the most outside calls the whole class may have at the same time, counted across all its phones (1 to 500). When the limit is reached, the next caller hears a busy signal.
-9. Choose **Create class**, then **Deploy changes** in the top bar.
+9. **Outside calls at once (empty: no limit)**: the most outside calls the whole class may have at the same time, counted across all its phones (1 to 500). When the limit is reached, the next caller hears a busy signal.
+10. Choose **Create class**, then **Deploy changes** in the top bar.
 
 ## Put phones in a class
 
 Open an extension under [Extensions](app:/extensions/) and choose its **Class of service**, or set the class on an extension template so new extensions get it. Save and deploy.
 
-The **Also** column of the list shows what differs from the defaults: **No outside forwards**, **No outside follow-me**, **No intercom**, **No fax**, **Supervisor codes**, **Never monitored**, and the limit of outside calls. The **Extensions** column shows how many extensions are in each class.
+The **Also** column of the list shows what differs from the defaults: **No outside forwards**, **No outside follow-me**, **No intercom**, how many extensions the class is limited to, **No fax**, **Supervisor codes**, **Never monitored**, and the limit of outside calls. The **Extensions** column shows how many extensions are in each class.
 
 ## What people notice
 
 - Dialling a number whose route is not in their class: the call is refused with a short recorded message, and Call History shows it as refused.
 - Dialling a feature code their class does not allow: the code is refused.
+- Dialling an extension their class does not allow: the call is refused the same way.
 - Dialling 911 (or any number on an emergency route): always goes through.
 
 ## Editing and deleting

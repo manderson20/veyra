@@ -1366,7 +1366,7 @@ def _dialplan(
     if "intercom" in codes:
         for ns in spaces:
             with engine_names.using(Names(ns)):
-                lines += _intercom_context(mine(extensions, ns))
+                lines += _intercom_context(mine(extensions, ns), _cos_for(snapshot, ns))
                 lines += _intercom_headers_context()
     lines += [
         f"[{CONTEXT_INVALID}]",
@@ -1591,6 +1591,20 @@ class Cos:
         """A ring group, queue or conference room the calling phone's class
         may not call; a caller from outside has no class and is never held."""
         return self.guard(self._denied(lambda c: c.get(field) is not None and slug not in c[field]))
+
+    def extension_guard(self, number: str) -> list[str]:
+        """An extension the calling phone's class may not call (issue #392).
+        A phone may always reach its own number, and a caller a colleague has
+        blind transferred here keeps their class but is not the one dialling."""
+        return self.guard(
+            self._denied(
+                lambda c: (
+                    c.get("allowed_extensions") is not None
+                    and number not in c["allowed_extensions"]
+                )
+            ),
+            extra=f'"${{VEYRA_EXT}}"!="{number}" & "${{BLINDTRANSFER}}"=""',
+        )
 
     def paging_guard(self) -> list[str]:
         return self.guard(self._denied(lambda c: not c.get("allow_paging", True)), label="denied")
@@ -2125,7 +2139,7 @@ def _intercom_code(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     ]
 
 
-def _intercom_context(extensions: list[dict[str, Any]]) -> list[str]:
+def _intercom_context(extensions: list[dict[str, Any]], cos: Cos | None = None) -> list[str]:
     """One intercom context per namespace: allowed phones are rung with the
     auto-answer headers (Poly reads Alert-Info, Yealink and Grandstream
     Call-Info); denied and unknown numbers are refused. Do Not Disturb holds."""
@@ -2143,14 +2157,17 @@ def _intercom_context(extensions: list[dict[str, Any]]) -> list[str]:
             ]
             continue
         endpoint = _check_section(str(ext["endpoint_name"]), "endpoint name")
+        guard = cos.extension_guard(number) if cos else []
         lines += [
             f"exten => {number},1,NoOp(Veyra intercom to {number})",
+            *guard,
             f' same => n,GotoIf($["${{DB(veyra/ext/{org_slug}/{number}/dnd)}}"="1"]?dnd)',
             f" same => n,Dial(PJSIP/{endpoint},{INTERCOM_RING_SECONDS},"
             f"b({n.intercom_headers}^s^1))",
             " same => n,Hangup()",
             " same => n(dnd),Busy(10)",
             " same => n,Hangup()",
+            *(COS_DENIED if guard else []),
         ]
     lines += [
         "exten => _X.,1,Answer()",
@@ -2184,9 +2201,10 @@ def _voicemail_direct(
     code = codes.get("vm_direct")
     if not code:
         return []
-    guard = cos.code_guard("vm_direct") if cos else []
+    code_guard = cos.code_guard("vm_direct") if cos else []
     lines: list[str] = []
     for number, _b in sorted(boxes, key=lambda kv: (len(kv[0]), kv[0])):
+        guard = code_guard + (cos.extension_guard(number) if cos else [])
         lines += [
             f"exten => {code}{number},1,NoOp(Veyra direct to voicemail {number})",
             *guard,
@@ -2735,6 +2753,7 @@ def _internal(
         )
         # A class that may not forward outside (docs/CALL_FEATURES.md §3.8).
         forward_guard = cos.forward_guard() if cos else []
+        call_guard = cos.extension_guard(number) if cos else []
         if fm_code and fm_branch:
             lines.append(f"exten => {fm_code}{number},hint,Custom:veyra-fm-{org_slug}-{number}")
         ring = int(
@@ -2767,10 +2786,11 @@ def _internal(
             f" same => n(toomany),NoOp(Veyra: {number}: too many forwards)",
             " same => n,Playback(number-not-answering)",
             " same => n,Hangup()",
-            *(COS_DENIED if forward_guard else []),
+            *(COS_DENIED if forward_guard or call_guard else []),
         ]
         head = [
             f"exten => {number},1,NoOp(Veyra extension {number})",
+            *call_guard,
             # The last outside caller, for the block-last-caller code (§4.8).
             f' same => n,ExecIf($["${{VEYRA_DID}}"!="" & "${{CALLERID(num)}}"!=""]'
             f"?Set(DB({LASTCID_FAMILY}/{org_slug}/{number})=${{CALLERID(num)}}))",

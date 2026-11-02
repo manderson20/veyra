@@ -1460,3 +1460,73 @@ def test_presence_from_the_phone_applies_the_rules(admin, app):
             )
             is None
         )
+
+
+def test_class_extension_allow_list_guards():
+    snap = _snapshot(
+        feature_codes={"intercom": "*80", "vm_direct": "*"},
+        numbering={"extension_length": 4},
+        classes_of_service=[
+            {"slug": "classroom", "organization": "example", "allowed_extensions": ["1001"]},
+            {"slug": "staff", "organization": "example"},
+        ],
+        extensions=[
+            {
+                "endpoint_name": f"example-{number}",
+                "number": number,
+                "display_name": number,
+                "organization": "example",
+                "secret": "s3cret",
+            }
+            for number in ("1001", "1002")
+        ],
+    )
+    text = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    denied = (
+        ' same => n,GotoIf($[${REGEX("^(classroom)$" ${VEYRA_COS})} & '
+        '"${VEYRA_EXT}"!="1002" & "${BLINDTRANSFER}"=""]?cosdenied)'
+    )
+    internal = _section(text, "veyra-internal")
+    assert denied in internal.split("exten => 1002,1,", 1)[1]
+    head = internal.split("exten => 1001,1,", 1)[1].split("exten =>", 1)[0]
+    assert "REGEX" not in head.split("\n")[1]
+    assert denied in _section(text, "veyra-intercom")
+    boxes = [{"number": "1002", "organization": "example", "pin": "4821", "email": None}]
+    text = {f.path: f.content for f in generator.generate({**snap, "voicemail_boxes": boxes})}[
+        "extensions.conf"
+    ]
+    assert denied in text.split("exten => *1002,1,", 1)[1].split("exten =>", 1)[0]
+    # Each exten has its label once, or Asterisk refuses the later one.
+    for chunk in internal.split("exten => ")[1:]:
+        assert chunk.count("n(cosdenied)") <= 1
+
+
+def test_class_extension_allow_list_api(admin, app):
+    from veyra.core.security.crypto import load_installation_key
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]
+    url = "/api/v1/classes-of-service"
+    row = admin.post(url, json={"organization_id": org["id"], "name": "Listed"}).json()
+    assert row["allowed_extensions"] is None
+    ext = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org["id"], "number": "1392", "display_name": "Nurse"},
+    )
+    assert ext.status_code == 201, ext.text
+    eid = ext.json()["id"]
+    r = admin.patch(f"{url}/{row['id']}", json={"allowed_extension_ids": [eid]})
+    assert r.status_code == 200, r.text
+    assert r.json()["allowed_extensions"] == [{"id": eid, "number": "1392", "name": "Nurse"}]
+    with session_scope() as db:
+        snap_class = next(
+            c
+            for c in snapshot.build_snapshot(db, load_installation_key(app.state.settings))[
+                "classes_of_service"
+            ]
+            if c["slug"] == row["slug"]
+        )
+    assert snap_class["allowed_extensions"] == ["1392"]
+    r = admin.patch(f"{url}/{row['id']}", json={"allowed_extension_ids": [row["id"]]})
+    assert r.status_code == 422 and r.json()["errors"][0]["field"] == "allowed_extension_ids"
+    r = admin.patch(f"{url}/{row['id']}", json={"allowed_extension_ids": None})
+    assert r.json()["allowed_extensions"] is None

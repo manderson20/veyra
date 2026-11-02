@@ -105,6 +105,8 @@ class ClassOfService(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     allowed_ring_group_ids: Mapped[list[str] | None] = mapped_column(JSONB)
     allowed_queue_ids: Mapped[list[str] | None] = mapped_column(JSONB)
     allowed_conference_ids: Mapped[list[str] | None] = mapped_column(JSONB)
+    # Extensions the class may call (issue #392); None: all.
+    allowed_extension_ids: Mapped[list[str] | None] = mapped_column(JSONB)
     allow_paging: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     # May send faxes from My Phone (docs/USER_PORTAL.md §9).
     allow_fax: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")

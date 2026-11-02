@@ -8,6 +8,13 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased — 0.27.84
+
+Migration 0089 adds the extension allow list. Deploy the configuration after setting one.
+
+### Added
+- **Extension allow list** (#392): turn off **Every extension** on a class of service and search for the extensions its phones may call. A phone can always call itself, and 911 is not affected. Intercom and direct-to-voicemail follow the list, and so does a menu key or a ring group's fallback that would send one of these phones to an extension not on it. Calls from outside aren't limited, and a forward or a colleague's transfer can still reach other extensions.
+
 ## 0.27.83 — 2026-11-01
 
 ### Changed

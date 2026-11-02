@@ -3397,6 +3397,8 @@ export interface ClassOfService {
   allowed_ring_group_ids?: string[] | null;
   allowed_queue_ids?: string[] | null;
   allowed_conference_ids?: string[] | null;
+  /** null: all of them. */
+  allowed_extensions?: { id: string; number: string; name: string }[] | null;
   allow_paging?: boolean;
   extensions: number;
   created_at: string;
@@ -3421,6 +3423,7 @@ export interface ClassOfServiceInput {
   allowed_ring_group_ids?: string[] | null;
   allowed_queue_ids?: string[] | null;
   allowed_conference_ids?: string[] | null;
+  allowed_extension_ids?: string[] | null;
   allow_paging?: boolean;
 }
 
