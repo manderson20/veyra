@@ -4,7 +4,7 @@ summary: Limit what groups of phones may dial, such as local calls only for clas
 audience: admin
 section: Calls and call flows
 order: 60
-reviewed: 0.27.68
+reviewed: 0.27.84
 pages:
   - /routing/classes-of-service/
 covers:

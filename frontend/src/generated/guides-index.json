@@ -490,8 +490,8 @@
    "summary": "Limit what groups of phones may dial, such as local calls only for classrooms, while 911 always works.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.68",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.84",
+   "reviewed_date": "2026-11-02",
    "pages": [
     "/routing/classes-of-service/"
    ],
