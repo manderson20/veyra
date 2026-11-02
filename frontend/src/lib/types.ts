@@ -1572,11 +1572,16 @@ export interface Recording {
 export interface IvrEntry {
   digit: string;
   destination: Destination;
+  time_condition_id?: string | null;
+  time_condition_name?: string | null;
+  closed_destination?: Destination | null;
 }
 
 export interface IvrEntryInput {
   digit: string;
   destination: DestinationInput;
+  time_condition_id?: string | null;
+  closed_destination?: DestinationInput | null;
 }
 
 export interface IvrMenu {
@@ -1594,6 +1599,8 @@ export interface IvrMenu {
   timeout_seconds: number;
   max_retries: number;
   allow_direct_dial: boolean;
+  direct_dial_mode?: "all" | "allow" | "block";
+  direct_dial_extensions?: { id: string; number: string; name: string }[];
   timeout_destination: Destination;
   invalid_destination: Destination;
   entries: IvrEntry[];
@@ -1614,6 +1621,8 @@ export interface IvrMenuInput {
   timeout_seconds?: number;
   max_retries?: number;
   allow_direct_dial?: boolean;
+  direct_dial_mode?: "all" | "allow" | "block";
+  direct_dial_extension_ids?: string[];
   timeout_destination?: DestinationInput;
   invalid_destination?: DestinationInput;
   entries?: IvrEntryInput[];

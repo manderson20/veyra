@@ -313,3 +313,30 @@ def test_voicemail_play_context():
     assert "[veyra-vmplay]" in dp
     assert " same => n,VoiceMailPlayMsg(${VEYRA_VM_BOX}@veyra,${VEYRA_VM_MSG})" in dp
     assert "${FILTER(0-9,${VEYRA_VM_BOX})}" in dp
+
+
+def test_ivr_multi_digit_key_and_key_by_time():
+    cond = {
+        "key": "tc1",
+        "organization": "example",
+        "timezone": "UTC",
+        "ranges": [{"days": ["mon"], "start": "08:00", "end": "17:00"}],
+        "holidays": [],
+    }
+    menu = _menu(
+        entries=[
+            {"digit": "42", "type": "extension", "number": "1001"},
+            {
+                "digit": "1",
+                "type": "extension",
+                "number": "1001",
+                "time_condition": "tc1",
+                "closed": {"type": "voicemail", "number": "1002"},
+            },
+        ]
+    )
+    text = _files(_snapshot(ivr_menus=[menu], time_conditions=[cond]))["extensions.conf"].content
+    assert "exten => 42,1,NoOp(Veyra IVR" in text
+    key = text.split("exten => 1,1,NoOp(Veyra IVR", 1)[1].split("exten =>", 1)[0]
+    assert "GotoIfTime(" in key and "?hoursopen)" in key
+    assert key.index("n(hoursclosed)") < key.index("n(hoursopen)")

@@ -12,6 +12,7 @@ import uuid
 from datetime import date
 
 from sqlalchemy import Boolean, Date, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -130,6 +131,12 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     timeout_seconds: Mapped[int] = mapped_column(Integer, default=5)
     max_retries: Mapped[int] = mapped_column(Integer, default=3)
     allow_direct_dial: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Which extensions direct dialling reaches (issue #392): all, or only
+    # (allow) or all but (block) those listed.
+    direct_dial_mode: Mapped[str] = mapped_column(String(8), default="all", server_default="all")
+    direct_dial_extension_ids: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default="[]"
+    )
     # Where callers go after max_retries timeouts / invalid keys:
     # extension | voicemail | ivr | ring_group | queue | hangup, with the matching
     # target column.
@@ -197,14 +204,16 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
 
 
 class IvrEntry(Base):
-    """One key of a menu (``0``-``9``, ``*``, ``#``) and its destination."""
+    """One key of a menu (up to eight of ``0``-``9``, ``*``, ``#``) and its
+    destination; with a time condition, the ``closed_*`` destination applies
+    while the condition is closed (issue #392)."""
 
     __tablename__ = "ivr_entries"
 
     menu_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("ivr_menus.id", ondelete="CASCADE"), primary_key=True
     )
-    digit: Mapped[str] = mapped_column(String(1), primary_key=True)
+    digit: Mapped[str] = mapped_column(String(8), primary_key=True)
     destination_type: Mapped[str] = mapped_column(String(16))
     destination_extension_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("extensions.id", ondelete="SET NULL")
@@ -234,6 +243,38 @@ class IvrEntry(Base):
         ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
     )
     destination_custom_context: Mapped[str | None] = mapped_column(String(64))
+    time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("time_conditions.id", ondelete="SET NULL", use_alter=True)
+    )
+    closed_type: Mapped[str | None] = mapped_column(String(16))
+    closed_extension_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("extensions.id", ondelete="SET NULL")
+    )
+    closed_ivr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ivr_menus.id", ondelete="SET NULL")
+    )
+    closed_ring_group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ring_groups.id", ondelete="SET NULL", use_alter=True)
+    )
+    closed_queue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_queues.id", ondelete="SET NULL", use_alter=True)
+    )
+    closed_voicemail_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    closed_announcement_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("announcements.id", ondelete="SET NULL", use_alter=True)
+    )
+    closed_conference_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conference_rooms.id", ondelete="SET NULL", use_alter=True)
+    )
+    closed_call_flow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("call_flows.id", ondelete="SET NULL", use_alter=True)
+    )
+    closed_fax_inbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("fax_inboxes.id", ondelete="SET NULL", use_alter=True)
+    )
+    closed_custom_context: Mapped[str | None] = mapped_column(String(64))
 
 
 class MohClass(UUIDPrimaryKey, Timestamps, TenantScoped, Base):

@@ -27,6 +27,7 @@ from pathlib import PurePosixPath
 from typing import IO, Any
 
 from veyra.bulk import service
+from veyra.telephony import routing
 
 MAX_DUMP_BYTES = 64 * 1024 * 1024
 _CREATE_RE = re.compile(r"CREATE TABLE `([^`]+)` \((.*?)\)[^;()]*;", re.S)
@@ -485,8 +486,8 @@ def convert(
         what = f"IVR {mname}"
         keys = []
         for digit, dest in sorted(entries.get(mid, [])):
-            if len(digit) != 1 or digit not in "0123456789*#":
-                warn.append(f"{what}: option {digit!r} is not a single key; skipped")
+            if not routing.IVR_KEY_RE.fullmatch(digit):
+                warn.append(f"{what}: option {digit!r} is not a key Veyra can use; skipped")
                 continue
             target = _dest(dest, names, warn, f"{what} key {digit}")
             if target:

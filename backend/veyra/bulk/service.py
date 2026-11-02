@@ -1194,8 +1194,8 @@ class IvrMenusKind:
 
     def apply(self, ctx: Ctx, row: dict[str, str]) -> tuple[str, list[str]]:
         from veyra.api.v1 import ivr as api
-        from veyra.api.v1.destinations import DestinationIn
-        from veyra.core.models import Prompt
+        from veyra.api.v1.destinations import DestinationIn, as_input, ref_of
+        from veyra.core.models import IvrEntry, Prompt
 
         db, org = ctx.db, ctx.org
         name = (row.get("name") or "").strip()
@@ -1238,7 +1238,7 @@ class IvrMenusKind:
             entries = []
             for item in keys:
                 digit, sep, dest = item.partition("=")
-                if not sep or len(digit.strip()) != 1:
+                if not sep or not digit.strip():
                     raise RowError(f"keys: write each as <key>=<type:target>, not {item!r}")
                 entries.append(
                     api.EntryIn(
@@ -1266,6 +1266,12 @@ class IvrMenusKind:
             )
             return "create", notes
         changes = _changes(menu, wanted)
+        # The file has no column for a key's hours; an imported key keeps them.
+        for e in entries or []:
+            old = db.get(IvrEntry, (menu.id, e.digit))
+            if old is not None and old.time_condition_id:
+                e.time_condition_id = old.time_condition_id
+                e.closed_destination = DestinationIn(**as_input(ref_of(old, "closed")))
         for fld, d in dests.items():
             prefix = fld.removesuffix("_destination")
             if _destination_of(db, menu, prefix).lower() != str(_text(row, prefix)).lower():

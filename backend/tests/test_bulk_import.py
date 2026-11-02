@@ -170,8 +170,7 @@ def test_freepbx_dump_becomes_import_files(admin):
     assert "Office open" in out["csv"]["inbound_routes"]
     assert "voicemail:1101" in out["csv"]["inbound_routes"].split("5735550103")[1]
     ivr = out["csv"]["ivr_menus"]
-    assert "1=extension:1101; 2=ring_group:6600; 9=queue:7700" in ivr, ivr
-    assert "'12'" in " ".join(out["warnings"])
+    assert "1=extension:1101; 12=extension:1102; 2=ring_group:6600; 9=queue:7700" in ivr, ivr
     qs = out["csv"]["queues"]
     assert "7700,Attendance,,rrmemory,20,0,600,yes,no,1101; 1102,,voicemail:1101" in qs, qs
     ext = out["csv"]["extensions"]
@@ -331,3 +330,41 @@ def test_freepbx_audio_archive_adds_recordings_and_hold_music(admin):
         files={"file": ("audio.tar.gz", b"not a tar", "x")},
     )
     assert r.status_code == 422 and r.json()["code"] == "freepbx_invalid"
+
+
+def test_ivr_import_keeps_a_keys_hours_and_takes_longer_keys(admin):
+    org = _org(admin)["id"]
+    ext = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org, "number": "4301", "display_name": "Desk"},
+    ).json()
+    tc = admin.post(
+        "/api/v1/routing/time-conditions",
+        json={
+            "organization_id": org,
+            "name": "Import hours",
+            "ranges": [{"days": ["mon"], "start": "08:00", "end": "17:00"}],
+        },
+    ).json()
+    menu = admin.post(
+        "/api/v1/ivr",
+        json={
+            "organization_id": org,
+            "name": "Import menu",
+            "entries": [
+                {
+                    "digit": "1",
+                    "destination": {"type": "extension", "extension_id": ext["id"]},
+                    "time_condition_id": tc["id"],
+                    "closed_destination": {"type": "hangup"},
+                }
+            ],
+        },
+    ).json()
+    text = "name,keys\nImport menu,1=hangup; 42=extension:4301\n"
+    out = _import(admin, "ivr_menus", org, text, dry_run=False)
+    assert out["rows"][0]["action"] == "update", out
+    entries = admin.get(f"/api/v1/ivr/{menu['id']}").json()["entries"]
+    assert [e["digit"] for e in entries] == ["1", "42"]
+    assert entries[0]["time_condition_id"] == tc["id"]
+    assert entries[0]["closed_destination"]["type"] == "hangup"

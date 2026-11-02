@@ -22,6 +22,15 @@ DTMF_MODES = ("rfc4733", "inband", "info", "auto")
 DESTINATION_TYPES = ("extension", "voicemail", "ivr")
 IVR_DESTINATION_TYPES = (*DESTINATION_TYPES, "hangup")
 IVR_DIGITS = tuple("0123456789*#")
+# A menu key may be several digits (issue #392).
+IVR_KEY_RE = re.compile(r"[0-9*#]{1,8}")
+
+
+def ivr_key_order(key: str) -> tuple[int, list[int]]:
+    """Single keys in keypad order, then longer ones."""
+    return len(key), [IVR_DIGITS.index(c) for c in key]
+
+
 MAX_HOPS = 3
 # IVR menus pointing at each other are cut off at this depth.
 MAX_IVR_DEPTH = 8

@@ -101,8 +101,8 @@ function IvrMenuView() {
           <Card title="As deployed" subtitle="What the phone system does with this menu after the next deployment.">
             <dl className="dl">
               <dt>Prompt</dt><dd>{m.prompt_name ?? <Badge tone="danger">None</Badge>}</dd>
-              {m.entries.map((e) => <><dt key={`k${e.digit}`}>Key {e.digit}</dt><dd key={`v${e.digit}`}><DestinationLabel d={e.destination} /></dd></>)}
-              <dt>Extensions</dt><dd>{m.allow_direct_dial ? "Callers may dial an extension" : "Not dialable"}</dd>
+              {m.entries.map((e) => <><dt key={`k${e.digit}`}>Key {e.digit}</dt><dd key={`v${e.digit}`}><DestinationLabel d={e.destination} />{e.closed_destination ? <div className="subtle">Outside {e.time_condition_name ?? "hours"}: <DestinationLabel d={e.closed_destination} /></div> : null}</dd></>)}
+              <dt>Extensions</dt><dd>{!m.allow_direct_dial ? "Not dialable" : m.direct_dial_mode === "allow" ? `Callers may dial ${m.direct_dial_extensions?.length ?? 0} listed` : m.direct_dial_mode === "block" ? `All but ${m.direct_dial_extensions?.length ?? 0} listed` : "Callers may dial an extension"}</dd>
               <dt>No key</dt><dd>{m.timeout_seconds} s wait, {m.max_retries} attempt{m.max_retries === 1 ? "" : "s"}, then <DestinationLabel d={m.timeout_destination} /></dd>
               <dt>Invalid key</dt><dd>{m.invalid_prompt_name ?? "Default prompt"}, {m.max_retries} attempt{m.max_retries === 1 ? "" : "s"}, then <DestinationLabel d={m.invalid_destination} /></dd>
             </dl>

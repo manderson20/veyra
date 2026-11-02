@@ -4,7 +4,7 @@ summary: Greet callers with a recording, send each key to the right place, and p
 audience: admin
 section: Calls and call flows
 order: 60
-reviewed: 0.27.44
+reviewed: 0.27.85
 checked: 2026-10-29
 pages:
   - /ivr/
@@ -56,7 +56,13 @@ Under **Keys**, every key from `0` to `9`, `*` and `#` is listed. Choose **Key 1
 
 **Remove** unmaps a key again. A key can be mapped only once.
 
+**Add a longer key** adds a code of 2 to 8 digits, `*` or `#`, such as `42`. Nothing announces it unless your recording does, so it also works as a hidden code for staff. If key `4` is mapped too, a caller who presses 4 waits a few seconds in case more digits follow.
+
+Tick **Goes somewhere else outside hours** on a key to give it a second destination. Choose a [time condition](guide:business-hours-and-holidays) and where the key goes **While closed**. The condition's manual override and calendar events count. A time condition used by a key can't be deleted until the key stops using it. Spreadsheet import and export don't include a key's hours; importing keeps the hours a key already has.
+
 Tick **Callers may dial an extension number during the menu** to let callers who know an extension dial it. Only extensions of this organization can be reached. A mapped key wins over an extension starting with the same digit, so with key 2 mapped, nobody can dial extension 2001 from the menu.
+
+If you allow dialling, **Extensions callers may dial** can be **All of them**, **Only the ones listed** or **All but the ones listed**. Search for extensions to list them. A number callers may not dial counts as a wrong key. **Only the ones listed** also shuts out the numbers of ring groups, queues and conference rooms.
 
 ## 3. Decide what happens when callers press nothing or the wrong key
 

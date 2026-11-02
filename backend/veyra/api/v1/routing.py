@@ -34,6 +34,8 @@ from veyra.core.models import (
     Extension,
     InboundCallerRule,
     InboundRoute,
+    IvrEntry,
+    IvrMenu,
     Organization,
     OutboundRoute,
     OutboundRouteTrunk,
@@ -240,6 +242,13 @@ def _tc_outs(db: Session, rows: list[TimeCondition]) -> list[TimeConditionOut]:
             select(OutboundRoute.time_condition_id, func.count())
             .where(OutboundRoute.time_condition_id.in_(ids))
             .group_by(OutboundRoute.time_condition_id)
+        ):
+            if cid is not None:
+                counts[cid] = counts.get(cid, 0) + n
+        for cid, n in db.execute(
+            select(IvrEntry.time_condition_id, func.count())
+            .where(IvrEntry.time_condition_id.in_(ids))
+            .group_by(IvrEntry.time_condition_id)
         ):
             if cid is not None:
                 counts[cid] = counts.get(cid, 0) + n
@@ -563,6 +572,19 @@ def delete_time_condition(
             f"These inbound routes use it: {', '.join(used)}.",
             code="time_condition_in_use",
             errors=[{"field": "routes", "message": d} for d in used],
+        )
+    menus = db.scalars(
+        select(IvrMenu.name)
+        .where(IvrMenu.id.in_(select(IvrEntry.menu_id).where(IvrEntry.time_condition_id == tc.id)))
+        .order_by(IvrMenu.name)
+    ).all()
+    if menus:
+        raise ProblemError(
+            409,
+            "Time condition in use",
+            f"Keys of these menus use it: {', '.join(menus)}.",
+            code="time_condition_in_use",
+            errors=[{"field": "routes", "message": m} for m in menus],
         )
     _audit(
         db,

@@ -451,3 +451,81 @@ def test_builtin_sounds_list_play_and_copy(admin, app):
     )
     assert named.status_code == 201 and named.json()["name"] == "Passing period"
     assert admin.get(f"/api/v1/prompts/{p['id']}/audio").status_code == 200
+
+
+def test_multi_digit_keys_direct_dial_lists_and_hours(admin, app):
+    from veyra.core.db import session_scope
+    from veyra.core.security.crypto import load_installation_key
+    from veyra.telephony.snapshot import build_snapshot
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    ext = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org, "number": "1391", "display_name": "Listed"},
+    ).json()
+    other = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org, "number": "1392", "display_name": "Other"},
+    ).json()
+    tc = admin.post(
+        "/api/v1/routing/time-conditions",
+        json={
+            "organization_id": org,
+            "name": "Office hours",
+            "ranges": [{"days": ["mon"], "start": "08:00", "end": "17:00"}],
+        },
+    )
+    assert tc.status_code == 201, tc.text
+    tc_id = tc.json()["id"]
+    to_ext = {"type": "extension", "extension_id": ext["id"]}
+    r = admin.post(
+        "/api/v1/ivr",
+        json={
+            "organization_id": org,
+            "name": "Hours menu",
+            "direct_dial_mode": "allow",
+            "direct_dial_extension_ids": [ext["id"]],
+            "entries": [
+                {"digit": "42", "destination": to_ext},
+                {
+                    "digit": "1",
+                    "destination": to_ext,
+                    "time_condition_id": tc_id,
+                    "closed_destination": {"type": "hangup"},
+                },
+            ],
+        },
+    )
+    assert r.status_code == 201, r.text
+    menu = r.json()
+    assert [e["digit"] for e in menu["entries"]] == ["1", "42"]
+    assert menu["entries"][0]["time_condition_name"] == "Office hours"
+    assert menu["entries"][0]["closed_destination"]["type"] == "hangup"
+    assert [e["number"] for e in menu["direct_dial_extensions"]] == ["1391"]
+
+    def snap():
+        with session_scope() as db:
+            return build_snapshot(db, load_installation_key(app.state.settings))
+
+    s = snap()
+    m = next(x for x in s["ivr_menus"] if x["slug"] == menu["slug"])
+    assert m["direct_dial"] == ["1391"]
+    assert m["entries"][0]["closed"]["type"] == "hangup"
+    assert tc_id in {str(c["key"]) for c in s["time_conditions"]}
+
+    r = admin.patch(
+        f"/api/v1/ivr/{menu['id']}",
+        json={"direct_dial_mode": "block", "direct_dial_extension_ids": [other["id"]]},
+    )
+    assert r.status_code == 200, r.text
+    # Saving something else keeps the key's hours.
+    assert r.json()["entries"][0]["time_condition_id"] == tc_id
+    m = next(x for x in snap()["ivr_menus"] if x["slug"] == menu["slug"])
+    assert "1391" in m["direct_dial"] and "1392" not in m["direct_dial"]
+
+    r = admin.delete(f"/api/v1/routing/time-conditions/{tc_id}")
+    assert r.status_code == 409 and r.json()["code"] == "time_condition_in_use"
+    bad = {"digit": "1", "destination": to_ext, "time_condition_id": tc_id}
+    assert admin.patch(f"/api/v1/ivr/{menu['id']}", json={"entries": [bad]}).status_code == 422
+    bad = {"digit": "12x", "destination": to_ext}
+    assert admin.patch(f"/api/v1/ivr/{menu['id']}", json={"entries": [bad]}).status_code == 422

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field, field_validator
@@ -23,7 +23,7 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import IvrEntry, IvrMenu, Organization, Prompt
+from veyra.core.models import Extension, IvrEntry, IvrMenu, Organization, Prompt, TimeCondition
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
@@ -45,14 +45,17 @@ def _validation(field: str, message: str) -> ProblemError:
 
 
 class EntryIn(BaseModel):
-    digit: str = Field(min_length=1, max_length=1)
+    digit: str = Field(min_length=1, max_length=8)
     destination: DestinationIn
+    # While this condition is closed the key goes to closed_destination.
+    time_condition_id: uuid.UUID | None = None
+    closed_destination: DestinationIn | None = None
 
     @field_validator("digit")
     @classmethod
     def _digit(cls, v: str) -> str:
-        if v not in routing.IVR_DIGITS:
-            raise ValueError("a key 0-9, * or #")
+        if not routing.IVR_KEY_RE.fullmatch(v):
+            raise ValueError("a key of up to 8 digits, * or #")
         return v
 
 
@@ -65,9 +68,11 @@ class IvrMenuIn(BaseModel):
     timeout_seconds: int = Field(5, ge=1, le=30)
     max_retries: int = Field(3, ge=1, le=9)
     allow_direct_dial: bool = True
+    direct_dial_mode: Literal["all", "allow", "block"] = "all"
+    direct_dial_extension_ids: list[uuid.UUID] = Field(default_factory=list, max_length=5000)
     timeout_destination: DestinationIn = Field(default_factory=lambda: DestinationIn(type="hangup"))
     invalid_destination: DestinationIn = Field(default_factory=lambda: DestinationIn(type="hangup"))
-    entries: list[EntryIn] = Field(default_factory=list, max_length=12)
+    entries: list[EntryIn] = Field(default_factory=list, max_length=60)
     is_enabled: bool = True
 
     @field_validator("name")
@@ -87,7 +92,9 @@ class IvrMenuIn(BaseModel):
             if e.digit in seen:
                 raise ValueError(f"key {e.digit} is mapped twice")
             seen.add(e.digit)
-        return sorted(v, key=lambda e: routing.IVR_DIGITS.index(e.digit))
+            if e.time_condition_id and e.closed_destination is None:
+                raise ValueError(f"key {e.digit} needs a destination for closed hours")
+        return sorted(v, key=lambda e: routing.ivr_key_order(e.digit))
 
 
 class IvrMenuPatch(BaseModel):
@@ -98,15 +105,26 @@ class IvrMenuPatch(BaseModel):
     timeout_seconds: int | None = Field(None, ge=1, le=30)
     max_retries: int | None = Field(None, ge=1, le=9)
     allow_direct_dial: bool | None = None
+    direct_dial_mode: Literal["all", "allow", "block"] | None = None
+    direct_dial_extension_ids: list[uuid.UUID] | None = Field(None, max_length=5000)
     timeout_destination: DestinationIn | None = None
     invalid_destination: DestinationIn | None = None
-    entries: list[EntryIn] | None = Field(None, max_length=12)
+    entries: list[EntryIn] | None = Field(None, max_length=60)
     is_enabled: bool | None = None
 
 
 class EntryOut(BaseModel):
     digit: str
     destination: DestinationOut
+    time_condition_id: uuid.UUID | None = None
+    time_condition_name: str | None = None
+    closed_destination: DestinationOut | None = None
+
+
+class ExtensionRef(BaseModel):
+    id: uuid.UUID
+    number: str
+    name: str
 
 
 class IvrMenuOut(BaseModel):
@@ -124,6 +142,8 @@ class IvrMenuOut(BaseModel):
     timeout_seconds: int
     max_retries: int
     allow_direct_dial: bool
+    direct_dial_mode: str = "all"
+    direct_dial_extensions: list[ExtensionRef] = []
     timeout_destination: DestinationOut
     invalid_destination: DestinationOut
     entries: list[EntryOut]
@@ -163,7 +183,7 @@ def _entries(db: Session, menu_ids: set[uuid.UUID]) -> dict[uuid.UUID, list[IvrE
         for e in db.scalars(select(IvrEntry).where(IvrEntry.menu_id.in_(menu_ids))):
             out[e.menu_id].append(e)
     for rows in out.values():
-        rows.sort(key=lambda e: routing.IVR_DIGITS.index(e.digit))
+        rows.sort(key=lambda e: routing.ivr_key_order(e.digit))
     return out
 
 
@@ -191,7 +211,29 @@ def _outs(db: Session, rows: list[IvrMenu]) -> list[IvrMenuOut]:
         refs.append(destinations.ref_of(r, "timeout"))
         refs.append(destinations.ref_of(r, "invalid"))
         refs += [destinations.ref_of(e, "destination") for e in entries[r.id]]
+        refs += [destinations.ref_of(e, "closed") for e in entries[r.id] if e.time_condition_id]
     resolver.load(refs)
+    condition_ids = {e.time_condition_id for r in rows for e in entries[r.id]} - {None}
+    condition_names = (
+        dict(
+            db.execute(
+                select(TimeCondition.id, TimeCondition.name).where(
+                    TimeCondition.id.in_(condition_ids)
+                )
+            ).all()
+        )
+        if condition_ids
+        else {}
+    )
+    listed = {uuid.UUID(x) for r in rows for x in (r.direct_dial_extension_ids or [])}
+    listed_refs = (
+        {
+            e.id: ExtensionRef(id=e.id, number=e.number, name=e.display_name)
+            for e in db.scalars(select(Extension).where(Extension.id.in_(listed)))
+        }
+        if listed
+        else {}
+    )
     out = []
     for r in rows:
         org = orgs.get(r.organization_id)
@@ -201,7 +243,17 @@ def _outs(db: Session, rows: list[IvrMenu]) -> list[IvrMenuOut]:
         invalid = resolver.out_ref(destinations.ref_of(r, "invalid"))
         outs = [
             EntryOut(
-                digit=e.digit, destination=resolver.out_ref(destinations.ref_of(e, "destination"))
+                digit=e.digit,
+                destination=resolver.out_ref(destinations.ref_of(e, "destination")),
+                time_condition_id=e.time_condition_id,
+                time_condition_name=(
+                    condition_names.get(e.time_condition_id) if e.time_condition_id else None
+                ),
+                closed_destination=(
+                    resolver.out_ref(destinations.ref_of(e, "closed"))
+                    if e.time_condition_id
+                    else None
+                ),
             )
             for e in entries[r.id]
         ]
@@ -215,6 +267,8 @@ def _outs(db: Session, rows: list[IvrMenu]) -> list[IvrMenuOut]:
         for e in outs:
             if e.destination.missing:
                 problems.append(f"Key {e.digit} points at a destination that no longer exists.")
+            if e.closed_destination and e.closed_destination.missing:
+                problems.append(f"Key {e.digit}'s closed destination no longer exists.")
         if not outs and not r.allow_direct_dial:
             problems.append("The menu has no keys and direct dialling is off.")
         out.append(
@@ -233,6 +287,15 @@ def _outs(db: Session, rows: list[IvrMenu]) -> list[IvrMenuOut]:
                 timeout_seconds=r.timeout_seconds,
                 max_retries=r.max_retries,
                 allow_direct_dial=r.allow_direct_dial,
+                direct_dial_mode=r.direct_dial_mode,
+                direct_dial_extensions=sorted(
+                    (
+                        listed_refs[uuid.UUID(x)]
+                        for x in r.direct_dial_extension_ids or []
+                        if uuid.UUID(x) in listed_refs
+                    ),
+                    key=lambda e: e.number,
+                ),
                 timeout_destination=timeout,
                 invalid_destination=invalid,
                 entries=outs,
@@ -279,6 +342,9 @@ def _set_entries(db: Session, menu: IvrMenu, entries: list[EntryIn]) -> None:
     for e in entries:
         row = IvrEntry(menu_id=menu.id, digit=e.digit)
         destinations.apply(row, "destination", e.destination)
+        if e.time_condition_id and e.closed_destination:
+            row.time_condition_id = e.time_condition_id
+            destinations.apply(row, "closed", e.closed_destination)
         db.add(row)
     db.flush()
 
@@ -298,6 +364,26 @@ def _check_all(
     )
     for e in body.entries:
         check_destination(db, org_id, e.destination, field=f"entries.{e.digit}", allow_hangup=True)
+        if e.time_condition_id and e.closed_destination:
+            condition = db.get(TimeCondition, e.time_condition_id)
+            if condition is None or condition.organization_id != org_id:
+                raise _validation(f"entries.{e.digit}", "time condition not found")
+            check_destination(
+                db, org_id, e.closed_destination, field=f"entries.{e.digit}", allow_hangup=True
+            )
+    if body.direct_dial_extension_ids:
+        wanted = set(body.direct_dial_extension_ids)
+        found = set(
+            db.scalars(
+                select(Extension.id).where(
+                    Extension.id.in_(wanted), Extension.organization_id == org_id
+                )
+            )
+        )
+        if wanted - found:
+            raise _validation(
+                "direct_dial_extension_ids", "an extension is not in this organization"
+            )
 
 
 def _audit(
@@ -366,6 +452,8 @@ def create_menu(
         timeout_seconds=body.timeout_seconds,
         max_retries=body.max_retries,
         allow_direct_dial=body.allow_direct_dial,
+        direct_dial_mode=body.direct_dial_mode,
+        direct_dial_extension_ids=[str(x) for x in dict.fromkeys(body.direct_dial_extension_ids)],
         is_enabled=body.is_enabled,
     )
     destinations.apply(menu, "timeout", body.timeout_destination)
@@ -421,12 +509,20 @@ def update_menu(
         "timeout_seconds": menu.timeout_seconds,
         "max_retries": menu.max_retries,
         "allow_direct_dial": menu.allow_direct_dial,
+        "direct_dial_mode": menu.direct_dial_mode,
+        "direct_dial_extension_ids": menu.direct_dial_extension_ids or [],
         "timeout_destination": destinations.as_input(destinations.ref_of(menu, "timeout")),
         "invalid_destination": destinations.as_input(destinations.ref_of(menu, "invalid")),
         "entries": [
             {
                 "digit": e.digit,
                 "destination": destinations.as_input(destinations.ref_of(e, "destination")),
+                "time_condition_id": e.time_condition_id,
+                "closed_destination": (
+                    destinations.as_input(destinations.ref_of(e, "closed"))
+                    if e.time_condition_id
+                    else None
+                ),
             }
             for e in current_entries
         ],
@@ -452,20 +548,43 @@ def update_menu(
         "timeout_seconds",
         "max_retries",
         "allow_direct_dial",
+        "direct_dial_mode",
         "is_enabled",
     ):
         value = getattr(validated, field)
         if value != getattr(menu, field):
             setattr(menu, field, value)
             details[field] = str(value) if value is not None else None
+    listed = [str(x) for x in dict.fromkeys(validated.direct_dial_extension_ids)]
+    if listed != (menu.direct_dial_extension_ids or []):
+        menu.direct_dial_extension_ids = listed
+        details["direct_dial_extensions"] = len(listed)
     for prefix in ("timeout", "invalid"):
         d = getattr(validated, f"{prefix}_destination")
         if destinations.ref_of(menu, prefix) != d.as_ref():
             destinations.apply(menu, prefix, d)
             details[f"{prefix}_destination"] = d.model_dump(mode="json")
     if "entries" in changes:
-        wanted = [(e.digit, *e.destination.as_ref()) for e in validated.entries]
-        have = [(e.digit, *destinations.ref_of(e, "destination")) for e in current_entries]
+        wanted = [
+            (
+                e.digit,
+                e.destination.as_ref(),
+                e.time_condition_id,
+                e.closed_destination.as_ref()
+                if e.time_condition_id and e.closed_destination
+                else None,
+            )
+            for e in validated.entries
+        ]
+        have = [
+            (
+                e.digit,
+                destinations.ref_of(e, "destination"),
+                e.time_condition_id,
+                destinations.ref_of(e, "closed") if e.time_condition_id else None,
+            )
+            for e in current_entries
+        ]
         if wanted != have:
             _set_entries(db, menu, validated.entries)
             details["keys"] = [e.digit for e in validated.entries]

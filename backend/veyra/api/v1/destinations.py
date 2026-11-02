@@ -643,6 +643,7 @@ def _holders() -> list[tuple[Any, str, str]]:
         (IvrMenu, "timeout", "menu"),
         (IvrMenu, "invalid", "menu"),
         (IvrEntry, "destination", "menu"),
+        (IvrEntry, "closed", "menu"),
         (RingGroup, "failover", "ring group"),
         (CallQueue, "failover", "queue"),
         (Announcement, "destination", "announcement"),

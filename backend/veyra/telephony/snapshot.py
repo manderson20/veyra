@@ -150,6 +150,22 @@ def _class_slugs(ids: list[str] | None, slugs: dict[str, str]) -> list[str] | No
     return None if ids is None else sorted(slugs[x] for x in ids if x in slugs)
 
 
+def _direct_dial(
+    menu: IvrMenu, numbers_by_org: dict[Any, list[str]], extension_number: dict[str, str]
+) -> list[str]:
+    """What a menu's callers may dial (issue #392): the allow list is those
+    extensions only, the block list everything of the organization but them."""
+    listed = {
+        extension_number[x] for x in menu.direct_dial_extension_ids or [] if x in extension_number
+    }
+    if menu.direct_dial_mode == "allow":
+        return sorted(listed)
+    numbers = numbers_by_org.get(menu.organization_id, [])
+    if menu.direct_dial_mode == "block":
+        return sorted(set(numbers) - listed)
+    return sorted(numbers)
+
+
 def _pin(box: VoicemailBox, number: str, key: InstallationKey | None) -> str:
     if key is None:
         raise SnapshotError(
@@ -919,6 +935,7 @@ def _voicemail_ivr(
     for e in db.scalars(select(IvrEntry).order_by(IvrEntry.digit)).all():
         entries.setdefault(e.menu_id, []).append(e)
     # Direct dialling from a menu reaches extensions, ring groups and queues.
+    extension_number = {str(e.id): e.number for e in extensions}
     numbers_by_org: dict[Any, list[str]] = {}
     for ext in extensions:
         numbers_by_org.setdefault(ext.organization_id, []).append(ext.number)
@@ -975,11 +992,22 @@ def _voicemail_ivr(
                 "timeout_seconds": m.timeout_seconds,
                 "max_retries": m.max_retries,
                 "allow_direct_dial": m.allow_direct_dial,
-                "direct_dial": sorted(numbers_by_org.get(m.organization_id, [])),
+                "direct_dial": _direct_dial(m, numbers_by_org, extension_number),
                 "timeout": targets.dest(m, "timeout"),
                 "invalid": targets.dest(m, "invalid"),
                 "entries": [
-                    {"digit": e.digit, **targets.dest(e, "destination")}
+                    {
+                        "digit": e.digit,
+                        **targets.dest(e, "destination"),
+                        **(
+                            {
+                                "time_condition": str(e.time_condition_id),
+                                "closed": targets.dest(e, "closed"),
+                            }
+                            if e.time_condition_id
+                            else {}
+                        ),
+                    }
                     for e in entries.get(m.id, [])
                 ],
             }
@@ -1186,6 +1214,11 @@ def _routing(
         )
     )
     used_conditions |= {r.time_condition_id for r in outbound if r.time_condition_id}
+    used_conditions |= set(
+        db.scalars(
+            select(IvrEntry.time_condition_id).where(IvrEntry.time_condition_id.is_not(None))
+        )
+    )
     caller_rules: dict[Any, list[InboundCallerRule]] = {}
     for rule in db.scalars(select(InboundCallerRule).order_by(InboundCallerRule.position)):
         caller_rules.setdefault(rule.route_id, []).append(rule)

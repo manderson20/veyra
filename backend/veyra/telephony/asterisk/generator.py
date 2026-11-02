@@ -1417,7 +1417,7 @@ def _dialplan(
     )
     for ns in spaces:
         with engine_names.using(Names(ns)):
-            lines += _ivr_contexts(mine(menus, ns), prompts_dir)
+            lines += _ivr_contexts(mine(menus, ns), prompts_dir, conditions)
             lines += _announcement_contexts(mine(announcements, ns), prompts_dir)
             lines += _conference_contexts(mine(rooms, ns), _cos_for(snapshot, ns))
             lines += _call_flow_contexts(mine(flows, ns))
@@ -2918,11 +2918,9 @@ def _internal(
     return lines
 
 
-def _route_hours(cond: dict[str, Any] | None) -> list[str]:
-    """An outbound route limited to a time condition (issue #142): refused while
-    closed, the override and a closing calendar event counted as for inbound."""
-    if cond is None:
-        return []
+def _hours_check(cond: dict[str, Any]) -> list[str]:
+    """Jump to ``hoursopen`` or ``hoursclosed``, the override and a closing
+    calendar event counted as for inbound; falls through when closed."""
     key = _check_value(str(cond["key"]), "time condition key")
     org = _slug(cond.get("organization") or "", f"organization of time condition {key}")
     tz = routing.check_timezone(str(cond.get("timezone") or "UTC"))
@@ -2937,6 +2935,16 @@ def _route_hours(cond: dict[str, Any] | None) -> list[str]:
         ' same => n,GotoIf($["${VEYRA_TC}"="calendar"]?hoursclosed)',
         *[f" same => n,{app}" for app in closed],
         *[f" same => n,GotoIfTime({args}?hoursopen)" for args in opened],
+    ]
+
+
+def _route_hours(cond: dict[str, Any] | None) -> list[str]:
+    """An outbound route limited to a time condition (issue #142): refused while
+    closed."""
+    if cond is None:
+        return []
+    return [
+        *_hours_check(cond),
         " same => n(hoursclosed),NoOp(Veyra: this route is closed at this time)",
         " same => n,Set(CDR(veyra_flag)=denied)",
         " same => n,Answer()",
@@ -3394,7 +3402,11 @@ def _goto(dest: Any) -> list[str]:
     ]
 
 
-def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
+def _ivr_contexts(
+    menus: list[dict[str, Any]],
+    prompts_dir: str,
+    conditions: dict[str, dict[str, Any]] | None = None,
+) -> list[str]:
     """One ``veyra-ivr-<slug>`` per enabled menu (docs/VOICEMAIL_IVR.md §5)."""
     lines: list[str] = []
     seen: set[str] = set()
@@ -3441,10 +3453,19 @@ def _ivr_contexts(menus: list[dict[str, Any]], prompts_dir: str) -> list[str]:
         digits: set[str] = set()
         for e in m.get("entries") or []:
             digit = str(e.get("digit") or "")
-            if digit not in routing.IVR_DIGITS or digit in digits:
+            if not routing.IVR_KEY_RE.fullmatch(digit) or digit in digits:
                 raise GenerationError(f"IVR menu {slug}: key {digit!r} is not valid or repeated")
             digits.add(digit)
             lines.append(f"exten => {digit},1,NoOp(Veyra IVR {name} key {digit})")
+            # A key that goes elsewhere outside hours (issue #392).
+            cond = (conditions or {}).get(str(e.get("time_condition")))
+            if cond is not None:
+                lines += [
+                    *_hours_check(cond),
+                    f" same => n(hoursclosed),NoOp(Veyra IVR {name} key {digit}: closed)",
+                    *_goto(e.get("closed")),
+                    " same => n(hoursopen),NoOp()",
+                ]
             lines += _goto(e)
         if m.get("allow_direct_dial"):
             for number in m.get("direct_dial") or []:

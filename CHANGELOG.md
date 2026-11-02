@@ -8,6 +8,16 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.85 — 2026-11-02
+
+Migration 0090 extends menu keys. Deploy the configuration after changing a menu.
+
+### Added
+- **Phone menus** (#392):
+  - **Longer keys:** a key can be 2 to 8 digits, `*` or `#`, such as `42`.
+  - **Keys by time:** a key can go somewhere else while a time condition is closed.
+  - **Limits on dialling an extension:** a menu can allow all extensions, only the ones listed, or all but the ones listed.
+
 ## 0.27.84 — 2026-11-02
 
 Migration 0089 adds the extension allow list. Deploy the configuration after setting one.
