@@ -992,6 +992,7 @@ def _voicemail_ivr(
                 "timeout_seconds": m.timeout_seconds,
                 "max_retries": m.max_retries,
                 "allow_direct_dial": m.allow_direct_dial,
+                "queue_priority": m.queue_priority,
                 "direct_dial": _direct_dial(m, numbers_by_org, extension_number),
                 "timeout": targets.dest(m, "timeout"),
                 "invalid": targets.dest(m, "invalid"),
@@ -1240,6 +1241,7 @@ def _routing(
                 ),
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
                 "caller_id_prefix": r.caller_id_prefix,
+                "queue_priority": r.queue_priority,
                 # A rule whose target was deleted is skipped: the call takes the route.
                 "caller_rules": [
                     {"match": c.match, "number": c.number, "destination": dest}

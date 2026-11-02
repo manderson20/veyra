@@ -10,13 +10,14 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## 0.27.85 — 2026-11-02
 
-Migration 0090 extends menu keys. Deploy the configuration after changing a menu.
+Migrations 0090 and 0091 extend menu keys and add caller importance. Deploy the configuration after changing a menu or route.
 
 ### Added
 - **Phone menus** (#392):
   - **Longer keys:** a key can be 2 to 8 digits, `*` or `#`, such as `42`.
   - **Keys by time:** a key can go somewhere else while a time condition is closed.
   - **Limits on dialling an extension:** a menu can allow all extensions, only the ones listed, or all but the ones listed.
+- **Caller importance** (#392): an inbound route or phone menu can move its callers up a queue's line, from 0 to 10.
 
 ## 0.27.84 — 2026-11-02
 

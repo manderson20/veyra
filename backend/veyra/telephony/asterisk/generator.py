@@ -3295,8 +3295,16 @@ def _caller_rules(rules: list[dict[str, Any]]) -> list[str]:
     return out
 
 
+def _queue_priority(row: dict[str, Any]) -> list[str]:
+    """How far up a queue's line this caller goes; Queue() reads QUEUE_PRIO."""
+    priority = int(row.get("queue_priority") or 0)
+    if not 0 <= priority <= 10:
+        raise GenerationError(f"queue priority {priority} is out of range")
+    return [f" same => n,Set(__QUEUE_PRIO={priority})"] if priority else []
+
+
 def _destination_lines_of(r: dict[str, Any], conditions: dict[str, dict[str, Any]]) -> list[str]:
-    out = []
+    out = _queue_priority(r)
     prefix = r.get("caller_id_prefix")
     if prefix:
         out.append(f" same => n,Set(CALLERID(name)={_prefix(str(prefix))}${{CALLERID(name)}})")
@@ -3439,6 +3447,7 @@ def _ivr_contexts(
             f"exten => s,1,NoOp(Veyra IVR {name})",
             " same => n,Set(__VEYRA_IVR_DEPTH=$[0${VEYRA_IVR_DEPTH} + 1])",
             f" same => n,GotoIf($[${{VEYRA_IVR_DEPTH}} > {routing.MAX_IVR_DEPTH}]?toodeep)",
+            *_queue_priority(m),
             " same => n,Answer()",
             " same => n,Set(VEYRA_IVR_TRIES=0)",
             f" same => n(menu),Background({prompt_path})",

@@ -22,6 +22,7 @@ export interface InboundRouteDraft {
   time_condition_id: string;
   after_hours: DestinationDraft;
   caller_id_prefix: string;
+  queue_priority: string;
   is_enabled: boolean;
 }
 
@@ -34,6 +35,7 @@ export const EMPTY_INBOUND_ROUTE: InboundRouteDraft = {
   time_condition_id: "",
   after_hours: EMPTY_DESTINATION,
   caller_id_prefix: "",
+  queue_priority: "0",
   is_enabled: true,
 };
 
@@ -73,6 +75,7 @@ export function inboundRouteDraft(r: InboundRoute): InboundRouteDraft {
       }
       : destinationDraft(null),
     caller_id_prefix: r.caller_id_prefix ?? "",
+    queue_priority: String(r.queue_priority ?? 0),
     is_enabled: r.is_enabled,
   };
 }
@@ -109,6 +112,7 @@ export function inboundRouteBody(d: InboundRouteDraft): InboundRouteInput {
     after_hours_fax_inbox_id: after?.fax_inbox_id ?? null,
     after_hours_custom_context: after?.custom_context ?? null,
     caller_id_prefix: d.caller_id_prefix.trim() || null,
+    queue_priority: Number(d.queue_priority),
     is_enabled: d.is_enabled,
   };
 }
@@ -192,6 +196,8 @@ export function InboundRouteFields({ draft, onChange, errors, organizationId, cu
         })}
         <div><Button size="sm" disabled={disabled || !organizationId || draft.caller_rules.length >= 20} onClick={() => onChange({ caller_rules: [...draft.caller_rules, { match: "anonymous", number: "", destination: EMPTY_DESTINATION }] })}>Add caller rule</Button></div>
       </div>
+      <TextField label="Caller importance in queues" type="number" min={0} max={10} disabled={disabled} value={draft.queue_priority} error={errors.queue_priority}
+        help="0 to 10. Callers on this number wait ahead of callers with a lower number." onChange={(e) => onChange({ queue_priority: e.target.value })} />
       <TextField label="Caller ID prefix" disabled={disabled} value={draft.caller_id_prefix} error={errors.caller_id_prefix} placeholder="e.g. Sales:" autoComplete="off"
         help="Text put in front of the caller's name so the answering phone shows which number was called." onChange={(e) => onChange({ caller_id_prefix: e.target.value })} />
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />

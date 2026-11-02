@@ -72,6 +72,8 @@ If you allow dialling, **Extensions callers may dial** can be **All of them**, *
 - **Invalid-key prompt**: what callers hear after a wrong key. The default says "I'm sorry, that's not a valid extension".
 - **After too many invalid keys**: where they go then.
 
+**Caller importance in queues** lets callers from this menu wait ahead of others in a queue. See [call queues](guide:call-queues).
+
 ## 4. Save, deploy and connect
 
 1. Choose **Save changes**, then **Deploy changes** in the top bar.

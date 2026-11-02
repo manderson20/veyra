@@ -340,3 +340,9 @@ def test_ivr_multi_digit_key_and_key_by_time():
     key = text.split("exten => 1,1,NoOp(Veyra IVR", 1)[1].split("exten =>", 1)[0]
     assert "GotoIfTime(" in key and "?hoursopen)" in key
     assert key.index("n(hoursclosed)") < key.index("n(hoursopen)")
+
+
+def test_ivr_caller_importance_sets_queue_prio():
+    text = _files(_snapshot(ivr_menus=[_menu(queue_priority=5)]))["extensions.conf"].content
+    assert "Set(__QUEUE_PRIO=5)" in text
+    assert "QUEUE_PRIO" not in _files(_snapshot(ivr_menus=[_menu()]))["extensions.conf"].content

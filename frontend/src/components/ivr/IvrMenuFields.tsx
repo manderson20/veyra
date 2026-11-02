@@ -36,6 +36,7 @@ export interface IvrMenuDraft {
   entries: Partial<Record<string, DestinationDraft>>;
   hours: Partial<Record<string, IvrKeyHours>>;
   direct_dial_mode: "all" | "allow" | "block";
+  queue_priority: string;
   direct_dial_extensions: ListedExtension[];
   is_enabled: boolean;
 }
@@ -53,6 +54,7 @@ export const EMPTY_IVR_MENU: IvrMenuDraft = {
   entries: {},
   hours: {},
   direct_dial_mode: "all",
+  queue_priority: "0",
   direct_dial_extensions: [],
   is_enabled: true,
 };
@@ -77,6 +79,7 @@ export function ivrMenuDraft(m: IvrMenu): IvrMenuDraft {
     entries,
     hours,
     direct_dial_mode: m.direct_dial_mode ?? "all",
+    queue_priority: String(m.queue_priority ?? 0),
     direct_dial_extensions: m.direct_dial_extensions ?? [],
     is_enabled: m.is_enabled,
   };
@@ -92,6 +95,7 @@ export function ivrMenuBody(d: IvrMenuDraft): IvrMenuInput {
     max_retries: Number(d.max_retries),
     allow_direct_dial: d.allow_direct_dial,
     direct_dial_mode: d.direct_dial_mode,
+    queue_priority: Number(d.queue_priority),
     direct_dial_extension_ids: d.direct_dial_mode === "all" ? [] : d.direct_dial_extensions.map((x) => x.id),
     timeout_destination: destinationBody(d.timeout_destination),
     invalid_destination: destinationBody(d.invalid_destination),
@@ -109,6 +113,7 @@ export function ivrMenuValid(d: IvrMenuDraft): boolean {
   return d.name.trim().length > 0
     && Number.isInteger(t) && t >= 1 && t <= 30
     && Number.isInteger(r) && r >= 1 && r <= 9
+    && Number.isInteger(Number(d.queue_priority)) && Number(d.queue_priority) >= 0 && Number(d.queue_priority) <= 10
     && destinationComplete(d.timeout_destination)
     && destinationComplete(d.invalid_destination)
     && menuKeys(d.entries).every((k) => !d.entries[k] || destinationComplete(d.entries[k]!))
@@ -227,6 +232,8 @@ export function IvrMenuFields({ draft, onChange, errors, organizationId, current
         options={invalidOptions} onChange={(e) => onChange({ invalid_prompt_id: e.target.value })} />
       <DestinationPicker label="After too many invalid keys" idBase="ivr-invalid" draft={draft.invalid_destination} onChange={(invalid_destination) => onChange({ invalid_destination })} options={options} allowHangup
         current={current?.invalid_destination} error={errors.invalid_destination} disabled={disabled} exclude={current?.id} />
+      <TextField label="Caller importance in queues" type="number" min={0} max={10} disabled={disabled} value={draft.queue_priority} error={errors.queue_priority}
+        help="0 to 10. Callers who come through this menu wait ahead of callers with a lower number. 0 leaves it unchanged." onChange={(e) => onChange({ queue_priority: e.target.value })} />
       <Switch label="Enabled" description="A disabled menu is left out of the phone system; routes that point at it are flagged." checked={draft.is_enabled} disabled={disabled} onChange={(e) => onChange({ is_enabled: e.target.checked })} />
     </>
   );

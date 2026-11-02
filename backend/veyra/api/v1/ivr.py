@@ -69,6 +69,7 @@ class IvrMenuIn(BaseModel):
     max_retries: int = Field(3, ge=1, le=9)
     allow_direct_dial: bool = True
     direct_dial_mode: Literal["all", "allow", "block"] = "all"
+    queue_priority: int = Field(0, ge=0, le=10)
     direct_dial_extension_ids: list[uuid.UUID] = Field(default_factory=list, max_length=5000)
     timeout_destination: DestinationIn = Field(default_factory=lambda: DestinationIn(type="hangup"))
     invalid_destination: DestinationIn = Field(default_factory=lambda: DestinationIn(type="hangup"))
@@ -106,6 +107,7 @@ class IvrMenuPatch(BaseModel):
     max_retries: int | None = Field(None, ge=1, le=9)
     allow_direct_dial: bool | None = None
     direct_dial_mode: Literal["all", "allow", "block"] | None = None
+    queue_priority: int | None = Field(None, ge=0, le=10)
     direct_dial_extension_ids: list[uuid.UUID] | None = Field(None, max_length=5000)
     timeout_destination: DestinationIn | None = None
     invalid_destination: DestinationIn | None = None
@@ -143,6 +145,7 @@ class IvrMenuOut(BaseModel):
     max_retries: int
     allow_direct_dial: bool
     direct_dial_mode: str = "all"
+    queue_priority: int = 0
     direct_dial_extensions: list[ExtensionRef] = []
     timeout_destination: DestinationOut
     invalid_destination: DestinationOut
@@ -288,6 +291,7 @@ def _outs(db: Session, rows: list[IvrMenu]) -> list[IvrMenuOut]:
                 max_retries=r.max_retries,
                 allow_direct_dial=r.allow_direct_dial,
                 direct_dial_mode=r.direct_dial_mode,
+                queue_priority=r.queue_priority,
                 direct_dial_extensions=sorted(
                     (
                         listed_refs[uuid.UUID(x)]
@@ -453,6 +457,7 @@ def create_menu(
         max_retries=body.max_retries,
         allow_direct_dial=body.allow_direct_dial,
         direct_dial_mode=body.direct_dial_mode,
+        queue_priority=body.queue_priority,
         direct_dial_extension_ids=[str(x) for x in dict.fromkeys(body.direct_dial_extension_ids)],
         is_enabled=body.is_enabled,
     )
@@ -510,6 +515,7 @@ def update_menu(
         "max_retries": menu.max_retries,
         "allow_direct_dial": menu.allow_direct_dial,
         "direct_dial_mode": menu.direct_dial_mode,
+        "queue_priority": menu.queue_priority,
         "direct_dial_extension_ids": menu.direct_dial_extension_ids or [],
         "timeout_destination": destinations.as_input(destinations.ref_of(menu, "timeout")),
         "invalid_destination": destinations.as_input(destinations.ref_of(menu, "invalid")),
@@ -549,6 +555,7 @@ def update_menu(
         "max_retries",
         "allow_direct_dial",
         "direct_dial_mode",
+        "queue_priority",
         "is_enabled",
     ):
         value = getattr(validated, field)

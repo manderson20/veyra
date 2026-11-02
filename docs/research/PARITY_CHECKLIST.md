@@ -16,7 +16,7 @@ comparison (PR #162) and a code-checked review of the Grandstream UCM6300 manual
 - [x] Pause reason codes (VQ Plus)
 - [x] Queue auto-pause on no answer, written to the database row (FreeSWITCH, FreePBX)
 - [x] Queue weight (FreeSWITCH, FreePBX)
-- [ ] Caller importance: priority set per inbound route or menu, moves a caller up the line (FreeSWITCH, FreePBX)
+- [x] Caller importance: priority set per inbound route or menu, moves a caller up the line (FreeSWITCH, FreePBX)
 - [x] DISA (FreePBX, Grandstream)
 - [x] Wake-up calls (Grandstream, FreePBX Hotel)
 - [x] Extension-to-extension allow list (Grandstream)

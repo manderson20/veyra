@@ -523,9 +523,43 @@ def test_multi_digit_keys_direct_dial_lists_and_hours(admin, app):
     m = next(x for x in snap()["ivr_menus"] if x["slug"] == menu["slug"])
     assert "1391" in m["direct_dial"] and "1392" not in m["direct_dial"]
 
+    r = admin.patch(f"/api/v1/ivr/{menu['id']}", json={"queue_priority": 7})
+    assert r.status_code == 200 and r.json()["queue_priority"] == 7
+    assert admin.patch(f"/api/v1/ivr/{menu['id']}", json={"queue_priority": 11}).status_code == 422
     r = admin.delete(f"/api/v1/routing/time-conditions/{tc_id}")
     assert r.status_code == 409 and r.json()["code"] == "time_condition_in_use"
     bad = {"digit": "1", "destination": to_ext, "time_condition_id": tc_id}
     assert admin.patch(f"/api/v1/ivr/{menu['id']}", json={"entries": [bad]}).status_code == 422
     bad = {"digit": "12x", "destination": to_ext}
     assert admin.patch(f"/api/v1/ivr/{menu['id']}", json={"entries": [bad]}).status_code == 422
+
+
+def test_inbound_route_caller_importance(admin, app):
+    from veyra.core.db import session_scope
+    from veyra.core.security.crypto import load_installation_key
+    from veyra.telephony.asterisk import generator
+    from veyra.telephony.snapshot import build_snapshot
+
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    ext = admin.post(
+        "/api/v1/extensions",
+        json={"organization_id": org, "number": "1393", "display_name": "Desk"},
+    ).json()
+    r = admin.post(
+        "/api/v1/routing/inbound",
+        json={
+            "organization_id": org,
+            "did": "+15735550142",
+            "destination_extension_id": ext["id"],
+            "queue_priority": 3,
+        },
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["queue_priority"] == 3
+    r = admin.patch(f"/api/v1/routing/inbound/{r.json()['id']}", json={"queue_priority": 4})
+    assert r.status_code == 200, r.text
+    assert r.json()["queue_priority"] == 4
+    with session_scope() as db:
+        snap = build_snapshot(db, load_installation_key(app.state.settings))
+    text = {f.path: f.content for f in generator.generate(snap)}["extensions.conf"]
+    assert "Set(__QUEUE_PRIO=4)" in text

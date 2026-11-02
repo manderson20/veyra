@@ -137,6 +137,8 @@ class IvrMenu(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     direct_dial_extension_ids: Mapped[list[str]] = mapped_column(
         JSONB, default=list, server_default="[]"
     )
+    # A queue's line (issue #392): raises callers who come through; 0 leaves it.
+    queue_priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Where callers go after max_retries timeouts / invalid keys:
     # extension | voicemail | ivr | ring_group | queue | hangup, with the matching
     # target column.

@@ -682,6 +682,7 @@ class InboundRouteIn(BaseModel):
     after_hours_fax_inbox_id: uuid.UUID | None = None
     after_hours_custom_context: str | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
+    queue_priority: int = Field(0, ge=0, le=10)
     is_enabled: bool = True
 
     @field_validator("did")
@@ -728,6 +729,7 @@ class InboundRoutePatch(BaseModel):
     after_hours_fax_inbox_id: uuid.UUID | None = None
     after_hours_custom_context: str | None = None
     caller_id_prefix: str | None = Field(None, max_length=40)
+    queue_priority: int | None = Field(None, ge=0, le=10)
     is_enabled: bool | None = None
 
 
@@ -775,6 +777,7 @@ class InboundRouteOut(BaseModel):
     after_hours_name: str | None
     after_hours: DestinationOut | None
     caller_id_prefix: str | None
+    queue_priority: int = 0
     is_enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -872,6 +875,7 @@ def _ir_outs(db: Session, rows: list[InboundRoute]) -> list[InboundRouteOut]:
                 after_hours_name=after.display_name if after else None,
                 after_hours=after_out,
                 caller_id_prefix=r.caller_id_prefix,
+                queue_priority=r.queue_priority,
                 is_enabled=r.is_enabled,
                 created_at=r.created_at,
                 updated_at=r.updated_at,
@@ -1021,6 +1025,7 @@ def create_inbound(
         after_hours_fax_inbox_id=body.after_hours_fax_inbox_id,
         after_hours_custom_context=body.after_hours_custom_context,
         caller_id_prefix=body.caller_id_prefix,
+        queue_priority=body.queue_priority,
         is_enabled=body.is_enabled,
     )
     _check_destinations(db, org.id, route)
@@ -1106,6 +1111,10 @@ def update_inbound(
         if prefix != route.caller_id_prefix:
             route.caller_id_prefix = prefix
             details["caller_id_prefix"] = prefix
+    priority = changes.get("queue_priority")
+    if priority is not None and priority != route.queue_priority:
+        route.queue_priority = priority
+        details["queue_priority"] = priority
     for field in (
         "trunk_id",
         "destination_type",

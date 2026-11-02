@@ -1195,6 +1195,7 @@ export interface InboundRoute {
   after_hours_name: string | null;
   after_hours: Destination | null;
   caller_id_prefix: string | null;
+  queue_priority?: number;
   is_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -1230,6 +1231,7 @@ export interface InboundRouteInput {
   after_hours_fax_inbox_id?: string | null;
   after_hours_custom_context?: string | null;
   caller_id_prefix?: string | null;
+  queue_priority?: number;
   is_enabled?: boolean;
 }
 
@@ -1600,6 +1602,7 @@ export interface IvrMenu {
   max_retries: number;
   allow_direct_dial: boolean;
   direct_dial_mode?: "all" | "allow" | "block";
+  queue_priority?: number;
   direct_dial_extensions?: { id: string; number: string; name: string }[];
   timeout_destination: Destination;
   invalid_destination: Destination;
@@ -1623,6 +1626,7 @@ export interface IvrMenuInput {
   allow_direct_dial?: boolean;
   direct_dial_mode?: "all" | "allow" | "block";
   direct_dial_extension_ids?: string[];
+  queue_priority?: number;
   timeout_destination?: DestinationInput;
   invalid_destination?: DestinationInput;
   entries?: IvrEntryInput[];

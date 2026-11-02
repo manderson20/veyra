@@ -186,6 +186,8 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     after_hours_custom_context: Mapped[str | None] = mapped_column(String(64))
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
+    # How far up a queue's line the caller goes (issue #392); higher goes first.
+    queue_priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

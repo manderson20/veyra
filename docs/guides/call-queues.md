@@ -4,7 +4,7 @@ summary: Let callers wait in line with music and announcements until an agent is
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.80
+reviewed: 0.27.85
 checked: 2026-10-29
 pages:
   - /queues/
@@ -74,6 +74,8 @@ Under **Agents**, choose an extension and click **Add**. A queue has at most 64 
 - **Let callers wait when no agent is available**: off, a caller goes straight to the destination below when no agent is logged in or free.
 - **Break-out menu**: an IVR menu whose keys callers may press while they wait, for example 1 to leave a voicemail. Tell callers about it in the announcement while waiting. The menu must be enabled. See [Build a phone menu](guide:phone-menus).
 - **When the caller is not connected**: where the call goes after the maximum wait, when the queue is full, or when nobody can take it. The same destinations as everywhere else, or **Hang up**.
+
+**Caller importance:** an inbound route or a phone menu can set **Caller importance in queues**, from 0 to 10. A caller with a higher number waits ahead of anyone lower, whatever the order they arrived in. A menu's non-zero setting replaces the route's for callers who pass through it. Use it sparingly, because callers with a low number can wait a long time on a busy line.
 
 ## 5. Save and deploy
 
