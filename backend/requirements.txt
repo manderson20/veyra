@@ -21,7 +21,7 @@ python-multipart==0.0.32
 # recurring-rule expansion; BSD-2-Clause / BSD-3-Clause, tzdata Apache-2.0.
 icalendar==7.3.0
 python-dateutil==2.9.0.post0
-tzdata==2026.5
+tzdata==2026.6
 # HTTP client used by bundled modules (the AND clock delivery, docs/PAGING_RECORDINGS.md §6);
 # BSD-3-Clause. It was a development-only dependency until 0.17.0, which broke
 # installing the module in production.
