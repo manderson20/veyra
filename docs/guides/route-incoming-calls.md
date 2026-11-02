@@ -4,7 +4,7 @@ summary: Decide where each of your phone numbers (DIDs) rings, with a different 
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.81
+reviewed: 0.27.85
 checked: 2026-11-01T21:00Z
 pages:
   - /routing/inbound/

@@ -4,7 +4,7 @@ summary: Set opening hours, holidays and closed days, so calls outside them go t
 audience: admin
 section: Calls and call flows
 order: 40
-reviewed: 0.27.81
+reviewed: 0.27.85
 checked: 2026-10-30T15:10Z
 pages:
   - /routing/time-conditions/
@@ -88,7 +88,7 @@ An outbound route can also use a time condition, so that it works only while the
 
 Change the schedule on the time condition's page, then **Save changes** and deploy. The **Information** panel lists the open hours and holidays as Veyra understands them.
 
-A time condition used by an inbound route cannot be deleted. Remove it from those routes first.
+A time condition used by an inbound route or by a [phone menu](guide:phone-menus) key cannot be deleted. Remove it from those first.
 
 ## If it does not work
 

@@ -324,8 +324,8 @@
    "summary": "Decide where each of your phone numbers (DIDs) rings, with a different destination outside business hours.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.81",
-   "reviewed_date": "2026-11-01",
+   "reviewed": "0.27.85",
+   "reviewed_date": "2026-11-02",
    "pages": [
     "/routing/inbound/",
     "/routing/inbound/view/"
@@ -365,8 +365,8 @@
    "summary": "Decide which dialled numbers go out to the carrier, through which trunks, and with which caller ID.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.81",
-   "reviewed_date": "2026-11-01",
+   "reviewed": "0.27.85",
+   "reviewed_date": "2026-11-02",
    "pages": [
     "/routing/outbound/",
     "/routing/outbound/view/"
@@ -379,8 +379,8 @@
    "summary": "Set opening hours, holidays and closed days, so calls outside them go to a different destination.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.81",
-   "reviewed_date": "2026-11-01",
+   "reviewed": "0.27.85",
+   "reviewed_date": "2026-11-02",
    "pages": [
     "/routing/time-conditions/",
     "/routing/time-conditions/view/"
@@ -775,8 +775,8 @@
    "summary": "Create or change many extensions, users, routes or groups at once with a spreadsheet, or move from FreePBX.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.64",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.85",
+   "reviewed_date": "2026-11-02",
    "pages": [
     "/system/import/"
    ],
