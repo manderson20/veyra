@@ -1,7 +1,24 @@
 {
   "schema_version": 1,
-  "sequence": 102,
+  "sequence": 103,
   "releases": [
+    {
+      "component": "veyra_core",
+      "target": "veyra",
+      "version": "0.27.86",
+      "channel": "stable",
+      "category": "feature",
+      "release_notes": "Voicemail copies, quota, alternate greeting, forward intro",
+      "service_impact": "The web interface and API restart (under a minute); calls are not interrupted.",
+      "min_from_version": null,
+      "module_api": "1.3.0",
+      "revision": "e552822fe1",
+      "artifact": {
+        "url": "https://github.com/manderson20/veyra/releases/download/v0.27.86/veyra-0.27.86.tar.gz",
+        "sha256": "86724cbb5864452772b065a3e76c119bed7c74b603f78311fe170c70ceccf6b9",
+        "size": 9645884
+      }
+    },
     {
       "component": "veyra_core",
       "target": "veyra",
@@ -1737,6 +1754,6 @@
       }
     }
   ],
-  "generated_at": "2026-11-02T12:14:59+00:00",
-  "expires_at": "2027-01-31T12:14:59+00:00"
+  "generated_at": "2026-11-04T14:20:20+00:00",
+  "expires_at": "2027-02-02T14:20:20+00:00"
 }
