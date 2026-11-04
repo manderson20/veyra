@@ -8,6 +8,17 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## 0.27.86 — 2026-11-04
+
+Migration 0092 adds voicemail copies, quotas and the alternate greeting. Deploy the configuration after setting copies or a quota on a box.
+
+### Added
+- **Voicemail** (#392):
+  - **Extra recipients:** a box can also leave every message in other boxes of the same organization (**Also leave every message in**). Each box gets its own copy and lights its lamp.
+  - **Quota per box:** **Most messages kept** (default 100) and **Longest message** (default 180 seconds). A full box tells callers it is full and refuses forwarded copies.
+  - **Alternate greeting:** a second greeting a user keeps ready and turns on with **Use the alternate greeting**. It plays instead of the unavailable and busy greetings and takes effect at once. A temporary greeting or an extended absence still comes first.
+  - **Spoken introduction on forward:** when forwarding a message from the browser, record a few words that play before it.
+
 ## 0.27.85 — 2026-11-02
 
 Migrations 0090 and 0091 extend menu keys and add caller importance. Deploy the configuration after changing a menu or route.

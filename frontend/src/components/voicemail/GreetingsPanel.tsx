@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Badge, Button, Callout, Checkbox, Dialog, Icon, Switch, TextField, useToast } from "@/components/ui";
 import { API_BASE, api, errorMessage } from "@/lib/api";
-import type { VoicemailAbsence, VoicemailGreeting } from "@/lib/types";
+import type { VoicemailAbsence, VoicemailAlternate, VoicemailGreeting } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useOnChange } from "@/hooks/useOnChange";
+import { useRecorder } from "@/hooks/useRecorder";
 
 const HELP: Record<VoicemailGreeting["kind"], string> = {
   unavail: "Played when you do not answer.",
@@ -15,6 +16,7 @@ const HELP: Record<VoicemailGreeting["kind"], string> = {
   temp: "Played instead of the others while it exists; remove it when you are back.",
   absence: "For a long absence (summer break, leave): played as the temporary greeting between the dates below, then removed by itself.",
   afterhours: "Played instead of the unavailable greeting while the office is closed, when your administrator has set the box's hours. A temporary greeting still wins.",
+  alternate: "A second greeting you keep ready (testing week, a field trip, a busy season). Turn it on below and it plays instead of the unavailable and busy greetings. A temporary greeting still wins.",
 };
 const MAX_SECONDS = 60;
 
@@ -98,8 +100,36 @@ export function GreetingsPanel({ base, editable = true }: { base: string; editab
         ))}
       </ul>
       <p className="subtle" style={{ margin: 0 }}>Up to {MAX_SECONDS} seconds each. You can also record from your phone: dial *97, then 0 for mailbox options.</p>
+      <AlternateSwitch base={base} editable={editable} recorded={!!list.data?.find((g) => g.kind === "alternate")?.recorded} />
       <AbsenceCard base={base} editable={editable} />
       <RecordDialog key={recording?.kind ?? "none"} greeting={recording} busy={!!busy} onClose={() => setRecording(null)} onSave={(blob) => recording && upload(recording, blob, "recording.webm")} />
+    </div>
+  );
+}
+
+/** The alternate greeting's switch (issue #392): applies at once. */
+function AlternateSwitch({ base, editable, recorded }: { base: string; editable: boolean; recorded: boolean }) {
+  const toast = useToast();
+  const alt = useApiData<VoicemailAlternate>(`${base}/alternate`);
+  const [busy, setBusy] = useState(false);
+  if (alt.error || !alt.data) return null;
+  const on = alt.data.enabled;
+  const put = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      alt.setData(await api.put<VoicemailAlternate>(`${base}/alternate`, { enabled }));
+      toast.success(enabled ? "Alternate greeting on" : "Alternate greeting off", "Takes effect at once; no deployment needed.");
+    } catch (err) {
+      toast.error("Could not change the greeting", errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="stack stack--xs" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <Switch label="Use the alternate greeting" checked={on} disabled={!editable || busy || (!on && !recorded)}
+        onChange={(e) => void put(e.target.checked)}
+        description={on ? (recorded ? "On: callers hear your alternate greeting." : "On, but the alternate greeting was removed: callers hear the usual greetings.") : recorded ? "Off: callers hear the usual greetings." : "Record or upload the alternate greeting above first."} />
     </div>
   );
 }
@@ -147,65 +177,7 @@ function AbsenceCard({ base, editable }: { base: string; editable: boolean }) {
 
 /** Record a greeting with the microphone (MediaRecorder), preview, save. */
 function RecordDialog({ greeting, busy, onClose, onSave }: { greeting: VoicemailGreeting | null; busy: boolean; onClose: () => void; onSave: (blob: Blob) => void }) {
-  const [state, setState] = useState<"idle" | "recording" | "done" | "unsupported" | "denied">("idle");
-  const [seconds, setSeconds] = useState(0);
-  const [blob, setBlob] = useState<Blob | null>(null);
-  const [url, setUrl] = useState<string | null>(null);
-  const recorder = useRef<MediaRecorder | null>(null);
-  const chunks = useRef<Blob[]>([]);
-  const timer = useRef<number | null>(null);
-
-  const stop = () => {
-    if (timer.current) { window.clearInterval(timer.current); timer.current = null; }
-    const r = recorder.current;
-    if (r && r.state !== "inactive") r.stop();
-    r?.stream.getTracks().forEach((t) => t.stop());
-  };
-  const reset = () => {
-    stop();
-    recorder.current = null;
-    chunks.current = [];
-    setSeconds(0);
-    setBlob(null);
-    if (url) URL.revokeObjectURL(url);
-    setUrl(null);
-    setState("idle");
-  };
-  // The dialog is keyed on the greeting, so a new greeting remounts it with
-  // fresh state; on unmount the microphone is released.
-  useEffect(() => () => {
-    if (timer.current) window.clearInterval(timer.current);
-    const r = recorder.current;
-    if (r && r.state !== "inactive") r.stop();
-    r?.stream.getTracks().forEach((t) => t.stop());
-  }, []);
-
-  const start = async () => {
-    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) { setState("unsupported"); return; }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((m) => MediaRecorder.isTypeSupported(m));
-      const r = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-      chunks.current = [];
-      r.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data); };
-      r.onstop = () => {
-        const b = new Blob(chunks.current, { type: r.mimeType || "audio/webm" });
-        setBlob(b);
-        setUrl(URL.createObjectURL(b));
-        setState("done");
-      };
-      recorder.current = r;
-      r.start(250);
-      setSeconds(0);
-      setState("recording");
-      timer.current = window.setInterval(() => setSeconds((s) => {
-        if (s + 1 >= MAX_SECONDS) stop();
-        return s + 1;
-      }), 1000);
-    } catch {
-      setState("denied");
-    }
-  };
+  const { state, seconds, blob, url, start, stop, reset } = useRecorder(MAX_SECONDS);
 
   return (
     <Dialog open={greeting !== null} onClose={onClose} busy={busy} title={`Record the ${greeting?.label.toLowerCase() ?? ""} greeting`}

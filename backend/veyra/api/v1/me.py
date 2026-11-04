@@ -1015,6 +1015,35 @@ def my_absence_put(
     return vmsvc.absence_out(db, box)
 
 
+@router.get("/voicemail/{box_id}/alternate", summary="Your alternate greeting switch")
+def my_alternate(
+    box_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return vmsvc.alternate_out(db, request.app.state.settings, _own_box(db, principal, box_id))
+
+
+@router.put("/voicemail/{box_id}/alternate", summary="Turn your alternate greeting on or off")
+def my_alternate_put(
+    box_id: uuid.UUID,
+    body: vmsvc.AlternateIn,
+    request: Request,
+    principal: Principal = Depends(require_me),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    box = _own_box(db, principal, box_id)
+    details = vmsvc.set_alternate(
+        db, request.app.state.settings, box, body, getattr(request.app.state, "telephony", None)
+    )
+    if details:
+        _box_audit(db, ctx, principal, "voicemail.alternate_update", box, details)
+    db.commit()
+    return vmsvc.alternate_out(db, request.app.state.settings, box)
+
+
 @router.delete(
     "/voicemail/{box_id}/greetings/{kind}",
     response_model=list[vmsvc.GreetingOut],

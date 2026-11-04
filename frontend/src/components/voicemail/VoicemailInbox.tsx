@@ -9,6 +9,10 @@ import { formatDateTime, formatDuration, formatRelative } from "@/lib/format";
 import type { VoicemailEmailResult, VoicemailMessage, VoicemailMessages } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { MoreRows, useRowLimit } from "@/components/portal/WidgetSize";
+import { blobToBase64, useRecorder } from "@/hooks/useRecorder";
+
+/** A forward's spoken intro (#392); the server's limit too. */
+const INTRO_SECONDS = 60;
 
 export interface ForwardTarget { id: string; label: string }
 
@@ -46,12 +50,15 @@ export function VoicemailInbox({ base, targets, email, editable = true, refreshS
     return () => window.clearInterval(t);
   }, [reload, refreshSeconds]);
 
-  const act = async (what: "move" | "forward" | "delete", m: VoicemailMessage, arg?: string) => {
+  const act = async (what: "move" | "forward" | "delete", m: VoicemailMessage, arg?: string, intro?: Blob | null) => {
     setBusy(true);
     setError(null);
     try {
       if (what === "move") await api.post(`${base}/messages/${m.number}/move`, { folder: m.folder, to: arg, msg_id: m.msg_id });
-      else if (what === "forward") await api.post(`${base}/messages/${m.number}/forward`, { folder: m.folder, box_id: arg, msg_id: m.msg_id });
+      else if (what === "forward") {
+        const extra = intro ? { intro: await blobToBase64(intro), intro_filename: intro.type.includes("ogg") ? "intro.ogg" : "intro.webm" } : {};
+        await api.post(`${base}/messages/${m.number}/forward`, { folder: m.folder, box_id: arg, msg_id: m.msg_id, ...extra });
+      }
       else await api.del(`${base}/messages/${m.number}?folder=${encodeURIComponent(m.folder)}&msg_id=${encodeURIComponent(m.msg_id)}`);
       toast.success(what === "move" ? "Message moved" : what === "forward" ? "Message forwarded" : "Message deleted");
       setMoving(null); setForwarding(null); setDeleting(null);
@@ -156,7 +163,7 @@ export function VoicemailInbox({ base, targets, email, editable = true, refreshS
       )}
       <MoreRows {...rows} />
       <MoveDialog message={moving} folders={data?.folders ?? []} busy={busy} error={error} onClose={() => setMoving(null)} onMove={(to) => moving && act("move", moving, to)} />
-      <ForwardDialog message={forwarding} targets={targets} busy={busy} error={error} onClose={() => setForwarding(null)} onForward={(id) => forwarding && act("forward", forwarding, id)} />
+      <ForwardDialog message={forwarding} targets={targets} busy={busy} error={error} onClose={() => setForwarding(null)} onForward={(id, intro) => forwarding && act("forward", forwarding, id, intro)} />
       {emailing ? (
         <EmailDialog message={emailing} email={email ?? null} own={base.startsWith("/me/")} busy={busy} error={error}
           onClose={() => setEmailing(null)} onSend={(del, to) => sendEmail(emailing, del, to)} />
@@ -199,17 +206,44 @@ function MoveDialog({ message, folders, busy, error, onClose, onMove }: {
   );
 }
 
-function ForwardDialog({ message, targets, busy, error, onClose, onForward }: {
+function ForwardDialog({ message, ...rest }: {
   message: VoicemailMessage | null; targets: ForwardTarget[]; busy: boolean; error: string | null;
-  onClose: () => void; onForward: (boxId: string) => void;
+  onClose: () => void; onForward: (boxId: string, intro: Blob | null) => void;
+}) {
+  // Keyed on the message: a new forward starts with no intro and frees the microphone.
+  return <ForwardForm key={message?.msg_id ?? "none"} message={message} {...rest} />;
+}
+
+function ForwardForm({ message, targets, busy, error, onClose, onForward }: {
+  message: VoicemailMessage | null; targets: ForwardTarget[]; busy: boolean; error: string | null;
+  onClose: () => void; onForward: (boxId: string, intro: Blob | null) => void;
 }) {
   const [target, setTarget] = useState(targets[0]?.id ?? "");
-  const valid = targets.some((t) => t.id === target);
+  const [withIntro, setWithIntro] = useState(false);
+  const rec = useRecorder(INTRO_SECONDS);
+  const chosen = targets.some((t) => t.id === target) ? target : (targets[0]?.id ?? "");
+  const introReady = !withIntro || (rec.state === "done" && !!rec.blob);
   return (
     <Dialog open={message !== null} onClose={onClose} busy={busy} title="Forward the message"
-      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" loading={busy} disabled={!valid} onClick={() => onForward(target)}>Forward</Button></>}>
+      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" loading={busy} disabled={!chosen || !introReady} onClick={() => onForward(chosen, withIntro ? rec.blob : null)}>Forward</Button></>}>
       <div className="stack stack--sm">
-        <SelectField label="To voicemail box" value={valid ? target : (targets[0]?.id ?? "")} options={targets.map((t) => ({ value: t.id, label: t.label }))} onChange={(e) => setTarget(e.target.value)} />
+        <SelectField label="To voicemail box" value={chosen} options={targets.map((t) => ({ value: t.id, label: t.label }))} onChange={(e) => setTarget(e.target.value)} />
+        <Checkbox label="Add a spoken introduction" checked={withIntro} disabled={busy}
+          onChange={(e) => { setWithIntro(e.target.checked); if (!e.target.checked) rec.reset(); }}
+          description="Say why you are forwarding it. They hear you first, then the message." />
+        {withIntro ? (
+          <div className="stack stack--xs">
+            {rec.state === "unsupported" ? <Callout tone="warn">This browser cannot record audio. Forward without an introduction.</Callout> : null}
+            {rec.state === "denied" ? <Callout tone="warn">The microphone is not available: allow it for this site and try again.</Callout> : null}
+            {rec.state === "recording" ? <p style={{ margin: 0 }}><Badge tone="danger">Recording</Badge> <span className="mono">{rec.seconds}s</span> of {INTRO_SECONDS}</p> : null}
+            {rec.state === "done" && rec.url ? <audio controls src={rec.url} style={{ width: "100%" }} /> : null}
+            <div className="row">
+              {rec.state === "idle" || rec.state === "denied" ? <Button size="sm" icon="mic" onClick={() => void rec.start()}>Record</Button> : null}
+              {rec.state === "recording" ? <Button size="sm" icon="stop" onClick={rec.stop}>Stop</Button> : null}
+              {rec.state === "done" ? <Button size="sm" onClick={rec.reset}>Record again</Button> : null}
+            </div>
+          </div>
+        ) : null}
         <p className="subtle" style={{ margin: 0 }}>A copy lands in that box as a new message, marked as forwarded by you; your copy stays.</p>
         {error ? <Callout tone="danger">{error}</Callout> : null}
       </div>

@@ -913,6 +913,7 @@ def _voicemail_ivr(
         return ext_by_id[b.extension_id].number if b.extension_id else str(b.number)
 
     boxes.sort(key=box_number)
+    boxes_by_id = {str(b.id): b for b in boxes}
     targets.box_numbers.update(box_number(b) for b in boxes)
     targets.shared_box_number.update({b.id: box_number(b) for b in boxes if not b.extension_id})
     # Member lamps of shared inboxes (docs/PAGING_RECORDINGS.md §5).
@@ -979,6 +980,17 @@ def _voicemail_ivr(
                     if b.after_hours_time_condition_id
                     else None
                 ),
+                # Issue #392: boxes that also get every message (numbers of
+                # the same organization; deleted or disabled boxes drop out).
+                "copy_to": [
+                    box_number(c)
+                    for i in b.copy_to_box_ids or []
+                    if (c := boxes_by_id.get(str(i))) is not None
+                    and c.organization_id == b.organization_id
+                    and c.id != b.id
+                ],
+                "max_messages": b.max_messages,
+                "max_message_seconds": b.max_message_seconds,
             }
             for b in boxes
         ],

@@ -4,13 +4,14 @@ summary: Give extensions a voicemail box, set PINs and email delivery, and creat
 audience: admin
 section: Voicemail and fax
 order: 10
-reviewed: 0.27.67
+reviewed: 0.27.86
 pages:
   - /voicemail/
 covers:
   - frontend/src/app/(app)/voicemail/*
   - frontend/src/components/voicemail/VoicemailBoxDialog.tsx
   - frontend/src/components/voicemail/LocaterField.tsx
+  - frontend/src/components/voicemail/BoxListPicker.tsx
   - frontend/src/components/voicemail/VoicemailBoxPanel.tsx
   - frontend/src/components/voicemail/VoicemailInbox.tsx
   - frontend/src/components/voicemail/GreetingsPanel.tsx
@@ -58,9 +59,12 @@ When you create or edit a box (click its row), these options are available:
 | **Attach the recording to the email** | On by default. Off: the email only says a message arrived. |
 | **Delete the message from the box once it has been emailed** | Saves storage. The message is deleted only after the email server accepted it; if sending fails, it stays. Needs an email address and the recording attached. |
 | **Delete messages older than (days)** | 1 to 3650. Once a day, older messages are deleted from every folder of the box. Empty keeps them. |
+| **Most messages kept** | 1 to 9999. When the box is full, callers hear that it is full and cannot leave a message, and forwarded copies are refused. Empty: 100. |
+| **Longest message (seconds)** | 10 to 3600. The recording stops after this. Empty: 180 seconds. |
+| **Also leave every message in** | Search for other boxes of the same organization. Each gets its own copy of every message as a new message and lights its lamp; callers hear only this box's greeting. Use it for a secretary who should hear the principal's messages, for example. Needs a deployment. |
 | **Enabled** | A disabled box keeps its settings and messages, but calls no longer land in it. |
 
-Each message can be up to 3 minutes long, and greetings up to 60 seconds.
+Unless **Longest message** says otherwise, each message can be up to 3 minutes long. Greetings can be up to 60 seconds.
 
 ## Reset a PIN
 
@@ -84,8 +88,8 @@ From a phone, members open the inbox with `*98`: enter the inbox's number, then 
 
 **Messages** on a box's row opens its messages and greetings, as the user sees them:
 
-- **Messages**: play, **Move** to another folder, **Forward** a copy to another box, **Email** it to an address (it stays in the box unless you tick **Delete it from the voicemail box once the email is sent**), or **Delete** it. Folders are *New*, *Old*, *Work*, *Family*, *Friends* and *Urgent*.
-- **Greetings**: play, **Upload** or **Record** in the browser, or **Remove** each greeting: *Unavailable*, *Busy*, *Name*, *Temporary*, *Extended absence* and *After hours*. Below them is the box's **Extended absence** (see [Your voicemail](guide:your-voicemail)).
+- **Messages**: play, **Move** to another folder, **Forward** a copy to another box (tick **Add a spoken introduction** to record a few words that play before it), **Email** it to an address (it stays in the box unless you tick **Delete it from the voicemail box once the email is sent**), or **Delete** it. Folders are *New*, *Old*, *Work*, *Family*, *Friends* and *Urgent*.
+- **Greetings**: play, **Upload** or **Record** in the browser, or **Remove** each greeting: *Unavailable*, *Busy*, *Name*, *Temporary*, *Extended absence*, *After hours* and *Alternate*. Below them are **Use the alternate greeting** and the box's **Extended absence** (see [Your voicemail](guide:your-voicemail)).
 
 Listening to a message and every change are written to the audit log.
 

@@ -1374,6 +1374,13 @@ export interface VoicemailBox {
   /** Pressing 1 / 2 during the greeting (#131): "followme" (1 only) or a number of the organization. */
   locater_1?: string | null;
   locater_2?: string | null;
+  /** Every message is also left in these boxes (#392). */
+  copy_to_box_ids?: string[];
+  /** Quota (#392); null: 100 messages of up to 180 seconds. */
+  max_messages?: number | null;
+  max_message_seconds?: number | null;
+  /** The alternate greeting plays instead of unavailable and busy (#392). */
+  alternate_greeting?: boolean;
   is_enabled: boolean;
   /** Settings → Email delivery is enabled; without it messages stay in the box. */
   email_delivery_enabled: boolean;
@@ -1409,6 +1416,9 @@ export interface VoicemailBoxInput {
   /** Pressing 1 / 2 during the greeting (#131): "followme" (1 only) or a number of the organization. */
   locater_1?: string | null;
   locater_2?: string | null;
+  copy_to_box_ids?: string[];
+  max_messages?: number | null;
+  max_message_seconds?: number | null;
 }
 
 export interface MyVoicemail {
@@ -1517,7 +1527,7 @@ export interface VoicemailMessage {
 
 /** One of the four greetings of a box (docs/USER_PORTAL.md §3). */
 export interface VoicemailGreeting {
-  kind: "unavail" | "busy" | "greet" | "temp" | "absence" | "afterhours";
+  kind: "unavail" | "busy" | "greet" | "temp" | "absence" | "afterhours" | "alternate";
   label: string;
   recorded: boolean;
   format: string | null;
@@ -3729,6 +3739,12 @@ export interface FaxJob {
 }
 
 /** Extended absence of a voicemail box (issue #169). */
+/** GET/PUT …/alternate (#392): the switch applies at once. */
+export interface VoicemailAlternate {
+  enabled: boolean;
+  recorded: boolean;
+}
+
 export interface VoicemailAbsence {
   enabled: boolean;
   starts_on: string | null;

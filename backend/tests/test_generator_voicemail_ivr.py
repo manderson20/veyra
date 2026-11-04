@@ -168,13 +168,23 @@ def test_mwi_and_voicemail_dialplan_for_extensions_with_a_box():
         " same => n(noanswer),Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_no_answer)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         ' same => n,GotoIf($["${DB(veyra/vmabs/veyra/1002)}"="refuse"]?veyra-vm-absent,1002,1)\n'
-        " same => n,VoiceMail(1002@veyra,u)\n"
+        ' same => n,Set(VEYRA_ALT=$["${DB(veyra/vmalt/veyra/1002)}"="on"'
+        " & ${STAT(e,/var/spool/asterisk/voicemail/veyra/1002/alternate.wav)}"
+        " & !${STAT(e,/var/spool/asterisk/voicemail/veyra/1002/temp.wav)}])\n"
+        " same => n,ExecIf(${VEYRA_ALT}"
+        "?Playback(/var/spool/asterisk/voicemail/veyra/1002/alternate))\n"
+        " same => n,VoiceMail(1002@veyra,${IF(${VEYRA_ALT}?:u)})\n"
         " same => n,Hangup()\n"
         " same => n(dnd),NoOp(Veyra: 1002 has Do Not Disturb on)\n"
         " same => n(busy),Set(VEYRA_CF=${DB(veyra/ext/example/1002/cf_busy)})\n"
         ' same => n,GotoIf($["${VEYRA_CF}"!=""]?forward)\n'
         ' same => n,GotoIf($["${DB(veyra/vmabs/veyra/1002)}"="refuse"]?veyra-vm-absent,1002,1)\n'
-        " same => n,VoiceMail(1002@veyra,b)\n"
+        ' same => n,Set(VEYRA_ALT=$["${DB(veyra/vmalt/veyra/1002)}"="on"'
+        " & ${STAT(e,/var/spool/asterisk/voicemail/veyra/1002/alternate.wav)}"
+        " & !${STAT(e,/var/spool/asterisk/voicemail/veyra/1002/temp.wav)}])\n"
+        " same => n,ExecIf(${VEYRA_ALT}"
+        "?Playback(/var/spool/asterisk/voicemail/veyra/1002/alternate))\n"
+        " same => n,VoiceMail(1002@veyra,${IF(${VEYRA_ALT}?:b)})\n"
         " same => n,Hangup()" in dp
     )
     # feature codes
@@ -221,7 +231,12 @@ def test_ivr_context_keys_direct_dial_and_fallbacks():
     assert (
         "exten => 2,1,NoOp(Veyra IVR Main menu key 2)\n"
         ' same => n,GotoIf($["${DB(veyra/vmabs/veyra/1002)}"="refuse"]?veyra-vm-absent,1002,1)\n'
-        " same => n,VoiceMail(1002@veyra,u)" in body
+        ' same => n,Set(VEYRA_ALT=$["${DB(veyra/vmalt/veyra/1002)}"="on"'
+        " & ${STAT(e,/var/spool/asterisk/voicemail/veyra/1002/alternate.wav)}"
+        " & !${STAT(e,/var/spool/asterisk/voicemail/veyra/1002/temp.wav)}])\n"
+        " same => n,ExecIf(${VEYRA_ALT}"
+        "?Playback(/var/spool/asterisk/voicemail/veyra/1002/alternate))\n"
+        " same => n,VoiceMail(1002@veyra,${IF(${VEYRA_ALT}?:u)})" in body
     )
     assert (
         "exten => 3,1,NoOp(Veyra IVR Main menu key 3)\n same => n,Goto(veyra-ivr-after-hours,s,1)"
@@ -300,7 +315,10 @@ def test_inbound_routes_accept_typed_destinations():
     )
     dp = _files(snap)["extensions.conf"].content
     assert "exten => 5735550100,1," in dp and "Goto(veyra-ivr-main-menu,s,1)" in dp
-    assert "VoiceMail(1002@veyra,u)" in dp.split("exten => 5735550101,1,")[1].split("exten =>")[0]
+    assert (
+        "VoiceMail(1002@veyra,${IF(${VEYRA_ALT}?:u)})"
+        in dp.split("exten => 5735550101,1,")[1].split("exten =>")[0]
+    )
     assert "Congestion(5)" in dp.split("exten => 5735550102,1,")[1].split("exten =>")[0]
     assert (
         "Goto(veyra-internal,1001,1)" in dp.split("exten => 5735550103,1,")[1].split("exten =>")[0]

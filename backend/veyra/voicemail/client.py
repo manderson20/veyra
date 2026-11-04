@@ -140,7 +140,19 @@ class StoreClient:
         to_context: str,
         to_mailbox: str,
         note: str = "",
+        *,
+        limit: int | None = None,
+        audio: bytes | None = None,
+        duration: float = 0,
     ) -> dict[str, Any]:
+        """``audio`` (WAV) replaces the recording in the copy: a forward with
+        a spoken intro; ``limit`` is the target box's message quota."""
+        extra: dict[str, Any] = {}
+        if limit:
+            extra["limit"] = limit
+        if audio is not None:
+            extra["audio"] = base64.b64encode(audio).decode("ascii")
+            extra["duration"] = duration
         return dict(
             self.call(
                 "copy",
@@ -151,6 +163,7 @@ class StoreClient:
                 to_context=to_context,
                 to_mailbox=to_mailbox,
                 note=note,
+                **extra,
             )
         )
 

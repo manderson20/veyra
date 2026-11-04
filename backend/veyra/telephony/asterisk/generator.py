@@ -469,6 +469,7 @@ def generate(
         if (num := str(b.get("number") or "")) and (key := str(b.get("after_hours") or ""))
     }
     hours_token = _vm_hours.set(hours)
+    copies_token = _vm_copies.set(_copy_targets(snapshot, mapping))
     try:
         with engine_names.namespaces(mapping):
             files = _generate(
@@ -483,6 +484,7 @@ def generate(
     finally:
         _vm_dtmf.reset(token)
         _vm_hours.reset(hours_token)
+        _vm_copies.reset(copies_token)
     # Prove the organizations cannot reach each other (docs/MULTI_TENANCY.md §5).
     strict = bool((snapshot.get("installation") or {}).get("multi_tenancy_enabled"))
     if len(set(mapping.values())) > 1 or strict:
@@ -2245,41 +2247,94 @@ _vm_dtmf: ContextVar[frozenset[tuple[str, str]]] = ContextVar("veyra_vm_dtmf", d
 _vm_hours: ContextVar[dict[tuple[str, str], str]] = ContextVar("veyra_vm_hours", default={})  # noqa: B039
 
 
+# (voicemail context, box number) -> the boxes that also get its messages
+# (issue #392): VoiceMail(<box>&<copy>&...) leaves one message in each.
+_vm_copies: ContextVar[dict[tuple[str, str], tuple[str, ...]]] = ContextVar(
+    "veyra_vm_copies",
+    default={},  # noqa: B039
+)
+
+
+def _copy_targets(
+    snapshot: dict[str, Any], mapping: dict[str, str]
+) -> dict[tuple[str, str], tuple[str, ...]]:
+    """Extra recipients by box, limited to deployed boxes of the same
+    organization."""
+    boxes = snapshot.get("voicemail_boxes") or []
+    known = {(str(b.get("organization") or ""), str(b.get("number") or "")) for b in boxes}
+    out: dict[tuple[str, str], tuple[str, ...]] = {}
+    for b in boxes:
+        org = str(b.get("organization") or "")
+        number = str(b.get("number") or "")
+        copies: list[str] = []
+        for c in b.get("copy_to") or []:
+            c = str(c)
+            if not _NUMBER_RE.match(c):
+                raise GenerationError(f"voicemail box {number}: copy to {c!r} is not valid")
+            if c != number and (org, c) in known and c not in copies:
+                copies.append(c)
+        if copies:
+            out[(engine_names.Names(mapping.get(org, "")).voicemail, number)] = tuple(copies)
+    return out
+
+
 def _vm(number: str, flags: str) -> str:
-    """``VoiceMail(<box>@<ns>,<flags>)``, with the locater's ``d()`` when set."""
+    """``VoiceMail(<box>[&<copy>...]@<ns>,<flags>)``, with the locater's
+    ``d()`` when set."""
     n = engine_names.current()
     if (n.voicemail, number) in _vm_dtmf.get():
         flags += f"d({n.voicemail_exit(number)})"
-    return f"VoiceMail({number}@{n.voicemail},{flags})"
+    boxes = "&".join(
+        f"{b}@{n.voicemail}" for b in (number, *_vm_copies.get().get((n.voicemail, number), ()))
+    )
+    return f"VoiceMail({boxes},{flags})"
 
 
 # Where Asterisk keeps the boxes; the absent context plays a box's
 # temporary greeting from here (issue #169).
 VOICEMAIL_SPOOL = "/var/spool/asterisk/voicemail"
 VMABS_FAMILY = "veyra/vmabs"
+# The alternate greeting's switch (voicemail.service.ALTERNATE_FAMILY).
+VMALT_FAMILY = "veyra/vmalt"
 
 
 def _vm_steps(number: str, flags: str) -> list[str]:
     """``VoiceMail`` after the extended-absence check (issue #169): a box that
-    takes no messages while its owner is away only plays the greeting."""
+    takes no messages while its owner is away only plays the greeting.
+
+    Greetings, first match: the temporary one (Asterisk's own), the
+    alternate one while switched on (issue #392), the after-hours one while
+    its condition is closed (issue #169), then unavailable or busy."""
     n = engine_names.current()
     absent = [
         f' same => n,GotoIf($["${{DB({VMABS_FAMILY}/{n.voicemail}/{number})}}"="refuse"]'
         f"?{n.voicemail_absent},{number},1)",
     ]
+    if flags not in ("u", "b"):
+        return [*absent, f" same => n,{_vm(number, flags)}"]
+    spool = f"{VOICEMAIL_SPOOL}/{n.voicemail}/{number}"
+    alternate = [
+        f' same => n,Set(VEYRA_ALT=$["${{DB({VMALT_FAMILY}/{n.voicemail}/{number})}}"="on"'
+        f" & ${{STAT(e,{spool}/alternate.wav)}} & !${{STAT(e,{spool}/temp.wav)}}])",
+        f" same => n,ExecIf(${{VEYRA_ALT}}?Playback({spool}/alternate))",
+    ]
     key = _vm_hours.get().get((n.voicemail, number))
     if not key or flags != "u":
-        return [*absent, f" same => n,{_vm(number, flags)}"]
+        return [
+            *absent,
+            *alternate,
+            f" same => n,{_vm(number, '${IF(${VEYRA_ALT}?:' + flags + ')}')}",
+        ]
     # After hours (issue #169): the box's own recording instead of the
     # unavailable greeting, unless a temporary (or absence) greeting is set.
-    spool = f"{VOICEMAIL_SPOOL}/{n.voicemail}/{number}"
     return [
         *absent,
+        *alternate,
         f" same => n,Gosub({n.tc_open(_check_value(key, 'time condition key'))},s,1)",
-        f" same => n,Set(VEYRA_AH=$[!0${{VEYRA_OPEN}} & ${{STAT(e,{spool}/afterhours.wav)}}"
-        f" & !${{STAT(e,{spool}/temp.wav)}}])",
+        f" same => n,Set(VEYRA_AH=$[!${{VEYRA_ALT}} & !0${{VEYRA_OPEN}}"
+        f" & ${{STAT(e,{spool}/afterhours.wav)}} & !${{STAT(e,{spool}/temp.wav)}}])",
         f" same => n,ExecIf(${{VEYRA_AH}}?Playback({spool}/afterhours))",
-        f" same => n,{_vm(number, '${IF(${VEYRA_AH}?:u)}')}",
+        f" same => n,{_vm(number, '${IF($[${VEYRA_ALT} | ${VEYRA_AH}]?:u)}')}",
     ]
 
 
@@ -5294,9 +5349,21 @@ def _box_lines(entries: list[tuple[str, dict[str, Any]]], delivery: bool) -> lis
         if _has_exit(b):
             ctx = engine_names.for_org(org).voicemail_exit(number)
             exit_opts = f"|operator={'yes' if operator else 'no'}|exitcontext={ctx}"
+        # Quota (issue #392); unset: [general]'s maxmsg and maxsecs.
+        quota = ""
+        for field, option, low, high in (
+            ("max_messages", "maxmsg", 1, 9999),
+            ("max_message_seconds", "maxsecs", 10, 3600),
+        ):
+            value = b.get(field)
+            if value is None:
+                continue
+            if not isinstance(value, int) or not low <= value <= high:
+                raise GenerationError(f"voicemail box {number}: {option} {value!r} is out of range")
+            quota += f"|{option}={value}"
         lines.append(
             f"{number} => {pin},{name},{email},,"
-            f"attach={attach}|delete=no|tz={org}|saycid=yes|envelope=yes{exit_opts}"
+            f"attach={attach}|delete=no|tz={org}|saycid=yes|envelope=yes{exit_opts}{quota}"
         )
     return lines
 

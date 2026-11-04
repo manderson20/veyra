@@ -4,8 +4,8 @@ summary: Listen to your messages from your phone or the browser, record your gre
 audience: user
 section: Using Veyra
 order: 20
-reviewed: 0.27.82
-checked: 2026-11-01
+reviewed: 0.27.86
+checked: 2026-11-04
 pages:
   - /my-phone/
 covers:
@@ -42,7 +42,7 @@ On [My Phone](app:/my-phone/), the **Voicemail** widget has two tabs.
 - **Play** listens in the browser.
 - **Call me** rings your desk phone and plays the message there, useful in a shared office.
 - **Move** puts it in another folder. Moving a new message to *Old* marks it as heard on the phone too.
-- **Forward** sends a copy to a colleague's box.
+- **Forward** sends a copy to a colleague's box. Tick **Add a spoken introduction** to record a few words first (up to 60 seconds), such as *Pat, this parent is asking about the field trip*. Your colleague hears you, then the message.
 - **Email** sends it to your email address with the recording attached. The message stays in the box unless you tick **Delete it from the voicemail box once the email is sent**.
 - **Delete** removes it.
 
@@ -52,7 +52,7 @@ On [My Phone](app:/my-phone/), the **Voicemail** widget has two tabs.
 - **Busy**: played when you are on another call.
 - **Name**: your name, used by the directory and the standard greetings.
 - **Temporary**: played instead of the others while it exists. Remove it when you are back.
-- **Extended absence** and **After hours**: see below.
+- **Extended absence**, **After hours** and **Alternate**: see below.
 
 For each one, **Record** records it with your computer's microphone (up to 60 seconds; listen to it, then **Save greeting**), **Upload** takes an audio file, and **Remove** goes back to the standard greeting.
 
@@ -67,9 +67,19 @@ For the summer break or a leave:
 
 On the first day, callers hear your absence greeting; after the last day, it turns itself off.
 
+## A second greeting: alternate
+
+The **Alternate** greeting is one you keep ready for a period of your own, such as testing week or a field trip.
+
+1. Record or upload your **Alternate** greeting.
+2. Turn on **Use the alternate greeting**. From the next call, it plays instead of your unavailable and busy greetings.
+3. Turn it off when you are done. The recording stays for next time.
+
+It takes effect at once; no deployment is needed. A temporary greeting, or an extended absence, still takes priority.
+
 ## After hours
 
-If your administrator has set office hours for your box, your **After hours** greeting plays instead of the unavailable one while the office is closed. A temporary greeting still takes priority.
+If your administrator has set office hours for your box, your **After hours** greeting plays instead of the unavailable one while the office is closed. A temporary greeting, or the alternate greeting while it is on, still takes priority.
 
 ## Your PIN and greeting keys
 

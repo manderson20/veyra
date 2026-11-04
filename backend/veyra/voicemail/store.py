@@ -53,7 +53,7 @@ FOLDERS = ("INBOX", "Old", "Work", "Family", "Friends", "Urgent")
 # "absence" (issue #169) is Veyra's own: copied over "temp" while an
 # extended absence is on; Asterisk never reads it. "afterhours" (#169) is
 # played by the dialplan while the box's time condition is closed.
-GREETINGS = ("unavail", "busy", "greet", "temp", "absence", "afterhours")
+GREETINGS = ("unavail", "busy", "greet", "temp", "absence", "afterhours", "alternate")
 AUDIO_FORMATS = ("wav", "WAV", "gsm")  # preference when reading
 MAX_MESSAGES = 9999
 MAX_AUDIO = 64 * 1024 * 1024
@@ -412,17 +412,36 @@ class VoicemailStore:
         audio = self._audio_file(src, n)
         if audio is None:
             raise StoreError("not_found", "the message has no audio file")
+        # A forward with a spoken intro (issue #392) brings the joined audio
+        # (WAV) and its length; otherwise the recording is copied as it is.
+        joined: bytes | None = None
+        if args.get("audio"):
+            try:
+                joined = base64.b64decode(str(args["audio"]), validate=True)
+            except ValueError as e:
+                raise StoreError("bad_argument", "the audio is not valid base64") from e
+            if not joined or len(joined) > MAX_AUDIO:
+                raise StoreError("bad_argument", "the audio is empty or too large")
+        try:
+            limit = min(int(args.get("limit") or MAX_MESSAGES), MAX_MESSAGES)
+        except (TypeError, ValueError) as e:
+            raise StoreError("bad_argument", "the limit is not valid") from e
         with _FolderLock(dst):
             target = len(self._messages(dst))
-            if target > MAX_MESSAGES:
-                raise StoreError("full", "the folder is full")
+            if target >= limit:
+                raise StoreError("full", "the mailbox is full")
             text = txt.read_text(errors="replace")
             note = str(args.get("note") or "").replace("\n", " ")[:200]
             if note:
                 text = text.rstrip("\n") + f"\nforwarded_by={note}\n"
-            # Audio first, the index file last: a reader never sees a .txt
-            # without its recording.
-            (dst / f"msg{target:04d}{audio.suffix}").write_bytes(audio.read_bytes())
+            if joined is not None:
+                duration = max(0, int(float(args.get("duration") or 0)))
+                text = re.sub(r"(?m)^duration=.*$", f"duration={duration}", text)
+                (dst / f"msg{target:04d}.wav").write_bytes(joined)
+            else:
+                # Audio first, the index file last: a reader never sees a .txt
+                # without its recording.
+                (dst / f"msg{target:04d}{audio.suffix}").write_bytes(audio.read_bytes())
             (dst / f"msg{target:04d}.txt").write_text(text)
         return {"copied": True, "number": target}
 

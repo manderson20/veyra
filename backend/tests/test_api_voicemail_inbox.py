@@ -243,6 +243,7 @@ def test_greetings_upload_play_limit_and_delete(admin, app, helper):
         "temp",
         "absence",
         "afterhours",
+        "alternate",
     ]
     assert not any(g["recorded"] for g in r.json())
     # Upload a 16 kHz stereo-ish WAV: converted to the engine's 8 kHz mono WAV.

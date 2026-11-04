@@ -69,6 +69,16 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     after_hours_time_condition_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("time_conditions.id", ondelete="SET NULL")
     )
+    # Issue #392 (FreeSWITCH voicemail): every message left here is also
+    # left in these boxes of the same organization (ids, in order).
+    copy_to_box_ids: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    # Quota: most messages kept and longest message; None = the defaults
+    # of voicemail.conf's [general] (100 messages, 180 s).
+    max_messages: Mapped[int | None] = mapped_column(Integer)
+    max_message_seconds: Mapped[int | None] = mapped_column(Integer)
+    # The "alternate" recording plays instead of the unavailable and busy
+    # greetings while this is on; applied to the engine at once (AstDB).
+    alternate_greeting: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class VoicemailBoxMember(Base):

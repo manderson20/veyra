@@ -889,7 +889,7 @@ def test_generator_direct_voicemail_and_operator():
     feat = _section(d, "veyra-features")
     assert "exten => *1001,1,NoOp(Veyra direct to voicemail 1001)" in feat
     # The unavailable greeting plays (u); VoiceMail plays no greeting without it.
-    assert "VoiceMail(1001@veyra,u)" in feat and "exten => *1002,1," in feat
+    assert "VoiceMail(1001@veyra,${IF(${VEYRA_ALT}?:u)})" in feat and "exten => *1002,1," in feat
     vmx = _section(d, "veyra-vmx-1001")
     assert "exten => o,1,NoOp(Veyra: voicemail 1001 operator)" in vmx
     assert "Goto(veyra-internal,1002,1)" in vmx and "exten => a,1,VoiceMailMain(1001@veyra)" in vmx
@@ -1335,8 +1335,8 @@ def test_generator_voicemail_locater():
     assert "exten => 1,1,NoOp(Veyra: voicemail 1001 locater 1)" in vmx
     assert "Goto(veyra-internal,1001,fm)" in vmx and "Goto(veyra-internal,7000,1)" in vmx
     assert "exten => o," not in vmx  # no operator set
-    assert "VoiceMail(1001@veyra,ud(veyra-vmx-1001))" in d
-    assert "VoiceMail(1001@veyra,bd(veyra-vmx-1001))" in d
+    assert "VoiceMail(1001@veyra,${IF(${VEYRA_ALT}?:u)}d(veyra-vmx-1001))" in d
+    assert "VoiceMail(1001@veyra,${IF(${VEYRA_ALT}?:b)}d(veyra-vmx-1001))" in d
     assert "|operator=no|exitcontext=veyra-vmx-1001" in files["voicemail.conf"]
     # Follow me gone: key 1 is dropped, key 2 stays.
     box["follow_me"] = False
@@ -1345,7 +1345,7 @@ def test_generator_voicemail_locater():
     # No locater and no operator: plain VoiceMail, no exit context.
     box.update(locater_1=None, locater_2=None)
     d = {f.path: f.content for f in generate(snap)}["extensions.conf"]
-    assert "[veyra-vmx-1001]" not in d and "VoiceMail(1001@veyra,u)" in d
+    assert "[veyra-vmx-1001]" not in d and "VoiceMail(1001@veyra,${IF(${VEYRA_ALT}?:u)})" in d
     box["locater_2"] = "70a"
     with pytest.raises(generator.GenerationError, match="locater"):
         generate(snap)

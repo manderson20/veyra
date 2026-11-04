@@ -121,7 +121,11 @@ def test_two_organizations_same_numbers_are_isolated():
             " same => n,Goto(veyra-rg-sales,s,1)",
         ),
         ("extensions.conf", "Dial(PJSIP/beta-1001,", "Dial(PJSIP/example-1001,"),
-        ("extensions.conf", "VoiceMail(1002@veyra_beta,u)", "VoiceMail(1002@veyra,u)"),
+        (
+            "extensions.conf",
+            "VoiceMail(1002@veyra_beta,${IF(${VEYRA_ALT}?:u)})",
+            "VoiceMail(1002@veyra,${IF(${VEYRA_ALT}?:u)})",
+        ),
         ("extensions.conf", "Queue(veyra_beta-support,", "Queue(veyra-support,"),
         ("pjsip.endpoints.conf", "context=veyra_beta-internal", "context=veyra-internal"),
         ("pjsip.endpoints.conf", "mailboxes=1002@veyra_beta", "mailboxes=1002@veyra"),

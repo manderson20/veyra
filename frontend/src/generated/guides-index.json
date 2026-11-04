@@ -634,8 +634,8 @@
    "summary": "Give extensions a voicemail box, set PINs and email delivery, and create shared inboxes that several phones watch.",
    "audience": "admin",
    "section": "Voicemail and fax",
-   "reviewed": "0.27.67",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.86",
+   "reviewed_date": "2026-11-04",
    "pages": [
     "/voicemail/"
    ],
@@ -871,8 +871,8 @@
    "summary": "Turn on Do Not Disturb, forward your calls, check voicemail, call people back, keep your contacts and send a fax, all from the My Phone page.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.82",
-   "reviewed_date": "2026-11-01",
+   "reviewed": "0.27.86",
+   "reviewed_date": "2026-11-04",
    "pages": [
     "/my-phone/"
    ],
@@ -884,8 +884,8 @@
    "summary": "Listen to your messages from your phone or the browser, record your greetings, set an away message for the holidays, and choose your PIN.",
    "audience": "user",
    "section": "Using Veyra",
-   "reviewed": "0.27.82",
-   "reviewed_date": "2026-11-01",
+   "reviewed": "0.27.86",
+   "reviewed_date": "2026-11-04",
    "pages": [
     "/my-phone/"
    ],

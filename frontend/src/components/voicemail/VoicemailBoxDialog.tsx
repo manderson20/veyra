@@ -7,6 +7,7 @@ import { MemberListEditor, membersFromIds, type MemberDraft } from "@/components
 import { Button, Callout, Checkbox, ConfirmDialog, Dialog, SelectField, Switch, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import type { Extension, Page, TimeCondition, VoicemailBox, VoicemailBoxCreated, VoicemailBoxInput } from "@/lib/types";
+import { BoxListPicker, useListedBoxes, type ListedBox } from "./BoxListPicker";
 import { LocaterField } from "./LocaterField";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -30,13 +31,15 @@ interface Draft {
   after_hours: string;
   locater_1: string;
   locater_2: string;
+  max_messages: string;
+  max_message_seconds: string;
   is_enabled: boolean;
 }
 
-const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, keep_days: "", ring_seconds: "20", operator_extension: "", after_hours: "", locater_1: "", locater_2: "", is_enabled: true };
+const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, keep_days: "", ring_seconds: "20", operator_extension: "", after_hours: "", locater_1: "", locater_2: "", max_messages: "", max_message_seconds: "", is_enabled: true };
 
 function fromBox(b: VoicemailBox): Draft {
-  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, keep_days: b.keep_days ? String(b.keep_days) : "", ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", after_hours: b.after_hours_time_condition_id ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", is_enabled: b.is_enabled };
+  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, keep_days: b.keep_days ? String(b.keep_days) : "", ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", after_hours: b.after_hours_time_condition_id ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", max_messages: b.max_messages ? String(b.max_messages) : "", max_message_seconds: b.max_message_seconds ? String(b.max_message_seconds) : "", is_enabled: b.is_enabled };
 }
 
 /** How a box is named in titles and toasts: its extension, or a shared inbox's name. */
@@ -76,6 +79,9 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
   const errors = useFormErrors();
   const editing = !!box;
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  // Extra recipients (#392): null until the stored ones are labelled.
+  const [copies, setCopies] = useState<ListedBox[] | null>(null);
+  const storedCopies = useListedBoxes(box?.copy_to_box_ids, open);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<VoicemailBoxCreated | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -93,6 +99,7 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
   useOnChange(open, () => {
     if (open) {
       setDraft(box ? fromBox(box) : { ...EMPTY, extension_id: extension?.id ?? "" });
+      setCopies(box?.copy_to_box_ids?.length ? null : []);
       setCreated(null);
       setResetPin(null);
       setResetError(null);
@@ -107,7 +114,12 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
   const targetOk = shared ? draft.number.trim() && draft.name.trim() : editing || draft.extension_id;
   const keep = draft.keep_days.trim() ? Number(draft.keep_days) : null;
   const keepOk = keep === null || (Number.isInteger(keep) && keep >= 1 && keep <= 3650);
-  const valid = keepOk && targetOk && Number.isInteger(ring) && ring >= 5 && ring <= 120 && (!draft.pin || /^[0-9]{4,10}$/.test(draft.pin)) && (!draft.delete_after_email || (draft.defaultEmail && !shared) || draft.email.trim());
+  const maxMsgs = draft.max_messages.trim() ? Number(draft.max_messages) : null;
+  const maxSecs = draft.max_message_seconds.trim() ? Number(draft.max_message_seconds) : null;
+  const quotaOk = (maxMsgs === null || (Number.isInteger(maxMsgs) && maxMsgs >= 1 && maxMsgs <= 9999))
+    && (maxSecs === null || (Number.isInteger(maxSecs) && maxSecs >= 10 && maxSecs <= 3600));
+  const copyList = copies ?? storedCopies ?? [];
+  const valid = keepOk && quotaOk && (copies !== null || storedCopies !== null || !box?.copy_to_box_ids?.length) && targetOk && Number.isInteger(ring) && ring >= 5 && ring <= 120 && (!draft.pin || /^[0-9]{4,10}$/.test(draft.pin)) && (!draft.delete_after_email || (draft.defaultEmail && !shared) || draft.email.trim());
 
   const body = (): VoicemailBoxInput => {
     const b: VoicemailBoxInput = {
@@ -119,6 +131,9 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
       after_hours_time_condition_id: draft.after_hours || null,
       locater_1: draft.locater_1 || null,
       locater_2: draft.locater_2 || null,
+      copy_to_box_ids: copyList.map((c) => c.id),
+      max_messages: maxMsgs,
+      max_message_seconds: maxSecs,
       is_enabled: draft.is_enabled,
     };
     if (shared) {
@@ -263,6 +278,17 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
           <TextField label="Delete messages older than (days)" type="number" min={1} max={3650} value={draft.keep_days} error={errors.fields.keep_days}
             placeholder="Keep them" help="Saves storage: once a day, messages older than this are deleted from every folder of the box. Empty keeps them."
             onChange={(e) => setDraft({ ...draft, keep_days: e.target.value })} />
+          <div className="form-grid">
+            <TextField label="Most messages kept" type="number" min={1} max={9999} value={draft.max_messages} error={errors.fields.max_messages}
+              placeholder="100" help="When the box is full, callers hear that it is full and cannot leave a message. Empty: 100."
+              onChange={(e) => setDraft({ ...draft, max_messages: e.target.value })} />
+            <TextField label="Longest message (seconds)" type="number" min={10} max={3600} value={draft.max_message_seconds} error={errors.fields.max_message_seconds}
+              placeholder="180" help="The recording stops after this. Empty: 180 seconds."
+              onChange={(e) => setDraft({ ...draft, max_message_seconds: e.target.value })} />
+          </div>
+          <BoxListPicker label="Also leave every message in" organizationId={orgId} exclude={box?.id} value={copyList} onChange={setCopies}
+            help="Each of these boxes gets its own copy as a new message, and lights its lamp. Callers hear this box's greeting. Needs a deployment."
+            emptyText="No other boxes: messages stay in this box only." error={errors.fields.copy_to_box_ids} />
           <Switch label="Enabled" description="A disabled box keeps its settings and messages, but calls no longer land in it." checked={draft.is_enabled} onChange={(e) => setDraft({ ...draft, is_enabled: e.target.checked })} />
           {editing ? (
             <div className="row">

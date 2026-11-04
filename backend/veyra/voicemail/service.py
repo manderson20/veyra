@@ -6,14 +6,18 @@ administrator's routes alike."""
 
 from __future__ import annotations
 
+import base64
+import binascii
+import io
 import logging
 import re
 import uuid
+import wave
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from veyra.core import audit, tenancy
@@ -26,6 +30,12 @@ from veyra.voicemail.client import StoreClient, StoreClientError, StoreUnavailab
 from veyra.voicemail.store import FOLDERS, GREETINGS
 
 log = logging.getLogger("veyra.voicemail")
+
+# A forward's spoken intro (issue #392): at most a minute, a few MB sent.
+MAX_INTRO_SECONDS = 60
+MAX_INTRO_BASE64 = 8 * 1024 * 1024
+# Silence between the intro and the message.
+INTRO_GAP_SECONDS = 0.4
 
 FOLDER_LABELS = {
     "INBOX": "New",
@@ -42,6 +52,7 @@ GREETING_LABELS = {
     "temp": "Temporary",
     "absence": "Extended absence",
     "afterhours": "After hours",
+    "alternate": "Alternate",
 }
 MEDIA_TYPES = {"wav": "audio/wav", "WAV": "audio/wav", "gsm": "audio/gsm"}
 
@@ -108,6 +119,10 @@ class ForwardIn(BaseModel):
     folder: str = "INBOX"
     box_id: uuid.UUID
     msg_id: str | None = None
+    # A spoken intro played before the message (issue #392): a browser
+    # recording or an audio file, base64; the copy carries both.
+    intro: str | None = Field(None, max_length=MAX_INTRO_BASE64)
+    intro_filename: str | None = Field(None, max_length=200)
 
 
 def check_folder(folder: str) -> str:
@@ -281,6 +296,7 @@ def forward(
     check_folder(body.folder)
     context, mailbox = location(db, box)
     to_context, to_mailbox = location(db, target)
+    intro = _intro(body) if body.intro else None
     try:
         c = client(settings)
         if body.msg_id:
@@ -289,9 +305,82 @@ def forward(
             current = next((m for m in listed if int(m["number"]) == number), None)
             if current is None or str(current.get("msg_id")) != body.msg_id:
                 raise StoreClientError("message_moved", "the message list changed; reload it")
-        return c.copy(context, mailbox, body.folder, number, to_context, to_mailbox, note)
+        joined: bytes | None = None
+        duration = 0.0
+        if intro is not None:
+            fmt, data = c.read(context, mailbox, body.folder, number)
+            try:
+                message, _ = audio_tools.convert_any(data, f"message.{fmt.lower()}")
+            except audio_tools.AudioError as e:
+                raise ProblemError(
+                    422,
+                    "Message cannot be joined",
+                    f"The message's audio could not be read ({e}); forward it without an intro.",
+                    code="unsupported_audio",
+                ) from e
+            joined, duration = join_wavs(intro, message)
+        return c.copy(
+            context,
+            mailbox,
+            body.folder,
+            number,
+            to_context,
+            to_mailbox,
+            note,
+            limit=target.max_messages,
+            audio=joined,
+            duration=duration,
+        )
     except StoreClientError as e:
         raise problem(e) from e
+
+
+def _intro(body: ForwardIn) -> bytes:
+    """The forward's intro as the engine's WAV (8 kHz mono)."""
+    try:
+        data = base64.b64decode(body.intro or "", validate=True)
+    except (binascii.Error, ValueError) as e:
+        raise ProblemError(
+            422, "Unsupported audio", "The intro is not valid base64.", code="unsupported_audio"
+        ) from e
+    if not data:
+        raise ProblemError(415, "Empty file", "The intro is empty.", code="unsupported_audio")
+    try:
+        wav, duration = audio_tools.convert_any(data, body.intro_filename)
+    except audio_tools.AudioError as e:
+        raise ProblemError(415, "Unsupported audio", str(e), code="unsupported_audio") from e
+    if duration > MAX_INTRO_SECONDS:
+        raise ProblemError(
+            422,
+            "Intro too long",
+            f"The intro is {duration:.0f} s long; the limit is {MAX_INTRO_SECONDS} s.",
+            code="intro_too_long",
+        )
+    return wav
+
+
+def join_wavs(first: bytes, second: bytes, gap: float = INTRO_GAP_SECONDS) -> tuple[bytes, float]:
+    """Two WAVs of the same format, one after the other with a short
+    silence between; returns the WAV and its length in seconds."""
+    with wave.open(io.BytesIO(first), "rb") as a, wave.open(io.BytesIO(second), "rb") as b:
+        params = a.getparams()
+        if (b.getnchannels(), b.getsampwidth(), b.getframerate()) != (
+            params.nchannels,
+            params.sampwidth,
+            params.framerate,
+        ):
+            raise ValueError("the recordings have different formats")
+        frames_a = a.readframes(a.getnframes())
+        frames_b = b.readframes(b.getnframes())
+    silence = b"\0" * (int(params.framerate * gap) * params.sampwidth * params.nchannels)
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(params.nchannels)
+        w.setsampwidth(params.sampwidth)
+        w.setframerate(params.framerate)
+        w.writeframes(frames_a + silence + frames_b)
+    frames = (len(frames_a) + len(silence) + len(frames_b)) // (params.sampwidth * params.nchannels)
+    return out.getvalue(), frames / params.framerate
 
 
 def greetings(db: Session, settings: Settings, box: VoicemailBox) -> list[dict[str, Any]]:
@@ -732,6 +821,59 @@ def absence_sweep(
             continue
     db.commit()
     return changed
+
+
+# ------------------------------------------------- alternate greeting (#392)
+
+# AstDB family the dialplan reads: veyra/vmalt/<voicemail context> <mailbox>
+# = "on" while the "alternate" recording plays instead of the unavailable
+# and busy greetings.
+ALTERNATE_FAMILY = "veyra/vmalt"
+
+
+class AlternateIn(BaseModel):
+    enabled: bool
+
+
+def alternate_out(db: Session, settings: Settings, box: VoicemailBox) -> dict[str, Any]:
+    recorded = any(g["kind"] == "alternate" and g["recorded"] for g in greetings(db, settings, box))
+    return {"enabled": box.alternate_greeting, "recorded": recorded}
+
+
+def apply_alternate(db: Session, box: VoicemailBox, adapter: Any) -> bool:
+    """Write the box's switch to the engine; False when it could not be
+    written (the next deployment or switch writes it again)."""
+    if adapter is None:
+        return False
+    context, mailbox = location(db, box)
+    try:
+        adapter.store_put(
+            f"{ALTERNATE_FAMILY}/{context}", mailbox, "on" if box.alternate_greeting else None
+        )
+    except Exception as e:
+        log.warning("Voicemail alternate greeting of %s not written: %s", mailbox, e)
+        return False
+    return True
+
+
+def set_alternate(
+    db: Session, settings: Settings, box: VoicemailBox, body: AlternateIn, adapter: Any = None
+) -> dict[str, Any]:
+    """Turn the alternate greeting on or off at once. Returns what changed."""
+    if body.enabled and not alternate_out(db, settings, box)["recorded"]:
+        raise ProblemError(
+            409,
+            "No alternate greeting",
+            "Record or upload the alternate greeting first.",
+            code="greeting_missing",
+        )
+    details: dict[str, Any] = {}
+    if body.enabled != box.alternate_greeting:
+        box.alternate_greeting = body.enabled
+        details["enabled"] = body.enabled
+        db.flush()
+    apply_alternate(db, box, adapter)
+    return details
 
 
 # ------------------------------------------------------- PINs from the phone

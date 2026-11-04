@@ -377,7 +377,10 @@ def test_inbound_routes_to_ivr_and_deployment(admin, app, tmp_path):
     assert f"Background({prompts_dir}/{org['slug']}/welcome)" in dp
     assert "exten => 1001,1,Goto(veyra-internal,1001,1)" in dp  # direct dialling
     body = dp.split("exten => 5735550100,1,")[1].split("\nexten =>")[0]
-    assert "Goto(veyra-ivr-main-menu,s,1)" in body and "VoiceMail(1002@veyra,u)" in body
+    assert (
+        "Goto(veyra-ivr-main-menu,s,1)" in body
+        and "VoiceMail(1002@veyra,${IF(${VEYRA_ALT}?:u)})" in body
+    )
     assert "GotoIfTime(08:00-17:00,mon,*,*,America/Chicago?open)" in body
     assert "pbx_config.so" in adapter.reloads
     # disabling the menu: the route is flagged and renders congestion

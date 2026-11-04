@@ -170,6 +170,34 @@ def check_locater(
     return v
 
 
+# Extra recipients of one box (issue #392).
+MAX_COPIES = 20
+
+
+def _copies(
+    db: Session, organization_id: uuid.UUID, box_id: uuid.UUID | None, ids: list[uuid.UUID]
+) -> list[str]:
+    """Boxes of the same organization that also get every message, in order,
+    without the box itself or repeats."""
+    wanted = list(dict.fromkeys(ids))
+    if box_id is not None and box_id in wanted:
+        raise _validation("copy_to_box_ids", "a box cannot copy its messages to itself")
+    if not wanted:
+        return []
+    found = {
+        b.id
+        for b in db.scalars(
+            select(VoicemailBox).where(
+                VoicemailBox.id.in_(wanted), VoicemailBox.organization_id == organization_id
+            )
+        )
+    }
+    missing = [str(i) for i in wanted if i not in found]
+    if missing:
+        raise _validation("copy_to_box_ids", "not a voicemail box of this organization")
+    return [str(i) for i in wanted]
+
+
 class VoicemailBoxIn(BaseModel):
     # An extension's box, or (no extension) a shared inbox with its own
     # number and name (docs/PAGING_RECORDINGS.md §5).
@@ -194,6 +222,11 @@ class VoicemailBoxIn(BaseModel):
     # Pressing 1 or 2 during the greeting (issue #131).
     locater_1: str | None = Field(None, max_length=32)
     locater_2: str | None = Field(None, max_length=32)
+    # Every message is also left in these boxes (issue #392).
+    copy_to_box_ids: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_COPIES)
+    # Quota (issue #392); None: 100 messages of up to 180 s.
+    max_messages: int | None = Field(None, ge=1, le=9999)
+    max_message_seconds: int | None = Field(None, ge=10, le=3600)
     is_enabled: bool = True
 
     @field_validator("pin")
@@ -222,6 +255,9 @@ class VoicemailBoxPatch(BaseModel):
     after_hours_time_condition_id: uuid.UUID | None = None
     locater_1: str | None = Field(None, max_length=32)
     locater_2: str | None = Field(None, max_length=32)
+    copy_to_box_ids: list[uuid.UUID] | None = Field(None, max_length=MAX_COPIES)
+    max_messages: int | None = Field(None, ge=1, le=9999)
+    max_message_seconds: int | None = Field(None, ge=10, le=3600)
     is_enabled: bool | None = None
 
     @field_validator("pin")
@@ -258,6 +294,10 @@ class VoicemailBoxOut(BaseModel):
     after_hours_time_condition_id: uuid.UUID | None = None
     locater_1: str | None = None
     locater_2: str | None = None
+    copy_to_box_ids: list[uuid.UUID] = []
+    max_messages: int | None = None
+    max_message_seconds: int | None = None
+    alternate_greeting: bool = False
     is_enabled: bool
     # Email delivery (Settings → Email delivery) is on; without it messages
     # stay in the box and are never deleted after an email.
@@ -373,6 +413,10 @@ def _outs(db: Session, rows: list[VoicemailBox]) -> list[VoicemailBoxOut]:
                 after_hours_time_condition_id=r.after_hours_time_condition_id,
                 locater_1=r.locater_1,
                 locater_2=r.locater_2,
+                copy_to_box_ids=[uuid.UUID(str(i)) for i in r.copy_to_box_ids or []],
+                max_messages=r.max_messages,
+                max_message_seconds=r.max_message_seconds,
+                alternate_greeting=r.alternate_greeting,
                 is_enabled=r.is_enabled,
                 email_delivery_enabled=delivery,
                 in_use_by=shared_uses.get(r.id, 0) if shared else uses.get(r.extension_id, 0),
@@ -511,6 +555,9 @@ def create_box(
             locater_2=check_locater(
                 db, org.id, "2", body.locater_2, own_number=body.number, shared=True
             ),
+            copy_to_box_ids=_copies(db, org.id, None, body.copy_to_box_ids),
+            max_messages=body.max_messages,
+            max_message_seconds=body.max_message_seconds,
             is_enabled=body.is_enabled,
         )
         set_pin(box, pin, key)
@@ -577,6 +624,9 @@ def create_box(
         locater_2=check_locater(
             db, ext.organization_id, "2", body.locater_2, own_number=ext.number, shared=False
         ),
+        copy_to_box_ids=_copies(db, ext.organization_id, None, body.copy_to_box_ids),
+        max_messages=body.max_messages,
+        max_message_seconds=body.max_message_seconds,
         is_enabled=body.is_enabled,
     )
     set_pin(box, pin, key)
@@ -689,6 +739,15 @@ def update_box(
     if "keep_days" in changes and changes["keep_days"] != box.keep_days:
         box.keep_days = changes["keep_days"]  # None: keep messages
         details["keep_days"] = box.keep_days
+    for field in ("max_messages", "max_message_seconds"):  # None: the defaults
+        if field in changes and changes[field] != getattr(box, field):
+            setattr(box, field, changes[field])
+            details[field] = changes[field]
+    if changes.get("copy_to_box_ids") is not None:
+        copies = _copies(db, box.organization_id, box.id, list(changes["copy_to_box_ids"]))
+        if copies != list(box.copy_to_box_ids or []):
+            box.copy_to_box_ids = copies
+            details["copy_to_box_ids"] = copies
     if "operator_extension" in changes:
         operator = _operator(db, box.organization_id, changes["operator_extension"])
         if operator != box.operator_extension:
@@ -776,6 +835,12 @@ def delete_box(
             code="voicemail_in_use",
         )
     _audit(db, ctx, principal, "voicemail.delete", box, number, {})
+    # Boxes that copied their messages here stop doing so (issue #392).
+    for other in db.scalars(
+        select(VoicemailBox).where(VoicemailBox.organization_id == box.organization_id)
+    ):
+        if str(box.id) in (other.copy_to_box_ids or []):
+            other.copy_to_box_ids = [i for i in other.copy_to_box_ids if i != str(box.id)]
     db.delete(box)
     db.commit()
     bus.publish(Event("voicemail.deleted", {"id": str(box_id), "extension": number}))
@@ -1070,6 +1135,36 @@ def box_absence_put(
         _message_audit(db, ctx, principal, "voicemail.absence_update", box, details)
     db.commit()
     return vmsvc.absence_out(db, box)
+
+
+@router.get("/{box_id}/alternate", summary="A box's alternate greeting switch")
+def box_alternate(
+    box_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(require("voicemail.read")),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    box = _get(db, principal, box_id, "voicemail.read")
+    return vmsvc.alternate_out(db, request.app.state.settings, box)
+
+
+@router.put("/{box_id}/alternate", summary="Turn the alternate greeting on or off (at once)")
+def box_alternate_put(
+    box_id: uuid.UUID,
+    body: vmsvc.AlternateIn,
+    request: Request,
+    principal: Principal = Depends(require("voicemail.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    box = _get(db, principal, box_id, "voicemail.write")
+    details = vmsvc.set_alternate(
+        db, request.app.state.settings, box, body, getattr(request.app.state, "telephony", None)
+    )
+    if details:
+        _message_audit(db, ctx, principal, "voicemail.alternate_update", box, details)
+    db.commit()
+    return vmsvc.alternate_out(db, request.app.state.settings, box)
 
 
 class AbsenceBulkIn(vmsvc.AbsenceIn):

@@ -21,8 +21,15 @@ from veyra.voicemail import service as vmsvc
 def test_dialplan_checks_the_absence_flag_before_voicemail():
     d = _files(_snapshot())["extensions.conf"].content
     flag = 'GotoIf($["${DB(veyra/vmabs/veyra/1002)}"="refuse"]?veyra-vm-absent,1002,1)'
-    assert f" same => n,{flag}\n same => n,VoiceMail(1002@veyra,u)" in d
-    assert f" same => n,{flag}\n same => n,VoiceMail(1002@veyra,b)" in d
+    spool = "/var/spool/asterisk/voicemail/veyra/1002"
+    for greeting in ("u", "b"):
+        assert (
+            f" same => n,{flag}\n"
+            f' same => n,Set(VEYRA_ALT=$["${{DB(veyra/vmalt/veyra/1002)}}"="on"'
+            f" & ${{STAT(e,{spool}/alternate.wav)}} & !${{STAT(e,{spool}/temp.wav)}}])\n"
+            f" same => n,ExecIf(${{VEYRA_ALT}}?Playback({spool}/alternate))\n"
+            f" same => n,VoiceMail(1002@veyra,${{IF(${{VEYRA_ALT}}?:{greeting})}})"
+        ) in d
     absent = d.split("[veyra-vm-absent]")[1].split("\n[")[0]
     assert "Playback(/var/spool/asterisk/voicemail/veyra/${EXTEN}/temp)" in absent
     assert "VoiceMail(" not in absent and "Hangup()" in absent
@@ -115,14 +122,14 @@ def test_after_hours_greeting_plays_while_the_condition_is_closed():
     spool = "/var/spool/asterisk/voicemail/veyra/1002"
     steps = (
         " same => n,Gosub(veyra-tcopen-hours-1,s,1)\n"
-        f" same => n,Set(VEYRA_AH=$[!0${{VEYRA_OPEN}} & ${{STAT(e,{spool}/afterhours.wav)}}"
-        f" & !${{STAT(e,{spool}/temp.wav)}}])\n"
+        f" same => n,Set(VEYRA_AH=$[!${{VEYRA_ALT}} & !0${{VEYRA_OPEN}}"
+        f" & ${{STAT(e,{spool}/afterhours.wav)}} & !${{STAT(e,{spool}/temp.wav)}}])\n"
         f" same => n,ExecIf(${{VEYRA_AH}}?Playback({spool}/afterhours))\n"
-        " same => n,VoiceMail(1002@veyra,${IF(${VEYRA_AH}?:u)})"
+        " same => n,VoiceMail(1002@veyra,${IF($[${VEYRA_ALT} | ${VEYRA_AH}]?:u)})"
     )
     assert steps in d
     # The busy greeting stays as it is.
-    assert " same => n,VoiceMail(1002@veyra,b)" in d
+    assert " same => n,VoiceMail(1002@veyra,${IF(${VEYRA_ALT}?:b)})" in d
     ctx = d.split("[veyra-tcopen-hours-1]")[1].split("\n[")[0]
     assert "/tc/example/hours-1)}" in ctx
     assert "GotoIfTime(07:30-16:00,mon-fri,*,*,America/Chicago?open)" in ctx

@@ -318,7 +318,10 @@ def test_voicemail_reaches_the_generated_configuration(admin, app, tmp_path):
     ep = (cfg / "pjsip.endpoints.conf").read_text()
     assert ep.count("mailboxes=1001@veyra") == 2
     dp = (cfg / "extensions.conf").read_text()
-    assert "Dial(PJSIP/example-1001,20,${VEYRA_XFER})" in dp and "VoiceMail(1001@veyra,u)" in dp
+    assert (
+        "Dial(PJSIP/example-1001,20,${VEYRA_XFER})" in dp
+        and "VoiceMail(1001@veyra,${IF(${VEYRA_ALT}?:u)})" in dp
+    )
     assert "app_voicemail.so" in adapter.reloads
     assert admin.get("/api/v1/telephony/engine").json()["changes_pending"] is False
     # the PIN never appears in a revision's readable artifacts
@@ -412,7 +415,7 @@ def test_shared_inbox_lifecycle_and_generated_configuration(admin, app, tmp_path
     assert "mailboxes=" not in ep.split("[example-1001]")[1].split("[", 1)[0]
     dp = (cfg / "extensions.conf").read_text()
     assert "exten => 1901,1,NoOp(Veyra shared inbox 1901)" in dp
-    assert " same => n,VoiceMail(1901@veyra,u)" in dp
+    assert " same => n,VoiceMail(1901@veyra,${IF(${VEYRA_ALT}?:u)})" in dp
     # deleting a member extension drops it from the inbox; the inbox stays
     admin.delete("/api/v1/ivr/" + menu["id"])
     r = admin.delete(f"/api/v1/extensions/{ext2['id']}")
