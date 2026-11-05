@@ -20,7 +20,7 @@ python-multipart==0.0.32
 # iCalendar feeds for bell schedules (docs/PAGING_RECORDINGS.md §4): parsing and
 # recurring-rule expansion; BSD-2-Clause / BSD-3-Clause, tzdata Apache-2.0.
 icalendar==7.3.0
-python-dateutil==2.9.0.post0
+python-dateutil==3.0.0
 tzdata==2026.5
 # HTTP client used by bundled modules (the AND clock delivery, docs/PAGING_RECORDINGS.md §6);
 # BSD-3-Clause. It was a development-only dependency until 0.17.0, which broke
