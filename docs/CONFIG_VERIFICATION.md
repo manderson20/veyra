@@ -452,10 +452,10 @@ model or firmware changes, the finding comes back").
 **Errors**, **Warnings**, and **Not checked** (grey, with "Veyra has no data
 for these settings: they were not checked"). A file with only not-checked
 findings is labelled **Not checked**, never **OK**. Unverified entries
-(`entry.unverified`) appear as one warning per file, such as "37 settings
+(`entry.unverified`) appear as one grey note per file, such as "37 settings
 are checked against data taken from Veyra's own template, not yet from the
 vendor's guide." The list of those settings is behind a toggle, so the
-official templates show no errors and one warning instead of fifty lines.
+official templates can come out clean with one note instead of fifty lines.
 
 ### 3.4 Modularity, summed up
 
