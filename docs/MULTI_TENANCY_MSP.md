@@ -6,7 +6,8 @@ request of 2026-11-07, after an audit of 0.27.86. Milestone 14
 closes the gaps outside it (Part A), adds what an MSP needs day to day
 (Part B), and sets out the larger choices for the owner to make (Part C).
 
-**Status:** design, for review. Nothing here is built yet.
+**Status:** design, for review. The owner's answers to the open questions
+are in §13. Nothing here is built yet.
 
 **Rule for this work:** while multi-tenancy is **off**, nothing changes for a
 single-organization installation. The golden generator tests stay
@@ -451,7 +452,7 @@ sees their own row only.
 
 - **Permission:** `config.deploy` gains an organization scope. At platform
   scope it is today's permission. At organization scope (default role
-  `org_admin`, only while multi-tenancy is on, §14 question 3), the user
+  `org_admin`, only while multi-tenancy is on; owner decision 3), the user
   may apply when **their** organization has pending changes.
 - **What it does:** it generates and deploys the whole configuration, which
   is the only kind of deploy Asterisk has. Other organizations' saved
@@ -682,22 +683,16 @@ On this branch, each with tests:
 2. **911 number:** every organization must have an emergency number of its
    own. While multi-tenancy is on, an organization cannot be created
    without one (§6.2). There is no MSP-wide fallback number.
+3. **Applying changes:** organization administrators apply their own
+   changes, when idle, rate-limited and audited (§7). An installation
+   setting "Organization administrators: apply / request only" keeps the
+   other choice open. Apply runs targeted module reloads, not a restart, so
+   calls in progress stay up.
 4. **Outside calls:** every organization must have a main number, its
    default outbound caller ID, and uses the shared routes or its dedicated
    trunk (§5.2).
 5. **Isolating generation failures:** yes, as recommended (§7, slice 6).
 6. **Billable minutes:** each call rounded up to a whole minute.
-
-## 14. Open questions
-
-3. **Deploy or request?** Should organization administrators deploy, or only
-   request a deploy that the platform approves? *Recommended: deploy, when
-   idle, rate-limited and audited (§7).* An installation setting
-   "Organization administrators: apply / request only" lets a cautious MSP
-   choose the other. On a single-organization installation nothing changes:
-   the organization scope only applies while multi-tenancy is on.
-7. **Publishing this document.** The repository is public, and §1 describes
-   unfixed cross-organization holes in enough detail to reproduce them. They
-   matter only to an installation with multi-tenancy on and several
-   organizations. *Recommended: keep this branch local until slices 1–5 are
-   built*, or file the findings as a private GitHub security advisory.
+7. **Publishing:** this branch stays on the development server, not on
+   GitHub, until the security fixes (slices 1–5) are built. It is then
+   pushed with them.
