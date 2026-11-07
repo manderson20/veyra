@@ -4,7 +4,7 @@ summary: Decide which dialled numbers go out to the carrier, through which trunk
 audience: admin
 section: Calls and call flows
 order: 30
-reviewed: 0.27.85
+reviewed: 0.27.87
 checked: 2026-11-02T06:20Z
 pages:
   - /routing/outbound/
@@ -115,6 +115,8 @@ A route used by one organization can work only while a [time condition](guide:bu
 Outside those hours, callers hear that the call is invalid, and Call History marks it as refused. The call doesn't try the next route, so check that no other route should have carried it. Emergency routes can't be limited, and a route used by every organization can't have this setting.
 
 ## Who may use which route
+
+A route for **All organizations** can only use shared trunks. A trunk dedicated to one organization (its **Organization** field, see [Connect a SIP trunk](guide:connect-a-sip-trunk)) carries only that organization's routes.
 
 By default every phone may use every route. To limit what some phones can dial (for example classroom phones that may only make local calls), see [Who can call where](guide:classes-of-service). Emergency routes always work, whatever the phone's class.
 

@@ -4,7 +4,7 @@ summary: Set up your organization's defaults, and add its sites, buildings and d
 audience: admin
 section: Getting started
 order: 30
-reviewed: 0.27.45
+reviewed: 0.27.87
 pages:
   - /organizations/
   - /organizations/view/
@@ -80,6 +80,17 @@ You then place each extension in a building on the extension's **General** tab, 
 One Veyra server can serve several organizations, for example a district and a neighboring town, with their phones kept apart. This needs **multi-tenancy**, which you turn on under [System → Settings](app:/settings/). See [Settings: email, sign-in policy and retention](guide:settings).
 
 With multi-tenancy on, choose **New organization** on the Organizations page (while multi-tenancy is off and one organization exists, the button is greyed out) and enter the **Name**, **Short name** and **Time zone**, then **Create organization**.
+
+### Numbers
+
+Each organization's page has a **Numbers** card: the phone numbers that belong to it. With several organizations, an organization's inbound routes can use only its own numbers, and no number can belong to two organizations.
+
+- **Assign numbers** (platform administrators): enter a **Number**, or the first and **Last number of a block** (at most 10,000), and optionally the trunk it **Arrives on** and a **Label**. Numbers are kept in one form, so `+1 573 555 0100` and `5735550100` are the same number.
+- **Routed** shows how many of the numbers have an inbound route. A number with a route cannot be withdrawn until its route is removed.
+- When multi-tenancy was turned on, Veyra filled the list from the existing inbound routes and emergency caller IDs (**From existing routes**). On a server with one organization, creating an inbound route assigns its number (**From a route**).
+- If two organizations route the same number, the route of the organization that does not own it is skipped, and the Organizations page lists it under **Numbers routed by an organization that does not own them**. Assign the number to the right organization, or delete the route.
+
+Organization administrators see their own organization's numbers but cannot change them.
 
 ## If something doesn't work
 

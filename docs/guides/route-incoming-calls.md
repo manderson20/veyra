@@ -4,7 +4,7 @@ summary: Decide where each of your phone numbers (DIDs) rings, with a different 
 audience: admin
 section: Calls and call flows
 order: 20
-reviewed: 0.27.85
+reviewed: 0.27.87
 checked: 2026-11-01T21:00Z
 pages:
   - /routing/inbound/
@@ -96,5 +96,9 @@ Open a route from the list to change it, then **Save changes** and deploy. The *
 - **Calls to a number are refused, but the route exists.** Check that the route is **Enabled** and deployed, that the carrier sends the number in a form the route matches (see the call details in Call History), and that a **Trunk** restriction is not excluding the trunk the call arrives on.
 - **Calls go to the after-hours destination during the day.** Check the time condition's time zone and hours, and whether someone left it **Forced closed**.
 - **A caller is rejected straight away.** They may be on the organization's block list: see [Block callers](guide:block-callers).
+
+- **"is not one of this organization's numbers".** With several organizations on the server, a route can only use a number assigned to its organization. Ask a platform administrator to add it under the organization's **Numbers** (see [Organizations and sites](guide:organizations-and-sites)).
+- **"belongs to another organization" or "already routed by another organization".** Each number belongs to one organization, whatever the **Trunk** setting.
+- **`any` is refused.** With several organizations, only a platform administrator can create a catch-all on a shared trunk. An organization's own administrators can create one on a trunk dedicated to their organization.
 
 > **Note:** Organization administrators can create and change inbound routes for their own organization. The **Trunk** field can only be changed by people allowed to see the trunks.

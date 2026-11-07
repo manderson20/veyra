@@ -4,7 +4,7 @@ summary: Set up 911 so it dials directly, sends the right number and location, a
 audience: admin
 section: Calls and call flows
 order: 80
-reviewed: 0.27.81
+reviewed: 0.27.87
 checked: 2026-10-29
 pages:
   - /system/emergency/

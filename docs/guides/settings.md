@@ -89,7 +89,7 @@ To replace it, choose **Rotate the key…**, then **Rotate now**. Veyra makes a 
 
 Multi-tenancy lets one Veyra server serve several organizations whose phones cannot reach each other. The card shows whether it is **On** or **Off**, how many organizations are active, and what every organization shares (trunks, the numbering plan, the mail server, the firewall, updates, modules and sign-in providers).
 
-- **Turn on:** choose **Turn on**, then **Run checks and turn on**. Veyra first builds the configuration with a test copy of everything your organization has, with the same numbers and names, and proves that neither can reach the other's phones, voicemail, queues, conference rooms, parking, hold music or phone lamps. Your current organization and its phones do not change. Then you can add organizations (see [Organizations and sites](guide:organizations-and-sites)).
+- **Turn on:** choose **Turn on**, then **Run checks and turn on**. Veyra first builds the configuration with a test copy of everything your organization has, with the same numbers and names, and proves that neither can reach the other's phones, voicemail, queues, conference rooms, parking, hold music or phone lamps, and that every number rings in the organization it belongs to. Your current organization and its phones do not change. Then you can add organizations (see [Organizations and sites](guide:organizations-and-sites)).
 - **Turn off:** only possible while a single organization is active.
 
 ## If something doesn't work
