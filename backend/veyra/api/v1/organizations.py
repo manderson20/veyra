@@ -119,22 +119,37 @@ def update_organization(
     # The allow list widens what phones may present to the carrier: a routing matter.
     if "caller_id_allow_list" in changes and not principal.has("routing.write", org.id):
         raise forbidden("Changing the caller ID allow list needs routing.write.")
-    if "main_number" in changes:
-        if changes["main_number"]:
-            number = numbers.maybe_canonical(changes["main_number"])
+    for field, what in (
+        ("main_number", "main number"),
+        ("emergency_caller_id_number", "emergency number"),
+    ):
+        if field not in changes:
+            continue
+        if changes[field]:
+            number = numbers.maybe_canonical(changes[field])
             if number is None or not numbers.owns(db, org.id, number):
                 raise ProblemError(
                     422,
                     "Validation failed",
-                    "The main number must be one of the organization's numbers.",
+                    f"The {what} must be one of the organization's numbers.",
                     code="validation_failed",
-                    errors=[{"field": "main_number", "message": "not one of its numbers"}],
+                    errors=[{"field": field, "message": "not one of its numbers"}],
                 )
-            changes["main_number"] = number
+            changes[field] = number
+        elif tenancy.enabled(db) and getattr(org, field):
+            # Every organization keeps both while several share the server
+            # (owner decision, docs/MULTI_TENANCY_MSP.md §13).
+            raise ProblemError(
+                422,
+                "Validation failed",
+                f"With several organizations, every organization needs a {what}.",
+                code="validation_failed",
+                errors=[{"field": field, "message": "required with multi-tenancy"}],
+            )
         else:
-            changes["main_number"] = None
-        if changes["main_number"] != org.main_number:
-            configmgmt.mark_changed(db, by=principal.label, what=f"main number of {org.slug}")
+            changes[field] = None
+        if changes[field] != getattr(org, field):
+            configmgmt.mark_changed(db, by=principal.label, what=f"{what} of {org.slug}")
     if changes.get("is_active") and not org.is_active:
         tenancy.check_may_activate(db, exclude=org.id)
     if "is_active" in changes and changes["is_active"] != org.is_active:

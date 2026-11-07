@@ -173,6 +173,7 @@ export interface Organization {
   caller_id_allow_list?: string[];
   /** Default outbound caller ID with several organizations: one of its numbers. */
   main_number?: string | null;
+  emergency_caller_id_number?: string | null;
   /** Intercom default for the organization's phones: allow or deny. */
   intercom_default?: "allow" | "deny" | string;
   /** Who may answer with **<extension> (#138). */
@@ -3992,4 +3993,17 @@ export interface NumberConflict {
   route_organization_name: string;
   owner_organization_id: string;
   owner_organization_name: string;
+}
+
+/** An organization's 911 readiness (docs/MULTI_TENANCY_MSP.md §6.5). */
+export interface EmergencyOrganizationRow {
+  id: string;
+  name: string;
+  emergency_number: string | null;
+  main_number: string | null;
+  /** Where its enabled phones' emergency caller IDs come from. */
+  phones: { own: number; site: number; organization: number; none: number };
+  sites: number;
+  sites_ready: number;
+  last_test_call: string | null;
 }

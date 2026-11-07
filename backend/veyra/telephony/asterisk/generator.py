@@ -222,12 +222,13 @@ def _check_section(name: str, what: str) -> str:
     return name
 
 
-def _org_mains(snapshot: dict[str, Any]) -> dict[str, str]:
-    """Each organization's main number (docs/MULTI_TENANCY_MSP.md §5.2)."""
+def _org_mains(snapshot: dict[str, Any], field: str = "main_number") -> dict[str, str]:
+    """Each organization's main number (docs/MULTI_TENANCY_MSP.md §5.2), or
+    with ``field`` its emergency number (§6.1)."""
     return {
-        str(o.get("slug") or ""): str(o["main_number"])
+        str(o.get("slug") or ""): str(o[field])
         for o in snapshot.get("organizations") or []
-        if o.get("main_number")
+        if o.get(field)
     }
 
 
@@ -556,6 +557,7 @@ def _generate(
             org_moh,
             len(_namespaces(snapshot)) > 1,
             _org_mains(snapshot),
+            _org_mains(snapshot, "emergency_caller_id_number"),
         ),
         _trunks(sip, trunks),
         _dialplan(
@@ -711,6 +713,7 @@ def _endpoints(
     org_moh: dict[str, str] | None = None,
     tenants: bool = False,
     org_main: dict[str, str] | None = None,
+    org_ecid: dict[str, str] | None = None,
 ) -> GeneratedFile:
     """``mailboxes`` holds (organization, number) of the extensions' own boxes.
     With ``tenants`` (more than one namespace), VEYRA_ORG is inherited by the
@@ -776,6 +779,10 @@ def _endpoints(
         # Emergency caller ID (docs/TRUNKS_ROUTING.md §7): read by the
         # emergency routes, which present it instead of the route's number.
         ecid = ext.get("emergency_caller_id_number")
+        if not ecid and tenants:
+            # The organization's emergency number (docs/MULTI_TENANCY_MSP.md
+            # §6.1), never another customer's trunk default.
+            ecid = (org_ecid or {}).get(str(ext.get("organization") or ""))
         if ecid and not _NUMBER_RE.match(str(ecid)):
             raise GenerationError(f"emergency caller ID {ecid!r} is not valid")
         emergency_cid = [f"set_var=VEYRA_EMERGENCY_CID={ecid}"] if ecid else []
@@ -3155,10 +3162,21 @@ def _outbound_contexts(
                     f" same => n,UserEvent({EMERGENCY_EVENT},Extension: ${{CALLERID(num)}},"
                     f"Site: ${{VEYRA_SITE}},Number: ${{EXTEN}},Route: {slug},"
                     "EmergencyCID: ${VEYRA_EMERGENCY_CID},Channel: ${CHANNEL})",
-                    # The PSAP's callback finds the caller through the ELIN (§6).
+                    # The PSAP's callback finds the caller through the ELIN (§6),
+                    # within the caller's organization when several share the
+                    # server (docs/MULTI_TENANCY_MSP.md §6.3).
                     ' same => n,ExecIf($["${VEYRA_EMERGENCY_CID}"!=""]'
-                    f"?Set(DB({ASTDB_CALLBACK}/${{VEYRA_EMERGENCY_CID}})="
-                    "${CALLERID(num)}|${EPOCH}))",
+                    f"?Set(DB({ASTDB_CALLBACK}/{'${VEYRA_ORG}/' if tenants else ''}"
+                    "${VEYRA_EMERGENCY_CID})=${CALLERID(num)}|${EPOCH}))",
+                    *(
+                        [
+                            ' same => n,ExecIf($["${VEYRA_EMERGENCY_CID}"=""]?Log(ERROR,'
+                            "Veyra EMERGENCY call from organization ${VEYRA_ORG} without "
+                            "an emergency number of its own))"
+                        ]
+                        if tenants
+                        else []
+                    ),
                     " same => n,Log(WARNING,Veyra EMERGENCY call from ${CALLERID(num)}"
                     ' to ${EXTEN}; extension emergency caller ID: ${IF($["${VEYRA_EMERGENCY_CID}"'
                     '!=""]?${VEYRA_EMERGENCY_CID}:none)})',
@@ -3279,13 +3297,30 @@ def _inbound_contexts(
     for site in sites or []:
         elin = routing.normalize_did(str(site.get("emergency_caller_id_number") or ""))
         if elin:
+            seen = elins.get(routing.canonical_did(elin))
+            if (
+                tenants
+                and seen is not None
+                and seen.get("organization") != site.get("organization")
+            ):
+                # One ELIN, two customers: the callback would ring the wrong one.
+                raise GenerationError(
+                    f"sites {seen.get('slug')} and {site.get('slug')} of two organizations "
+                    f"share the emergency number {elin}"
+                )
             elins[routing.canonical_did(elin)] = site
 
     def callback_lines(site: dict[str, Any], did: str) -> list[str]:
         window = int(site.get("callback_minutes") or 30) * 60
-        ns = engine_names.for_org(str(site.get("organization") or "")).internal
+        org = str(site.get("organization") or "")
+        ns = engine_names.for_org(org).internal
+        key = (
+            f"{ASTDB_CALLBACK}/{_check_value(org, 'organization')}/{did}"
+            if tenants
+            else (f"{ASTDB_CALLBACK}/{did}")
+        )
         out = [
-            f" same => n,Set(VEYRA_ECB=${{DB({ASTDB_CALLBACK}/{did})}})",
+            f" same => n,Set(VEYRA_ECB=${{DB({key})}})",
             ' same => n,GotoIf($["${VEYRA_ECB}"=""]?responder)',
             " same => n,Set(VEYRA_ECB_EXT=${CUT(VEYRA_ECB,|,1)})",
             " same => n,Set(VEYRA_ECB_AT=${CUT(VEYRA_ECB,|,2)})",

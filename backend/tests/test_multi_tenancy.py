@@ -221,7 +221,8 @@ def test_second_organization_needs_the_switch(admin):
     assert st["enabled"] is False and st["active_organizations"] == 1
     # Without a main number the switch stays off (docs/MULTI_TENANCY_MSP.md §5.2).
     r = admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
-    assert r.status_code == 409 and "main number" in r.json()["detail"]
+    detail = r.json()["detail"]
+    assert r.status_code == 409 and "main number" in detail and "emergency number" in detail
     give_main_number(admin)
     r = admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
     assert r.status_code == 200, r.text

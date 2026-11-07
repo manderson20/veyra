@@ -557,6 +557,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 # Default outbound caller ID with several organizations
                 # (docs/MULTI_TENANCY_MSP.md §5.2).
                 "main_number": o.main_number,
+                "emergency_caller_id_number": o.emergency_caller_id_number,
                 "hold_music": moh_slug(o.moh_class_id, o.id),
                 "fax_header": o.fax_header,
                 "fax_station_id": o.fax_station_id,

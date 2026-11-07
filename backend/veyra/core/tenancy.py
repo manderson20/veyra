@@ -200,6 +200,11 @@ def _with_twin(snapshot: dict[str, Any]) -> dict[str, Any]:
             "name": "Isolation check",
             "namespace": twin,
             "main_number": swap.get(str(main), _twin_number(str(main))) if main else None,
+            "emergency_caller_id_number": (
+                swap.get(str(ecid), _twin_number(str(ecid)))
+                if (ecid := first.get("emergency_caller_id_number"))
+                else None
+            ),
         }
     )
     for (key, member), items in sources.items():
@@ -242,6 +247,18 @@ def caller_id_checks(db: Session) -> list[dict[str, object]]:
             "outside calls: " + ", ".join(missing),
         }
     ]
+    no_ecid = [o.name for o in orgs if not o.emergency_caller_id_number]
+    out.append(
+        {
+            "name": "emergency_numbers",
+            "ok": not no_ecid,
+            "detail": "Every organization has an emergency number of its own for 911 calls."
+            if not no_ecid
+            else "These organizations need an emergency number (one of their numbers, "
+            "registered at their address) so their 911 calls never present another "
+            "organization's number: " + ", ".join(no_ecid),
+        }
+    )
     names = {o.id: o.name for o in orgs}
     warnings: list[str] = []
     for e in db.scalars(select(Extension).where(Extension.organization_id.in_(list(names)))):

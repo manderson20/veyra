@@ -251,11 +251,14 @@ def give_main_number(
     admin: TestClient, org_id: str | None = None, number: str = "5735550100"
 ) -> None:
     """Assign ``number`` to the organization (the first by default) and make
-    it the main number, which turning multi-tenancy on requires
-    (docs/MULTI_TENANCY_MSP.md §5.2)."""
+    it the main number and the emergency number, which turning multi-tenancy
+    on requires (docs/MULTI_TENANCY_MSP.md §5.2, §6.2)."""
     if org_id is None:
         org_id = admin.get("/api/v1/organizations").json()["items"][0]["id"]
     r = admin.post(f"/api/v1/organizations/{org_id}/numbers", json={"first": number})
     assert r.status_code in (201, 409), r.text
-    r = admin.patch(f"/api/v1/organizations/{org_id}", json={"main_number": number})
+    r = admin.patch(
+        f"/api/v1/organizations/{org_id}",
+        json={"main_number": number, "emergency_caller_id_number": number},
+    )
     assert r.status_code == 200, r.text
