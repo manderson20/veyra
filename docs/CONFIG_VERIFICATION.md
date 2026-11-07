@@ -408,7 +408,7 @@ looked at (goal 4).
 | `range.1` | error | the int is outside `range` |
 | `param.deprecated` | warning | the firmware is at or past `deprecated_in` (the note names `replaced_by`) |
 | `binding.composite` | warning | the setting is built from several fields and text; review it (§3.0) |
-| `entry.unverified` | warning | the entry is only `seeded-from-template` (shown once per file as a count; see §3.3) |
+| `entry.unverified` | info (a note) | the entry is only `seeded-from-template` (shown once per file as a count; see §3.3) |
 | `param.not-in-catalog` | info | the parameter is not in the catalog |
 | `catalog.none` | info | the vendor, family or firmware has no catalog; the whole file is not checked |
 | `catalog.newer-firmware` | info | the firmware is newer than the newest release; it was checked against the newest one |
@@ -632,6 +632,8 @@ Clean                                   Problems
 │ ✔ No problems found               │   │                                                   │
 │   212 settings checked on         │   │ ✖ account.1.sip_server.1.transport_type           │
 │   T46U, T48U · firmware 86        │   │   Filled by: Base File Edit (fixed value)         │
+│ ○ 37 checked against Veyra's own  │
+│   data, not yet the vendor's guide│
 │ ○ 14 settings not in Veyra's data │   │   Value: 4                                        │
 │   were not checked       [ Show ] │   │   Accepts: 0 UDP, 1 TCP, 2 TLS, 3 DNS-NAPTR       │
 │                                   │   │   Source: Yealink Admin Guide V86, Accounts       │
@@ -754,9 +756,9 @@ is audited.
 
 ## 11. Open questions
 
-1. ~~"Pass cleanly" vs unverified warnings~~, resolved by the check window
-   (§7.1): unverified entries show as one warning there.
-   Original question: **"Pass cleanly" vs unverified warnings.** The official templates will
+1. ~~"Pass cleanly" vs unverified warnings.~~ Resolved: unverified entries
+   are a note in the check window (§7.1), not a warning, so the official
+   templates can come out clean. Original question: The official templates will
    have no errors but will carry one "unverified" warning per file until
    the entries are cited. Is one summarized warning acceptable, or should
    `seeded-from-template` count as info until the first vendor-doc pass?
