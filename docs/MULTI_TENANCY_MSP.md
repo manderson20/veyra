@@ -562,6 +562,110 @@ left and resumed:
 Step 1 still needs multi-tenancy to be on, or this to be the first
 organization. The page links to the switch.
 
+## 10a. Working in one organization
+
+Owner's request, 2026-11-07:
+
+> "If there are multiple organizations, you must choose which organization
+> you are working in (and have an organization switcher on the top menu)
+> so the settings you are working with only apply to that organization.
+> Almost like having a dedicated Veyra server per client … while the
+> system-wide settings would show everything, pending permissions. User
+> roles should have an option to give them permissions for which clients
+> they can view (per client)."
+
+### 10a.1 Today
+
+- Lists (extensions, ring groups, devices and so on) show every
+  organization the user can see, mixed together.
+- Each dialog has an **Organization** field.
+- Role assignments are already scoped: a role is granted for the platform,
+  for one organization, or for one site (`role_assignments.scope_type`).
+  Someone can hold Technician in clients A and C only, as two assignments.
+  The users page does not make this easy to see or set.
+
+### 10a.2 The organization switcher
+
+- **Top bar.** A switcher shows the organization being worked in: its
+  name, plus its colour once branding (C1) exists. It is shown only when the
+  user can see more than one organization. A single-organization
+  installation never sees it.
+- **Choices:** each organization the user holds a role in, and, for users
+  with platform-scope permissions, **System (all organizations)**.
+- **In an organization**, Veyra behaves like that client's own server:
+  - Every list shows only that organization, without an Organization
+    column.
+  - Every dialog's Organization field is gone; new objects belong to the
+    current organization.
+  - The menu shows only that organization's pages: extensions, groups,
+    queues, routing, devices, provisioning, reports, users, voicemail,
+    emergency, its numbers and limits (read-only), and so on.
+  - System pages (trunks, system settings, firewall, updates, modules, HA,
+    backups, the number inventory of every client, usage, onboarding) are
+    not in the menu. They are one click away under **System**.
+  - The pending-changes banner and **Apply** are that organization's (§7).
+- **In System**, the user sees what they see today: every organization's
+  objects with an Organization column, and the system-wide pages, as far as
+  their permissions allow.
+- **Enforced by the server, not just the menu.** The browser sends the
+  current organization in a header (`X-Veyra-Organization`). The API
+  narrows the user's permissions to that organization for the request,
+  even for a platform administrator. While working in A, a write to B's
+  object answers 404, as if B did not exist. "System" sends no header and
+  keeps today's behaviour.
+- **One tab, one client.** The choice is kept per browser tab, so an MSP
+  technician can have client A in one tab and client B in another without
+  mixing them up. A link or bookmark carries it as `?org=<slug>`. A new tab
+  opens in the organization of the tab it came from, or else the user's
+  last one.
+- **Which page after switching:** the same page in the new organization
+  (Extensions in A becomes Extensions in B). An open object (extension
+  1001 of A) is closed and goes back to its list.
+- **Searching across clients** stays in System.
+
+### 10a.3 Choosing the clients a user can see
+
+- **Users → user → Access** lists the user's roles, one row per role, with
+  where it applies:
+  - **All organizations**: platform scope (only for platform
+    administrators to grant);
+  - **These organizations**: pick one or several clients;
+  - **These sites** of one organization (today's site scope).
+- Saving writes one role assignment per client. Removing a client removes
+  its assignment and ends the user's open sessions' access to it at once.
+- **Typical MSP set-up:**
+  - MSP staff: Technician (or a custom role) in the clients they look after;
+  - a customer's own IT person: Organization Administrator in their
+    organization only;
+  - the MSP owner: Platform Administrator.
+- An organization administrator can grant roles only within their own
+  organization, as today. Only a platform administrator can give someone
+  access to several clients.
+- Custom roles work the same way, so the MSP can make a "Client support"
+  role with exactly the permissions it wants and grant it per client.
+- **What a user may grant is still limited by what they hold:** no one can
+  grant a permission they do not have in that organization.
+
+### 10a.4 Built as
+
+- Backend:
+  - the header and the narrowed principal (`Principal.narrowed(org_id)`);
+  - `GET /me/organizations`, the switcher's list;
+  - the access editor's API (role, scope, several organizations in one
+    save).
+- Frontend:
+  - the switcher;
+  - the per-tab organization;
+  - lists and dialogs reading the current organization instead of asking;
+  - the menu split into the organization and System;
+  - the Access tab.
+- Tests:
+  - a platform administrator working in A cannot change B's objects;
+  - a technician in A and C sees only A and C in the switcher, and gets 404
+    for B;
+  - a user without a header gets today's behaviour;
+  - one organization: no switcher.
+
 ## Part C: for the owner to decide (not built)
 
 ### C1. Branding, portal hostname and SMTP sender per organization
@@ -672,7 +776,9 @@ On this branch, each with tests:
 7. **Limits** (§8), migration.
 8. **Usage** (§9).
 9. **Onboarding** (§10).
-10. **Docs:** an admin guide `docs/guides/host-several-organizations.md`,
+10. **Working in one organization** (§10a): the switcher, the narrowed
+    API, and per-client access on the users page.
+11. **Docs:** an admin guide `docs/guides/host-several-organizations.md`,
     MULTI_TENANCY.md updated, CHANGELOG.
 
 ## 13. Owner decisions (2026-11-07)
