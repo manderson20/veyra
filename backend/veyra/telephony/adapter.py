@@ -121,6 +121,11 @@ class ActiveCall:
     endpoint: str | None = None
     # The engine's channel name (``PJSIP/<endpoint>-…``), for recording_states.
     channel_name: str | None = None
+    # The bridge the channel is in, if any: a trunk leg or Local channel takes
+    # the organization of the phone it is bridged with (docs/MULTI_TENANCY_MSP.md §2).
+    bridge_id: str | None = None
+    # The channel's VEYRA_ORG (an organization slug), when the engine reports it.
+    organization: str | None = None
 
 
 @dataclass(frozen=True)

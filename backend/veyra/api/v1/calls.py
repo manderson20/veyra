@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections import defaultdict
+from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
@@ -76,6 +78,79 @@ class OriginateOut(BaseModel):
     message: str
 
 
+@dataclass(frozen=True)
+class CallOwner:
+    """Whose call a channel is: the organization, and the extension it is
+    shown with (a phone of that same organization), when known."""
+
+    organization_id: uuid.UUID | None
+    extension: Extension | None = None
+
+
+def call_owners(db: Session, calls: list[ActiveCall]) -> dict[str, CallOwner]:
+    """The organization of every channel (docs/MULTI_TENANCY_MSP.md §2):
+
+    1. the phone the channel belongs to;
+    2. else the phone it is bridged with (a trunk leg, a Local channel);
+    3. else the channel's VEYRA_ORG;
+    4. else unknown, which only platform administrators see.
+
+    Never by caller number: two organizations may both have extension 1001.
+    """
+    endpoints = {c.endpoint for c in calls if c.endpoint}
+    phones = (
+        {
+            e.endpoint_name: e
+            for e in db.scalars(select(Extension).where(Extension.endpoint_name.in_(endpoints)))
+        }
+        if endpoints
+        else {}
+    )
+    owners = {
+        c.channel_id: CallOwner(p.organization_id, p)
+        if (p := phones.get(c.endpoint or ""))
+        else None
+        for c in calls
+    }
+    bridges: dict[str, list[ActiveCall]] = defaultdict(list)
+    for c in calls:
+        if c.bridge_id:
+            bridges[c.bridge_id].append(c)
+    slugs = {c.organization for c in calls if c.organization}
+    by_slug: dict[str, uuid.UUID] = (
+        {
+            slug: org_id
+            for slug, org_id in db.execute(
+                select(Organization.slug, Organization.id).where(Organization.slug.in_(slugs))
+            )
+        }
+        if slugs
+        else {}
+    )
+    out: dict[str, CallOwner] = {}
+    for c in calls:
+        owner = owners[c.channel_id]
+        if owner is None and c.bridge_id:
+            peers = [o for p in bridges[c.bridge_id] if (o := owners[p.channel_id]) is not None]
+            # A bridge of two organizations cannot happen; if it does, nobody
+            # but a platform administrator sees the channel.
+            if peers and len({o.organization_id for o in peers}) == 1:
+                owner = peers[0]
+        if owner is None and c.organization in by_slug:
+            owner = CallOwner(by_slug[c.organization])
+        out[c.channel_id] = owner or CallOwner(None)
+    return out
+
+
+def _may(principal: Principal, permission: str, owner: CallOwner) -> bool:
+    if principal.is_platform_admin:
+        return True
+    if owner.organization_id is None:
+        return False
+    orgs = principal.organization_ids_with(permission)
+    return orgs is None or owner.organization_id in orgs
+
+
 def _normalize_number(value: str) -> str:
     digits = re.sub(r"[\s().-]", "", value.strip())
     if not _NUMBER_RE.match(digits):
@@ -104,23 +179,15 @@ def active_calls(
         calls = adapter.active_calls()
     except (EngineUnavailable, NotSupported) as e:
         return ActiveCallsOut(calls=[], available=False, message=str(e))
-    rows = db.scalars(visible_extensions(principal, "calls.read")).all()
-    by_endpoint = {e.endpoint_name: e for e in rows}
-    by_number = {e.number: e for e in rows}
+    owners = call_owners(db, calls)
     out: list[ActiveCallOut] = []
-    visible = [
-        c
-        for c in calls
-        if principal.is_platform_admin
-        or by_endpoint.get(c.endpoint or "")
-        or by_number.get(c.caller or "")
-    ]
+    visible = [c for c in calls if _may(principal, "calls.read", owners[c.channel_id])]
     try:
         states = adapter.recording_states(visible)
     except (EngineUnavailable, NotSupported):
         states = {}
     for c in visible:
-        ext = by_endpoint.get(c.endpoint or "") or by_number.get(c.caller or "")
+        ext = owners[c.channel_id].extension
         state = states.get(c.channel_id)
         out.append(
             ActiveCallOut(
@@ -245,13 +312,10 @@ def hangup(
     call = next((c for c in calls if c.channel_id == channel_id), None)
     if call is None:
         raise not_found("Call")
-    rows = db.scalars(visible_extensions(principal, "calls.hangup")).all()
-    ext = next(
-        (e for e in rows if e.endpoint_name == call.endpoint),
-        next((e for e in rows if e.number == call.caller), None),
-    )
-    if ext is None and not principal.is_platform_admin:
+    owner = call_owners(db, calls)[channel_id]
+    if not _may(principal, "calls.hangup", owner):
         raise not_found("Call")
+    ext = owner.extension
     details = {
         "channel": channel_id,
         "from": call.caller,
@@ -267,7 +331,7 @@ def hangup(
             outcome="failure",
             actor_user_id=principal.user_id,
             actor_label=principal.label,
-            organization_id=ext.organization_id if ext else None,
+            organization_id=owner.organization_id,
             target_type="extension" if ext else None,
             target_id=ext.id if ext else None,
             ip_address=ctx.ip,
@@ -281,7 +345,7 @@ def hangup(
         action="call.hangup",
         actor_user_id=principal.user_id,
         actor_label=principal.label,
-        organization_id=ext.organization_id if ext else None,
+        organization_id=owner.organization_id,
         target_type="extension" if ext else None,
         target_id=ext.id if ext else None,
         ip_address=ctx.ip,
@@ -328,13 +392,10 @@ def record(
     call = next((c for c in calls if c.channel_id == channel_id), None)
     if call is None:
         raise not_found("Call")
-    rows = db.scalars(visible_extensions(principal, "calls.record")).all()
-    ext = next(
-        (e for e in rows if e.endpoint_name == call.endpoint),
-        next((e for e in rows if e.number == call.caller), None),
-    )
-    if ext is None and not principal.is_platform_admin:
+    owner = call_owners(db, calls)[channel_id]
+    if not _may(principal, "calls.record", owner):
         raise not_found("Call")
+    ext = owner.extension
     try:
         adapter.record_call(channel_id, body.action == "start")
     except ValueError as e:
@@ -348,7 +409,7 @@ def record(
         action=f"call.record_{body.action}",
         actor_user_id=principal.user_id,
         actor_label=principal.label,
-        organization_id=ext.organization_id if ext else None,
+        organization_id=owner.organization_id,
         target_type="extension" if ext else None,
         target_id=ext.id if ext else None,
         ip_address=ctx.ip,

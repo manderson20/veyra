@@ -87,7 +87,7 @@ def _endpoints(text: str) -> dict[str, dict[str, object]]:
             continue
         key, _, value = line.partition("=")
         info = out[current]
-        if key == "set_var" and value.startswith("VEYRA_ORG="):
+        if key == "set_var" and value.lstrip("_").startswith("VEYRA_ORG="):
             info["org"] = value.split("=", 1)[1]
         elif key == "context":
             info["context"] = value

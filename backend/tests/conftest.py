@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 from alembic import command
@@ -185,3 +187,61 @@ def enable_multi_tenancy() -> None:
     with session_scope() as db:
         inst = db.query(Installation).one()
         inst.multi_tenancy_enabled = True
+
+
+@dataclass
+class Tenant:
+    """One organization of :func:`two_organizations` and its extensions by number."""
+
+    id: str
+    slug: str
+    extensions: dict[str, dict[str, Any]]
+
+
+def two_organizations(
+    admin: TestClient, numbers: tuple[str, ...] = ("1001", "1002")
+) -> tuple[Tenant, Tenant]:
+    """Two organizations with **the same numbers** (docs/MULTI_TENANCY_MSP.md
+    §11): the first organization and "Beta", each with an extension per
+    number. Display names say whose it is, so a wrong label shows."""
+    enable_multi_tenancy()
+    first = admin.get("/api/v1/organizations").json()["items"][0]
+    r = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"})
+    assert r.status_code == 201, r.text
+    tenants = []
+    for org in (first, r.json()):
+        exts = {}
+        for n in numbers:
+            e = admin.post(
+                "/api/v1/extensions",
+                json={
+                    "organization_id": org["id"],
+                    "number": n,
+                    "display_name": f"{org['slug']} {n}",
+                },
+            )
+            assert e.status_code == 201, e.text
+            exts[n] = e.json()
+        tenants.append(Tenant(org["id"], org["slug"], exts))
+    return tenants[0], tenants[1]
+
+
+def org_user(admin: TestClient, app: Any, email: str, role: str, org_id: str) -> TestClient:
+    """A signed-in client for a user holding ``role`` in one organization."""
+    r = admin.post(
+        "/api/v1/users",
+        json={
+            "email": email,
+            "display_name": email.split("@")[0],
+            "password": ADMIN_PASSWORD,
+            "home_organization_id": org_id,
+            "require_password_change": False,
+        },
+    )
+    assert r.status_code == 201, r.text
+    r = admin.post(
+        f"/api/v1/users/{r.json()['id']}/roles",
+        json={"role_key": role, "scope_type": "organization", "organization_id": org_id},
+    )
+    assert r.status_code == 201, r.text
+    return login(TestClient(app, base_url="http://veyra.test"), email, ADMIN_PASSWORD)

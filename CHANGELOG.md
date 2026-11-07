@@ -27,6 +27,9 @@ Migrations 0093 and 0094 add configuration check overrides and modes, and import
 ### Documentation
 - **Configuration verification design** (`docs/CONFIG_VERIFICATION.md`, approved): checking phone settings against a per-firmware catalog of what each model accepts, with overrides, vendor packs other developers can build, and modes to turn checks off.
 
+### Security
+- **Active calls with several organizations** (docs/MULTI_TENANCY_MSP.md §2): a call is matched to its organization by the phone it is on, the phone it is connected to, or the organization the engine gives it, never by caller number. Two organizations can both have extension 1001, and each one's administrators now see, end and record only their own calls. The installer adds `channelvars = VEYRA_ORG` to `ari.conf`; run it again so that a call still ringing on a trunk shows up for its organization.
+
 ## 0.27.86 — 2026-11-04
 
 Migration 0092 adds voicemail copies, quotas and the alternate greeting. Deploy the configuration after setting copies or a quota on a box.

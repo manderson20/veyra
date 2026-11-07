@@ -532,6 +532,7 @@ def _generate(
             {k for k, b in boxes.items() if not b.get("shared")},
             dict(snapshot.get("shared_mailboxes") or {}),
             org_moh,
+            len(_namespaces(snapshot)) > 1,
         ),
         _trunks(sip, trunks),
         _dialplan(
@@ -685,8 +686,12 @@ def _endpoints(
     mailboxes: set[tuple[str, str]] | None = None,
     shared_mailboxes: dict[str, list[str]] | None = None,
     org_moh: dict[str, str] | None = None,
+    tenants: bool = False,
 ) -> GeneratedFile:
-    """``mailboxes`` holds (organization, number) of the extensions' own boxes."""
+    """``mailboxes`` holds (organization, number) of the extensions' own boxes.
+    With ``tenants`` (more than one namespace), VEYRA_ORG is inherited by the
+    channels a phone dials, so a trunk leg names its organization
+    (docs/MULTI_TENANCY_MSP.md §2)."""
     allow = ",".join(sip.codecs)
     mailboxes = mailboxes or set()
     lines = [
@@ -826,7 +831,7 @@ def _endpoints(
             f"auth={name}",
             f"aors={name}",
             f'callerid="{cid_name}" <{cid_num}>',
-            f"set_var=VEYRA_ORG={org}",
+            f"set_var={'__' if tenants else ''}VEYRA_ORG={org}",
             f"set_var=VEYRA_EXT={number}",
             *(
                 [f"set_var=VEYRA_COS={_slug(str(ext['class_of_service']), 'class of service')}"]
@@ -1416,6 +1421,7 @@ def _dialplan(
         prompts_dir,
         list(snapshot.get("sites") or []),
         policies,
+        len(spaces) > 1,
     )
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -3190,8 +3196,12 @@ def _inbound_contexts(
     prompts_dir: str = DEFAULT_PROMPTS_DIR,
     sites: list[dict[str, Any]] | None = None,
     policies: dict[str, dict[str, Any]] | None = None,
+    tenants: bool = False,
 ) -> list[str]:
-    """``veyra-from-trunk`` (shared DIDs), one ``veyra-from-trunk-<slug>`` per
+    """With ``tenants``, each DID sets the organization's VEYRA_ORG on the
+    trunk channel (docs/MULTI_TENANCY_MSP.md §2).
+
+    ``veyra-from-trunk`` (shared DIDs), one ``veyra-from-trunk-<slug>`` per
     trunk (its restricted DIDs, then the shared ones, then its fallback), and
     ``veyra-from-trunk-<slug>-fallback`` (docs/TRUNKS_ROUTING.md §3)."""
     shared: list[dict[str, Any]] = []
@@ -3239,6 +3249,11 @@ def _inbound_contexts(
             out.append(f" same => n,Goto({ns},{_check_value(str(responder), 'responder')},1)")
         return out
 
+    def org_line(org: str) -> list[str]:
+        if not tenants or not org:
+            return []
+        return [f" same => n,Set(__VEYRA_ORG={_check_value(org, 'organization')})"]
+
     def body(r: dict[str, Any], context: str) -> list[str]:
         did = r["did"]
         if did == routing.DID_ANY:
@@ -3246,6 +3261,7 @@ def _inbound_contexts(
         org = str(r.get("organization_slug") or "")
         out = [
             f"exten => {did},1,NoOp(Veyra inbound {did} via ${{VEYRA_TRUNK}})",
+            *org_line(org),
             " same => n,Set(__VEYRA_HOPS=1)",
             f" same => n,Set(__VEYRA_DID={did})",
             *_blacklist_check(org, (policies or {}).get(org)),
@@ -3274,6 +3290,7 @@ def _inbound_contexts(
         did = routing.normalize_did(str(site["emergency_caller_id_number"]))
         lines += [
             f"exten => {did},1,NoOp(Veyra emergency callback for {site.get('slug')})",
+            *org_line(str(site.get("organization") or "")),
             " same => n,Set(__VEYRA_HOPS=1)",
             f" same => n,Set(__VEYRA_DID={did})",
             *callback_lines(site, did),
@@ -3295,6 +3312,7 @@ def _inbound_contexts(
                 org = str(catch.get("organization_slug") or "")
                 lines += [
                     f"exten => {exten},1,NoOp(Veyra inbound ${{EXTEN}} via ${{VEYRA_TRUNK}}: any)",
+                    *org_line(org),
                     " same => n,Set(__VEYRA_HOPS=1)",
                     " same => n,Set(__VEYRA_DID=${EXTEN})",
                     *_blacklist_check(org, (policies or {}).get(org)),

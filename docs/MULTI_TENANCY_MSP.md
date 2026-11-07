@@ -6,8 +6,8 @@ request of 2026-11-07, after an audit of 0.27.86. Milestone 14
 closes the gaps outside it (Part A), adds what an MSP needs day to day
 (Part B), and sets out the larger choices for the owner to make (Part C).
 
-**Status:** design, for review. The owner's answers to the open questions
-are in §13. Nothing here is built yet.
+**Status:** approved 2026-11-07, with the owner's decisions in §13 and the
+organization switcher in §10a. Built in the slices of §12.
 
 **Rule for this work:** while multi-tenancy is **off**, nothing changes for a
 single-organization installation. The golden generator tests stay
