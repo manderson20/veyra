@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -195,6 +195,36 @@ def get_multi_tenancy(
     principal: Principal = Depends(require("system.settings.read")),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    return tenancy.status(db)
+
+
+class OrgApplyIn(BaseModel):
+    mode: str = Field(pattern="^(apply|request)$")
+
+
+@router.put(
+    "/multi-tenancy/org-apply",
+    summary="Whether organization administrators apply their changes or only request it",
+)
+def set_org_apply(
+    body: OrgApplyIn,
+    principal: Principal = Depends(require("system.settings.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    from veyra.configmgmt import service as configmgmt
+
+    configmgmt.set_org_apply_mode(db, body.mode)
+    audit.record(
+        db,
+        action="system.org_apply_mode",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"mode": body.mode},
+    )
+    db.commit()
     return tenancy.status(db)
 
 

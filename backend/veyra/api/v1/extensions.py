@@ -770,7 +770,12 @@ def _record(
     # every save that may affect the engine, until a deployment runs. A change
     # the engine takes at once (Do Not Disturb) does not need one.
     if deploy:
-        configmgmt.mark_changed(db, by=principal.label, what=f"{action} {ext.number}")
+        configmgmt.mark_changed(
+            db,
+            by=principal.label,
+            what=f"{action} {ext.number}",
+            organization_id=ext.organization_id,
+        )
 
 
 # ----------------------------------------------------------------- routes

@@ -41,15 +41,38 @@ export function ApplyChanges() {
     );
   }
   if (applying) return <Badge tone="accent" icon="upload">Deploying…</Badge>;
-  if (!engine.changes_pending) return null;
+  const held = engine.held_back ?? [];
+  const heldBadge = held.length ? (
+    <Badge tone="danger" icon="alert">
+      <span title={held.map((h) => h.error).join("\n")}>{can("config.deploy") ? `${held.length} organization${held.length === 1 ? "'s" : "s'"} changes held back` : "Your latest changes were held back"}</span>
+    </Badge>
+  ) : null;
+  if (!engine.changes_pending) return heldBadge;
+  // Several organizations (docs/MULTI_TENANCY_MSP.md §7): an organization
+  // administrator applies when idle, or asks the platform to.
+  if (!can("config.deploy") && engine.org_apply) {
+    const request = engine.org_apply === "request";
+    return (
+      <span className="row" style={{ gap: 8 }}>
+        {heldBadge}
+        <Button variant="danger" icon="upload" className="topbar__deploy" disabled={engine.state !== "running"} onClick={() => void apply("when_idle")}
+          title={request ? "Ask a platform administrator to deploy the saved changes." : "Deploys the saved changes when no calls are active. The telephony server is shared: it reloads for every organization, and calls in progress are not interrupted."}>
+          {request ? "Request deployment" : "Deploy changes"}
+        </Button>
+      </span>
+    );
+  }
   if (!can("config.deploy")) {
-    return <Badge tone="warn" icon="alert">Changes pending deployment</Badge>;
+    return <span className="row" style={{ gap: 8 }}>{heldBadge}<Badge tone="warn" icon="alert">Changes pending deployment</Badge></span>;
   }
   const blocked = engine.state !== "running";
   const calls = engine.active_calls ?? 0;
   const go = (mode: DeployMode) => { setOpen(false); void apply(mode); };
+  const requests = engine.apply_requests?.length ?? 0;
   return (
     <span className="row" style={{ gap: 8 }}>
+      {heldBadge}
+      {requests ? <Badge tone="info" icon="clock">{`${requests} deployment request${requests === 1 ? "" : "s"}`}</Badge> : null}
       <span className="deploy-split menu" ref={ref}>
         <Button variant="danger" icon="upload" className="topbar__deploy" onClick={() => go("now")} disabled={blocked}
           title={blocked ? "The telephony engine is not running." : engine.pending_by ? `Changes saved by ${engine.pending_by} ${formatRelative(engine.pending_since)} are waiting to be deployed` : "Generate a configuration revision and deploy it to the telephony engine"}>

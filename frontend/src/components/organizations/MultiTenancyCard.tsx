@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Callout, Card, ConfirmDialog, ErrorState, LoadingState, useToast } from "@/components/ui";
+import { Badge, Button, Callout, Card, ConfirmDialog, ErrorState, LoadingState, SelectField, useToast } from "@/components/ui";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { MultiTenancyCheck, MultiTenancyStatus } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -18,6 +18,15 @@ export function MultiTenancyCard({ editable }: { editable: boolean }) {
   const [checks, setChecks] = useState<MultiTenancyCheck[] | null>(null);
   const d = st.data;
 
+  const setOrgApply = async (mode: string) => {
+    try {
+      await api.put("/system/multi-tenancy/org-apply", { mode });
+      toast.success("Saved");
+      st.reload();
+    } catch (err) {
+      toast.error("Could not save", errorMessage(err));
+    }
+  };
   const toggle = async () => {
     if (!d) return;
     setBusy(true);
@@ -50,6 +59,12 @@ export function MultiTenancyCard({ editable }: { editable: boolean }) {
             <Callout tone="warn" title="Several organizations without isolation">
               These organizations share one dialplan: their phones can reach each other. Turn multi-tenancy on.
             </Callout>
+          ) : null}
+          {d.enabled ? (
+            <SelectField label="Organization administrators" value={d.org_apply ?? "apply"} disabled={!editable}
+              options={[{ value: "apply", label: "Deploy their own changes (when no calls are active, at most every 5 minutes)" }, { value: "request", label: "Only request a deployment; a platform administrator deploys" }]}
+              help="Every deployment reloads the telephony server for all organizations; calls in progress are not interrupted."
+              onChange={(e) => void setOrgApply(e.target.value)} />
           ) : null}
           <div>
             <p className="field__label">Shared by every organization</p>

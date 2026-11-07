@@ -198,7 +198,9 @@ def add_number(
         details={"first": first, "last": last, "trunk_id": str(body.trunk_id or "") or None},
     )
     # Routes skipped as conflicts may now route.
-    configmgmt.mark_changed(db, by=principal.label, what=f"numbers of {org.slug}")
+    configmgmt.mark_changed(
+        db, by=principal.label, what=f"numbers of {org.slug}", organization_id=org.id
+    )
     db.commit()
     return _outs(db, [row])[0]
 

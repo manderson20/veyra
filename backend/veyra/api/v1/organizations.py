@@ -149,11 +149,15 @@ def update_organization(
         else:
             changes[field] = None
         if changes[field] != getattr(org, field):
-            configmgmt.mark_changed(db, by=principal.label, what=f"{what} of {org.slug}")
+            configmgmt.mark_changed(
+                db, by=principal.label, what=f"{what} of {org.slug}", organization_id=org.id
+            )
     if changes.get("is_active") and not org.is_active:
         tenancy.check_may_activate(db, exclude=org.id)
     if "is_active" in changes and changes["is_active"] != org.is_active:
-        configmgmt.mark_changed(db, by=principal.label, what=f"organization {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"organization {org.slug}", organization_id=org.id
+        )
     if "moh_class_id" in changes:
         from veyra.api.v1 import hold_music
 
@@ -175,18 +179,29 @@ def update_organization(
             ) from e
         if changes["dnd_allow"] != list(org.dnd_allow or []):
             configmgmt.mark_changed(
-                db, by=principal.label, what=f"Do Not Disturb exceptions of {org.slug}"
+                db,
+                by=principal.label,
+                what=f"Do Not Disturb exceptions of {org.slug}",
+                organization_id=org.id,
             )
     for k, v in changes.items():
         setattr(org, k, v)
     if "moh_class_id" in changes:
-        configmgmt.mark_changed(db, by=principal.label, what=f"hold music of {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"hold music of {org.slug}", organization_id=org.id
+        )
     if "intercom_default" in changes:
-        configmgmt.mark_changed(db, by=principal.label, what=f"intercom default of {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"intercom default of {org.slug}", organization_id=org.id
+        )
     if "monitor_beep" in changes and changes["monitor_beep"] != org.monitor_beep:
-        configmgmt.mark_changed(db, by=principal.label, what=f"monitoring beep of {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"monitoring beep of {org.slug}", organization_id=org.id
+        )
     if "directed_pickup" in changes:
-        configmgmt.mark_changed(db, by=principal.label, what=f"directed pickup of {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"directed pickup of {org.slug}", organization_id=org.id
+        )
     audit.record(
         db,
         action="organization.update",

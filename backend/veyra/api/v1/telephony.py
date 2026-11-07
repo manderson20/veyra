@@ -16,11 +16,12 @@ from veyra.api.v1 import destinations
 from veyra.api.v1.schemas import MessageOut
 from veyra.configmgmt import service
 from veyra.configmgmt.revisions import RevisionState, artifacts_to_files_safe, diff
-from veyra.core import audit
+from veyra.core import audit, tenancy
 from veyra.core.db import get_db
-from veyra.core.deps import RequestContext, request_context, require
-from veyra.core.errors import ProblemError, conflict, not_found
-from veyra.core.models import ConfigRevision
+from veyra.core.deps import RequestContext, current_principal, request_context, require
+from veyra.core.errors import ProblemError, conflict, forbidden, not_found
+from veyra.core.models import ConfigRevision, SystemSetting
+from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.crypto import InstallationKey, try_load_installation_key
 from veyra.core.security.principal import Principal
@@ -79,6 +80,14 @@ class EngineOut(BaseModel):
     pending_requested_at: str | None = None
     pending_active_calls: int | None = None
     active_calls: int | None = None
+    # Several organizations (docs/MULTI_TENANCY_MSP.md §7), as far as the
+    # caller may see: each organization's last saved change, the reason its
+    # newer changes were held back, and its apply requests.
+    organization_pending: list[dict[str, Any]] = []
+    held_back: list[dict[str, Any]] = []
+    apply_requests: list[dict[str, Any]] = []
+    # Whether the caller applies as an organization administrator, and how.
+    org_apply: str | None = None
 
 
 @router.get("/engine", response_model=EngineOut, summary="Telephony engine status")
@@ -112,6 +121,7 @@ def engine_status(
     flag = service.pending_change(db)
     if flag:
         out.pending_since, out.pending_by = flag.get("at"), flag.get("by")
+    _organization_status(db, principal, out)
     wait = service.pending_wait(db, adapter)
     if wait:
         out.pending_mode = wait["mode"]
@@ -559,11 +569,21 @@ class DeployIn(BaseModel):
     mode: str = Field("now", pattern="^(now|when_idle)$")
 
 
+class ApplyIn(DeployIn):
+    # An organization administrator applies their organization's changes
+    # (docs/MULTI_TENANCY_MSP.md §7); platform administrators leave it out.
+    organization_id: uuid.UUID | None = None
+
+
 class ApplyOut(BaseModel):
-    revision: RevisionOut
+    # None when the apply was only requested (the platform applies it).
+    revision: RevisionOut | None = None
     # True when a deployment was queued; False when nothing changed or generation failed.
     applied: bool
     unchanged: bool
+    requested: bool = False
+    # Organizations whose newer changes could not be generated and were held back.
+    held_back: list[str] = []
 
 
 @router.post(
@@ -574,15 +594,48 @@ class ApplyOut(BaseModel):
 )
 def apply_changes(
     request: Request,
-    body: DeployIn | None = None,
-    principal: Principal = Depends(require("config.deploy")),
+    body: ApplyIn | None = None,
+    principal: Principal = Depends(current_principal),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
 ) -> ApplyOut:
-    mode = body.mode if body else service.DEPLOY_NOW
     """The "apply" button: the same as POST /revisions followed by
     POST /revisions/{id}/deploy. A revision identical to the deployed one is
-    discarded instead of queued; a failed generation is returned as such."""
+    discarded instead of queued; a failed generation is returned as such.
+
+    With several organizations, an organization administrator
+    (``config.apply``) applies too: always when idle, at most once in five
+    minutes, or only requests it when the platform says so
+    (docs/MULTI_TENANCY_MSP.md §7). It is still one server-wide deployment."""
+    mode = body.mode if body else service.DEPLOY_NOW
+    org_id = _org_scope(db, principal, body.organization_id if body else None)
+    if org_id is not None:
+        mode = service.DEPLOY_WHEN_IDLE
+        if service.org_apply_mode(db) == "request":
+            service._set(
+                db,
+                f"{APPLY_REQUEST_PREFIX}{org_id}",
+                {"at": utcnow().isoformat(), "by": principal.label},
+            )
+            audit.record(
+                db,
+                action="telephony.config_apply_request",
+                actor_user_id=principal.user_id,
+                actor_label=principal.label,
+                organization_id=org_id,
+                ip_address=ctx.ip,
+                request_id=ctx.request_id,
+            )
+            db.commit()
+            return ApplyOut(applied=False, unchanged=False, requested=True)
+        wait = service.org_apply_wait(db, org_id)
+        if wait:
+            raise ProblemError(
+                429,
+                "Too soon",
+                f"Changes were applied a moment ago. Try again in {wait} seconds.",
+                code="apply_rate_limited",
+            )
     adapter = _adapter(request)
     if Capability.CONFIG_GENERATION not in adapter.capabilities():
         raise ProblemError(
@@ -613,12 +666,23 @@ def apply_changes(
         else:
             service.request_deploy(db, rev, mode)
             applied = True
+    if org_id is not None:
+        service.record_org_apply(db, org_id)
+        row = db.get(SystemSetting, f"{APPLY_REQUEST_PREFIX}{org_id}")
+        if row is not None:
+            db.delete(row)
+    elif not failed:
+        for row in db.scalars(
+            select(SystemSetting).where(SystemSetting.key.startswith(APPLY_REQUEST_PREFIX))
+        ):
+            db.delete(row)
     audit.record(
         db,
         action="telephony.config_apply",
         outcome="failure" if failed else "success",
         actor_user_id=principal.user_id,
         actor_label=principal.label,
+        organization_id=org_id,
         target_type="config_revision",
         target_id=rev.id,
         ip_address=ctx.ip,
@@ -630,12 +694,58 @@ def apply_changes(
             "unchanged": generated.unchanged,
             "changed_files": sorted(generated.diff),
             "errors": rev.validation_errors,
+            "held_back": sorted(generated.held_back),
         },
     )
     db.commit()
     out = _revision_out(db, rev, principal, with_files=False)
     out.unchanged = generated.unchanged
-    return ApplyOut(revision=out, applied=applied, unchanged=generated.unchanged)
+    return ApplyOut(
+        revision=out,
+        applied=applied,
+        unchanged=generated.unchanged,
+        held_back=sorted(generated.held_back),
+    )
+
+
+APPLY_REQUEST_PREFIX = "telephony.apply_request.org."
+
+
+def _organization_status(db: Session, principal: Principal, out: EngineOut) -> None:
+    visible = principal.organization_ids_with("config.read")
+
+    def rows(prefix: str) -> list[dict[str, Any]]:
+        return [
+            {"organization_id": str(org), **value}
+            for org, value in service.organization_flags(db, prefix).items()
+            if visible is None or org in visible
+        ]
+
+    out.organization_pending = rows(service.ORG_PENDING_PREFIX)
+    out.held_back = rows(service.HELD_BACK_PREFIX)
+    out.apply_requests = rows(APPLY_REQUEST_PREFIX)
+    if not principal.has("config.deploy") and principal.organization_ids_with("config.apply"):
+        out.org_apply = service.org_apply_mode(db) if tenancy.enabled(db) else None
+
+
+def _org_scope(
+    db: Session, principal: Principal, organization_id: uuid.UUID | None
+) -> uuid.UUID | None:
+    """None for a platform deployment; otherwise the organization an
+    organization administrator applies for, after the checks."""
+    if principal.has("config.deploy"):
+        return None
+    orgs = principal.organization_ids_with("config.apply") or set()
+    if not orgs or not tenancy.enabled(db):
+        raise forbidden(
+            "Only platform administrators deploy configuration"
+            + ("." if orgs else "; you cannot apply changes.")
+        )
+    if organization_id is None and len(orgs) == 1:
+        organization_id = next(iter(orgs))
+    if organization_id is None or organization_id not in orgs:
+        raise forbidden("You can apply only your own organization's changes.")
+    return organization_id
 
 
 @router.get("/revisions/{revision_id}", response_model=RevisionOut, summary="One revision")

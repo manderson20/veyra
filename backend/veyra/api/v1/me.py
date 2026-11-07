@@ -300,7 +300,12 @@ def put_my_follow_me(
     ext = _own_extension(db, principal, extension_id)
     row, details = save_follow_me(db, ext, body, by=principal.label)
     _own_audit(db, ctx, principal, "extension.follow_me_update", ext, details)
-    configmgmt.mark_changed(db, by=principal.label, what=f"follow-me of {ext.number}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"follow-me of {ext.number}",
+        organization_id=ext.organization_id,
+    )
     db.commit()
     return _follow_me_out(row, extension_state.get(db, ext.id))
 
@@ -621,7 +626,12 @@ def my_voicemail_pin(
     )
     # The PIN lives in voicemail.conf: the change reaches the phone system at
     # the next deployment.
-    configmgmt.mark_changed(db, by=principal.label, what=f"voicemail.pin_change {ext.number}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"voicemail.pin_change {ext.number}",
+        organization_id=ext.organization_id,
+    )
     db.commit()
     return Response(status_code=204)
 
@@ -662,7 +672,12 @@ def my_voicemail_locater(
         if details:
             db.flush()
             _box_audit(db, ctx, principal, "voicemail.update", box, details)
-            configmgmt.mark_changed(db, by=principal.label, what=f"voicemail locater {ext.number}")
+            configmgmt.mark_changed(
+                db,
+                by=principal.label,
+                what=f"voicemail locater {ext.number}",
+                organization_id=ext.organization_id,
+            )
             db.commit()
         return _my_box_out(box, ext)
     raise not_found("Voicemail box")

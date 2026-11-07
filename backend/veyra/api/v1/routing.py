@@ -88,7 +88,9 @@ def _audit(
         request_id=ctx.request_id,
         details=details,
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {label}")
+    configmgmt.mark_changed(
+        db, by=principal.label, what=f"{action} {label}", organization_id=organization_id
+    )
 
 
 def _org_filter(stmt: Select[Any], column: Any, principal: Principal, perm: str) -> Select[Any]:

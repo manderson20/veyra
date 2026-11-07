@@ -313,3 +313,22 @@ class ProvisioningTemplate(UUIDPrimaryKey, Timestamps, Base):
     )
     manifest: Mapped[dict[str, Any]] = mapped_column(JSONB)
     files: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict)
+
+
+class OrganizationConfigSlice(Base):
+    """An organization's part of the last snapshot that generated a valid
+    configuration (docs/MULTI_TENANCY_MSP.md §7). When the organization's
+    newer data cannot be generated, this is used instead, so the other
+    organizations' changes still deploy. Encrypted with the installation key
+    (purpose ``config_slice:<organization id>``): it holds SIP secrets."""
+
+    __tablename__ = "organization_config_slices"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    )
+    revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("config_revisions.id", ondelete="SET NULL")
+    )
+    ciphertext: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

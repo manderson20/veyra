@@ -91,7 +91,15 @@ def status(db: Session) -> dict[str, object]:
             for o in orgs
         ],
         "shared": SHARED,
+        # docs/MULTI_TENANCY_MSP.md §7: apply | request.
+        "org_apply": _org_apply_mode(db),
     }
+
+
+def _org_apply_mode(db: Session) -> str:
+    from veyra.configmgmt import service
+
+    return service.org_apply_mode(db)
 
 
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")

@@ -254,6 +254,11 @@ export interface EngineStatus {
   pending_mode: "now" | "when_idle" | null;
   pending_requested_at: string | null;
   pending_active_calls: number | null;
+  organization_pending?: OrganizationNote[];
+  held_back?: OrganizationNote[];
+  apply_requests?: OrganizationNote[];
+  /** Set when the caller applies as an organization administrator. */
+  org_apply?: "apply" | "request" | null;
   active_calls: number | null;
 }
 
@@ -340,9 +345,22 @@ export interface Registrations {
 }
 
 export interface ApplyResult {
-  revision: ConfigRevision;
+  /** Null when the apply was only requested from the platform. */
+  revision: ConfigRevision | null;
   applied: boolean;
   unchanged: boolean;
+  requested?: boolean;
+  /** Organizations whose newer changes could not be generated. */
+  held_back?: string[];
+}
+
+/** A per-organization note in the engine status (docs/MULTI_TENANCY_MSP.md §7). */
+export interface OrganizationNote {
+  organization_id: string;
+  at?: string;
+  by?: string;
+  what?: string;
+  error?: string;
 }
 
 export interface NumberingPlan {
@@ -3154,6 +3172,8 @@ export interface MultiTenancyStatus {
   organizations: { id: string; name: string; slug: string; namespace: string; is_active: boolean }[];
   shared: string[];
   checks?: MultiTenancyCheck[];
+  /** Whether organization administrators apply their own changes or request it. */
+  org_apply?: "apply" | "request";
 }
 
 // --- Central management (docs/CENTRAL_MANAGEMENT.md) ---------------------------
