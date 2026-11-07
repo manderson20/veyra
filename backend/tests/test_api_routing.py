@@ -575,15 +575,19 @@ def test_org_admin_scope_for_routing_and_trunks(admin, app):
         json={"organization_id": b, "did": "5735550102", "destination_extension_id": ext_a["id"]},
     )
     assert r.status_code == 422
-    r = c.post(
-        INBOUND,
-        json={
-            "organization_id": b,
-            "did": "5735550102",
-            "trunk_id": trunk["id"],
-            "destination_extension_id": ext_b["id"],
-        },
-    )
+    beta_route = {
+        "organization_id": b,
+        "did": "5735550102",
+        "trunk_id": trunk["id"],
+        "destination_extension_id": ext_b["id"],
+    }
+    # A number nobody assigned to Beta (docs/MULTI_TENANCY_MSP.md §4.2) ...
+    r = c.post(INBOUND, json=beta_route)
+    assert r.status_code == 422 and r.json()["code"] == "number_not_assigned"
+    # ... works once a platform administrator assigns it.
+    r = admin.post(f"/api/v1/organizations/{b}/numbers", json={"first": "5735550102"})
+    assert r.status_code == 201, r.text
+    r = c.post(INBOUND, json=beta_route)
     assert r.status_code == 201, r.text
     # trunks: read yes (org_admin), write no
     assert c.get(TRUNKS).json()["total"] == 1

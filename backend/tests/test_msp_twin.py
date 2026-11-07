@@ -196,15 +196,13 @@ def test_verifier_paging_ports_and_did_owners():
     assert any("paging port" in p for p in isolation.verify(bad.values(), organizations=orgs))
     # The number inventory says who owns each DID.
     # ELINs are numbers of the inventory too.
-    owners = {
-        "5735550100": "",
-        "005735550100": "zzcheck",
-        "5735550199": "",
-        "005735550199": "zzcheck",
-    }
-    assert isolation.verify(files.values(), organizations=orgs, dids=owners) == []
-    wrong = {**owners, "5735550100": "zzcheck"}
-    found = isolation.verify(files.values(), organizations=orgs, dids=wrong)
+    owners = [
+        ("5735550100", "5735550199", ""),
+        ("005735550100", "005735550199", "zzcheck"),
+    ]
+    assert isolation.verify(files.values(), organizations=orgs, numbers=owners) == []
+    wrong = [("5735550100", "5735550100", "zzcheck"), *owners]
+    found = isolation.verify(files.values(), organizations=orgs, numbers=wrong)
     assert any("does not own it" in p for p in found)
 
 

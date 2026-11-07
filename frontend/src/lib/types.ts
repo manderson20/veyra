@@ -1062,6 +1062,8 @@ export interface Trunk {
   /** Of max_channels, kept for emergency calls (issue #171). */
   emergency_reserved_channels?: number;
   default_caller_id: string | null;
+  /** Dedicated to one organization (bring your own carrier); null: shared. */
+  organization_id?: string | null;
   caller_id_header: CallerIdHeader;
   dtmf_mode: DtmfMode;
   fax_t38: boolean;
@@ -1100,6 +1102,7 @@ export interface TrunkInput {
   max_channels?: number | null;
   emergency_reserved_channels?: number;
   default_caller_id?: string | null;
+  organization_id?: string | null;
   caller_id_header?: CallerIdHeader;
   dtmf_mode?: DtmfMode;
   fax_t38?: boolean;
@@ -3959,4 +3962,30 @@ export interface CapabilityCoverage {
   packs: CapabilityPackInfo[];
   load_errors: Record<string, string[]>;
   uncovered: { manufacturer: string; model: string; phones: number }[];
+}
+
+/** A number or block of numbers assigned to an organization (docs/MULTI_TENANCY_MSP.md §4). */
+export interface OrganizationNumber {
+  id: string;
+  organization_id: string;
+  first: string;
+  last: string;
+  count: number;
+  trunk_id: string | null;
+  trunk_name: string | null;
+  label: string | null;
+  source: "manual" | "migration" | "auto";
+  routed: number;
+  created_at: string;
+  created_by: string;
+}
+
+/** An inbound route for a number another organization owns. */
+export interface NumberConflict {
+  route_id: string;
+  did: string;
+  route_organization_id: string;
+  route_organization_name: string;
+  owner_organization_id: string;
+  owner_organization_name: string;
 }

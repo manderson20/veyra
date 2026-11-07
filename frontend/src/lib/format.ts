@@ -81,3 +81,14 @@ export function humanize(key: string): string {
   const s = key.replace(/[_.-]+/g, " ").trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/** A canonical number from the number inventory for reading: ten North
+ * American digits as (573) 555-0100, anything else as entered. */
+export function formatNumber(number: string): string {
+  return /^[0-9]{10}$/.test(number) ? `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}` : number;
+}
+
+/** A number or a block: one number, or the first and last. */
+export function formatNumberBlock(first: string, last: string): string {
+  return first === last ? formatNumber(first) : `${formatNumber(first)} – ${formatNumber(last)}`;
+}

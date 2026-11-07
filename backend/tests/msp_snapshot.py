@@ -94,6 +94,9 @@ def rich_snapshot(org: str = "example") -> dict[str, Any]:
                 patterns=[{"prefix": "8", "match": "NXXNXXXXXX", "prepend": "1"}],
             ),
         ],
+        "numbers": [
+            {"organization": org, "first": "5735550100", "last": "5735550199", "trunk": None}
+        ],
         "inbound_routes": [
             {
                 "did": "5735550100",

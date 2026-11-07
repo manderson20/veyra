@@ -144,19 +144,35 @@ def _db_org(key: str) -> str | None:
     return None
 
 
+def number_key(did: str) -> str:
+    """A DID as the number inventory holds it: digits, without the North
+    American 1."""
+    digits = canonical_did(did).lstrip("+")
+    return digits[1:] if len(digits) == 11 and digits[0] == "1" else digits
+
+
+def _number_owner(did: str, numbers: list[tuple[str, str, str]]) -> str | None:
+    n = number_key(did)
+    for first, last, ns in numbers:
+        if len(first) == len(n) and first <= n <= last:
+            return ns
+    return None
+
+
 def verify(
     files: Iterable[GeneratedFile],
     *,
     strict: bool = True,
     organizations: dict[str, str] | None = None,
-    dids: dict[str, str] | None = None,
+    numbers: list[tuple[str, str, str]] | None = None,
 ) -> list[str]:
     """Problems found; empty when every organization is isolated. With
     ``strict``, two organizations in one namespace are a problem too (the
     multi-tenancy switch is on). ``organizations`` maps each organization's
-    slug to its namespace; without it, the phones' VEYRA_ORG tell. ``dids``
-    maps each DID (canonical, ``routing.canonical_did``) to the namespace that
-    owns the number (the number inventory, docs/MULTI_TENANCY_MSP.md §4)."""
+    slug to its namespace; without it, the phones' VEYRA_ORG tell. ``numbers``
+    is the number inventory (docs/MULTI_TENANCY_MSP.md §4) as (first, last,
+    namespace) in canonical form: each DID must go to the namespace that owns
+    it."""
     by_path = {f.path: f.content for f in files}
     problems: list[str] = []
     endpoints = _endpoints(by_path.get("pjsip.endpoints.conf", ""))
@@ -322,8 +338,8 @@ def verify(
     for exten, reached in sorted(did_reach.items()):
         if len(reached) > 1:
             problems.append(f"DID {exten}: routed to several organizations across trunks")
-        if dids is not None and reached:
-            owner = dids.get(canonical_did(exten))
+        if numbers is not None and reached:
+            owner = _number_owner(exten, numbers)
             if owner is None or {owner} != reached:
                 problems.append(f"DID {exten}: routed to an organization that does not own it")
 

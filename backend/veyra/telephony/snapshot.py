@@ -47,6 +47,7 @@ from veyra.core.models import (
     MohClass,
     MohClassTrack,
     Organization,
+    OrganizationNumber,
     OutboundRoute,
     OutboundRouteTrunk,
     Page,
@@ -75,7 +76,7 @@ from veyra.telephony.numbering import load_numbering_plan
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 11  # 11: engine namespaces (docs/MULTI_TENANCY.md)
+SNAPSHOT_VERSION = 12  # 11: engine namespaces; 12: the number inventory (MULTI_TENANCY_MSP.md §4)
 
 # What each top-level key of the snapshot holds (docs/MULTI_TENANCY_MSP.md
 # §3.1). The isolation check copies every organization-owned item into a
@@ -93,6 +94,7 @@ ORG_LISTS: tuple[str, ...] = (
     "hold_music",
     "inbound_routes",
     "ivr_menus",
+    "numbers",
     "outbound_routes",  # only the routes of one organization; shared ones stay
     "parking_lots",
     "queues",
@@ -1277,11 +1279,23 @@ def _routing(
     caller_rules: dict[Any, list[InboundCallerRule]] = {}
     for rule in db.scalars(select(InboundCallerRule).order_by(InboundCallerRule.position)):
         caller_rules.setdefault(rule.route_id, []).append(rule)
+    # The number inventory (docs/MULTI_TENANCY_MSP.md §4): a route for a
+    # number another organization owns is skipped (a conflict for a platform
+    # administrator to decide); the owner's route works.
+    from veyra.core import numbers as inventory
+
+    held = list(db.scalars(select(OrganizationNumber).order_by(OrganizationNumber.first)))
     inbound_out = []
     for r in inbound:
         if r.organization_id not in active_orgs:
             continue
         if r.trunk_id is not None and r.trunk_id not in enabled_trunks:
+            continue
+        number = inventory.maybe_canonical(r.did)
+        owner = next(
+            (n for n in held if number and inventory.in_range(number, n.first, n.last)), None
+        )
+        if owner is not None and owner.organization_id != r.organization_id:
             continue
         if r.time_condition_id is not None:
             used_conditions.add(r.time_condition_id)
@@ -1339,6 +1353,16 @@ def _routing(
             if t.is_enabled
         ],
         "inbound_routes": inbound_out,
+        "numbers": [
+            {
+                "organization": org_slug.get(n.organization_id, ""),
+                "first": n.first,
+                "last": n.last,
+                "trunk": enabled_trunks[n.trunk_id].slug if n.trunk_id in enabled_trunks else None,
+            }
+            for n in held
+            if n.organization_id in active_orgs
+        ],
         "outbound_routes": [
             {
                 "slug": r.slug,

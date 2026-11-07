@@ -98,7 +98,7 @@ _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 # Fields that name an organization by slug.
 _ORG_FIELDS = ("organization", "organization_slug")
 # Fields that hold a carrier number, which must stay unique on the server.
-_NUMBER_FIELDS = ("did", "routes", "emergency_caller_id_number")
+_NUMBER_FIELDS = ("did", "routes", "emergency_caller_id_number", "first", "last")
 TWIN_NUMBER_PREFIX = "00"
 
 

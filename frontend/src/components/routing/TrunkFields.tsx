@@ -2,6 +2,7 @@
 "use client";
 
 import { Badge, Checkbox, FormSection, SelectField, Switch, TextArea, TextField } from "@/components/ui";
+import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { AUTH_MODES, CALLER_ID_HEADERS, CODECS, DTMF_MODES, TRANSPORTS, parseList, trunkStatus } from "@/lib/routing";
 import type { CallerIdHeader, DtmfMode, Trunk, TrunkAuthMode, TrunkInput, TrunkTransport } from "@/lib/types";
 
@@ -31,6 +32,8 @@ export interface TrunkDraft {
   /** Of max_channels, kept for emergency calls (issue #171). */
   emergency_reserved_channels: string;
   default_caller_id: string;
+  /** Organization id; "" = shared by every organization. */
+  organization_id: string;
   caller_id_header: CallerIdHeader;
   dtmf_mode: DtmfMode;
   fax_t38: boolean;
@@ -62,6 +65,7 @@ export const EMPTY_TRUNK: TrunkDraft = {
   max_channels: "",
   emergency_reserved_channels: "1",
   default_caller_id: "",
+  organization_id: "",
   caller_id_header: "pai",
   dtmf_mode: "rfc4733",
   fax_t38: false,
@@ -93,6 +97,7 @@ export function trunkDraft(t: Trunk): TrunkDraft {
     max_channels: t.max_channels === null ? "" : String(t.max_channels),
     emergency_reserved_channels: String(t.emergency_reserved_channels ?? 1),
     default_caller_id: t.default_caller_id ?? "",
+    organization_id: t.organization_id ?? "",
     caller_id_header: t.caller_id_header,
     dtmf_mode: t.dtmf_mode,
     fax_t38: t.fax_t38,
@@ -131,6 +136,7 @@ export function trunkBody(d: TrunkDraft): TrunkInput {
     max_channels: d.max_channels.trim() ? int(d.max_channels, 0) : null,
     emergency_reserved_channels: int(d.emergency_reserved_channels, 1),
     default_caller_id: text(d.default_caller_id),
+    organization_id: d.organization_id || null,
     caller_id_header: d.caller_id_header,
     dtmf_mode: d.dtmf_mode,
     fax_t38: d.fax_t38,
@@ -255,6 +261,7 @@ export function TrunkAllFields({ draft, onChange, errors, disabled, hasPassword 
         <TextArea label="Match addresses" rows={3} disabled={disabled} value={draft.match_addresses} error={errors.match_addresses}
           help={registration ? "Optional in registration mode: extra source addresses accepted as this trunk." : MATCH_HELP}
           placeholder={registration ? "" : draft.host.trim() || "203.0.113.10\n198.51.100.0/24"} spellCheck={false} onChange={(e) => onChange({ match_addresses: e.target.value })} />
+              <OrganizationOwner draft={draft} onChange={onChange} errors={errors} disabled={disabled} />
       </FormSection>
       <hr className="divider" />
       <FormSection title="Calling" description="Media, capacity and caller ID for calls over this trunk.">
@@ -317,6 +324,19 @@ export function TrunkAllFields({ draft, onChange, errors, disabled, hasPassword 
         <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />
       </FormSection>
     </>
+  );
+}
+
+/** Dedicated to one organization (bring your own carrier, docs/MULTI_TENANCY_MSP.md C4).
+ * Shown only when there is more than one organization. */
+function OrganizationOwner({ draft, onChange, errors, disabled }: Pick<FieldsProps, "draft" | "onChange" | "errors" | "disabled">) {
+  const { organizations } = useOrganizationOptions();
+  if (organizations.length < 2 && !draft.organization_id) return null;
+  return (
+    <SelectField label="Organization" disabled={disabled} value={draft.organization_id} error={errors.organization_id} placeholder="Shared by every organization"
+      options={organizations.map((o) => ({ value: o.id, label: o.name }))}
+      help="A trunk dedicated to one organization carries only that organization's routes, and may take every number arriving on it ('any')."
+      onChange={(e) => onChange({ organization_id: e.target.value })} />
   );
 }
 

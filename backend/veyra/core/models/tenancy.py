@@ -7,8 +7,18 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID, ExcludeConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -170,3 +180,39 @@ class Department(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )
     site_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"))
     name: Mapped[str] = mapped_column(String(200))
+
+
+class OrganizationNumber(UUIDPrimaryKey, Base):
+    """A number, or a block of numbers, assigned to one organization
+    (docs/MULTI_TENANCY_MSP.md §4). Numbers are in canonical form
+    (``numbers.canonical``): digits only, ten for a North American number.
+    No number belongs to two organizations."""
+
+    __tablename__ = "organization_numbers"
+    __table_args__ = (
+        CheckConstraint(
+            "first ~ '^[0-9]{2,18}$' AND last ~ '^[0-9]{2,18}$'"
+            " AND length(first) = length(last) AND first <= last",
+            name="numbers_canonical",
+        ),
+        ExcludeConstraint(
+            (text("int8range(first::bigint, last::bigint, '[]')"), "&&"),
+            name="uq_organization_numbers_no_overlap",
+            using="gist",
+        ),
+    )
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    first: Mapped[str] = mapped_column(String(18))
+    last: Mapped[str] = mapped_column(String(18))
+    # Arrives only on this trunk; None: on any trunk.
+    trunk_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("sip_trunks.id", ondelete="SET NULL")
+    )
+    label: Mapped[str | None] = mapped_column(String(100))
+    # manual | migration | auto (assigned by creating a route, multi-tenancy off)
+    source: Mapped[str] = mapped_column(String(16), default="manual")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String(320), default="")

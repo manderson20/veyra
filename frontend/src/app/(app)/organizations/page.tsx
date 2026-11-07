@@ -22,7 +22,7 @@ import {
 import { api } from "@/lib/api";
 import { formatDateTime, slugify } from "@/lib/format";
 import { browserTimeZone, timeZones } from "@/lib/timezones";
-import type { MultiTenancyStatus, Organization, Page } from "@/lib/types";
+import type { MultiTenancyStatus, NumberConflict, Organization, Page } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useSession } from "@/hooks/useSession";
@@ -48,6 +48,7 @@ export default function OrganizationsPage() {
 
   const list = useApiData<Page<Organization>>("/organizations", { q: debounced, limit: LIMIT, offset });
   const mt = useApiData<MultiTenancyStatus>(can("system.settings.read") ? "/system/multi-tenancy" : null);
+  const conflicts = useApiData<NumberConflict[]>(can("organizations.write") ? "/numbers/conflicts" : null);
   const columns: Column<Organization>[] = [
     { key: "name", header: "Name", render: (o) => <span className="table__primary">{o.name}</span> },
     { key: "slug", header: "Short name", render: (o) => <span className="mono">{o.slug}</span> },
@@ -71,6 +72,16 @@ export default function OrganizationsPage() {
         ) : can("organizations.write") ? (
           <Callout tone="info">A second organization needs multi-tenancy (System → Settings), which keeps the organizations&apos; phones, numbers and voicemail apart.</Callout>
         ) : null
+      ) : null}
+      {conflicts.data?.length ? (
+        <Callout tone="warn" title="Numbers routed by an organization that does not own them">
+          <p>These inbound routes are skipped until you decide: assign the number to the route&apos;s organization (withdraw it from the owner first), or delete the route.</p>
+          <ul>
+            {conflicts.data.map((c) => (
+              <li key={c.route_id}><span className="mono">{c.did}</span>: routed by {c.route_organization_name}, owned by {c.owner_organization_name}</li>
+            ))}
+          </ul>
+        </Callout>
       ) : null}
       <Card flush>
         <div className="table-toolbar">
