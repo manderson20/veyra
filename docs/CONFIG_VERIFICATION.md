@@ -25,6 +25,14 @@ templates, Base File Edit #372) and
   Administrators can change it.
 - **Modes are per profile at the finest.** There is no per-phone switch;
   build a test profile for phones that should not be checked (§5).
+- **A check window.** Every check opens a window with a progress bar. When
+  it is clean, the window says so and waits for **OK**. Otherwise it lists
+  each item with the setting, the Veyra field that fills it, the value, and
+  the values the setting accepts (§7.1).
+- **Permissions.** Who may override a finding and who may change a mode are
+  permissions in the user roles (§8).
+- **Composite settings** take the safest route: they are checked with the
+  extreme values and always marked for review (§3.0).
 
 ## 1. Goals
 
@@ -331,13 +339,20 @@ break it?" for each phone.
    parser of Jinja expressions. A parameter that holds a fixed value is
    checked by that value. A parameter fed by one or more fields is checked
    by their domains.
-3. **Domain against rule.** A field's domain must fit the parameter's
+3. **Composite settings.** A setting built from several fields and text
+   (`{{ line.sip_username }}@{{ server.sip_host }}`) is checked with the
+   shortest and longest value of each field together, and it always gets a
+   **warning**, `binding.composite`, that marks it for review. The rule is
+   the checker's and does not change per firmware. The vendor's limits it
+   is checked against (length, format) come from the release file and can
+   change per firmware.
+4. **Domain against rule.** A field's domain must fit the parameter's
    rules. If no value of the domain fits, the result is an **error** (a
    display name in an int parameter). If only some values fit, it is a
    **warning** that gives an example value that would fail ("a display name
    over 64 characters would be cut"). If every value fits, the parameter
    passes.
-4. **Counts.** Index ranges (`reg.{n}`, `linekey.{n}`) come from what the
+5. **Counts.** Index ranges (`reg.{n}`, `linekey.{n}`) come from what the
    profile defines: its key list is checked as it is, and lines up to the
    model's most lines.
 
@@ -392,6 +407,7 @@ looked at (goal 4).
 | `enum.1` | error | the value is not one of `values` |
 | `range.1` | error | the int is outside `range` |
 | `param.deprecated` | warning | the firmware is at or past `deprecated_in` (the note names `replaced_by`) |
+| `binding.composite` | warning | the setting is built from several fields and text; review it (§3.0) |
 | `entry.unverified` | warning | the entry is only `seeded-from-template` (shown once per file as a count; see §3.3) |
 | `param.not-in-catalog` | info | the parameter is not in the catalog |
 | `catalog.none` | info | the vendor, family or firmware has no catalog; the whole file is not checked |
@@ -602,6 +618,50 @@ columns (§5).
 
 ## 7. Interface sketch
 
+### 7.1 The check window
+
+Every check opens a window: on save, on **Check now**, and on assigning
+firmware. While the check runs, a progress bar shows the step it is on
+("Rendering Yealink T4x for T46U on 86 (3 of 8)").
+
+```
+Clean                                   Problems
+┌ Configuration check ──────────────┐   ┌ Configuration check ──────────────────────────────┐
+│ ████████████████████████  done    │   │ ████████████████████████  done                    │
+│                                   │   │ ✖ 1 error   ⚠ 2 warnings   ○ 14 not checked       │
+│ ✔ No problems found               │   │                                                   │
+│   212 settings checked on         │   │ ✖ account.1.sip_server.1.transport_type           │
+│   T46U, T48U · firmware 86        │   │   Filled by: Base File Edit (fixed value)         │
+│ ○ 14 settings not in Veyra's data │   │   Value: 4                                        │
+│   were not checked       [ Show ] │   │   Accepts: 0 UDP, 1 TCP, 2 TLS, 3 DNS-NAPTR       │
+│                                   │   │   Source: Yealink Admin Guide V86, Accounts       │
+│                         [ OK ]    │   │ ⚠ account.1.label                                 │
+└───────────────────────────────────┘   │   Filled by: line.display_name (up to 80 chars)   │
+                                        │   Accepts: text, up to 64 characters              │
+                                        │   Example that fails: an 80-character name        │
+                                        │ ⚠ …                                               │
+                                        │ [ Cancel ]  [ Override and save… ]                │
+                                        └───────────────────────────────────────────────────┘
+```
+
+- **Clean** means no errors and no warnings. It still shows how many
+  settings were not checked, because "not checked" is never "passed".
+  **OK** closes the window, and the acknowledgement is recorded with the
+  check.
+- **Problems** lists every error and warning. Each item shows the setting,
+  the **Veyra field or variable** that fills it (or "fixed value" with
+  where it was set), the value or the field's range, and **what the
+  setting accepts**: the enum values with their labels, the range, or the
+  type and length. The source the vendor gave is also shown.
+- With warnings only, **Save** goes ahead. With errors, **Override and
+  save…** asks for a reason (and "The checker is wrong"). It is shown only
+  to users with the override permission (§8). Everyone else sees "Ask an
+  administrator to review these" and can only **Cancel**.
+- In `advisory` mode the window appears the same way but never blocks. In
+  `off` mode no window appears.
+
+### 7.2 On the pages
+
 ```
 Profile: Building A teachers                     [ Save ]
 ┌ Configuration check ─────────── enforced ▾ ───────────────────────┐
@@ -647,20 +707,18 @@ Override…  ┌─────────────────────�
 
 ## 8. Permissions
 
-Whoever can save the configuration can override its findings. The existing
-`provisioning:write` on the template, profile, device or variable is
-enough, because the override only records a decision that person could
-already make by editing the file. Two exceptions are proposed:
+Two new permissions in `core/security/permissions.py` appear in the user
+roles editor like any other (owner, 2026-11-07):
 
-- **Turning checks off or to advisory** for an organization or the
-  installation needs the organization's or the installation's settings
-  permission, not just `provisioning:write`. One profile can be switched by
-  whoever can save it.
-- **Revoking someone else's override** follows the same permission as
-  making it, and it is audited.
+| Permission | Allows | Default roles |
+|---|---|---|
+| `provisioning.check.override` | **Override and save** past errors, revoke overrides, and mark "the checker is wrong" | `org_admin` |
+| `provisioning.check.mode` | change the mode of an organization or a profile | `org_admin` |
 
-Tell me if overrides of `vendor-doc` errors should need more than
-`provisioning:write`.
+Saving still needs `provisioning.write` as today. Without the override
+permission, a save with errors cannot go through. The installation's mode
+needs `system.settings.write`. Every override, revocation and mode change
+is audited.
 
 ## 9. Adding a firmware release
 
@@ -696,7 +754,9 @@ Tell me if overrides of `vendor-doc` errors should need more than
 
 ## 11. Open questions
 
-1. **"Pass cleanly" vs unverified warnings.** The official templates will
+1. ~~"Pass cleanly" vs unverified warnings~~, resolved by the check window
+   (§7.1): unverified entries show as one warning there.
+   Original question: **"Pass cleanly" vs unverified warnings.** The official templates will
    have no errors but will carry one "unverified" warning per file until
    the entries are cited. Is one summarized warning acceptable, or should
    `seeded-from-template` count as info until the first vendor-doc pass?
@@ -722,7 +782,5 @@ Tell me if overrides of `vendor-doc` errors should need more than
 9. **Catalogs from modules** (§2.1): in scope now, or later?
 10. **Grandstream and Algo** families are left for after VVX and T4x; the
     format already allows them.
-11. **Composite parameters.** A parameter built from two fields and text
-    (`{{ line.sip_username }}@{{ server.sip_host }}`) is checked with the
-    shortest and longest value of each domain together. Is that enough, or
-    should such parameters always be marked for review?
+11. ~~Composite parameters.~~ Resolved: checked with the extreme values and
+    always marked for review (§3.0).
