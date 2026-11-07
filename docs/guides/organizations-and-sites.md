@@ -35,6 +35,7 @@ Both pages are under **Directory** in the menu: [Organizations](app:/organizatio
    - **Answer another phone's call:** who may dial `**` and an extension to answer a call ringing there: **Any phone of the organization**, or **Only phones in the same pickup group**.
    - **Callers who ring through Do Not Disturb:** numbers or extensions that ring every phone even when it has Do Not Disturb on, such as the district office. One per line, at most 50.
    - **Main number** (platform administrators): one of the organization's numbers. With several organizations on the server, outside calls from a phone without its own outbound caller ID present it. Every organization needs one before multi-tenancy can be turned on, and it cannot be withdrawn from the **Numbers** card while it is the main number.
+   - **Emergency number** (platform administrators): one of the organization's numbers, registered with the carrier at its address. With several organizations on the server, a 911 call from a phone whose extension and site have no emergency caller ID presents it. Every organization needs one before multi-tenancy can be turned on. See [Emergency calling (911)](guide:emergency-calling).
    - **Outbound caller ID allow list:** numbers an extension may send as caller ID besides the organization's own numbers. Changing it also needs the routing permission.
    - **Hold music:** what callers hear on hold.
    - **Fax header** and **Fax station ID:** printed on, and announced with, every fax the organization sends.
