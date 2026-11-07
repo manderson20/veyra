@@ -4,7 +4,7 @@ summary: Change what Veyra writes into phones' configuration files with your own
 audience: admin
 section: Phones and devices
 order: 60
-reviewed: 0.27.65
+reviewed: 0.27.87
 pages:
   - /provisioning/
   - /provisioning/view/
@@ -82,7 +82,7 @@ The **Insert a Veyra variable** panel next to the box lists everything you can u
 - **Provisioning variables:** the [provisioning variables](guide:provisioning-variables) defined under Provisioning → Variables, inserted as `{{ vars.name }}`. Each phone gets the value of its site, its organization or the installation.
 - **Snippets:** common patterns, such as *Only when set*, *Yes/no as 1/0* and *Override a block*.
 
-Choose **Save template**. Veyra checks the base file first. If something is wrong, **The template did not validate** lists the problems and nothing is saved. Phones using the base file get the change at their next check.
+Choose **Save template**. Veyra checks the base file first. If something is wrong, **The template did not validate** lists the problems and nothing is saved. Veyra then checks the settings it writes against what each model listed accepts (see [Configuration checks](guide:configuration-checks)). Phones using the base file get the change at their next check.
 
 ## Export and import
 

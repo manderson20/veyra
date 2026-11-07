@@ -9,6 +9,7 @@ import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
+import { useConfigCheck } from "@/components/provisioning/ConfigCheck";
 
 const SCOPE_LABEL: Record<VariableScope, string> = { installation: "Installation", organization: "Organization", site: "Site", profile: "Template" };
 const SCOPE_ORDER: VariableScope[] = ["installation", "organization", "site", "profile"];
@@ -68,6 +69,7 @@ function VariableDialog({ variable, isPlatform, onClose, onSaved }: { variable: 
   const toast = useToast();
   const { session } = useSession();
   const errors = useFormErrors();
+  const check = useConfigCheck();
   const { organizations } = useOrganizationOptions(true);
   const [scope, setScope] = useState<VariableScope>(variable?.scope ?? "organization");
   const [org, setOrg] = useState(variable?.organization_id ?? session?.user.home_organization_id ?? "");
@@ -88,17 +90,15 @@ function VariableDialog({ variable, isPlatform, onClose, onSaved }: { variable: 
     setBusy("save");
     errors.clear();
     try {
-      let saved: ProvisioningVariable;
-      if (variable) {
-        saved = await api.patch<ProvisioningVariable>(`/provisioning/variables/${variable.id}`, {
-          ...(variable.sensitive && !value ? {} : { value }), description: description.trim() || null, sensitive,
-        });
-      } else {
-        saved = await api.post<ProvisioningVariable>("/provisioning/variables", {
+      const saved = await check.run((acknowledge) => variable
+        ? api.patch<ProvisioningVariable>(`/provisioning/variables/${variable.id}`, {
+          ...(variable.sensitive && !value ? {} : { value }), description: description.trim() || null, sensitive, acknowledge,
+        })
+        : api.post<ProvisioningVariable>("/provisioning/variables", {
           scope, scope_id: scope === "installation" ? null : scope === "organization" ? effectiveOrg : target,
-          name: name.trim(), value, sensitive, description: description.trim() || null,
-        });
-      }
+          name: name.trim(), value, sensitive, description: description.trim() || null, acknowledge,
+        }));
+      if (!saved) return; // cancelled in the check window: nothing was saved
       const n = saved.affected_devices ?? 0;
       toast.success(`Variable ${saved.name} saved`, n ? `${n} phone${n === 1 ? "" : "s"} asked to re-read the configuration.` : undefined);
       onSaved();
@@ -129,6 +129,8 @@ function VariableDialog({ variable, isPlatform, onClose, onSaved }: { variable: 
     : (profiles.data?.items ?? []).map((p) => ({ value: p.id, label: p.name }));
 
   return (
+    <>
+    {check.dialog}
     <Dialog open onClose={onClose} busy={!!busy} title={variable ? `Variable ${variable.name}` : "New variable"}
       description={variable ? `Defined for ${SCOPE_LABEL[variable.scope!]}${variable.scope_name && variable.scope !== "installation" ? ` ${variable.scope_name}` : ""}.` : "Define it at the widest scope that shares the value; narrower scopes override it."}
       footer={(
@@ -166,5 +168,6 @@ function VariableDialog({ variable, isPlatform, onClose, onSaved }: { variable: 
         {confirmDelete ? <Callout tone="warn">Remove this variable? Phones that use it from this scope fall back to the same variable in a wider scope. A variable that line keys still use cannot be removed until those keys change.</Callout> : null}
       </form>
     </Dialog>
+    </>
   );
 }

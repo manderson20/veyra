@@ -834,8 +834,16 @@ is audited.
    `.mode`. The 422 problem carries every finding in `errors`. Fingerprints
    include the model, so a template that serves six models needs six
    acknowledgements; the check window ticks them all by default.
-4. Interface: `ConfigFindings`, the save dialog, the Checks page, the mode
-   control, and the device list column.
+4. **Done:** the check window (`components/provisioning/ConfigCheck.tsx`,
+   `useConfigCheck().run(save)`) on profile create and edit, Base File Edit,
+   device create and edit (dialog, page and list), the template editor and
+   variables. It shows progress, a clean result waiting for OK, or the
+   findings grouped by setting across models, with the override form. Also
+   the **Provisioning → Configuration Checks** page (overrides, the
+   **Checker is wrong** filter, revoke, and the installation and
+   organization modes), the template's mode control, and a check badge in
+   Extension Mapping's status cell in place of a separate column, because
+   the table is already wide. Plus the guide `configuration-checks.md`.
 5. The firmware assignment check (the diff between releases).
 6. Pack sources from modules and local import, the Coverage page and the
    `pack` commands.

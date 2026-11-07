@@ -4,7 +4,7 @@ summary: How a new phone finds this server, signs in for its configuration, and 
 audience: admin
 section: Phones and devices
 order: 10
-reviewed: 0.27.64
+reviewed: 0.27.87
 checked: 2026-10-29
 pages:
   - /devices/
@@ -95,6 +95,8 @@ When the bootstrap is on, the **Phone provisioning** card also shows the switch 
 - **No such file** is usually harmless, because phones ask for optional files.
 
 A phone Veyra does not know belongs to no organization yet, so only platform administrators see its requests.
+
+A [configuration check](guide:configuration-checks) never stops a phone from getting its files. A phone served while its configuration has open check errors still gets them, and the server log notes it.
 
 ## If something doesn't work
 

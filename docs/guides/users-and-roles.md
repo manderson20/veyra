@@ -4,7 +4,7 @@ summary: Create accounts for the people who sign in to Veyra, give them roles, a
 audience: admin
 section: Getting started
 order: 40
-reviewed: 0.27.52
+reviewed: 0.27.87
 checked: 2026-10-29
 pages:
   - /users/
@@ -33,6 +33,8 @@ What a user may do depends on their **roles**. A user without a role can sign in
 | **Technician** | Maintains devices and views telephony configuration. |
 | **Standard User** | Self-service access to their own phone and voicemail. |
 | **Read-Only User** | Can view, but not change, configuration. |
+
+Two permissions decide who may save phone configuration past a [configuration check](guide:configuration-checks): **provisioning.check.override** (override a setting the firmware would refuse) and **provisioning.check.mode** (turn checks to advisory or off). Organization Administrators have both.
 
 Every role except Platform Administrator is given for one organization. Only a platform administrator can give the Platform Administrator role.
 
