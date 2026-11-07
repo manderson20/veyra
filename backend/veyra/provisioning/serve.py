@@ -445,10 +445,9 @@ def get_file(filename: str, request: Request, db: Session = Depends(get_db)) -> 
     check = device.config_check or {}
     if check.get("open_errors"):
         log.info(
-            "served %s to %s with %s open configuration check error(s)",
-            filename,
-            device.mac_address,
-            check["open_errors"],
+            "served a file to device %s with %d open configuration check error(s)",
+            device.id,
+            int(check["open_errors"]),
         )
     _log(
         db,
