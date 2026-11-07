@@ -4,6 +4,7 @@ organizations and the switch that allows more than one active organization."""
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -93,11 +94,68 @@ def status(db: Session) -> dict[str, object]:
     }
 
 
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+# Fields that name an organization by slug.
+_ORG_FIELDS = ("organization", "organization_slug")
+# Fields that hold a carrier number, which must stay unique on the server.
+_NUMBER_FIELDS = ("did", "routes", "emergency_caller_id_number")
+TWIN_NUMBER_PREFIX = "00"
+
+
+def _owner(item: Any) -> str | None:
+    if not isinstance(item, dict):
+        return None
+    slug = item.get("organization_slug", item.get("organization"))
+    return str(slug) if slug else None
+
+
+def _twin_number(number: str) -> str:
+    """A number no real route uses: the isolation check's DIDs and ELINs."""
+    return TWIN_NUMBER_PREFIX + number.lstrip("+")[-18:]
+
+
+def _collect(value: Any, key: str, ids: set[str], numbers: set[str]) -> None:
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _collect(v, k, ids, numbers)
+    elif isinstance(value, list):
+        for v in value:
+            _collect(v, key, ids, numbers)
+    elif isinstance(value, str):
+        if _UUID_RE.match(value):
+            ids.add(value)
+        elif key in _NUMBER_FIELDS and value != "any":
+            numbers.add(value)
+
+
+def _rewrite(value: Any, key: str, src: str, twin: str, swap: dict[str, str]) -> Any:
+    if isinstance(value, dict):
+        return {k: _rewrite(v, k, src, twin, swap) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_rewrite(v, key, src, twin, swap) for v in value]
+    if isinstance(value, str):
+        if key in _ORG_FIELDS and value == src:
+            return twin
+        return swap.get(value, value)
+    return value
+
+
 def _with_twin(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """The snapshot plus a synthetic organization that copies the first
-    organization's numbers, slugs and names in its own namespace, so the
-    proof does not depend on how many organizations exist yet."""
+    """The snapshot plus a synthetic organization that copies everything the
+    first organization owns (docs/MULTI_TENANCY_MSP.md §3.1), with the same
+    numbers, slugs and names, in its own namespace. Every key listed in
+    ``snapshot.ORG_LISTS`` and ``ORG_NESTED`` is copied, so a new feature is
+    in the proof as soon as its key is listed (and a key listed nowhere fails
+    the tests).
+
+    In the copies, the organization's slug becomes the twin's, endpoint names
+    and ids are swapped consistently (so references stay inside the twin),
+    and DIDs and ELINs get a prefix, because carrier numbers stay unique on
+    the server. An ``any`` catch-all is not copied: there is one per trunk."""
     import copy
+    import uuid as _uuid
+
+    from veyra.telephony.snapshot import ORG_LISTS, ORG_NESTED
 
     snap = copy.deepcopy(snapshot)
     orgs = list(snap.get("organizations") or [])
@@ -109,24 +167,50 @@ def _with_twin(snapshot: dict[str, Any]) -> dict[str, Any]:
     snap["organizations"] = orgs
     snap["installation"] = {**dict(snap.get("installation") or {}), "multi_tenancy_enabled": True}
 
-    def endpoint(name: str) -> str:
-        return f"{twin}-{name.split('-')[-1]}"
+    def owned(items: Any) -> list[dict[str, Any]]:
+        return [
+            i
+            for i in (items or [])
+            if _owner(i) == src and not (isinstance(i, dict) and i.get("did") == "any")
+        ]
 
-    for key in ("extensions", "voicemail_boxes", "ring_groups", "queues", "ivr_menus"):
-        items = list(snap.get(key) or [])
-        copies = []
-        for item in items:
-            if item.get("organization") != src:
-                continue
-            c = copy.deepcopy(item)
-            c["organization"] = twin
-            if "endpoint_name" in c:
-                c["endpoint_name"] = endpoint(str(c["endpoint_name"]))
-            for m in c.get("members") or []:
-                if isinstance(m, dict) and "endpoint_name" in m:
-                    m["endpoint_name"] = endpoint(str(m["endpoint_name"]))
-            copies.append(c)
-        snap[key] = items + copies
+    sources: dict[tuple[str, str | None], list[dict[str, Any]]] = {}
+    for key in ORG_LISTS:
+        sources[(key, None)] = owned(snap.get(key))
+    for key, members in ORG_NESTED.items():
+        nested = snap.get(key) or {}
+        for name in members:
+            sources[(key, name)] = owned(nested.get(name))
+
+    ids: set[str] = set()
+    numbers: set[str] = set()
+    for items in sources.values():
+        _collect(items, "", ids, numbers)
+    swap = {i: str(_uuid.uuid5(_uuid.NAMESPACE_URL, f"veyra-twin:{i}")) for i in ids}
+    swap |= {n: _twin_number(n) for n in numbers}
+    for e in sources[("extensions", None)]:
+        name = str(e.get("endpoint_name") or "")
+        if name:
+            swap[name] = f"{twin}-{name.split('-')[-1]}"
+
+    for (key, member), items in sources.items():
+        copies = [_rewrite(i, "", src, twin, swap) for i in items]
+        if key == "outbound_routes":
+            # Route contexts are shared names (veyra-out-<slug>).
+            for c in copies:
+                c["slug"] = f"{twin}-{c['slug']}"
+        if member is None:
+            snap[key] = list(snap.get(key) or []) + copies
+            continue
+        nested = dict(snap.get(key) or {})
+        existing = list(nested.get(member) or [])
+        if key == "paging" and member == "zones":
+            # The sender listens on one port per zone, across the server.
+            used = [int(z.get("port") or 0) for z in existing]
+            for i, c in enumerate(copies):
+                c["port"] = max(used, default=40000) + 1 + i
+        nested[member] = existing + copies
+        snap[key] = nested
     return snap
 
 
@@ -145,8 +229,16 @@ def run_checks(db: Session, key: Any) -> list[dict[str, object]]:
     )
     try:
         snap = build_snapshot(db, key)
-        files = generator.generate(_with_twin(snap))
-        problems = isolation.verify(files, strict=True)
+        twin = _with_twin(snap)
+        files = generator.generate(twin)
+        problems = isolation.verify(
+            files,
+            strict=True,
+            organizations={
+                str(o.get("slug") or ""): str(o.get("namespace") or "")
+                for o in twin.get("organizations") or []
+            },
+        )
         checks.append(
             {
                 "name": "isolation",

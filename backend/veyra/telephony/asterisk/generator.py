@@ -490,7 +490,7 @@ def generate(
     if len(set(mapping.values())) > 1 or strict:
         from veyra.telephony.asterisk import isolation
 
-        problems = isolation.verify(files, strict=strict)
+        problems = isolation.verify(files, strict=strict, organizations=mapping)
         if problems:
             raise GenerationError("isolation check failed: " + "; ".join(problems[:10]))
     return files

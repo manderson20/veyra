@@ -77,6 +77,48 @@ from veyra.version import __version__
 
 SNAPSHOT_VERSION = 11  # 11: engine namespaces (docs/MULTI_TENANCY.md)
 
+# What each top-level key of the snapshot holds (docs/MULTI_TENANCY_MSP.md
+# §3.1). The isolation check copies every organization-owned item into a
+# synthetic second organization; a key listed nowhere here fails the test
+# suite, so a new feature cannot be left out of the check.
+ORG_LISTS: tuple[str, ...] = (
+    "announcements",
+    "call_flows",
+    "caller_block_policies",
+    "classes_of_service",
+    "conference_rooms",
+    "disa_lines",
+    "extensions",
+    "fax_inboxes",
+    "hold_music",
+    "inbound_routes",
+    "ivr_menus",
+    "outbound_routes",  # only the routes of one organization; shared ones stay
+    "parking_lots",
+    "queues",
+    "recording",
+    "ring_groups",
+    "sites",
+    "time_conditions",
+    "voicemail_boxes",
+)
+# Dicts whose named members are organization-owned lists.
+ORG_NESTED: dict[str, tuple[str, ...]] = {"paging": ("zones", "pages")}
+SHARED_KEYS: tuple[str, ...] = (
+    "custom_dialplan",
+    "feature_codes",
+    "installation",
+    "numbering",
+    "sip",
+    "smtp",
+    "snapshot_version",
+    "trunks",
+    "veyra_version",
+    # Per extension number, a fallback the extension rows always override.
+    "shared_mailboxes",
+)
+ORGANIZATIONS_KEY = "organizations"
+
 
 def secret_purpose(extension_id: Any) -> str:
     """Associated data that binds a SIP secret ciphertext to its extension."""

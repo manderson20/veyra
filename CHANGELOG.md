@@ -28,6 +28,7 @@ Migrations 0093 and 0094 add configuration check overrides and modes, and import
 - **Configuration verification design** (`docs/CONFIG_VERIFICATION.md`, approved): checking phone settings against a per-firmware catalog of what each model accepts, with overrides, vendor packs other developers can build, and modes to turn checks off.
 
 ### Security
+- **A complete isolation check** (docs/MULTI_TENANCY_MSP.md §3): the check run when multi-tenancy is turned on now copies everything the first organization owns (conference rooms, parking, announcements, call flows, time conditions, paging, sites, inbound routes, recording policies and the rest), not only extensions, voicemail, ring groups, queues and menus. A test fails when a new kind of data is not covered. The verifier now also reads conference profiles, parking lots, hold music, voicemail contexts and paging ports, the device state lamps and engine store keys in each organization's dialplan, and refuses a number routed to two organizations across trunks.
 - **Active calls with several organizations** (docs/MULTI_TENANCY_MSP.md §2): a call is matched to its organization by the phone it is on, the phone it is connected to, or the organization the engine gives it, never by caller number. Two organizations can both have extension 1001, and each one's administrators now see, end and record only their own calls. The installer adds `channelvars = VEYRA_ORG` to `ari.conf`; run it again so that a call still ringing on a trunk shows up for its organization.
 
 ## 0.27.86 — 2026-11-04
