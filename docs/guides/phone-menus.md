@@ -5,7 +5,7 @@ audience: admin
 section: Calls and call flows
 order: 60
 reviewed: 0.27.85
-checked: 2026-10-29
+checked: 2026-11-07T23:43Z
 pages:
   - /ivr/
   - /ivr/view/

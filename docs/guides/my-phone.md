@@ -5,7 +5,7 @@ audience: user
 section: Using Veyra
 order: 10
 reviewed: 0.27.86
-checked: 2026-10-30
+checked: 2026-11-07T23:43Z
 pages:
   - /my-phone/
 covers:

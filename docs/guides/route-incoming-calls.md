@@ -5,7 +5,7 @@ audience: admin
 section: Calls and call flows
 order: 20
 reviewed: 0.27.87
-checked: 2026-11-07T22:59Z
+checked: 2026-11-07T23:43Z
 pages:
   - /routing/inbound/
   - /routing/inbound/view/

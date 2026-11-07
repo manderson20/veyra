@@ -4,7 +4,7 @@ summary: Send saved changes to the telephony engine, now or when calls have ende
 audience: admin
 section: Maintenance
 order: 30
-reviewed: 0.27.63
+reviewed: 0.27.87
 pages:
   - /system/telephony/
 covers:
@@ -29,6 +29,12 @@ While saved changes wait, the top bar shows a red **Deploy changes** button and 
 While it runs the top bar shows **Deploying #n**, or **Waiting for n calls to end (revision #n)**. When it is done you see *Revision #n deployed. Phones will pick up the change.* If nothing actually changed, you see *Nothing to apply*.
 
 If your role cannot deploy, the top bar shows **Changes pending deployment** instead; ask someone who can.
+
+### When several organizations share the server
+
+- **Organization administrators** can deploy their own organization's changes with **Deploy changes**. Their deployment always waits until no calls are active, and an organization can deploy at most once every five minutes. It is still one deployment for the whole server: other organizations' saved changes go live with it, and calls in progress are not interrupted.
+- If a platform administrator has chosen **Only request a deployment** (System → Settings → Multi-tenancy), the button reads **Request deployment** instead, and the platform administrators see the request in their top bar.
+- **Held back:** if one organization's changes cannot be generated, Veyra deploys everyone else's changes with that organization's last working configuration, and the top bar shows **Your latest changes were held back** to that organization (hover over it for the reason). Fix the change and deploy again. A problem in something shared, such as a trunk, still stops the deployment for everyone.
 
 The button is greyed out when the telephony engine is not running.
 

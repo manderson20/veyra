@@ -36,6 +36,8 @@ What a user may do depends on their **roles**. A user without a role can sign in
 
 Two permissions decide who may save phone configuration past a [configuration check](guide:configuration-checks): **provisioning.check.override** (override a setting the firmware would refuse) and **provisioning.check.mode** (turn checks to advisory or off). Organization Administrators have both.
 
+**Apply the organization's saved changes** lets an Organization Administrator deploy their own organization's changes when several organizations share the server (see [Deploy changes](guide:deploy-changes)). Organization Administrators have it; it does nothing on a server with one organization, where only platform administrators deploy.
+
 Every role except Platform Administrator is given for one organization. Only a platform administrator can give the Platform Administrator role.
 
 > **Note:** The **Assign role** dialog gives every role for a whole organization, including Site Administrator. It does not yet offer to limit a role to one site.

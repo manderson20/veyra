@@ -5,7 +5,7 @@ audience: admin
 section: Getting started
 order: 50
 reviewed: 0.27.87
-checked: 2026-10-29
+checked: 2026-11-07T23:43Z
 pages:
   - /extensions/
   - /extensions/view/
