@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { PendingChanges } from "@/components/extensions/PendingChanges";
@@ -58,7 +59,7 @@ export default function TrunksPage() {
     <div className="stack">
       <PageHeader
         title="SIP trunks"
-        description="Connections to carriers. Outbound routes send calls over trunks; inbound routes answer the numbers carriers deliver on them."
+        description={<>Connections to carriers. Outbound routes send calls over trunks; inbound routes answer the numbers carriers deliver on them. Choosing a carrier? See <Link href="/help/sip-providers/">compatible SIP providers</Link>.</>}
         actions={can("trunks.write") ? <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New trunk</Button> : null}
       />
       <PendingChanges refreshKey={list.data?.total} />

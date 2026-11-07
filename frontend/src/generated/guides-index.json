@@ -291,6 +291,17 @@
    "wiki": "https://github.com/manderson20/veyra/wiki/See-which-phones-are-registered"
   },
   {
+   "slug": "sip-providers",
+   "title": "Choose a SIP trunk provider",
+   "summary": "Phone service providers (SIP trunk carriers) known to work with Veyra, with how each connects and what each offers for 911.",
+   "audience": "admin",
+   "section": "Calls and call flows",
+   "reviewed": "0.27.86",
+   "reviewed_date": "2026-11-04",
+   "pages": [],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Choose-a-SIP-trunk-provider"
+  },
+  {
    "slug": "connect-a-sip-trunk",
    "title": "Connect a SIP trunk",
    "summary": "Connect Veyra to your phone carrier so calls can reach and leave the building.",
