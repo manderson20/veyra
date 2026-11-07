@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from veyra.api.v1 import device_common as common
+from veyra.api.v1.config_checks import run_device_check
 from veyra.api.v1.device_common import LineKey
 from veyra.api.v1.enrollment import device_purpose, new_secret
 from veyra.api.v1.extensions import installation_key
@@ -40,6 +41,7 @@ from veyra.core.security.crypto import try_load_installation_key
 from veyra.core.security.principal import Principal
 from veyra.provisioning import facts
 from veyra.provisioning import variables as provisioning_vars
+from veyra.provisioning.checks import Acknowledgement
 from veyra.provisioning.renderer import normalize_mac
 from veyra.provisioning.spec import TemplateError
 from veyra.telephony.asterisk import cli
@@ -71,6 +73,10 @@ def _token(v: str) -> str:
     return v
 
 
+# A change of these runs the phone's configuration check (docs/CONFIG_VERIFICATION.md §4.1).
+CHECKED_FIELDS = {"profile_id", "values", "keys", "firmware_image_id", "model"}
+
+
 class DeviceIn(BaseModel):
     organization_id: uuid.UUID
     mac_address: str = Field(max_length=32)
@@ -87,6 +93,8 @@ class DeviceIn(BaseModel):
     values: dict[str, Any] = Field(default_factory=dict)
     firmware_image_id: uuid.UUID | None = None
     is_enabled: bool = True
+    # Configuration check findings saved past (docs/CONFIG_VERIFICATION.md §4.2).
+    acknowledge: list[Acknowledgement] = Field(default_factory=list, max_length=500)
 
     @field_validator("mac_address")
     @classmethod
@@ -119,6 +127,7 @@ class DevicePatch(BaseModel):
     values: dict[str, Any] | None = None
     firmware_image_id: uuid.UUID | None = None
     is_enabled: bool | None = None
+    acknowledge: list[Acknowledgement] = Field(default_factory=list, max_length=500)
 
     @field_validator("mac_address")
     @classmethod
@@ -189,6 +198,10 @@ class DeviceOut(BaseModel):
     allow_bootstrap: bool
     credential_user: str
     problems: list[str]
+    # The last configuration check's counts (docs/CONFIG_VERIFICATION.md §4.3).
+    config_check_summary: dict[str, Any] | None = None
+    # The configuration check of this save (§4.2).
+    config_check: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -435,6 +448,7 @@ def _outs(request: Request, db: Session, rows: list[Device]) -> list[DeviceOut]:
                 credential_user=credential_user(r.mac_address),
                 problems=problems,
                 created_at=r.created_at,
+                config_check_summary=r.config_check,
                 updated_at=r.updated_at,
             )
         )
@@ -843,9 +857,14 @@ def create_device(
         db.flush()
     except IntegrityError as e:
         raise _mac_conflict(e, db) from e
+    report = run_device_check(
+        request, db, principal, ctx, device, profile, catalog_for(request, db), body.acknowledge
+    )
     _record(db, ctx, principal, "device.create", device, {"profile_id": str(body.profile_id)})
     db.commit()
-    return _outs(request, db, [device])[0]
+    out = _outs(request, db, [device])[0]
+    out.config_check = report
+    return out
 
 
 class ReprovisionIn(BaseModel):
@@ -1162,9 +1181,16 @@ def update_device(
         db.flush()
     except IntegrityError as e:
         raise _mac_conflict(e, db) from e
+    report = None
+    if CHECKED_FIELDS & set(details):
+        report = run_device_check(
+            request, db, principal, ctx, device, profile, catalog_for(request, db), body.acknowledge
+        )
     _record(db, ctx, principal, "device.update", device, details)
     db.commit()
-    return _outs(request, db, [device])[0]
+    out = _outs(request, db, [device])[0]
+    out.config_check = report
+    return out
 
 
 @router.delete("/{device_id}", status_code=204)

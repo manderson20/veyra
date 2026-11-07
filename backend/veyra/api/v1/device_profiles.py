@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from veyra.api.v1 import device_common as common
+from veyra.api.v1.config_checks import run_profile_check
 from veyra.api.v1.device_common import LineKey
 from veyra.api.v1.provisioning import catalog_for
 from veyra.core import audit
@@ -36,8 +37,10 @@ from veyra.core.models import (
 from veyra.core.models.base import utcnow
 from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
+from veyra.provisioning import checks
 from veyra.provisioning import variables as provisioning_vars
 from veyra.provisioning.base_edits import PARAMETER, SECRET_NAME, settings
+from veyra.provisioning.checks import Acknowledgement
 from veyra.provisioning.renderer import MASK, TemplateCatalog, render
 from veyra.provisioning.spec import TemplateError
 from veyra.telephony.asterisk import cli
@@ -73,6 +76,8 @@ class ProfileIn(BaseModel):
     is_default: bool = False
     paging: list[PagingMembershipIn] = Field(default_factory=list, max_length=MAX_ZONES)
     firmware_image_id: uuid.UUID | None = None
+    # Findings of the configuration check saved past (docs/CONFIG_VERIFICATION.md §4.2).
+    acknowledge: list[Acknowledgement] = Field(default_factory=list, max_length=500)
 
     @field_validator("name")
     @classmethod
@@ -94,6 +99,9 @@ class ProfilePatch(BaseModel):
     is_default: bool | None = None
     paging: list[PagingMembershipIn] | None = Field(None, max_length=MAX_ZONES)
     firmware_image_id: uuid.UUID | None = None
+    # null: follow the organization (docs/CONFIG_VERIFICATION.md §5).
+    config_check_mode: Literal["enforce", "advisory", "off"] | None = None
+    acknowledge: list[Acknowledgement] = Field(default_factory=list, max_length=500)
 
     @field_validator("name")
     @classmethod
@@ -174,6 +182,9 @@ class ProfileOut(BaseModel):
     devices: int
     used_by: list[UsedBy]
     problems: list[str]
+    config_check_mode: str | None = None
+    # The configuration check of this save (docs/CONFIG_VERIFICATION.md §4.2).
+    config_check: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -203,7 +214,7 @@ def _memberships(db: Session, ids: set[uuid.UUID]) -> dict[uuid.UUID, list[Devic
     return out
 
 
-def _served_models(
+def served_models(
     catalog: TemplateCatalog, template_key: str, organization_id: uuid.UUID
 ) -> dict[str, str]:
     """Model -> the concrete base file a template with this base serves it from."""
@@ -310,7 +321,7 @@ def _outs(request: Request, db: Session, rows: list[DeviceProfile]) -> list[Prof
     for r in rows:
         rec = catalog.records.get(r.template_key)
         problems: list[str] = []
-        models = _served_models(catalog, r.template_key, r.organization_id)
+        models = served_models(catalog, r.template_key, r.organization_id)
         if rec is None:
             problems.append(f"Base file {r.template_key} is missing; phones cannot be provisioned.")
         elif not models:
@@ -372,6 +383,7 @@ def _outs(request: Request, db: Session, rows: list[DeviceProfile]) -> list[Prof
                 devices=int(counts.get(r.id, 0)),
                 used_by=used_by[r.id],
                 problems=problems,
+                config_check_mode=r.config_check_mode,
                 created_at=r.created_at,
                 updated_at=r.updated_at,
             )
@@ -543,7 +555,7 @@ def create_profile(
     )
     _check_paging(db, org.id, body.paging)
     model_keys = _check_model_keys(
-        db, org.id, body.model_keys, _served_models(catalog, body.template_key, org.id)
+        db, org.id, body.model_keys, served_models(catalog, body.template_key, org.id)
     )
     profile = DeviceProfile(
         id=uuid.uuid4(),
@@ -566,6 +578,17 @@ def create_profile(
     except IntegrityError as e:
         raise _name_conflict(e, db) from e
     _set_paging(db, profile, body.paging)
+    db.flush()
+    report = run_profile_check(
+        request,
+        db,
+        principal,
+        ctx,
+        profile,
+        catalog,
+        served_models(catalog, profile.template_key, org.id),
+        body.acknowledge,
+    )
     _record(
         db,
         ctx,
@@ -575,7 +598,9 @@ def create_profile(
         {"template_key": profile.template_key, "zones": len(body.paging)},
     )
     db.commit()
-    return _outs(request, db, [profile])[0]
+    out = _outs(request, db, [profile])[0]
+    out.config_check = report
+    return out
 
 
 @router.get("/{profile_id}", response_model=ProfileOut)
@@ -619,7 +644,7 @@ def update_profile(
         details["template_key"] = {"from": profile.template_key, "to": template_key}
         profile.template_key = template_key
         # Line keys of models the new base file does not serve would never apply.
-        served = _served_models(catalog, template_key, profile.organization_id)
+        served = served_models(catalog, template_key, profile.organization_id)
         kept = {m: k for m, k in (profile.model_keys or {}).items() if m in served}
         if kept != profile.model_keys:
             profile.model_keys = kept
@@ -647,7 +672,7 @@ def update_profile(
                 m: [LineKey.model_validate(k) for k in keys]
                 for m, keys in (changes["model_keys"] or {}).items()
             },
-            _served_models(catalog, template_key, profile.organization_id),
+            served_models(catalog, template_key, profile.organization_id),
         )
         if dumped_models != profile.model_keys:
             profile.model_keys = dumped_models
@@ -682,6 +707,14 @@ def update_profile(
         _check_paging(db, profile.organization_id, paging)
         _set_paging(db, profile, paging)
         details["zones"] = len(paging)
+    if "config_check_mode" in changes and changes["config_check_mode"] != profile.config_check_mode:
+        if not principal.has(checks.MODE, profile.organization_id):
+            raise forbidden("You may not change the configuration check mode.")
+        details["config_check_mode"] = {
+            "from": profile.config_check_mode,
+            "to": changes["config_check_mode"],
+        }
+        profile.config_check_mode = changes["config_check_mode"]
     if not details:
         return _outs(request, db, [profile])[0]
     # Paging lives in another table, and a phone must still see this as a change.
@@ -690,9 +723,21 @@ def update_profile(
         db.flush()
     except IntegrityError as e:
         raise _name_conflict(e, db) from e
+    report = run_profile_check(
+        request,
+        db,
+        principal,
+        ctx,
+        profile,
+        catalog,
+        served_models(catalog, profile.template_key, profile.organization_id),
+        body.acknowledge,
+    )
     _record(db, ctx, principal, "device_profile.update", profile, details)
     db.commit()
-    return _outs(request, db, [profile])[0]
+    out = _outs(request, db, [profile])[0]
+    out.config_check = report
+    return out
 
 
 @router.delete("/{profile_id}", status_code=204)
@@ -782,6 +827,7 @@ class BaseFileOut(BaseModel):
 
 class BaseEditsIn(BaseModel):
     edits: list[BaseEdit] = Field(max_length=500)
+    acknowledge: list[Acknowledgement] = Field(default_factory=list, max_length=500)
 
 
 def _base_files(
@@ -789,7 +835,7 @@ def _base_files(
 ) -> list[BaseFileOut]:
     """The files of a phone of this model, with sample line and server details
     and secrets masked. Files that are only checksums have nothing to change."""
-    key = _served_models(catalog, profile.template_key, profile.organization_id).get(model)
+    key = served_models(catalog, profile.template_key, profile.organization_id).get(model)
     if key is None:
         raise common.validation("model", f"this template does not serve {model}")
     resolved = catalog.resolve(key)
@@ -861,7 +907,7 @@ def save_base_edits(
     if not principal.has("provisioning.write", profile.organization_id):
         raise forbidden()
     catalog = catalog_for(request, db)
-    served = _served_models(catalog, profile.template_key, profile.organization_id)
+    served = served_models(catalog, profile.template_key, profile.organization_id)
     taken: set[tuple[str, str, str]] = set()
     for edit in body.edits:
         for model in edit.models:
@@ -886,9 +932,14 @@ def save_base_edits(
             raise common.validation(
                 "edits", f"{edit.parameter} is a secret: set it in the template's settings"
             )
+    report = None
     if dumped != (profile.base_edits or []):
         profile.base_edits = dumped
         profile.updated_at = utcnow()
+        db.flush()
+        report = run_profile_check(
+            request, db, principal, ctx, profile, catalog, served, body.acknowledge
+        )
         _record(
             db,
             ctx,
@@ -898,4 +949,6 @@ def save_base_edits(
             {"edits": [{"parameter": e.parameter, "models": e.models} for e in body.edits]},
         )
         db.commit()
-    return _outs(request, db, [profile])[0]
+    out = _outs(request, db, [profile])[0]
+    out.config_check = report
+    return out

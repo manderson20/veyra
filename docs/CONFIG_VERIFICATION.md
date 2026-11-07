@@ -810,12 +810,30 @@ is audited.
    (`provisioning/capabilities.py`), the seeded Poly VVX and Yealink T4x
    packs, the seeder, and the test that every setting the official
    templates write is in the catalog.
-2. Field domains on facts and variables (with the validator test), then the
-   checker (`verify.py`): tracer rendering, bindings, the value and domain
-   rules, and unit tests with fixtures for each rule.
-3. Migration 0093, modes, the `acknowledge` contract, the hooks in §4.1 and
-   `POST /provisioning/verify`, the `config_check` summary, the serve-time
-   log line, and the audit events.
+2. **Done:** the field domains (`provisioning/domains.py`, with a test that
+   they agree with the extension validators), the checker (`verify.py`) and
+   the precheck (`precheck.py`). The precheck renders the template three
+   times, with each field at its typical, shortest and longest value. The
+   distinctive typical values show which field filled each setting
+   (`filled_by`). A failure seen only at an extreme is a warning, and so is
+   a template that does not render at an extreme (`render.extreme`). The
+   official templates come out clean. The precheck found one real bug: an
+   extension name over 80 characters (allowed up to 200) left the phone
+   with no configuration, because the template variable `display_name`
+   stopped at 80. It now takes 200.
+3. **Done:** migration 0093 (`config_check_overrides`, the three
+   `config_check_mode` columns and `devices.config_check`), the two
+   permissions, `provisioning/checks.py` (mode, targets, the gate), and the
+   hooks in `api/v1/config_checks.py` on profile create and update, Base
+   File Edit, device create and update (the phone's own values and keys,
+   covered by its profile's overrides too), local template save, and
+   provisioning variable create and update (each reached profile, up to
+   50). Also `POST /provisioning/verify`, `GET /provisioning/check-overrides`
+   with revoke, `GET`/`PUT /provisioning/check-mode`, the serve-time log
+   line, and the audit events `provisioning.check.override`, `.revoke` and
+   `.mode`. The 422 problem carries every finding in `errors`. Fingerprints
+   include the model, so a template that serves six models needs six
+   acknowledgements; the check window ticks them all by default.
 4. Interface: `ConfigFindings`, the save dialog, the Checks page, the mode
    control, and the device list column.
 5. The firmware assignment check (the diff between releases).

@@ -12,16 +12,19 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.config_checks import run_variable_check
+from veyra.api.v1.provisioning import catalog_for
 from veyra.core import audit
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
-from veyra.core.models import DeviceProfile, Organization, ProvisioningVariable, Site
+from veyra.core.models import Device, DeviceProfile, Organization, ProvisioningVariable, Site
 from veyra.core.security.principal import Principal
 from veyra.provisioning import variables as varsvc
+from veyra.provisioning.checks import Acknowledgement
 from veyra.provisioning.spec import CORE_VARIABLES
 from veyra.telephony.asterisk import cli
 
@@ -39,12 +42,44 @@ class VariableIn(BaseModel):
     value: str = Field("", max_length=varsvc.MAX_VALUE)
     sensitive: bool = False
     description: str | None = Field(None, max_length=500)
+    # Configuration check findings saved past (docs/CONFIG_VERIFICATION.md §4.2).
+    acknowledge: list[Acknowledgement] = Field(default_factory=list, max_length=500)
+
+
+def _check(
+    request: Request,
+    db: Session,
+    principal: Principal,
+    ctx: RequestContext,
+    row: ProvisioningVariable,
+    acknowledge: list[Acknowledgement],
+) -> dict[str, Any]:
+    """The configuration check of every template the variable reaches."""
+    stmt = select(DeviceProfile)
+    if row.scope == "organization":
+        stmt = stmt.where(DeviceProfile.organization_id == row.scope_id)
+    elif row.scope == "site":
+        stmt = stmt.where(
+            or_(
+                DeviceProfile.site_id == row.scope_id,
+                DeviceProfile.id.in_(
+                    select(Device.profile_id).where(Device.site_id == row.scope_id)
+                ),
+            )
+        )
+    elif row.scope == "profile":
+        stmt = stmt.where(DeviceProfile.id == row.scope_id)
+    profiles = list(db.scalars(stmt.order_by(DeviceProfile.name)))
+    return run_variable_check(
+        request, db, principal, ctx, profiles, catalog_for(request, db), acknowledge
+    )
 
 
 class VariablePatch(BaseModel):
     value: str | None = Field(None, max_length=varsvc.MAX_VALUE)
     sensitive: bool | None = None
     description: str | None = Field(None, max_length=500)
+    acknowledge: list[Acknowledgement] = Field(default_factory=list, max_length=500)
 
 
 class VariableOut(BaseModel):
@@ -61,6 +96,8 @@ class VariableOut(BaseModel):
     type: str | None = None
     default: str | int | bool | None = None
     affected_devices: int | None = None
+    # The configuration check of this save (docs/CONFIG_VERIFICATION.md §4.1).
+    config_check: dict[str, Any] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -284,11 +321,14 @@ def create_variable(
     )
     db.add(row)
     db.flush()
+    report = _check(request, db, principal, ctx, row, body.acknowledge)
     affected = _reprovision(db, request, row)
     _audit(db, ctx, principal, "provisioning.variable_create", row, {"reprovisioned": affected})
     db.commit()
     names = {row.scope_id: scope_name} if row.scope_id and scope_name else {}
-    return _out(row, names, reveal=True, affected=affected)
+    out = _out(row, names, reveal=True, affected=affected)
+    out.config_check = report
+    return out
 
 
 @router.patch("/{variable_id}", response_model=VariableOut, summary="Change a variable")
@@ -302,11 +342,17 @@ def update_variable(
 ) -> VariableOut:
     row = _get(db, principal, variable_id, WRITE)
     changes = body.model_dump(exclude_unset=True)
+    acknowledge = body.acknowledge
+    changes.pop("acknowledge", None)
     changed_value = "value" in changes and changes["value"] != row.value
     for k, v in changes.items():
         if k == "description":
             v = (v or "").strip() or None
         setattr(row, k, v)
+    report = None
+    if changed_value:
+        db.flush()
+        report = _check(request, db, principal, ctx, row, acknowledge)
     affected = _reprovision(db, request, row) if changed_value else 0
     _audit(
         db,
@@ -317,7 +363,9 @@ def update_variable(
         {"fields": sorted(changes), "reprovisioned": affected},
     )
     db.commit()
-    return _out(row, _scope_names(db, [row]), reveal=True, affected=affected)
+    out = _out(row, _scope_names(db, [row]), reveal=True, affected=affected)
+    out.config_check = report
+    return out
 
 
 @router.delete("/{variable_id}", status_code=204, summary="Remove a variable")

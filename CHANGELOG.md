@@ -10,8 +10,16 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased
 
+Migration 0093 adds configuration check overrides and modes.
+
 ### Added
+- **Configuration checks on save** (configuration verification, slice 3): saving a template, profile, Base File Edit, phone or provisioning variable now checks the phone settings it produces against the capability packs. In the default **enforce** mode, a setting the firmware would refuse stops the save until someone with the new `provisioning.check.override` permission overrides it with a reason, optionally marking that the checker is wrong. Overrides are listed, audited and can be revoked. The mode can be set to enforce, advisory or off for the installation, an organization or a profile (new `provisioning.check.mode` permission). Serving files to phones is never blocked; a phone served with open errors is logged. There's no interface for this yet.
 - **Phone capability packs** (configuration verification, slice 1): `provisioning/capabilities/` holds one pack per vendor, with a file per firmware release that lists only what changed. Poly VVX and Yealink T4x are seeded from Veyra's own templates and still need citations from the vendors' guides. Nothing checks phones yet.
+
+- **Configuration checker** (configuration verification, slice 2): checks rendered phone files against the capability packs. It reports errors (a value or setting the firmware would refuse), warnings (deprecated, a value that fails only at a field's longest or shortest value, a setting built from several fields) and notes (not checked, or checked only against Veyra's own data). It isn't connected to any page yet.
+
+### Fixed
+- **Long extension names:** a phone whose extension had a name over 80 characters got no configuration at all, because the phone template's name variable stopped at 80. It now takes the full 200 characters an extension name can have. The configuration checker found this.
 
 ### Documentation
 - **Configuration verification design** (`docs/CONFIG_VERIFICATION.md`, approved): checking phone settings against a per-firmware catalog of what each model accepts, with overrides, vendor packs other developers can build, and modes to turn checks off.
