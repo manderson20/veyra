@@ -300,7 +300,7 @@ isolation check cannot see into". It is not an error.
   restriction. The routing API checks the owner, and the inventory makes two
   owners impossible.
 - **`any` is platform-only**, unless the trunk is dedicated to the
-  organization (open question 1).
+  organization (C4, approved).
 - The verifier's DID check (§3.2) proves the generated output follows the
   inventory.
 
@@ -356,15 +356,24 @@ outside number as:
 It never resolves to a shared route's caller ID, a trunk's default, or the
 extension's internal number, because any of those can be another customer's.
 The generator passes the result as `VEYRA_OUT_CID`, so
-`_outbound_caller_id` keeps its shape. When nothing resolves (an
-organization without a main number), the generator sets `VEYRA_OUT_CID` to
-the installation's **placeholder** setting:
+`_outbound_caller_id` keeps its shape.
 
-- **Recommended: refuse the outside call** ("all circuits busy"), log it,
-  and raise an alert. A customer without numbers cannot call out under
-  another customer's number.
+**Every organization has a main number (owner, 2026-11-07).** While
+multi-tenancy is on:
 
-The alternative is the trunk default. Open question 4.
+- an organization cannot be created without one (§10);
+- its last inventory number and its main number cannot be removed;
+- turning the switch on is refused until every existing organization has
+  one.
+
+The main number is the organization's default outbound caller ID. Its calls
+leave through the shared outbound routes, or through its dedicated trunk
+(C4) when it has one.
+
+Step 3 then never comes up empty in practice. If it does anyway (data
+changed outside the API), the outside call is refused ("all circuits
+busy"), logged, and raises an alert. It is never sent under another
+customer's number. This never applies to 911 (§6).
 
 ### 5.3 Turning the switch on
 
@@ -383,28 +392,28 @@ While there is more than one namespace, the snapshot resolves each phone's
 2. else its site's ELIN (owned);
 3. else its organization's **emergency number** (new
    `emergency_caller_id_number`, an inventory number; defaults to the main
-   number);
-4. else the installation's **emergency fallback number** (new setting): the
-   MSP's own number, registered with the carrier at the MSP's address, so a
-   PSAP that calls back reaches someone who can help.
+   number).
 
-The emergency route never reaches the trunk default or the route's number
-for such a phone, because step 4 always gives a number once multi-tenancy
-is on. **A 911 call is never refused.** If step 4 is empty, which should not
-happen because of §6.2, the call goes out with today's behaviour.
-`Log(ERROR)` records it, and a critical alert is raised.
+Step 3 is required for every organization (owner, 2026-11-07, §6.2), so the
+emergency route never reaches the trunk default or the route's number.
+**A 911 call is never refused.** If step 3 is somehow empty (data changed
+outside the API), the call goes out with today's behaviour. `Log(ERROR)`
+records it, and a critical alert is raised.
 
 ### 6.2 Rules
 
-- Turning multi-tenancy on is **refused** until every organization with
-  extensions has a 911 number at step 1, 2 or 3, or the installation's
-  fallback (step 4) is set. This is the one caller ID rule that blocks the
-  switch.
-- After that, a save that would leave an organization with no step 1–3
-  number and no fallback is refused. Examples are removing its last number
-  or clearing the fallback.
-- Step 4 in use is a **warning** on the readiness page: "Acme's 911 calls
-  present the MSP's number; the PSAP will not see Acme's address".
+- **An organization must have an emergency number** (owner, 2026-11-07).
+  While multi-tenancy is on, an organization cannot be created without one
+  (§10), and it cannot be cleared.
+- Turning multi-tenancy on is **refused** until every existing organization
+  has one. With the main number (§5.2), these are the caller ID rules that
+  block the switch.
+- A save that would leave the emergency number outside the organization's
+  inventory is refused, for example removing that number from the
+  inventory.
+- A site without its own ELIN is a **warning** on the readiness page:
+  "Acme's Main Street site presents the organization's emergency number;
+  register that number at the site's address, or give the site its own".
 
 ### 6.3 Callback key
 
@@ -442,7 +451,7 @@ sees their own row only.
 
 - **Permission:** `config.deploy` gains an organization scope. At platform
   scope it is today's permission. At organization scope (default role
-  `org_admin`, only while multi-tenancy is on, open question 3), the user
+  `org_admin`, only while multi-tenancy is on, §14 question 3), the user
   may apply when **their** organization has pending changes.
 - **What it does:** it generates and deploys the whole configuration, which
   is the only kind of deploy Asterisk has. Other organizations' saved
@@ -461,7 +470,7 @@ sees their own row only.
   and `object` (e.g. `ring group office`). The generator fills them from
   the item being written, so the revision's errors read "Acme, ring group
   office: …".
-- **Isolating a failure (proposed, open question 5):**
+- **Isolating a failure (approved):**
   - Each successful revision stores each organization's slice of the
     snapshot, encrypted with the installation key, because it holds SIP
     secrets.
@@ -533,14 +542,17 @@ it later):
 administrators. Each step saves on its own, shows done or to do, and can be
 left and resumed:
 
-1. **Organization:** name, slug, time zone. The namespace is shown.
-2. **Numbers:** add DIDs and ranges (§4), choose the main number and the
-   emergency number.
+1. **Organization and numbers:** name, slug, time zone, its DIDs and
+   ranges (§4), the main number and the emergency number. The namespace is
+   shown. While multi-tenancy is on, the organization is not created
+   without a main number and an emergency number (§5.2, §6.2).
+2. **Trunk:** the shared outbound routes it uses, or a dedicated trunk
+   (C4), optional.
 3. **First administrator:** an email invitation, or a temporary password
    (the existing users API), with the `org_admin` role in the new
    organization.
 4. **Phones:** the provisioning credential for the organization.
-5. **Emergency:** a site with its civic address and ELIN (one of step 2's
+5. **Emergency:** a site with its civic address and ELIN (one of step 1's
    numbers). Shows the readiness result.
 6. **Limits** (§8), optional.
 7. **Check:** runs the isolation check (§3) and the §5 and §6 rules with
@@ -581,16 +593,17 @@ organization. The page links to the switch.
 
 ### C4. Trunks owned by one organization (bring your own carrier)
 
+**Approved (owner, 2026-11-07): built with slice 3.**
+
 - `sip_trunks.organization_id`: null is shared (today), set means dedicated.
 - A dedicated trunk:
-  - may have that organization's `any` catch-all (open question 1);
+  - may have that organization's `any` catch-all;
   - is used only by that organization's routes;
   - has its own limits;
   - may have its trunk default caller ID used by §5.2 and §6.1.
 - Organization administrators still cannot edit trunks: credentials and
   firewall rules stay with the MSP.
-- Effort: small once Part A is in. **Recommended** together with open
-  question 1.
+- Effort: small once Part A is in.
 
 ### C5. PostgreSQL row-level security
 
@@ -648,43 +661,41 @@ On this branch, each with tests:
 
 1. **Active calls** (§2).
 2. **Twin and verifier** (§3).
-3. **Number inventory and inbound routes** (§4), migration.
+3. **Number inventory, inbound routes and dedicated trunks** (§4, C4),
+   migration.
 4. **Caller ID** (§5), migration (main number).
-5. **E911** (§6), migration (organization emergency number, the
-   installation fallback, `is_emergency`).
+5. **E911** (§6), migration (organization emergency number,
+   `is_emergency`).
 6. **Deploy** (§7): organization scope, per-organization pending, errors
-   that name the organization. Isolation (§7, last item) only if approved.
+   that name the organization, and isolating one organization's failure.
 7. **Limits** (§8), migration.
 8. **Usage** (§9).
 9. **Onboarding** (§10).
 10. **Docs:** an admin guide `docs/guides/host-several-organizations.md`,
     MULTI_TENANCY.md updated, CHANGELOG.
 
-## 13. Open questions
+## 13. Owner decisions (2026-11-07)
 
-1. **Dedicated trunks.** Should a trunk be markable as one organization's,
-   so it may have that organization's `any` catch-all? *Recommended: yes, as
-   C4's `organization_id`, built with slice 3.* A shared trunk's `any` stays
-   platform-only.
-2. **911 without an organization number.** What should a 911 call present
-   when an organization has no valid emergency number?
-   *Recommended: the MSP's own registered fallback number (§6.1 step 4),
-   never another customer's trunk default.* Turning the switch on is
-   refused until every organization has a number or the fallback is set.
-   The call always connects.
+1. **Dedicated trunks:** yes. A trunk can belong to one organization and
+   may then have its `any` catch-all (C4, slice 3). A shared trunk's `any`
+   stays platform-only.
+2. **911 number:** every organization must have an emergency number of its
+   own. While multi-tenancy is on, an organization cannot be created
+   without one (§6.2). There is no MSP-wide fallback number.
+4. **Outside calls:** every organization must have a main number, its
+   default outbound caller ID, and uses the shared routes or its dedicated
+   trunk (§5.2).
+5. **Isolating generation failures:** yes, as recommended (§7, slice 6).
+6. **Billable minutes:** each call rounded up to a whole minute.
+
+## 14. Open questions
+
 3. **Deploy or request?** Should organization administrators deploy, or only
    request a deploy that the platform approves? *Recommended: deploy, when
    idle, rate-limited and audited (§7).* An installation setting
    "Organization administrators: apply / request only" lets a cautious MSP
    choose the other. On a single-organization installation nothing changes:
    the organization scope only applies while multi-tenancy is on.
-4. **Outside calls without an own number.** *Recommended: refuse them
-   (§5.2)*, rather than present the trunk default.
-5. **Isolate generation failures by organization** with the last good slice
-   (§7)? *Recommended: yes*, as part of slice 6. It is the larger piece of
-   that slice, so it can be left for later.
-6. **Billable minutes:** round up per call to a whole minute (proposed), or
-   per 6 seconds, or exact seconds?
 7. **Publishing this document.** The repository is public, and §1 describes
    unfixed cross-organization holes in enough detail to reproduce them. They
    matter only to an installation with multi-tenancy on and several
