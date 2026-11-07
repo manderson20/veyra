@@ -68,8 +68,8 @@
    "summary": "Create accounts for the people who sign in to Veyra, give them roles, and help them when they are locked out.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.52",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/users/",
     "/users/view/"
@@ -135,8 +135,8 @@
    "summary": "How a new phone finds this server, signs in for its configuration, and learns to trust Veyra's certificate.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.64",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/devices/",
     "/provisioning/requests/"
@@ -162,8 +162,8 @@
    "summary": "Map phones to extensions by MAC address, give them a template, and check that it picked up its configuration.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.64",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/devices/",
     "/devices/view/"
@@ -189,8 +189,8 @@
    "summary": "Each brand has its templates. A template holds the settings, line keys, paging zones and firmware that a group of phones share.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.68",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/provisioning/brands/",
     "/provisioning/brands/view/",
@@ -230,8 +230,8 @@
    "summary": "Change what Veyra writes into phones' configuration files with your own base file, edited in the browser, previewed, exported and imported.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.65",
-   "reviewed_date": "2026-10-31",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/provisioning/",
     "/provisioning/view/"
@@ -244,12 +244,25 @@
    "summary": "Define a value once, such as each building's all-call paging zone or a time server, and let every phone take the value for its site or profile.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/provisioning/variables/"
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Provisioning-variables"
+  },
+  {
+   "slug": "configuration-checks",
+   "title": "Configuration checks",
+   "summary": "Veyra checks every phone setting against what the phone's firmware accepts before it saves a change, and you decide what to do when it finds a problem.",
+   "audience": "admin",
+   "section": "Phones and devices",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
+   "pages": [
+    "/provisioning/checks/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Configuration-checks"
   },
   {
    "slug": "phone-firmware",
@@ -257,8 +270,8 @@
    "summary": "Upload the vendor's firmware for your phones and let Veyra update them, per profile or per phone.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/firmware/"
    ],

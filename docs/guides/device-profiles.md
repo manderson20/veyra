@@ -4,7 +4,7 @@ summary: Each brand has its templates. A template holds the settings, line keys,
 audience: admin
 section: Phones and devices
 order: 30
-reviewed: 0.27.68
+reviewed: 0.27.87
 checked: 2026-10-29T20:28Z
 pages:
   - /provisioning/brands/
@@ -50,7 +50,7 @@ To add a brand, open [Provisioning → Add Brand](app:/provisioning/brands/) and
      - A *model's* base file serves only the models listed next to it.
    - **Default template for this brand:** new phones of this brand start on this template. Each brand has one default per organization, so ticking this replaces the old one.
    - **Description:** for your own notes.
-   - **Firmware:** the firmware image the phones should run. Leave **Keep the phones' current firmware** if Veyra should not manage it. Only images for this brand are listed. See [Phone firmware](guide:phone-firmware).
+   - **Firmware:** the firmware image the phones should run. Leave **Keep the phones' current firmware** if Veyra should not manage it. Only images for this brand are listed. When you save a different image, Veyra lists the settings the new firmware would newly refuse and how many phones that affects. See [Phone firmware](guide:phone-firmware) and [Configuration checks](guide:configuration-checks).
 3. Fill in the settings, line keys and paging zones (below).
 4. Choose **Create template**.
 
@@ -95,10 +95,12 @@ A template can take part in up to 25 zones. A phone cannot change its zones on i
 
 ## Save
 
-- **Save** stores the template. Phones pick up the change at their next daily check.
+- **Save** stores the template. Veyra first checks the settings against what the phones' firmware accepts, in a window that says whether it found problems (see [Configuration checks](guide:configuration-checks)). Phones pick up the change at their next daily check.
 - **Save and Update Phones** also asks each phone with an extension to re-read its configuration now. It works even with nothing to save, and reports how many phones accepted. A phone that does not answer picks up the change at its next check.
 
 Veyra builds a phone's files when the phone asks for them, so there is no separate rebuild step.
+
+**Configuration checks** sets how saves of this template are checked: the same as the organization, or **Enforce**, **Advisory** or **Off** for this template only. To try phones without checks, make a test template with checks off.
 
 A problem with a template shows as a badge, for example:
 
@@ -117,7 +119,7 @@ Sometimes a phone needs a setting that the template does not offer. **Base File 
    - **Change Basefile** stores the new value.
    - **Delete Entry** takes the setting out of the file.
 
-To set something the file does not contain yet, choose **Add Entry** and type the parameter as the phone maker's documentation names it. Be careful: Veyra cannot tell whether the phone understands it. On Poly's first file, which has no room for more settings, an added entry has no effect. Use the phone's own configuration file instead.
+To set something the file does not contain yet, choose **Add Entry** and type the parameter as the phone maker's documentation names it. Veyra checks a change against the vendor data when it has any, and a setting it has no data for is shown as not checked (see [Configuration checks](guide:configuration-checks)). On Poly's first file, which has no room for more settings, an added entry has no effect. Use the phone's own configuration file instead.
 
 **Changes in this template** lists every change, with **Undo**. Phones pick changes up at their next check, or choose **Update Phones**.
 

@@ -546,3 +546,21 @@ a.rail__button:hover { color: #fff; }
   .help-toc { position: static; }
   .topbar__help-text { display: none; }
 }
+
+/* Configuration check window (docs/CONFIG_VERIFICATION.md §7.1). */
+.check-progress { height: 6px; border-radius: var(--radius-full); background: var(--surface-3); overflow: hidden; }
+.check-progress__bar { height: 100%; width: 35%; border-radius: var(--radius-full); background: var(--primary); animation: check-progress 1.1s var(--ease) infinite; }
+.check-progress--done .check-progress__bar { width: 100%; animation: none; background: var(--ok); }
+@keyframes check-progress { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) { .check-progress__bar { animation: none; width: 100%; opacity: 0.5; } }
+.findings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.finding { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); background: var(--surface); }
+.finding__head { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.finding__param { font-weight: var(--weight-semibold); word-break: break-all; }
+.finding__message { margin: var(--space-2) 0; font-size: var(--text-sm); }
+.finding__facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-3); margin: 0; font-size: var(--text-sm); }
+.finding__facts dt { color: var(--text-muted); }
+.finding__facts dd { margin: 0; word-break: break-word; }
+.finding__note { margin: 0; font-size: var(--text-sm); }
+.finding__members { columns: 2; font-size: var(--text-xs); margin: 0; padding-left: var(--space-4); }
+@media (max-width: 640px) { .finding__facts { grid-template-columns: 1fr; } .finding__members { columns: 1; } }

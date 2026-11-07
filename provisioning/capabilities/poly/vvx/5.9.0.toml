@@ -1,0 +1,512 @@
+# The first release of the family: the full parameter list. Entries marked
+# seeded-from-template were taken from what Veyra's templates write and
+# still need a citation from the UC Software Administrator Guide.
+schema = 1
+
+[release]
+version = "5.9.0"
+revision = 1
+
+[param."attendant.behaviors.display.spontaneousCallAppearances.normal"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["0"]
+
+[param."attendant.resourceList.{n}.address"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ key.value }}"]
+
+[param."attendant.resourceList.{n}.label"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ key.label }}"]
+
+[param."attendant.resourceList.{n}.type"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["normal"]
+
+[param."call.autoAnswer.micMute"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ intercom_mic_muted | bool01 }}"]
+
+[param."call.autoOffHook.{n}.contact"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ line.hotline }}"]
+
+[param."call.autoOffHook.{n}.enabled"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."call.autoOffHook.{n}.protocol"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["SIP"]
+
+[param."call.directedCallPickupMethod"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["native"]
+
+[param."call.directedCallPickupString"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.pickup_prefix }}"]
+
+[param."device.auth.localAdminPassword"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ admin_password }}"]
+
+[param."device.auth.localAdminPassword.set"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."device.net.vlanId"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ vlan_id }}"]
+
+[param."device.net.vlanId.set"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."device.prov.password"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ device.credential_password }}"]
+
+[param."device.prov.password.set"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."device.prov.serverName"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.provisioning_url }}"]
+
+[param."device.prov.serverName.set"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."device.prov.serverType"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.provisioning_server_type }}"]
+
+[param."device.prov.serverType.set"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."device.prov.user"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ device.credential_user }}"]
+
+[param."device.prov.user.set"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."device.set"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."efk.efklist.{n}.action.string"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ key.value }}$Tdtmf$", "{{ key.value }}$Tinvite$"]
+
+[param."efk.efklist.{n}.label"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ key.label }}"]
+
+[param."efk.efklist.{n}.mname"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["veyra-sd-{{ key.speed_dial_index }}"]
+
+[param."efk.efklist.{n}.status"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."feature.enhancedFeatureKeys.enabled"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."lineKey.{n}.category"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["BLF", "Line", "Paging", "SpeedDial"]
+
+[param."lineKey.{n}.index"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ key.blf_index }}", "{{ key.group }}", "{{ key.speed_dial_index }}", "{{ key.value }}"]
+
+[param."msg.mwi.{n}.callBack"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.voicemail_number }}"]
+
+[param."msg.mwi.{n}.callBackMode"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["contact"]
+
+[param."msg.mwi.{n}.subscribe"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ line.sip_username }}"]
+
+[param."prov.polling.enabled"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."prov.polling.mode"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["abs"]
+
+[param."prov.polling.period"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["86400"]
+
+[param."prov.polling.time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ '%02d' % polling_hour }}:00"]
+
+[param."ptt.address"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ paging.address }}"]
+
+[param."ptt.pageMode.codec"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ paging.codec }}"]
+
+[param."ptt.pageMode.defaultGroup"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ paging.default_group or '' }}"]
+
+[param."ptt.pageMode.displayName"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ device.label or (lines[0].display_name if lines else '') }}"]
+
+[param."ptt.pageMode.emergencyGroup"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ paging.emergency_group or '' }}"]
+
+[param."ptt.pageMode.enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["0", "1"]
+
+[param."ptt.pageMode.group.{n}.allowReceive"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ group.subscribed | bool01 }}"]
+
+[param."ptt.pageMode.group.{n}.allowTransmit"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ group.transmit | bool01 }}"]
+
+[param."ptt.pageMode.group.{n}.label"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ group.label }}"]
+
+[param."ptt.pageMode.group.{n}.subscribed"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ group.subscribed | bool01 }}"]
+
+[param."ptt.pageMode.payloadSize"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["20"]
+
+[param."ptt.pageMode.priorityGroup"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ paging.priority_group or '' }}"]
+
+[param."ptt.port"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ paging.port }}"]
+
+[param."ptt.volume"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ paging_default_volume }}"]
+
+[param."reg.{n}.address"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ line.sip_username }}"]
+
+[param."reg.{n}.auth.password"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ line.sip_password }}"]
+
+[param."reg.{n}.auth.userId"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ line.sip_username }}"]
+
+[param."reg.{n}.displayName"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ line.caller_id_name or line.display_name or line.extension_number }}"]
+
+[param."reg.{n}.label"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ line.label or line.extension_number }}"]
+
+[param."reg.{n}.lineKeys"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."reg.{n}.server.1.address"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.sip_host }}"]
+
+[param."reg.{n}.server.1.expires"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ registration_expires }}"]
+
+[param."reg.{n}.server.1.port"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.sip_port }}"]
+
+[param."reg.{n}.server.1.transport"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ sip_transport }}"]
+
+[param."se.rt.autoAnswer.type"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["ring-answer"]
+
+[param."sec.srtp.enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ 0 if server.srtp == \"off\" else 1 }}"]
+
+[param."sec.srtp.offer"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ 0 if server.srtp == \"off\" else 1 }}"]
+
+[param."sec.srtp.require"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ 1 if server.srtp == \"required\" else 0 }}"]
+
+[param."tcpIpApp.sntp.address"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.ntp_server }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.enabled | bool01 }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.fixedDayEnable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["0"]
+
+[param."tcpIpApp.sntp.daylightSavings.start.date"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.start.date }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.start.dayOfWeek"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.start.day_of_week }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.start.dayOfWeek.lastInMonth"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.start.last_in_month | bool01 }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.start.month"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.start.month }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.start.time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.start.hour }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.stop.date"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.stop.date }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.stop.dayOfWeek"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.stop.day_of_week }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.stop.dayOfWeek.lastInMonth"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.stop.last_in_month | bool01 }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.stop.month"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.stop.month }}"]
+
+[param."tcpIpApp.sntp.daylightSavings.stop.time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.stop.hour }}"]
+
+[param."tcpIpApp.sntp.gmtOffset"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ server.dst.standard_offset }}"]
+
+[param."up.backlight.idleIntensity"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ backlight_idle }}"]
+
+[param."up.screenSaver.enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ (screen_saver_minutes > 0) | bool01 }}"]
+
+[param."up.screenSaver.waitTime"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["{{ screen_saver_minutes if screen_saver_minutes > 0 else 10 }}"]
+
+[param."voIpProt.SIP.alertInfo.1.class"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["autoAnswer"]
+
+[param."voIpProt.SIP.alertInfo.1.value"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by poly.vvx.base (phone.cfg.j2)"
+seen = ["alert-autoanswer"]

@@ -17,6 +17,7 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useProfileOptions } from "@/hooks/useProfileOptions";
 import { useSession } from "@/hooks/useSession";
+import { useConfigCheck } from "@/components/provisioning/ConfigCheck";
 
 interface Draft {
   mac: string; manufacturer: string; model: string; label: string; site_id: string; profile_id: string;
@@ -67,6 +68,7 @@ function DeviceView() {
   const selectedProfile = (profiles.data?.items ?? []).find((p) => p.id === draft?.profile_id);
   const options = useProfileOptions(orgId, selectedProfile?.template_key);
 
+  const check = useConfigCheck();
   useOnChange(device.data, (d) => { if (d) setDraft(draftOf(d)); });
 
   if (!id) return <ErrorState title="No device selected" error={{ message: "Open a device from the list." }} />;
@@ -83,7 +85,9 @@ function DeviceView() {
     setBusy(true);
     errors.clear();
     try {
-      device.setData(await api.patch<Device>(`/devices/${d.id}`, bodyOf(draft)));
+      const saved = await check.run((acknowledge) => api.patch<Device>(`/devices/${d.id}`, { ...bodyOf(draft), acknowledge }));
+      if (!saved) return; // cancelled in the check window: nothing was saved
+      device.setData(saved);
       setPreview(null);
       toast.success("Device saved", "The phone picks up the change at its next provisioning check, or use Reprovision.");
     } catch (err) {
@@ -140,6 +144,7 @@ function DeviceView() {
 
   return (
     <div className="stack">
+      {check.dialog}
       <PageHeader back={{ href: "/devices/", label: "Extension Mapping" }} title={d.label ?? d.mac_display}
         description={<span className="row"><span className="mono">{d.mac_display}</span><span>{d.manufacturer} {d.model}</span><Badge tone={DEVICE_STATUS[d.status].tone}>{DEVICE_STATUS[d.status].label}</Badge>{!d.is_enabled ? <Badge tone="neutral">Disabled</Badge> : null}</span>}
         actions={editable ? (

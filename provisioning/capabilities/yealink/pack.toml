@@ -1,0 +1,21 @@
+# Yealink phones: what each model accepts, per firmware release
+# (docs/CONFIG_VERIFICATION.md §2, docs/CAPABILITY_CATALOG.md).
+schema = 1
+
+[pack]
+id = "veyra.yealink"
+name = "Yealink phones"
+vendor = "yealink"
+version = "0.1.0"
+author = "Veyra Project"
+license = "AGPL-3.0-or-later"
+description = "Yealink T4x. Seeded from Veyra's official templates; vendor citations still to be added."
+
+# Seeded: the models Veyra's template lists. Replace with the vendor's
+# supported-models list (Administrator Guide) and its citation.
+[[supports]]
+family = "t4x"
+models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]
+firmware = ">=86"
+source = { title = "Veyra template yealink.t4x (template.toml)" }
+provenance = "seeded-from-template"

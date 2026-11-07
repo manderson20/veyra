@@ -63,6 +63,7 @@ def make_settings(database_url: str, tmp_path: Path, **overrides: object) -> Set
         "upgrade_dir": tmp_path / "upgrade",
         "module_paths": [REPO / "modules"],
         "template_paths": [REPO / "provisioning" / "templates"],
+        "capability_paths": [REPO / "provisioning" / "capabilities"],
         "cookie_secure": False,
         "allow_unsigned_modules": True,
         "telephony_engine": "none",

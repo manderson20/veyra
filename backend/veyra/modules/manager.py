@@ -236,6 +236,27 @@ class ModuleManager:
         return row
 
     def enable(self, db: Session, module_id: str) -> InstalledModule:
+        row = self._enable(db, module_id)
+        self._packs_changed(db)
+        return row
+
+    def disable(self, db: Session, module_id: str) -> InstalledModule:
+        row = self._disable(db, module_id)
+        self._packs_changed(db)
+        return row
+
+    def _packs_changed(self, db: Session) -> None:
+        """A module's capability packs come and go with it (docs/CONFIG_VERIFICATION.md §2.0)."""
+        if self.app is None:
+            return
+        from veyra.provisioning import packs  # local import: provisioning uses the models
+
+        try:
+            packs.rebuild(self.app, db)
+        except Exception as e:  # never let vendor data break a module change
+            log.error("Capability packs not reloaded: %s", e)
+
+    def _enable(self, db: Session, module_id: str) -> InstalledModule:
         row = self._row(db, module_id)
         if row.state == "enabled" and module_id in self.enabled:
             return row
@@ -273,7 +294,7 @@ class ModuleManager:
         self.bus.publish(Event("module.enabled", {"module_id": module_id}))
         return row
 
-    def disable(self, db: Session, module_id: str) -> InstalledModule:
+    def _disable(self, db: Session, module_id: str) -> InstalledModule:
         row = self._row(db, module_id)
         dependents = [
             m.module_id
@@ -421,6 +442,19 @@ class ModuleManager:
                 except Exception:
                     log.exception("Module %s: periodic task %s failed", module_id, task.name)
         return ran
+
+    def capability_dirs(self) -> list[tuple[str, Path]]:
+        """``(module id, directory)`` of the capability packs enabled modules
+        ship (docs/CONFIG_VERIFICATION.md §2.0)."""
+        out = []
+        for module_id, loaded in sorted(self.loaded.items()):
+            spec = loaded.manifest.provisioning
+            if spec is None or not spec.capabilities:
+                continue
+            d = (loaded.path / spec.capabilities).resolve()
+            if d.is_dir() and d.is_relative_to(loaded.path.resolve()):
+                out.append((module_id, d))
+        return out
 
     def is_enabled(self, module_id: str) -> bool:
         return module_id in self.enabled

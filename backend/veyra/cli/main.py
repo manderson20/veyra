@@ -448,6 +448,164 @@ def cmd_templates_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pack_templates(args: argparse.Namespace) -> Any:
+    from veyra.core.config import get_settings
+    from veyra.provisioning.renderer import TemplateCatalog
+
+    paths = [Path(args.templates)] if getattr(args, "templates", None) else []
+    return TemplateCatalog.from_paths(paths or get_settings().template_paths)
+
+
+def cmd_packs_new(args: argparse.Namespace) -> int:
+    """A capability pack skeleton (docs/CAPABILITY_CATALOG.md)."""
+    from veyra.provisioning import packs
+
+    try:
+        written = packs.new_pack(Path(args.path), args.vendor, args.family, args.version)
+    except packs.PackImportError as e:
+        print(e, file=sys.stderr)
+        return 1
+    for p in written:
+        print(p)
+    return 0
+
+
+def cmd_packs_validate(args: argparse.Namespace) -> int:
+    from veyra.provisioning.capabilities import CapabilityError, load_pack
+
+    try:
+        pack = load_pack(Path(args.path))
+    except CapabilityError as e:
+        print("Pack is invalid:", file=sys.stderr)
+        for p in e.errors:
+            print(f"  - {p}", file=sys.stderr)
+        return 1
+    releases = sum(len(f.releases) for f in pack.families.values())
+    families = len(pack.families)
+    print(f"OK: {pack.info.id} {pack.info.version}: {families} families, {releases} releases")
+    return 0
+
+
+def cmd_packs_seed(args: argparse.Namespace) -> int:
+    from veyra.provisioning import capability_seed
+
+    added = capability_seed.seed(Path(args.family), _pack_templates(args), write=not args.dry_run)
+    for f in added:
+        print(f.pattern)
+    print(f"{len(added)} entries {'missing' if args.dry_run else 'added'}", file=sys.stderr)
+    return 0
+
+
+def cmd_packs_check(args: argparse.Namespace) -> int:
+    """Check every template a pack is for, on every release; exit 1 on errors."""
+    from veyra.provisioning import packs
+    from veyra.provisioning.capabilities import CapabilityError, load_pack
+
+    try:
+        pack = load_pack(Path(args.path))
+    except CapabilityError as e:
+        for p in e.errors:
+            print(f"  - {p}", file=sys.stderr)
+        return 1
+    failed = False
+    for c in packs.check_pack(pack, _pack_templates(args)):
+        where = f"{c.template_key} {c.model} on {c.release}"
+        if c.error:
+            print(f"{where}: {c.error}")
+            failed = True
+            continue
+        errors = [f for f in c.findings if f["severity"] == "error"]
+        warnings = [f for f in c.findings if f["severity"] == "warning"]
+        failed = failed or bool(errors)
+        print(f"{where}: {len(errors)} errors, {len(warnings)} warnings")
+        for f in c.findings:
+            print(f"  {f['severity']}: {f['parameter']} = {f['value']!r}: {f['message']}")
+    return 1 if failed else 0
+
+
+def cmd_packs_import(args: argparse.Namespace) -> int:
+    """Import a pack directory as the web page's Import pack does; running
+    services pick it up at their next configuration check."""
+    import uuid as _uuid
+
+    from sqlalchemy import select
+
+    from veyra.core import audit
+    from veyra.core.config import get_settings
+    from veyra.core.db import init_engine, session_scope
+    from veyra.core.models import CapabilityPack
+    from veyra.core.models.base import utcnow
+    from veyra.provisioning import packs
+    from veyra.provisioning.capabilities import CapabilityCatalog, CapabilityError
+
+    root = Path(args.path)
+    files = {
+        str(p.relative_to(root)): p.read_text(encoding="utf-8")
+        for p in sorted(root.rglob("*"))
+        if p.is_file() and p.suffix in (".toml", ".md", ".txt")
+    }
+    try:
+        pack = packs.validate_files(files)
+    except CapabilityError as e:
+        for p in e.errors:
+            print(f"  - {p}", file=sys.stderr)
+        return 1
+    settings = get_settings()
+    if pack.info.id in CapabilityCatalog.from_paths(settings.capability_paths).packs:
+        print(f"{pack.info.id} is a built-in pack; give the pack another id.", file=sys.stderr)
+        return 1
+    init_engine(settings)
+    with session_scope() as db:
+        row = db.scalar(select(CapabilityPack).where(CapabilityPack.pack_id == pack.info.id))
+        if row is None:
+            row = CapabilityPack(id=_uuid.uuid4(), pack_id=pack.info.id, created_at=utcnow())
+            db.add(row)
+        row.name, row.vendor, row.version, row.files = (
+            pack.info.name,
+            pack.info.vendor,
+            pack.info.version,
+            files,
+        )
+        row.uploaded_by_label, row.updated_at = "console", utcnow()
+        audit.record(
+            db,
+            action="provisioning.pack.import",
+            actor_type="system",
+            actor_label="console",
+            target_type="capability_pack",
+            details={"pack": pack.info.id, "version": pack.info.version, "files": len(files)},
+        )
+    print(f"Imported {pack.info.id} {pack.info.version}")
+    return 0
+
+
+def cmd_packs_remove(args: argparse.Namespace) -> int:
+    from sqlalchemy import select
+
+    from veyra.core import audit
+    from veyra.core.config import get_settings
+    from veyra.core.db import init_engine, session_scope
+    from veyra.core.models import CapabilityPack
+
+    init_engine(get_settings())
+    with session_scope() as db:
+        row = db.scalar(select(CapabilityPack).where(CapabilityPack.pack_id == args.pack_id))
+        if row is None:
+            print(f"No imported pack {args.pack_id}", file=sys.stderr)
+            return 1
+        db.delete(row)
+        audit.record(
+            db,
+            action="provisioning.pack.delete",
+            actor_type="system",
+            actor_label="console",
+            target_type="capability_pack",
+            details={"pack": args.pack_id},
+        )
+    print(f"Removed {args.pack_id}")
+    return 0
+
+
 def cmd_updates_check(args: argparse.Namespace) -> int:
     from veyra.core.config import get_settings
     from veyra.core.db import session_scope
@@ -2607,6 +2765,34 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("path")
     s.add_argument("--base", help="Additional template root containing official/ (for parents)")
     s.set_defaults(func=cmd_templates_validate)
+
+    pk = sub.add_parser(
+        "packs", help="Capability packs: vendor data for configuration checks"
+    ).add_subparsers(dest="packs_cmd", metavar="<action>")
+    s = pk.add_parser("new", help="Write a pack skeleton")
+    s.add_argument("path", help="new, empty directory")
+    s.add_argument("--vendor", required=True)
+    s.add_argument("--family", required=True)
+    s.add_argument("--version", default="1.0", help="the first firmware release")
+    s.set_defaults(func=cmd_packs_new)
+    s = pk.add_parser("validate", help="Check a pack directory")
+    s.add_argument("path")
+    s.set_defaults(func=cmd_packs_validate)
+    s = pk.add_parser("seed", help="Add what a family's templates write as unverified entries")
+    s.add_argument("family", help="the family directory inside the pack")
+    s.add_argument("--templates", help="provisioning templates directory (official/ inside)")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_packs_seed)
+    s = pk.add_parser("check", help="Check the templates a pack is for, on every release")
+    s.add_argument("path")
+    s.add_argument("--templates", help="provisioning templates directory (official/ inside)")
+    s.set_defaults(func=cmd_packs_check)
+    s = pk.add_parser("import", help="Import a pack directory, as the web page does")
+    s.add_argument("path")
+    s.set_defaults(func=cmd_packs_import)
+    s = pk.add_parser("remove", help="Remove an imported pack")
+    s.add_argument("pack_id")
+    s.set_defaults(func=cmd_packs_remove)
 
     upd = sub.add_parser("updates", help="Update management").add_subparsers(
         dest="upd_cmd", metavar="<action>"

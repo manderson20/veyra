@@ -8,6 +8,25 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+Migrations 0093 and 0094 add configuration check overrides and modes, and imported capability packs.
+
+### Added
+- **Configuration checks on save** (configuration verification, slice 3): saving a template, profile, Base File Edit, phone or provisioning variable now checks the phone settings it produces against the capability packs. In the default **enforce** mode, a setting the firmware would refuse stops the save until someone with the new `provisioning.check.override` permission overrides it with a reason, optionally marking that the checker is wrong. Overrides are listed, audited and can be revoked. The mode can be set to enforce, advisory or off for the installation, an organization or a profile (new `provisioning.check.mode` permission). Serving files to phones is never blocked; a phone served with open errors is logged.
+- **Vendor data from modules and imports** (configuration verification, slices 6 and 7): a module can ship capability packs (`[provisioning] capabilities` in `module.toml`), and a platform administrator can import a pack as a ZIP. The **Vendor data** card on Provisioning → Configuration Checks lists each pack, where it came from, the phones and firmware it covers and how much is cited from the vendor, and the phones in use no pack covers. An imported pack is used instead of the built-in data for the models it covers. New `veyra packs new | validate | seed | check | import | remove` commands, an example pack for trying the checks (`docs/examples/capability-pack-yealink-strict`), the pack author's guide `docs/CAPABILITY_CATALOG.md`, and a reusable prompt for adding a firmware release (`docs/prompts/add-firmware-release.md`). Migration 0094 adds imported packs.
+- **New firmware check** (configuration verification, slice 5): when a template or a phone gets a different firmware image, the check compares the new release with the old one. It lists the settings the new firmware newly refuses or warns about, how many phones are affected, and which problems go away. `POST /provisioning/verify` with a `firmware_image_id` shows the same before saving.
+- **Check window** (configuration verification, slice 4): every save that changes phone files opens a window with a progress bar. A clean result says so and waits for **OK**. Problems are listed with the setting, the Veyra field that fills it, the value and the values the setting accepts, and a setting refused on several models is shown once. **Override and save** asks for a reason and offers **The checker is wrong**. New page **Provisioning → Configuration Checks** lists overrides (filter **Checker is wrong**), revokes them and sets the installation's and the organization's mode. A template's page sets the template's own mode, and Extension Mapping shows a phone's open errors. New guide: **Configuration checks**.
+- **Phone capability packs** (configuration verification, slice 1): `provisioning/capabilities/` holds one pack per vendor, with a file per firmware release that lists only what changed. Poly VVX and Yealink T4x are seeded from Veyra's own templates and still need citations from the vendors' guides. Nothing checks phones yet.
+
+- **Configuration checker** (configuration verification, slice 2): checks rendered phone files against the capability packs. It reports errors (a value or setting the firmware would refuse), warnings (deprecated, a value that fails only at a field's longest or shortest value, a setting built from several fields) and notes (not checked, or checked only against Veyra's own data). It isn't connected to any page yet.
+
+### Fixed
+- **Long extension names:** a phone whose extension had a name over 80 characters got no configuration at all, because the phone template's name variable stopped at 80. It now takes the full 200 characters an extension name can have. The configuration checker found this.
+
+### Documentation
+- **Configuration verification design** (`docs/CONFIG_VERIFICATION.md`, approved): checking phone settings against a per-firmware catalog of what each model accepts, with overrides, vendor packs other developers can build, and modes to turn checks off.
+
 ## 0.27.86 — 2026-11-04
 
 Migration 0092 adds voicemail copies, quotas and the alternate greeting. Deploy the configuration after setting copies or a quota on a box.

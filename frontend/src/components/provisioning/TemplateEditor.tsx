@@ -10,6 +10,7 @@ import type { ProvisioningVariable, TemplateCatalog, TemplateDetail, TemplateVar
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
+import { useConfigCheck } from "@/components/provisioning/ConfigCheck";
 
 interface ExportDoc {
   manifest: { template: Record<string, unknown>; files: { name: string; source: string; format: string }[]; variables: TemplateVariable[]; defaults: Record<string, string | number | boolean>; features: string[]; spec_version: number };
@@ -22,6 +23,7 @@ const SOURCE_ID = "template-source";
 export function TemplateEditor({ template, onSaved }: { template: TemplateDetail; onSaved: (t: TemplateDetail) => void }) {
   const toast = useToast();
   const errors = useFormErrors();
+  const check = useConfigCheck();
   const doc = useApiData<ExportDoc>(`/provisioning/templates/${encodeURIComponent(template.key)}/export`);
   const catalog = useApiData<TemplateCatalog>("/provisioning/template-catalog");
   const defined = useApiData<ProvisioningVariable[]>("/provisioning/variables");
@@ -91,7 +93,8 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
           description,
         },
       };
-      const saved = await api.put<TemplateDetail>(`/provisioning/templates/${encodeURIComponent(template.key)}`, { manifest, sources });
+      const saved = await check.run((acknowledge) => api.put<TemplateDetail>(`/provisioning/templates/${encodeURIComponent(template.key)}`, { manifest, sources, acknowledge }));
+      if (!saved) return; // cancelled in the check window: nothing was saved
       toast.success("Template saved", "Phones using it pick up the change at their next provisioning check.");
       onSaved(saved);
       doc.reload();
@@ -108,6 +111,7 @@ export function TemplateEditor({ template, onSaved }: { template: TemplateDetail
   const files = Object.keys(sources);
   return (
     <form className="stack" onSubmit={save}>
+      {check.dialog}
       <div className="grid grid--2" style={{ alignItems: "start" }}>
         <Card title="Template">
           <div className="stack stack--sm">

@@ -79,6 +79,10 @@ prefix = "paging-bridge"                # mounted at /api/v1/ext/paging-bridge
 subscribes = ["organization.*"]         # patterns the module may subscribe to
 publishes = ["paging_bridge.*"]         # must start with the permission namespace
 
+[provisioning]
+capabilities = "capabilities"           # optional: capability packs (vendor data) the module ships;
+                                        # docs/CAPABILITY_CATALOG.md
+
 [[ui.nav]]
 label = "Paging"
 view = "zones"

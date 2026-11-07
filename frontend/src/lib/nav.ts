@@ -97,6 +97,7 @@ export const NAV: NavSection[] = [
     { label: "Base File Edit", href: "/provisioning/base-file-edit/", icon: "template", permissions: ["devices.read"], group: "Advanced" },
     { label: "Base Files", href: "/provisioning/", icon: "template", permissions: ["provisioning.read"], group: "Advanced" },
     { label: "Variables", href: "/provisioning/variables/", icon: "settings", permissions: ["provisioning.read"], group: "Advanced" },
+    { label: "Configuration Checks", href: "/provisioning/checks/", icon: "checkCircle", permissions: ["provisioning.read"], group: "Advanced" },
     { label: "Firmware", href: "/firmware/", icon: "update", permissions: ["provisioning.read"], group: "Advanced" },
   ] },
   { id: "modules", label: "Modules", icon: "modules", description: "Pages added by installed modules.", items: [] },

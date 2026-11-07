@@ -59,7 +59,9 @@ CORE_VARIABLES: tuple[VariableDef, ...] = (
         pattern=r"^[A-Za-z0-9.:\[\]-]{1,255}$",
     ),
     VariableDef(name="sip_port", type="integer", description="SIP registrar port", default=5060),
-    VariableDef(name="display_name", description="Name shown on the phone", max_length=80),
+    # As long as an extension's name (api/v1/extensions.py), or a phone whose
+    # extension has a long name gets no configuration at all.
+    VariableDef(name="display_name", description="Name shown on the phone", max_length=200),
     VariableDef(name="caller_id", description="Outbound caller ID name", max_length=80),
     VariableDef(
         name="timezone",

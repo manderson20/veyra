@@ -2284,6 +2284,10 @@ export interface DeviceProfile {
   devices: number;
   used_by: { device_id: string; label: string }[];
   problems: string[];
+  /** null: follows the organization (docs/CONFIG_VERIFICATION.md §5). */
+  config_check_mode?: ConfigCheckMode | null;
+  /** The configuration check of the save that returned this profile. */
+  config_check?: ConfigCheck | null;
   created_at: string;
   updated_at: string;
 }
@@ -2380,6 +2384,10 @@ export interface Device {
   allow_bootstrap: boolean;
   credential_user: string;
   problems: string[];
+  /** The last configuration check's counts (docs/CONFIG_VERIFICATION.md §4.3). */
+  config_check_summary?: { open_errors: number; overridden: number; warnings: number; notes: number; mode: ConfigCheckMode; checked_at: string } | { mode: "off" } | null;
+  /** The configuration check of the save that returned this device. */
+  config_check?: ConfigCheck | null;
   created_at: string;
   updated_at: string;
 }
@@ -3814,4 +3822,141 @@ export interface DisaLine {
   caller_id_number: string;
   is_enabled: boolean;
   in_use_by: string[];
+}
+
+// Configuration checks (docs/CONFIG_VERIFICATION.md §3–§7).
+
+export type ConfigCheckMode = "enforce" | "advisory" | "off";
+export type FindingSeverity = "error" | "warning" | "info";
+
+export interface ConfigOverride {
+  id: string;
+  by: string;
+  at: string;
+  reason: string;
+  checker_wrong: boolean;
+  scope_type: string;
+}
+
+export interface ConfigFinding {
+  fingerprint: string;
+  severity: FindingSeverity;
+  rule: string;
+  message: string;
+  file: string;
+  parameter: string;
+  pattern: string;
+  value: string;
+  vendor: string;
+  family: string;
+  model: string;
+  firmware: string;
+  release: string;
+  note: string;
+  source: string;
+  provenance: string;
+  /** The Veyra fields that filled the setting; empty for a fixed value. */
+  filled_by: string[];
+  /** What the setting accepts, in words. */
+  accepts: string;
+  /** For a summary (not checked, unverified): the settings it stands for. */
+  members: string[];
+  template_key?: string;
+  target?: { firmware: string | null; how: string };
+  override?: ConfigOverride | null;
+  profile_id?: string;
+  profile_name?: string;
+}
+
+export interface ConfigCheckTarget {
+  model: string;
+  template_key: string;
+  firmware: string | null;
+  how: string;
+  checked: number;
+}
+
+export interface ConfigCheck {
+  mode: ConfigCheckMode;
+  level?: string;
+  /** null when nothing was checked (mode off, or the template did not render). */
+  clean: boolean | null;
+  counts?: { error: number; warning: number; info: number; overridden: number };
+  checked?: number;
+  targets?: ConfigCheckTarget[];
+  findings: ConfigFinding[];
+  /** A firmware change: what is new on the new release, and what goes away. */
+  firmware?: {
+    from: string[];
+    to: string[];
+    new: (ConfigFinding & { phones: number })[];
+    gone: (ConfigFinding & { phones: number })[];
+  };
+  /** Variables: how many templates the variable reaches and were checked. */
+  profiles?: number;
+  checked_profiles?: number;
+}
+
+export interface ConfigAcknowledgement {
+  fingerprint: string;
+  reason: string;
+  checker_wrong: boolean;
+}
+
+export interface ConfigCheckOverrideRow {
+  id: string;
+  organization_id: string | null;
+  scope_type: string;
+  scope_id: string;
+  fingerprint: string;
+  rule: string;
+  vendor: string;
+  family: string;
+  model: string;
+  release: string;
+  file: string;
+  parameter: string;
+  value: string | null;
+  message: string;
+  reason: string;
+  checker_wrong: boolean;
+  created_by_label: string;
+  created_at: string;
+  revoked_at: string | null;
+  stale_at: string | null;
+}
+
+export interface ConfigCheckModeState {
+  installation: ConfigCheckMode;
+  organization: ConfigCheckMode | null;
+  profile: ConfigCheckMode | null;
+  effective: ConfigCheckMode;
+  level: string;
+}
+
+export interface CapabilityPackInfo {
+  id: string;
+  name: string;
+  vendor: string;
+  version: string;
+  author: string;
+  description: string;
+  /** built-in | module:<id> | local */
+  origin: string;
+  supports: { family: string; models: string[]; firmware: string; source: string; provenance: string }[];
+  families: {
+    family: string;
+    name: string;
+    models: string[];
+    format: string;
+    firmware_packaging: string;
+    templates: string[];
+    releases: { version: string; revision: number; models: string[]; settings: number; cited: number }[];
+  }[];
+}
+
+export interface CapabilityCoverage {
+  packs: CapabilityPackInfo[];
+  load_errors: Record<string, string[]>;
+  uncovered: { manufacturer: string; model: string; phones: number }[];
 }

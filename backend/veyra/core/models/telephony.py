@@ -256,6 +256,9 @@ class Device(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     last_user_agent: Mapped[str | None] = mapped_column(String(200))
     last_result: Mapped[str | None] = mapped_column(String(32))
     firmware_reported: Mapped[str | None] = mapped_column(String(64))
+    # The last configuration check (docs/CONFIG_VERIFICATION.md §4.3): counts
+    # of open and overridden errors, warnings and notes, and when it ran.
+    config_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     building_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("buildings.id", ondelete="SET NULL")
     )
