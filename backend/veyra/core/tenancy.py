@@ -163,7 +163,6 @@ def _with_twin(snapshot: dict[str, Any]) -> dict[str, Any]:
     if first is None:
         return snap
     src, twin = str(first["slug"]), CHECK_NAMESPACE
-    orgs.append({**first, "slug": twin, "name": "Isolation check", "namespace": twin})
     snap["organizations"] = orgs
     snap["installation"] = {**dict(snap.get("installation") or {}), "multi_tenancy_enabled": True}
 
@@ -193,6 +192,16 @@ def _with_twin(snapshot: dict[str, Any]) -> dict[str, Any]:
         if name:
             swap[name] = f"{twin}-{name.split('-')[-1]}"
 
+    main = first.get("main_number")
+    orgs.append(
+        {
+            **first,
+            "slug": twin,
+            "name": "Isolation check",
+            "namespace": twin,
+            "main_number": swap.get(str(main), _twin_number(str(main))) if main else None,
+        }
+    )
     for (key, member), items in sources.items():
         copies = [_rewrite(i, "", src, twin, swap) for i in items]
         if key == "outbound_routes":
@@ -214,6 +223,73 @@ def _with_twin(snapshot: dict[str, Any]) -> dict[str, Any]:
     return snap
 
 
+def caller_id_checks(db: Session) -> list[dict[str, object]]:
+    """Caller IDs with several organizations (docs/MULTI_TENANCY_MSP.md §5):
+    every active organization needs a main number (this blocks the switch);
+    numbers that break the rules are listed as warnings."""
+    from veyra.core import numbers
+    from veyra.core.models import Extension, OutboundRoute
+
+    orgs = list(db.scalars(select(Organization).where(Organization.is_active.is_(True))))
+    missing = [o.name for o in orgs if not o.main_number]
+    out: list[dict[str, object]] = [
+        {
+            "name": "main_numbers",
+            "ok": not missing,
+            "detail": "Every organization has a main number for its outside calls."
+            if not missing
+            else "These organizations need a main number (one of their numbers) for their "
+            "outside calls: " + ", ".join(missing),
+        }
+    ]
+    names = {o.id: o.name for o in orgs}
+    warnings: list[str] = []
+    for e in db.scalars(select(Extension).where(Extension.organization_id.in_(list(names)))):
+        org = db.get(Organization, e.organization_id)
+        allow = (
+            {numbers.maybe_canonical(str(n)) for n in (org.caller_id_allow_list or [])}
+            if org
+            else set()
+        )
+        if e.outbound_caller_id_number and not (
+            numbers.owns(db, e.organization_id, e.outbound_caller_id_number)
+            or numbers.maybe_canonical(e.outbound_caller_id_number) in allow
+        ):
+            warnings.append(
+                f"{names[e.organization_id]} extension {e.number}: outbound caller ID "
+                f"{e.outbound_caller_id_number} is not one of its numbers"
+            )
+        if e.emergency_caller_id_number and not numbers.owns(
+            db, e.organization_id, e.emergency_caller_id_number
+        ):
+            warnings.append(
+                f"{names[e.organization_id]} extension {e.number}: emergency caller ID "
+                f"{e.emergency_caller_id_number} is not one of its numbers"
+            )
+    for r in db.scalars(select(OutboundRoute).where(OutboundRoute.caller_id_number.is_not(None))):
+        if r.is_emergency:
+            continue
+        if r.organization_id is None:
+            warnings.append(
+                f"outbound route {r.name}: a route for every organization sets a caller ID"
+            )
+        elif not numbers.owns(db, r.organization_id, r.caller_id_number):
+            warnings.append(
+                f"outbound route {r.name}: caller ID {r.caller_id_number} is not its organization's"
+            )
+    out.append(
+        {
+            "name": "caller_ids",
+            "ok": True,
+            "warning": bool(warnings),
+            "detail": "Every caller ID is one of its organization's numbers."
+            if not warnings
+            else f"{len(warnings)} caller ID(s) to review: " + "; ".join(warnings[:10]),
+        }
+    )
+    return out
+
+
 def run_checks(db: Session, key: Any) -> list[dict[str, object]]:
     from veyra.telephony.asterisk import generator, isolation
     from veyra.telephony.snapshot import SnapshotError, build_snapshot
@@ -227,6 +303,7 @@ def run_checks(db: Session, key: Any) -> list[dict[str, object]]:
             "detail": "Every organization has its own engine namespace.",
         }
     )
+    checks += caller_id_checks(db)
     try:
         snap = build_snapshot(db, key)
         twin = _with_twin(snap)

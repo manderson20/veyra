@@ -222,6 +222,22 @@ def _check_section(name: str, what: str) -> str:
     return name
 
 
+def _org_mains(snapshot: dict[str, Any]) -> dict[str, str]:
+    """Each organization's main number (docs/MULTI_TENANCY_MSP.md §5.2)."""
+    return {
+        str(o.get("slug") or ""): str(o["main_number"])
+        for o in snapshot.get("organizations") or []
+        if o.get("main_number")
+    }
+
+
+def _main_number(mains: dict[str, str] | None, org: str) -> str:
+    number = (mains or {}).get(org, "")
+    if not _NUMBER_RE.match(number):
+        raise GenerationError(f"organization {org}: main number {number!r} is not valid")
+    return number
+
+
 def _check_value(value: str, what: str) -> str:
     if not _SAFE_VALUE_RE.match(value):
         raise GenerationError(f"{what} contains characters that are not allowed: {value!r}")
@@ -539,6 +555,7 @@ def _generate(
             dict(snapshot.get("shared_mailboxes") or {}),
             org_moh,
             len(_namespaces(snapshot)) > 1,
+            _org_mains(snapshot),
         ),
         _trunks(sip, trunks),
         _dialplan(
@@ -693,6 +710,7 @@ def _endpoints(
     shared_mailboxes: dict[str, list[str]] | None = None,
     org_moh: dict[str, str] | None = None,
     tenants: bool = False,
+    org_main: dict[str, str] | None = None,
 ) -> GeneratedFile:
     """``mailboxes`` holds (organization, number) of the extensions' own boxes.
     With ``tenants`` (more than one namespace), VEYRA_ORG is inherited by the
@@ -838,6 +856,11 @@ def _endpoints(
             f"aors={name}",
             f'callerid="{cid_name}" <{cid_num}>',
             f"set_var={'__' if tenants else ''}VEYRA_ORG={org}",
+            *(
+                [f"set_var=__VEYRA_ORG_MAIN={_main_number(org_main, org)}"]
+                if tenants and (org_main or {}).get(org)
+                else []
+            ),
             f"set_var=VEYRA_EXT={number}",
             *(
                 [f"set_var=VEYRA_COS={_slug(str(ext['class_of_service']), 'class of service')}"]
@@ -1428,6 +1451,7 @@ def _dialplan(
         list(snapshot.get("sites") or []),
         policies,
         len(spaces) > 1,
+        _org_mains(snapshot),
     )
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -3050,6 +3074,7 @@ def _outbound_contexts(
         slugs.append(slug)
     emergency_slugs = [sl for r, sl in zip(ordered, slugs, strict=True) if r.get("is_emergency")]
     lines: list[str] = []
+    tenants = spaces is not None and len(spaces) > 1
     for ns in spaces if spaces is not None else [engine_names.LEGACY]:
         lines += [
             f"[{Names(ns).outbound}]",
@@ -3151,6 +3176,13 @@ def _outbound_contexts(
                 nxt = f"t{i + 2}" if i + 1 < len(route_trunks) else "failed"
                 trunk = trunks[tslug]
                 cid = cid_override or trunk.get("default_caller_id")
+                if tenants and not emergency:
+                    # Several organizations (docs/MULTI_TENANCY_MSP.md §5.2): the
+                    # phone's own number, else its organization's main number;
+                    # never a shared route's or a trunk's, which may be another
+                    # customer's. A route of one organization may force its own.
+                    own = bool(r.get("organization"))
+                    cid = cid_override if own and cid_force else "${VEYRA_ORG_MAIN}"
                 first = f" same => n({label})," if label else " same => n,"
                 step = [f"{first}Set(GROUP(veyra_trunk)={tslug})"]
                 if trunk.get("max_channels") and not emergency:
@@ -3166,9 +3198,13 @@ def _outbound_contexts(
                         f" same => n,GotoIf($[${{GROUP_COUNT({tslug}@veyra_trunk)}} > "
                         f"{usable}]?{nxt})"
                     )
-                if cid and not _NUMBER_RE.match(str(cid)):
+                if cid and cid != "${VEYRA_ORG_MAIN}" and not _NUMBER_RE.match(str(cid)):
                     raise GenerationError(f"trunk {tslug}: caller ID {cid!r} is not valid")
-                step += _outbound_caller_id(cid, cid_force, emergency)
+                step += _outbound_caller_id(
+                    cid, cid_force and (not tenants or bool(r.get("organization"))), emergency
+                )
+                if tenants and not emergency:
+                    step.append(' same => n,GotoIf($["${CALLERID(num)}"=""]?nocid)')
                 step += [
                     f" same => n,Dial(PJSIP/${{VEYRA_DIAL}}@{TRUNK_PREFIX}{tslug},{timeout},"
                     "${VEYRA_XFER_OUT})",
@@ -3183,6 +3219,13 @@ def _outbound_contexts(
                 " same => n,Congestion(5)",
                 " same => n,Hangup()",
             ]
+            if tenants and not emergency:
+                lines += [
+                    " same => n(nocid),Log(ERROR,Veyra: organization ${VEYRA_ORG} has no "
+                    "number to present; outside call to ${EXTEN} refused)",
+                    " same => n,Playback(all-circuits-busy)",
+                    " same => n,Hangup()",
+                ]
             if not emergency:
                 lines += [
                     " same => n(loop),NoOp(Veyra: a trunk call may not leave through a trunk)",
@@ -3203,9 +3246,10 @@ def _inbound_contexts(
     sites: list[dict[str, Any]] | None = None,
     policies: dict[str, dict[str, Any]] | None = None,
     tenants: bool = False,
+    org_main: dict[str, str] | None = None,
 ) -> list[str]:
-    """With ``tenants``, each DID sets the organization's VEYRA_ORG on the
-    trunk channel (docs/MULTI_TENANCY_MSP.md §2).
+    """With ``tenants``, each DID sets the organization's VEYRA_ORG and main
+    number on the trunk channel (docs/MULTI_TENANCY_MSP.md §2, §5.2).
 
     ``veyra-from-trunk`` (shared DIDs), one ``veyra-from-trunk-<slug>`` per
     trunk (its restricted DIDs, then the shared ones, then its fallback), and
@@ -3258,7 +3302,10 @@ def _inbound_contexts(
     def org_line(org: str) -> list[str]:
         if not tenants or not org:
             return []
-        return [f" same => n,Set(__VEYRA_ORG={_check_value(org, 'organization')})"]
+        out = [f" same => n,Set(__VEYRA_ORG={_check_value(org, 'organization')})"]
+        if (org_main or {}).get(org):
+            out.append(f" same => n,Set(__VEYRA_ORG_MAIN={_main_number(org_main, org)})")
+        return out
 
     def body(r: dict[str, Any], context: str) -> list[str]:
         did = r["did"]

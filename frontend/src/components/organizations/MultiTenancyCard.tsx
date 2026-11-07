@@ -61,7 +61,7 @@ export function MultiTenancyCard({ editable }: { editable: boolean }) {
             <ul className="list-plain">
               {checks.map((c) => (
                 <li key={c.name} className="list-row">
-                  <span><Badge tone={c.ok ? "ok" : "danger"}>{c.ok ? "Passed" : "Failed"}</Badge> <strong>{c.name}</strong></span>
+                  <span><Badge tone={!c.ok ? "danger" : c.warning ? "warn" : "ok"}>{!c.ok ? "Failed" : c.warning ? "Review" : "Passed"}</Badge> <strong>{c.name}</strong></span>
                   <span className="subtle">{c.detail}</span>
                 </li>
               ))}

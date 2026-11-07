@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from veyra.api.v1 import wakeup_shared
 from veyra.api.v1.group_helpers import MembershipOut
 from veyra.configmgmt import service as configmgmt
-from veyra.core import audit
+from veyra.core import audit, numbers
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
@@ -40,7 +40,6 @@ from veyra.core.models import (
     ExtensionState,
     ExtensionTemplate,
     FollowMe,
-    InboundRoute,
     Organization,
     PickupGroup,
     PickupGroupMember,
@@ -58,7 +57,7 @@ from veyra.core.security.crypto import (
     load_installation_key,
 )
 from veyra.core.security.principal import Principal
-from veyra.telephony import ext_templates, extension_state, routing
+from veyra.telephony import ext_templates, extension_state
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
 from veyra.telephony.numbering import (
     NumberingPlan,
@@ -300,36 +299,8 @@ def _check_class(db: Session, organization_id: uuid.UUID, class_id: uuid.UUID | 
 def check_outbound_caller_id(
     db: Session, principal: Principal, organization_id: uuid.UUID, number: str | None
 ) -> None:
-    """An extension may present one of its organization's DIDs or a number on
-    the organization's allow list; anyone with routing.write may set any
-    number (docs/CALL_FEATURES.md §3.5)."""
-    if not number or principal.has("routing.write", organization_id):
-        return
-    wanted = routing.canonical_did(number)
-    dids = {
-        d
-        for d in db.scalars(
-            select(InboundRoute.did_canonical).where(
-                InboundRoute.organization_id == organization_id
-            )
-        )
-        if d != routing.DID_ANY
-    }
-    org = db.get(Organization, organization_id)
-    allowed = set()
-    for raw in (org.caller_id_allow_list if org else None) or []:
-        try:
-            allowed.add(routing.canonical_did(str(raw)))
-        except ValueError:
-            continue
-    if wanted in dids or wanted in allowed:
-        return
-    raise _validation(
-        "outbound_caller_id_number",
-        "The number is not one of the organization's numbers (inbound routes) and is not on "
-        "its caller ID allow list.",
-        code="caller_id_not_allowed",
-    )
+    """docs/CALL_FEATURES.md §3.5, docs/MULTI_TENANCY_MSP.md §5.1."""
+    numbers.check_caller_id(db, principal, organization_id, number)
 
 
 class ContactOut(BaseModel):
@@ -880,6 +851,14 @@ def create_extension(
     _check_number(db, load_numbering_plan(db), body.number, None, org.id)
     _check_user(db, body.user_id, body.organization_id)
     check_outbound_caller_id(db, principal, org.id, body.outbound_caller_id_number)
+    numbers.check_caller_id(
+        db,
+        principal,
+        org.id,
+        body.emergency_caller_id_number,
+        field="emergency_caller_id_number",
+        emergency=True,
+    )
     _check_class(db, org.id, body.class_of_service_id)
     site_id = _check_place(db, org.id, body.site_id, body.building_id)
     _check_department(db, org.id, body.department_id)
@@ -1017,6 +996,18 @@ def update_extension(
     ):
         check_outbound_caller_id(
             db, principal, ext.organization_id, changes["outbound_caller_id_number"]
+        )
+    if (
+        "emergency_caller_id_number" in changes
+        and changes["emergency_caller_id_number"] != ext.emergency_caller_id_number
+    ):
+        numbers.check_caller_id(
+            db,
+            principal,
+            ext.organization_id,
+            changes["emergency_caller_id_number"],
+            field="emergency_caller_id_number",
+            emergency=True,
         )
     for field in (
         "display_name",

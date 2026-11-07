@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from veyra.api.v1.schemas import OrganizationIn, OrganizationOut, OrganizationPatch
 from veyra.configmgmt import service as configmgmt
-from veyra.core import audit, tenancy
+from veyra.core import audit, numbers, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
@@ -119,6 +119,22 @@ def update_organization(
     # The allow list widens what phones may present to the carrier: a routing matter.
     if "caller_id_allow_list" in changes and not principal.has("routing.write", org.id):
         raise forbidden("Changing the caller ID allow list needs routing.write.")
+    if "main_number" in changes:
+        if changes["main_number"]:
+            number = numbers.maybe_canonical(changes["main_number"])
+            if number is None or not numbers.owns(db, org.id, number):
+                raise ProblemError(
+                    422,
+                    "Validation failed",
+                    "The main number must be one of the organization's numbers.",
+                    code="validation_failed",
+                    errors=[{"field": "main_number", "message": "not one of its numbers"}],
+                )
+            changes["main_number"] = number
+        else:
+            changes["main_number"] = None
+        if changes["main_number"] != org.main_number:
+            configmgmt.mark_changed(db, by=principal.label, what=f"main number of {org.slug}")
     if changes.get("is_active") and not org.is_active:
         tenancy.check_may_activate(db, exclude=org.id)
     if "is_active" in changes and changes["is_active"] != org.is_active:

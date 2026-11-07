@@ -1539,6 +1539,10 @@ def create_outbound(
         raise conflict(f"An outbound route named {body.name!r} already exists.", "name_in_use")
     _check_route_org(db, body.organization_id)
     _check_route_hours(db, body)
+    if not body.is_emergency:
+        # An emergency call never presents the route's number while several
+        # organizations share the server (docs/MULTI_TENANCY_MSP.md §6.1).
+        numbers.check_route_caller_id(db, body.organization_id, body.caller_id_number)
     position = (db.scalar(select(func.max(OutboundRoute.position))) or 0) + 1
     route = OutboundRoute(
         id=uuid.uuid4(),
@@ -1661,6 +1665,10 @@ def update_outbound(
     if "organization_id" in changes:
         _check_route_org(db, validated.organization_id)
     _check_route_hours(db, validated)
+    if not validated.is_emergency and (
+        changes.keys() & {"caller_id_number", "organization_id", "is_emergency"}
+    ):
+        numbers.check_route_caller_id(db, validated.organization_id, validated.caller_id_number)
     for field in (
         "is_emergency",
         "time_condition_id",

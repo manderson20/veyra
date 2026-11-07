@@ -63,6 +63,10 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     # stay as they were; set once and never changed.
     engine_namespace: Mapped[str] = mapped_column(String(16), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The organization's default outbound caller ID while several
+    # organizations share the server (docs/MULTI_TENANCY_MSP.md §5.2): one of
+    # its numbers, canonical.
+    main_number: Mapped[str | None] = mapped_column(String(18))
     # Default hold music set of the organization's phones
     # (docs/PAGING_RECORDINGS.md §3.2); none = the engine's built-in class.
     moh_class_id: Mapped[uuid.UUID | None] = mapped_column(

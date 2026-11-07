@@ -171,6 +171,8 @@ export interface Organization {
   bootstrap_includes_credential?: boolean;
   /** Numbers extensions may present as outbound caller ID besides the organization's DIDs. */
   caller_id_allow_list?: string[];
+  /** Default outbound caller ID with several organizations: one of its numbers. */
+  main_number?: string | null;
   /** Intercom default for the organization's phones: allow or deny. */
   intercom_default?: "allow" | "deny" | string;
   /** Who may answer with **<extension> (#138). */
@@ -3140,6 +3142,8 @@ export interface WebhookDeliveryOut {
 export interface MultiTenancyCheck {
   name: string;
   ok: boolean;
+  /** Passed, with things to review (docs/MULTI_TENANCY_MSP.md §5.3). */
+  warning?: boolean;
   detail: string;
 }
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 import copy
 
 import pytest
-from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, login
+from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, give_main_number, login
 from test_generator_groups import _ext, _group, _member, _queue
 from test_generator_groups import _snapshot as _base
 
@@ -219,6 +219,10 @@ def test_second_organization_needs_the_switch(admin):
     assert r.status_code == 409 and r.json()["code"] == "multi_tenancy_disabled"
     st = admin.get("/api/v1/system/multi-tenancy").json()
     assert st["enabled"] is False and st["active_organizations"] == 1
+    # Without a main number the switch stays off (docs/MULTI_TENANCY_MSP.md §5.2).
+    r = admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
+    assert r.status_code == 409 and "main number" in r.json()["detail"]
+    give_main_number(admin)
     r = admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
     assert r.status_code == 200, r.text
     assert r.json()["enabled"] is True and all(c["ok"] for c in r.json()["checks"])
@@ -243,6 +247,7 @@ def test_second_organization_needs_the_switch(admin):
 
 
 def test_numbers_are_per_organization(admin):
+    give_main_number(admin)
     rm = admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
     assert rm.status_code == 200, rm.text
     a = next(o for o in _orgs(admin) if o["slug"] == "example")["id"]
@@ -285,6 +290,7 @@ def test_numbers_are_per_organization(admin):
 
 
 def test_outbound_route_organization_field(admin):
+    give_main_number(admin)
     admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
     b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
     trunk = admin.post(
@@ -311,6 +317,7 @@ def test_outbound_route_organization_field(admin):
 
 
 def test_org_admin_sees_only_own_organization(admin):
+    give_main_number(admin)
     admin.post("/api/v1/system/multi-tenancy", json={"enabled": True})
     b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
     admin.post(

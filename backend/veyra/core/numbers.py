@@ -171,3 +171,118 @@ def conflicts(db: Session) -> list[Conflict]:
         if owner is not None and owner.organization_id != r.organization_id:
             out.append(Conflict(r.id, r.did, r.organization_id, owner.organization_id))
     return out
+
+
+# ------------------------------------------------------------------ caller ID
+
+
+def _cid_error(field: str, message: str) -> ProblemError:
+    return _validation(field, message, code="caller_id_not_allowed")
+
+
+def _allow_list(org: Organization | None) -> set[str]:
+    return {
+        n
+        for raw in (org.caller_id_allow_list if org else None) or []
+        if (n := maybe_canonical(str(raw)))
+    }
+
+
+def owns(db: Session, organization_id: uuid.UUID, number: str | None) -> bool:
+    """``number`` (any form) is one of the organization's inventory numbers."""
+    n = maybe_canonical(number)
+    held = owner_of(db, n) if n else None
+    return held is not None and held.organization_id == organization_id
+
+
+def check_caller_id(
+    db: Session,
+    principal: Principal | None,
+    organization_id: uuid.UUID,
+    number: str | None,
+    *,
+    field: str = "outbound_caller_id_number",
+    emergency: bool = False,
+) -> None:
+    """A caller ID an extension presents (docs/MULTI_TENANCY_MSP.md §5.1).
+
+    With multi-tenancy on: one of the organization's numbers, or for an
+    outbound caller ID also its allow list; only platform administrators may
+    set any number. An emergency caller ID must be an inventory number, so
+    the 911 centre's callback rings here. With it off: today's rule
+    (docs/CALL_FEATURES.md §3.5)."""
+    if not number:
+        return
+    org = db.get(Organization, organization_id)
+    if not tenancy.enabled(db):
+        if emergency or principal is None or principal.has("routing.write", organization_id):
+            return
+        wanted = routing.canonical_did(number)
+        dids = {
+            d
+            for d in db.scalars(
+                select(InboundRoute.did_canonical).where(
+                    InboundRoute.organization_id == organization_id
+                )
+            )
+            if d != routing.DID_ANY
+        }
+        allowed = set()
+        for raw in (org.caller_id_allow_list if org else None) or []:
+            try:
+                allowed.add(routing.canonical_did(str(raw)))
+            except ValueError:
+                continue
+        if wanted in dids or wanted in allowed:
+            return
+        raise _cid_error(
+            field,
+            "The number is not one of the organization's numbers (inbound routes) and is not "
+            "on its caller ID allow list.",
+        )
+    if is_platform(principal) or owns(db, organization_id, number):
+        return
+    if not emergency and maybe_canonical(number) in _allow_list(org):
+        return
+    raise _cid_error(
+        field,
+        "The number is not one of this organization's numbers"
+        + ("." if emergency else " and is not on its caller ID allow list.")
+        + " A platform administrator assigns numbers under Organizations.",
+    )
+
+
+def check_owned(db: Session, organization_id: uuid.UUID, number: str | None, field: str) -> None:
+    """Numbers that must be the organization's own while multi-tenancy is on,
+    whoever sets them: a site's ELIN, an organization's main number."""
+    if number and tenancy.enabled(db) and not owns(db, organization_id, number):
+        raise _cid_error(field, "The number is not one of this organization's numbers.")
+
+
+def check_route_caller_id(
+    db: Session, organization_id: uuid.UUID | None, number: str | None
+) -> None:
+    """An outbound route's caller ID while multi-tenancy is on: a route for
+    one organization presents one of its numbers; a route for every
+    organization presents none, or it would send one customer's number on
+    every customer's calls (docs/MULTI_TENANCY_MSP.md §5.2)."""
+    if not number or not tenancy.enabled(db):
+        return
+    if organization_id is None:
+        raise _cid_error(
+            "caller_id_number",
+            "A route for every organization cannot set a caller ID while several "
+            "organizations share the server; each call presents its own organization's number.",
+        )
+    org = db.get(Organization, organization_id)
+    if owns(db, organization_id, number) or maybe_canonical(number) in _allow_list(org):
+        return
+    raise _cid_error("caller_id_number", "The number is not one of this organization's numbers.")
+
+
+def main_number_rows(db: Session) -> dict[uuid.UUID, str]:
+    return {
+        o.id: o.main_number
+        for o in db.scalars(select(Organization).where(Organization.main_number.is_not(None)))
+        if o.main_number
+    }

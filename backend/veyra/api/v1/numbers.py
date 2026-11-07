@@ -228,6 +228,16 @@ def remove_number(
         )
         if (n := numbers.maybe_canonical(r.did)) and numbers.in_range(n, row.first, row.last)
     ]
+    org = db.get(Organization, organization_id)
+    if (
+        org is not None
+        and org.main_number
+        and numbers.in_range(org.main_number, row.first, row.last)
+    ):
+        raise conflict(
+            "This holds the organization's main number. Choose another main number first.",
+            "main_number",
+        )
     if used:
         raise conflict(
             "Inbound routes still use " + ", ".join(sorted(used)[:10]) + ". Remove them first.",
