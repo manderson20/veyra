@@ -8,6 +8,11 @@ Milestone 4b → 0.5.0, Milestone 5 → 0.6.0, …); patch versions carry fixes
 between milestones; `-dev` marks work in progress. Milestones 0 to 3 all
 shipped as `0.1.0-dev.0` before this scheme was adopted.
 
+## Unreleased
+
+### Documentation
+- **Configuration verification design** (`docs/CONFIG_VERIFICATION.md`, for review): checking phone settings against a per-firmware catalog of what each model accepts, with overrides, and modes to turn checks off.
+
 ## 0.27.86 — 2026-11-04
 
 Migration 0092 adds voicemail copies, quotas and the alternate greeting. Deploy the configuration after setting copies or a quota on a box.
