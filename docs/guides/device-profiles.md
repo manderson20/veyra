@@ -50,7 +50,7 @@ To add a brand, open [Provisioning → Add Brand](app:/provisioning/brands/) and
      - A *model's* base file serves only the models listed next to it.
    - **Default template for this brand:** new phones of this brand start on this template. Each brand has one default per organization, so ticking this replaces the old one.
    - **Description:** for your own notes.
-   - **Firmware:** the firmware image the phones should run. Leave **Keep the phones' current firmware** if Veyra should not manage it. Only images for this brand are listed. See [Phone firmware](guide:phone-firmware).
+   - **Firmware:** the firmware image the phones should run. Leave **Keep the phones' current firmware** if Veyra should not manage it. Only images for this brand are listed. When you save a different image, Veyra lists the settings the new firmware would newly refuse and how many phones that affects. See [Phone firmware](guide:phone-firmware) and [Configuration checks](guide:configuration-checks).
 3. Fill in the settings, line keys and paging zones (below).
 4. Choose **Create template**.
 

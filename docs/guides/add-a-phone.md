@@ -86,7 +86,7 @@ Here you change everything from the registration form, and also:
 - **Building:** the building the phone is in. The list shows the buildings of the phone's site; **No building** leaves it unset.
 
 - **Extra lines:** **Add line** gives the phone a second, third… extension, up to 8 lines in all. Each extension can appear only once on a phone. On an analog adapter, each line is one phone port (see [Analog adapters and fax machines](guide:analog-adapters-and-fax)).
-- **Firmware override:** a firmware image for this phone only. Left on **From the template**, the phone gets the template's firmware. See [Phone firmware](guide:phone-firmware).
+- **Firmware override:** a firmware image for this phone only. Left on **From the template**, the phone gets the template's firmware. See [Phone firmware](guide:phone-firmware). Choosing another image runs the new-firmware check: Veyra lists the settings that firmware would newly refuse (see [Configuration checks](guide:configuration-checks)).
 - **Setting overrides:** the template's settings for this phone only. A blank field keeps the template's value, which is shown greyed in the field. A yes/no setting is a list: **As the template** (which shows the template's value), **Yes** or **No**. Secret settings, such as passwords, are shown as dots.
 - **Enabled:** a disabled phone is refused its configuration until you turn it back on.
 
