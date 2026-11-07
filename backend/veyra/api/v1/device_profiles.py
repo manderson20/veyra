@@ -626,6 +626,7 @@ def update_profile(
     changes = body.model_dump(exclude_unset=True)
     details: dict[str, Any] = {}
     catalog = catalog_for(request, db)
+    old_firmware = profile.firmware_image_id
     template_key = changes.get("template_key") or profile.template_key
     resolved = common.resolve_template(
         catalog, template_key, "template_key", profile.organization_id
@@ -732,6 +733,7 @@ def update_profile(
         catalog,
         served_models(catalog, profile.template_key, profile.organization_id),
         body.acknowledge,
+        previous_firmware=old_firmware if "firmware_image_id" in details else False,
     )
     _record(db, ctx, principal, "device_profile.update", profile, details)
     db.commit()

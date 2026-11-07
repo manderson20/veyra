@@ -270,8 +270,8 @@
    "summary": "Upload the vendor's firmware for your phones and let Veyra update them, per profile or per phone.",
    "audience": "admin",
    "section": "Phones and devices",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/firmware/"
    ],

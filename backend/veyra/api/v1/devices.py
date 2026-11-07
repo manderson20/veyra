@@ -1108,6 +1108,7 @@ def update_device(
     device = _get(db, principal, device_id, WRITE)
     changes = body.model_dump(exclude_unset=True)
     details: dict[str, Any] = {}
+    old_firmware = device.firmware_image_id
     org_id = device.organization_id
     profile = (
         _check_profile(db, org_id, changes["profile_id"])
@@ -1184,7 +1185,15 @@ def update_device(
     report = None
     if CHECKED_FIELDS & set(details):
         report = run_device_check(
-            request, db, principal, ctx, device, profile, catalog_for(request, db), body.acknowledge
+            request,
+            db,
+            principal,
+            ctx,
+            device,
+            profile,
+            catalog_for(request, db),
+            body.acknowledge,
+            previous_firmware=old_firmware if "firmware_image_id" in details else False,
         )
     _record(db, ctx, principal, "device.update", device, details)
     db.commit()

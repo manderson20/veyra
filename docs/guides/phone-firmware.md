@@ -4,7 +4,7 @@ summary: Upload the vendor's firmware for your phones and let Veyra update them,
 audience: admin
 section: Phones and devices
 order: 80
-reviewed: 0.27.45
+reviewed: 0.27.87
 pages:
   - /firmware/
 covers:
@@ -15,6 +15,8 @@ covers:
 Phones run software from their maker, called **firmware**. Veyra can keep your phones on the version you choose: you upload the vendor's firmware file once and assign it to a template. Each phone compares the version at its next check, updates itself and restarts.
 
 If you assign nothing, Veyra leaves the phones' firmware alone.
+
+When you assign firmware to a template or a phone, Veyra checks whether the new firmware still takes the template's settings, and lists what changes (see [Configuration checks](guide:configuration-checks)).
 
 ## Upload a firmware image
 

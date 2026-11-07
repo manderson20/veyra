@@ -3885,6 +3885,13 @@ export interface ConfigCheck {
   checked?: number;
   targets?: ConfigCheckTarget[];
   findings: ConfigFinding[];
+  /** A firmware change: what is new on the new release, and what goes away. */
+  firmware?: {
+    from: string[];
+    to: string[];
+    new: (ConfigFinding & { phones: number })[];
+    gone: (ConfigFinding & { phones: number })[];
+  };
   /** Variables: how many templates the variable reaches and were checked. */
   profiles?: number;
   checked_profiles?: number;
@@ -3925,4 +3932,31 @@ export interface ConfigCheckModeState {
   profile: ConfigCheckMode | null;
   effective: ConfigCheckMode;
   level: string;
+}
+
+export interface CapabilityPackInfo {
+  id: string;
+  name: string;
+  vendor: string;
+  version: string;
+  author: string;
+  description: string;
+  /** built-in | module:<id> | local */
+  origin: string;
+  supports: { family: string; models: string[]; firmware: string; source: string; provenance: string }[];
+  families: {
+    family: string;
+    name: string;
+    models: string[];
+    format: string;
+    firmware_packaging: string;
+    templates: string[];
+    releases: { version: string; revision: number; models: string[]; settings: number; cited: number }[];
+  }[];
+}
+
+export interface CapabilityCoverage {
+  packs: CapabilityPackInfo[];
+  load_errors: Record<string, string[]>;
+  uncovered: { manufacturer: string; model: string; phones: number }[];
 }

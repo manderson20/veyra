@@ -10,6 +10,7 @@ import { useApiData } from "@/hooks/useApiData";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
 import { MODE_OPTIONS } from "@/components/provisioning/ConfigCheck";
+import { PackCoverage } from "@/components/provisioning/PackCoverage";
 
 const LIMIT = 50;
 
@@ -103,6 +104,7 @@ export default function ConfigChecksPage() {
       <PageHeader title="Configuration checks" description="Settings saved past a check, why, and by whom. A setting someone marked as “checker is wrong” is a correction for the vendor data." />
       <Callout tone="info">An override covers one setting with one value on one model and firmware release. A different value, model or release is checked again.</Callout>
       <Modes org={effectiveOrg} />
+      <PackCoverage />
       <Card flush>
         <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end", padding: "var(--space-3) var(--space-4)" }}>
           {organizations.length > 1 ? <SelectField label="Organization" value={org} options={[{ value: "", label: "All" }, ...organizations.map((o) => ({ value: o.id, label: o.name }))]} onChange={(e) => { setOrg(e.target.value); setOffset(0); }} /> : null}

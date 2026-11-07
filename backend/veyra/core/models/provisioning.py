@@ -231,3 +231,25 @@ class ConfigCheckOverride(UUIDPrimaryKey, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # The finding no longer occurs (after a catalog or configuration change).
     stale_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CapabilityPack(UUIDPrimaryKey, Base):
+    """A capability pack an administrator imported (docs/CONFIG_VERIFICATION.md
+    §2.0), kept in the database so it reaches an HA standby and backups with
+    the rest; installation-wide, like the built-in packs."""
+
+    __tablename__ = "capability_packs"
+
+    pack_id: Mapped[str] = mapped_column(String(100), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    vendor: Mapped[str] = mapped_column(String(40))
+    version: Mapped[str] = mapped_column(String(40))
+    # {relative path: text} of every file of the pack.
+    files: Mapped[dict[str, str]] = mapped_column(JSONB)
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    uploaded_by_label: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Each import sets it: running services notice and reload the packs.
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

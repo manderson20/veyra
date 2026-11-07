@@ -135,6 +135,27 @@ function Notes({ notes }: { notes: FindingGroup[] }) {
   );
 }
 
+/** What a firmware change brings (docs/CONFIG_VERIFICATION.md §4.1). */
+function FirmwareChange({ check }: { check: ConfigCheck }) {
+  const fw = check.firmware;
+  if (!fw) return null;
+  const phones = fw.new.reduce((n, f) => n + f.phones, 0);
+  const to = fw.to.map((v) => (v === "oldest" ? "the oldest known release" : v)).join(", ");
+  return (
+    <div className="stack--sm">
+      {fw.new.length ? (
+        <Callout tone="warn" title={`Firmware ${to}: ${fw.new.length} setting(s) newly refused or warned`}>
+          {phones ? `${phones} phone(s) on this template are affected.` : "No phone uses this template yet."}
+        </Callout>
+      ) : (
+        <Callout tone="ok" title={`Firmware ${to} takes the configuration as before`}>No setting is newly refused or warned.</Callout>
+      )}
+      {fw.new.length ? <ul className="findings">{groupFindings(fw.new).map((g) => <FindingItem key={g.key} group={g} />)}</ul> : null}
+      {fw.gone.length ? <p className="subtle finding__note">{fw.gone.length} problem(s) of the previous firmware go away.</p> : null}
+    </div>
+  );
+}
+
 function Progress({ done }: { done: boolean }) {
   return (
     <div className={`check-progress${done ? " check-progress--done" : ""}`} role="progressbar" aria-label="Configuration check" aria-valuetext={done ? "Done" : "Checking"}>
@@ -244,6 +265,7 @@ export function useConfigCheck() {
               {summaryLine(state.check)}. Phones may refuse or ignore the settings below.
             </Callout>
           )}
+          <FirmwareChange check={state.check} />
           {groups.length ? <ul className="findings">{groups.map((g) => <FindingItem key={g.key} group={g} />)}</ul> : null}
           <Notes notes={c.notes} />
         </div>

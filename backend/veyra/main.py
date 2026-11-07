@@ -104,6 +104,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     raise
                 db.rollback()
                 log.warning("Module startup skipped on the standby")
+            try:
+                from veyra.provisioning import packs
+
+                packs.rebuild(app, db)
+            except Exception as e:  # vendor data never stops Veyra starting
+                db.rollback()
+                log.error("Capability packs not loaded: %s", e)
+            for path, errors in app.state.capabilities.load_errors.items():
+                log.warning("capability pack %s not loaded: %s", path, "; ".join(errors))
         try:
             key = load_installation_key(settings)
             log.info("Installation key loaded (fingerprint %s)", key.fingerprint)
@@ -132,9 +141,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.modules = ModuleManager(settings, bus, app.state.keyring)
     app.state.telephony = get_adapter(settings)
     app.state.templates = TemplateCatalog.from_paths(settings.template_paths)
+    # Built-in packs at once; modules and imported packs join at startup.
     app.state.capabilities = CapabilityCatalog.from_paths(settings.capability_paths)
-    for path, errors in app.state.capabilities.load_errors.items():
-        log.warning("capability pack %s not loaded: %s", path, "; ".join(errors))
     app.state.callevents = CallEventHub()
     # High availability (docs/HIGH_AVAILABILITY.md §9): a standby (or a
     # frozen primary) refuses writes; the standby's sign-in lives in memory.

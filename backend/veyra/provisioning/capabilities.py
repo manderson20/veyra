@@ -436,6 +436,10 @@ class Pack:
         return None
 
 
+def _origin_rank(origin: str) -> int:
+    return 0 if origin == "local" else 1 if origin.startswith("module:") else 2
+
+
 @dataclass
 class CapabilityCatalog:
     packs: dict[str, Pack] = field(default_factory=dict)
@@ -452,7 +456,10 @@ class CapabilityCatalog:
         """The pack and family that cover a model; ``vendor`` is the
         template's manufacturer, compared without case."""
         want = vendor.strip().lower()
-        for pack in self.packs.values():
+        # An imported pack wins over a module's, and a module's over a
+        # built-in one, for the same models: an administrator who imports a
+        # correction wants it used (docs/CONFIG_VERIFICATION.md §2.0).
+        for pack in sorted(self.packs.values(), key=lambda p: _origin_rank(p.origin)):
             if pack.info.vendor != want:
                 continue
             hit = pack.covers(model)

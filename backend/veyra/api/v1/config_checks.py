@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -45,9 +45,12 @@ WRITE = "provisioning.write"
 Mode = Literal["enforce", "advisory", "off"]
 
 
-def capabilities(request: Request) -> CapabilityCatalog:
-    caps = getattr(request.app.state, "capabilities", None)
-    return caps if caps is not None else CapabilityCatalog()
+def capabilities(request: Request, db: Session) -> CapabilityCatalog:
+    from veyra.provisioning import packs
+
+    if getattr(request.app.state, "capabilities", None) is None:
+        return CapabilityCatalog()
+    return packs.current(request.app, db)
 
 
 def run_profile_check(
@@ -61,15 +64,17 @@ def run_profile_check(
     acknowledge: list[Acknowledgement],
     *,
     gate: bool = True,
+    previous_firmware: uuid.UUID | Literal[False] | None = False,
 ) -> dict[str, Any]:
     """Check a profile as it is in the session (after the change is flushed)
     and stop the save when enforced errors are open. Returns the report for
-    the response."""
+    the response. ``previous_firmware``, when the firmware image changed,
+    adds what the change brings (``firmware``)."""
     mode = checks.effective_mode(db, profile.organization_id, profile)
     if mode[0] == "off":
         return {"mode": "off", "level": mode[1], "findings": [], "clean": None}
     try:
-        results = checks.check_profile(db, templates, capabilities(request), profile, served)
+        results = checks.check_profile(db, templates, capabilities(request, db), profile, served)
     except TemplateError:
         # A template that does not render is reported by the template's own checks.
         return {"mode": mode[0], "level": mode[1], "findings": [], "clean": None}
@@ -88,7 +93,20 @@ def run_profile_check(
         checks.store_summaries(db, profile, report)
     else:
         report = checks.Report(mode[0], mode[1], results, checks.live_overrides(db, subject.scopes))
-    return report.as_dict()
+    out = report.as_dict()
+    if previous_firmware is not False:
+        try:
+            before = checks.check_profile(
+                db,
+                templates,
+                capabilities(request, db),
+                checks.copy_profile(profile, firmware_image_id=previous_firmware),
+                served,
+            )
+        except TemplateError:
+            before = []
+        out["firmware"] = checks.firmware_diff(before, results, checks.phones_by_model(db, profile))
+    return out
 
 
 def run_device_check(
@@ -100,9 +118,13 @@ def run_device_check(
     profile: DeviceProfile | None,
     templates: TemplateCatalog,
     acknowledge: list[Acknowledgement],
+    *,
+    previous_firmware: uuid.UUID | Literal[False] | None = False,
 ) -> dict[str, Any] | None:
     """Check what a phone adds to its profile (§4.1): its own values and
-    keys, on its own firmware. The profile's checks cover the rest."""
+    keys, on its own firmware. The profile's checks cover the rest.
+    ``previous_firmware``: the phone's image before this save, to report
+    what the firmware change brings."""
     from veyra.api.v1.device_profiles import served_models
 
     if profile is None:
@@ -115,29 +137,30 @@ def run_device_check(
     if key is None:
         return None
     vendor = templates.records[key].manifest.template.manufacturer
-    images = {
-        i.id: i.version
-        for i in db.scalars(
-            select(FirmwareImage).where(
-                FirmwareImage.id.in_(
-                    [x for x in (device.firmware_image_id, profile.firmware_image_id) if x]
-                )
-            )
+
+    def targets_with(image_id: uuid.UUID | None) -> list[Target]:
+        ids = [x for x in (image_id, profile.firmware_image_id) if x]
+        images = {
+            i.id: i.version
+            for i in db.scalars(select(FirmwareImage).where(FirmwareImage.id.in_(ids)))
+        }
+        return firmware_targets(
+            vendor,
+            device.model,
+            device_image=images.get(image_id) if image_id else None,
+            profile_image=images.get(profile.firmware_image_id)
+            if profile.firmware_image_id
+            else None,
+            reported=[device.firmware_reported],
+            catalog=capabilities(request, db),
         )
-    }
-    targets = firmware_targets(
-        vendor,
-        device.model,
-        device_image=images.get(device.firmware_image_id) if device.firmware_image_id else None,
-        profile_image=images.get(profile.firmware_image_id) if profile.firmware_image_id else None,
-        reported=[device.firmware_reported],
-        catalog=capabilities(request),
-    )
+
+    targets = targets_with(device.firmware_image_id)
     try:
         results = checks.check_profile(
             db,
             templates,
-            capabilities(request),
+            capabilities(request, db),
             profile,
             {device.model: key},
             device_values=dict(device.values or {}),
@@ -155,7 +178,25 @@ def run_device_check(
         db, principal, subject, results, mode, acknowledge, ip=ctx.ip, request_id=ctx.request_id
     )
     device.config_check = checks.summarize(report, device.model)
-    return report.as_dict()
+    out = report.as_dict()
+    if previous_firmware is not False:
+        try:
+            before = checks.check_profile(
+                db,
+                templates,
+                capabilities(request, db),
+                profile,
+                {device.model: key},
+                device_values=dict(device.values or {}),
+                device_keys=device.keys,
+                models=[device.model],
+                targets={device.model: targets_with(previous_firmware)},
+                site_id=device.site_id,
+            )
+        except TemplateError:
+            before = []
+        out["firmware"] = checks.firmware_diff(before, results, {device.model: 1})
+    return out
 
 
 def run_template_check(
@@ -184,7 +225,7 @@ def run_template_check(
                 model,
                 key,
                 precheck(
-                    capabilities(request),
+                    capabilities(request, db),
                     resolved,
                     Target(rec.manifest.template.manufacturer, model, None, "oldest"),
                 ),
@@ -288,6 +329,7 @@ def verify(
     from veyra.api.v1.provisioning import catalog_for
 
     templates = catalog_for(request, db)
+    saved: DeviceProfile | None = None
     if body.profile_id is not None:
         saved = db.get(DeviceProfile, body.profile_id)
         if saved is None or not principal.has(READ, saved.organization_id):
@@ -327,8 +369,20 @@ def verify(
     )
     served = served_models(templates, profile.template_key, profile.organization_id)
     # The profile here is never added to the session, so nothing is saved.
+    previous: uuid.UUID | Literal[False] | None = False
+    if saved is not None and "firmware_image_id" in body.model_fields_set:
+        previous = saved.firmware_image_id
     return run_profile_check(
-        request, db, principal, ctx, profile, templates, served, [], gate=False
+        request,
+        db,
+        principal,
+        ctx,
+        profile,
+        templates,
+        served,
+        [],
+        gate=False,
+        previous_firmware=previous,
     )
 
 
@@ -518,3 +572,211 @@ def set_mode(
     )
     db.commit()
     return get_mode(org_id, profile_id, principal, db)
+
+
+# ------------------------------------------------------------------ packs
+
+
+def _pack_out(pack: Any) -> dict[str, Any]:
+    from veyra.provisioning.capabilities import _cite
+
+    return {
+        "id": pack.info.id,
+        "name": pack.info.name,
+        "vendor": pack.info.vendor,
+        "version": pack.info.version,
+        "author": pack.info.author,
+        "description": pack.info.description,
+        "origin": pack.origin,
+        "supports": [
+            {
+                "family": s.family,
+                "models": s.models,
+                "firmware": s.firmware,
+                "source": _cite(s.source, {}),
+                "provenance": s.provenance,
+            }
+            for s in pack.supports
+        ],
+        "families": [
+            {
+                "family": f.info.family,
+                "name": f.info.name,
+                "models": f.info.models,
+                "format": f.info.format,
+                "firmware_packaging": f.info.firmware_packaging,
+                "templates": f.info.templates,
+                "releases": [
+                    {
+                        "version": r.version,
+                        "revision": r.revision,
+                        "models": list(r.models),
+                        "settings": len(r.entries),
+                        "cited": sum(
+                            1 for e in r.entries if e.provenance != "seeded-from-template"
+                        ),
+                    }
+                    for r in f.releases
+                ],
+            }
+            for f in pack.families.values()
+        ],
+    }
+
+
+@router.get("/capability-packs", summary="Vendor data packs and the phones they cover")
+def list_packs(
+    request: Request,
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    from sqlalchemy import func
+
+    caps = capabilities(request, db)
+    stmt = select(Device.manufacturer, Device.model, func.count(Device.id)).group_by(
+        Device.manufacturer, Device.model
+    )
+    orgs = principal.organization_ids_with(READ)
+    if orgs is not None:
+        stmt = stmt.where(Device.organization_id.in_(orgs or {uuid.UUID(int=0)}))
+    uncovered = [
+        {"manufacturer": m, "model": model, "phones": int(n)}
+        for m, model, n in db.execute(stmt)
+        if caps.family_for(m, model) is None
+    ]
+    return {
+        "packs": [_pack_out(p) for p in caps.packs.values()],
+        "load_errors": caps.load_errors if principal.is_platform_admin else {},
+        "uncovered": sorted(uncovered, key=lambda u: (-u["phones"], u["manufacturer"], u["model"])),
+    }
+
+
+def _platform(principal: Principal) -> None:
+    if not principal.is_platform_admin:
+        raise forbidden("Only a platform administrator can change the vendor data.")
+
+
+@router.post("/capability-packs", status_code=201, summary="Import a capability pack (ZIP)")
+async def import_pack(
+    request: Request,
+    file: UploadFile,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> dict[str, Any]:
+    from veyra.core.models import CapabilityPack
+    from veyra.provisioning import packs
+    from veyra.provisioning.capabilities import CapabilityError
+
+    _platform(principal)
+    data = await file.read(packs.MAX_BYTES + 1)
+    if len(data) > packs.MAX_BYTES:
+        raise ProblemError(413, "Too large", "A pack archive is at most 4 MB.", code="too_large")
+    try:
+        files = packs.read_archive(data)
+        pack = packs.validate_files(files)
+    except (packs.PackImportError, CapabilityError) as e:
+        raise ProblemError(
+            422,
+            "Invalid pack",
+            str(e),
+            code="invalid_pack",
+            errors=[{"message": m} for m in e.errors],
+        ) from e
+    caps = capabilities(request, db)
+    existing = caps.packs.get(pack.info.id)
+    if existing is not None and existing.origin != "local":
+        raise ProblemError(
+            409,
+            "Pack in use",
+            f"{pack.info.id} is provided by {existing.origin}; give the pack another id.",
+            code="pack_id_in_use",
+        )
+    row = db.scalar(select(CapabilityPack).where(CapabilityPack.pack_id == pack.info.id))
+    if row is None:
+        row = CapabilityPack(id=uuid.uuid4(), pack_id=pack.info.id, created_at=utcnow())
+        db.add(row)
+    row.updated_at = utcnow()
+    row.name, row.vendor, row.version, row.files = (
+        pack.info.name,
+        pack.info.vendor,
+        pack.info.version,
+        files,
+    )
+    row.uploaded_by, row.uploaded_by_label = principal.user_id, principal.label
+    db.flush()
+    audit.record(
+        db,
+        action="provisioning.pack.import",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        target_type="capability_pack",
+        target_id=None,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"pack": pack.info.id, "version": pack.info.version, "files": len(files)},
+    )
+    db.commit()
+    caps = packs.rebuild(request.app, db)
+    return _pack_out(caps.packs[pack.info.id])
+
+
+@router.delete("/capability-packs/{pack_id}", status_code=204, summary="Remove an imported pack")
+def delete_pack(
+    pack_id: str,
+    request: Request,
+    principal: Principal = Depends(require(WRITE)),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> Response:
+    from veyra.core.models import CapabilityPack
+    from veyra.provisioning import packs
+
+    _platform(principal)
+    row = db.scalar(select(CapabilityPack).where(CapabilityPack.pack_id == pack_id))
+    if row is None:
+        raise not_found("Imported pack")
+    db.delete(row)
+    audit.record(
+        db,
+        action="provisioning.pack.delete",
+        actor_user_id=principal.user_id,
+        actor_label=principal.label,
+        target_type="capability_pack",
+        target_id=None,
+        ip_address=ctx.ip,
+        request_id=ctx.request_id,
+        details={"pack": pack_id},
+    )
+    db.commit()
+    packs.rebuild(request.app, db)
+    return Response(status_code=204)
+
+
+@router.get(
+    "/capability-packs/{pack_id}/check",
+    summary="Check every template a pack is for against each of its releases",
+)
+def check_pack(
+    pack_id: str,
+    request: Request,
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    from veyra.api.v1.provisioning import catalog_for
+    from veyra.provisioning import packs
+
+    pack = capabilities(request, db).packs.get(pack_id)
+    if pack is None:
+        raise not_found("Pack")
+    return [
+        {
+            "template_key": c.template_key,
+            "model": c.model,
+            "release": c.release,
+            "error": c.error,
+            "checked": c.result.checked if c.result else 0,
+            "findings": c.findings,
+        }
+        for c in packs.check_pack(pack, catalog_for(request, db))
+    ]

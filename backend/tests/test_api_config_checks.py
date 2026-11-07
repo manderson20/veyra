@@ -251,3 +251,61 @@ def test_local_template_save_is_checked(admin, app, tmp_path):
     )
     assert r.status_code == 200, r.text
     assert r.json()["config_check"]["counts"]["overridden"] >= 1
+
+
+def test_firmware_change_reports_what_it_brings(admin, app, tmp_path):
+    """Assigning newer firmware: the settings it newly refuses and the phones
+    they reach, before saving (verify) and on the save (§4.1)."""
+    import uuid as _uuid
+
+    from veyra.core.models import FirmwareImage
+    from veyra.provisioning.capabilities import CapabilityCatalog
+
+    _setup(admin, app, tmp_path)  # writes the strict pack under tmp_path/caps
+    root = tmp_path / "caps"
+    (root / "yealink" / "t4x" / "87.toml").write_text(
+        'schema = 1\n[release]\nversion = "87"\nextends = "86"\n'
+        'models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]\n'
+        '[release.sources.rn]\ntitle = "Release notes V87"\n'
+        '[removed."features.intercom.barge"]\nsource = { ref = "rn", section = "Removed" }\n'
+    )
+    app.state.capabilities = CapabilityCatalog.from_paths([root])
+    assert app.state.capabilities.load_errors == {}
+    org = admin.get("/api/v1/organizations").json()["items"][0]["id"]
+    pid = admin.post(
+        PROFILES, json={"organization_id": org, "name": "Hall", "template_key": "yealink.t4x"}
+    ).json()["id"]
+    image = _uuid.uuid4()
+    with session_scope() as db:
+        db.add(
+            FirmwareImage(
+                id=image,
+                manufacturer="Yealink",
+                models=["T46U"],
+                version="108.87.0.1",
+                filename="T46U-108.87.0.1.rom",
+                size=1,
+                sha256="0" * 64,
+            )
+        )
+    r = admin.post(
+        "/api/v1/provisioning/verify", json={"profile_id": pid, "firmware_image_id": str(image)}
+    )
+    assert r.status_code == 200, r.text
+    diff = r.json()["firmware"]
+    new = [(f["model"], f["parameter"], f["rule"]) for f in diff["new"]]
+    assert new == [("T46U", "features.intercom.barge", "param.removed")]
+    assert diff["to"] and "108.87.0.1" in diff["to"]
+
+    r = admin.patch(f"{PROFILES}/{pid}", json={"firmware_image_id": str(image)})
+    assert r.status_code == 422, r.text
+    ack = [
+        {"fingerprint": f["fingerprint"], "reason": "Barge is not used"}
+        for f in r.json()["errors"]
+        if f["severity"] == "error"
+    ]
+    r = admin.patch(f"{PROFILES}/{pid}", json={"firmware_image_id": str(image), "acknowledge": ack})
+    assert r.status_code == 200, r.text
+    assert [f["parameter"] for f in r.json()["config_check"]["firmware"]["new"]] == [
+        "features.intercom.barge"
+    ]

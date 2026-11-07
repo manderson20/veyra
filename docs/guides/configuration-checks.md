@@ -16,6 +16,8 @@ covers:
   - backend/veyra/provisioning/precheck.py
   - backend/veyra/provisioning/verify.py
   - backend/veyra/provisioning/capabilities.py
+  - backend/veyra/provisioning/packs.py
+  - frontend/src/components/provisioning/PackCoverage.tsx
 ---
 
 Phones quietly ignore a setting they don't understand, or refuse a value their firmware doesn't take. Veyra checks first. When you save a template, a Base File Edit, a phone or a variable, Veyra builds the files the phones would download and compares every setting with what that model accepts on its firmware.
@@ -53,6 +55,12 @@ An override covers exactly one setting, with that value, on that model and firmw
 
 Overriding needs the **provisioning.check.override** permission (Organization Administrators have it). Without it, the window asks you to have an administrator review the settings.
 
+## Assign new firmware
+
+When you choose a different firmware image for a template or a phone, the check also compares the new firmware with the old one. The window then lists the settings the new firmware newly refuses or warns about, and how many phones on the template are affected. A problem the old firmware had and the new one does not counts as gone.
+
+When the new firmware would refuse a setting, the save stops like any other error. Change the setting, override it, or keep the old firmware.
+
 ## What "not checked" means
 
 Grey notes in the window are not passes:
@@ -85,6 +93,20 @@ Changing a mode needs the **provisioning.check.mode** permission and is recorded
 **Revoke** an override when it is no longer right. The next save of that configuration stops at the setting again.
 
 On [Extension Mapping](app:/devices/), a phone's status shows **Check: … errors** when its configuration has open errors, and **Check: overridden** when someone saved past them.
+
+## Vendor data
+
+The **Vendor data** card on [Provisioning → Configuration Checks](app:/provisioning/checks/) lists the packs of vendor data Veyra checks against:
+
+- **From:** *Built in* (comes with Veyra), *Module …* (an installed module brings it) or *Imported*.
+- **Phones covered:** the models and firmware each pack is for, and the document the model list comes from. *Model list taken from Veyra's templates* means it has not been confirmed with the vendor's documentation yet.
+- **Firmware releases:** each release with the number of settings it describes and how many of them are cited from the vendor.
+
+**Phones no pack covers** lists the models in use that Veyra cannot check.
+
+A platform administrator can **Import pack** (a ZIP with `pack.toml` at its top) to try vendor data before it is published, and **Remove** it again. An imported pack is used instead of the built-in data for the models it covers. Built-in and module packs cannot be removed here.
+
+From the server console, `sudo veyra packs import <folder>` and `sudo veyra packs remove <id>` do the same. To see the checks refuse a setting, import the example pack that comes with Veyra: `sudo veyra packs import /opt/veyra/current/docs/examples/capability-pack-yealink-strict`. It gives three Yealink T4x settings made-up rules. Remove it afterwards with `sudo veyra packs remove example.yealink-strict`.
 
 ## Phones always get their files
 

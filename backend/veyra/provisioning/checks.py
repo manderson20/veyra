@@ -396,6 +396,78 @@ def _uuid_or_none(value: str) -> uuid.UUID | None:
         return None
 
 
+# ------------------------------------------------------------------ firmware change
+
+
+def copy_profile(profile: DeviceProfile, **changes: Any) -> DeviceProfile:
+    """A transient copy (never added to the session) with some fields changed."""
+    fields = (
+        "id",
+        "organization_id",
+        "site_id",
+        "name",
+        "template_key",
+        "values",
+        "keys",
+        "model_keys",
+        "base_edits",
+        "firmware_image_id",
+        "config_check_mode",
+    )
+    data = {f: getattr(profile, f) for f in fields}
+    data.update(changes)
+    return DeviceProfile(**data)
+
+
+def _key(f: Finding) -> tuple[str, str, str, str, str]:
+    return (f.model, f.file, f.parameter, f.rule, f.value_key or f.value)
+
+
+def firmware_diff(
+    before: list[ModelResult],
+    after: list[ModelResult],
+    phones: dict[str, int],
+) -> dict[str, Any]:
+    """What changes for the phones when the firmware does (§4.1): the errors
+    and warnings that are new on the new release, and those that go away.
+    Fingerprints differ between releases, so findings are matched by model,
+    file, setting, rule and value."""
+
+    def index(results: list[ModelResult]) -> dict[tuple[str, str, str, str, str], Finding]:
+        out: dict[tuple[str, str, str, str, str], Finding] = {}
+        for r in results:
+            for f in r.result.findings:
+                if f.severity in ("error", "warning"):
+                    out.setdefault(_key(f), f)
+        return out
+
+    old, new = index(before), index(after)
+
+    def rows(found: dict[Any, Finding], keys: Iterable[Any]) -> list[dict[str, Any]]:
+        return [
+            {**found[k].as_dict(), "phones": phones.get(found[k].model, 0)} for k in sorted(keys)
+        ]
+
+    releases = {
+        "from": sorted({r.result.target.firmware or "oldest" for r in before}),
+        "to": sorted({r.result.target.firmware or "oldest" for r in after}),
+    }
+    return {
+        **releases,
+        "new": rows(new, new.keys() - old.keys()),
+        "gone": rows(old, old.keys() - new.keys()),
+    }
+
+
+def phones_by_model(db: Session, profile: DeviceProfile) -> dict[str, int]:
+    if profile.id is None:
+        return {}
+    out: dict[str, int] = {}
+    for (model,) in db.execute(select(Device.model).where(Device.profile_id == profile.id)):
+        out[model] = out.get(model, 0) + 1
+    return out
+
+
 # ------------------------------------------------------------------ device summary
 
 

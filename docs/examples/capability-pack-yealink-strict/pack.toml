@@ -1,0 +1,19 @@
+# An EXAMPLE pack for trying configuration checks (docs/guides/configuration-checks.md).
+# It is the built-in Yealink T4x data with three settings given made-up
+# rules, so a save can be refused on purpose. Never use it for real phones.
+schema = 1
+
+[pack]
+id = "example.yealink-strict"
+name = "Yealink T4x (example rules)"
+vendor = "yealink"
+version = "0.1.0"
+author = "Veyra Project"
+license = "AGPL-3.0-or-later"
+description = "For testing only: three made-up rules on the Yealink T4x data."
+
+[[supports]]
+family = "t4x"
+models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]
+firmware = ">=86"
+source = { title = "Example only: not a vendor document" }

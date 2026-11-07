@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     )
     # Built-in capability packs (docs/CONFIG_VERIFICATION.md §2.0).
     capability_paths: Annotated[list[Path], NoDecode] = Field(
-        default_factory=lambda: [Path("/opt/veyra/provisioning/capabilities")]
+        default_factory=lambda: [Path("/opt/veyra/current/provisioning/capabilities")]
     )
 
     # --- Provisioning (docs/DEVICE_PROVISIONING.md §3) --------------------------

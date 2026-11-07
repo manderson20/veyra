@@ -99,8 +99,11 @@ The loader rejects a pack whose `supports` entry names a family the pack
 lacks, or whose family lists a model that no `supports` entry covers. It
 also rejects a `supports` entry without a source.
 
-**Where packs come from**, in this order (a later pack id never replaces
-an earlier one; the loader refuses the duplicate and logs it):
+**Where packs come from**, in this order. A pack id can be loaded only once:
+the loader refuses a duplicate and logs it. When two packs cover the same
+model, an imported pack wins over a module's and a module's over a built-in
+one, so a correction an administrator imports is the one used (decided
+while building slice 6, so that an imported test pack actually applies):
 
 1. **Built in:** `provisioning/capabilities/<pack>/` in this repository,
    reviewed through pull requests. Poly and Yealink come first, the other
@@ -113,11 +116,14 @@ an earlier one; the loader refuses the duplicate and logs it):
    Provisioning → Checks → Packs, the same way local templates are
    imported. This is for testing a pack before it is published.
 
-A developer builds a pack with `veyra-cli provisioning pack new <vendor>`
-(writes the skeleton), `pack validate <dir>` (the loader's checks), `pack
-seed <dir> --template <key>` (§2.7) and `pack check <dir>` (runs the checker
-on every template the pack's families list). `docs/CAPABILITY_CATALOG.md`
-is the pack author's guide.
+A developer builds a pack with `veyra packs new <dir> --vendor … --family …`
+(writes the skeleton), `veyra packs validate <dir>` (the loader's checks),
+`veyra packs seed <family dir>` (§2.7) and `veyra packs check <dir>` (runs
+the checker on every template the pack's families list, on every release).
+`docs/CAPABILITY_CATALOG.md` is the pack author's guide. Imported packs are
+kept in the `capability_packs` table (migration 0094), so they reach an HA
+standby and backups with the database; only platform administrators import
+or remove them.
 
 **Coverage page.** Provisioning → Checks → Coverage lists every pack with
 its version, where it came from, the models and firmware it supports and
@@ -844,11 +850,27 @@ is audited.
    organization modes), the template's mode control, and a check badge in
    Extension Mapping's status cell in place of a separate column, because
    the table is already wide. Plus the guide `configuration-checks.md`.
-5. The firmware assignment check (the diff between releases).
-6. Pack sources from modules and local import, the Coverage page and the
-   `pack` commands.
-7. The guides, the pack author's guide, the prompt, the CHANGELOG, Test:
-   issues and the wiki.
+5. **Done:** the firmware assignment check. A profile or device save that
+   changes the image, and `POST /provisioning/verify` with
+   `firmware_image_id`, add `firmware: {from, to, new, gone}`. Findings are
+   matched across releases by model, file, setting, rule and value, because
+   fingerprints differ between releases, and each new one carries the
+   number of phones of that model on the profile. In enforce mode a newly
+   refused setting stops the save as usual; the diff is shown on a
+   successful save and in verify.
+6. **Done:** pack sources (`provisioning/packs.py`): module packs through
+   `[provisioning] capabilities` in `module.toml`, and imported ZIPs
+   (`POST`/`DELETE /provisioning/capability-packs`, platform
+   administrators). The catalog is rebuilt at startup, on a module's enable
+   or disable, and on import or delete. Also the Coverage listing
+   (`GET /provisioning/capability-packs`: packs, sources, how much is cited,
+   phones in use no pack covers), `GET …/{id}/check`, the **Vendor data**
+   card on the Configuration Checks page, and `veyra packs new | validate |
+   seed | check`.
+7. **Done:** the admin guide `docs/guides/configuration-checks.md`, the pack
+   author's guide `docs/CAPABILITY_CATALOG.md`, the prompt
+   `docs/prompts/add-firmware-release.md`, and the CHANGELOG. Test: issues
+   and the wiki page follow when the branch is merged.
 
 ## 11. Open questions
 
