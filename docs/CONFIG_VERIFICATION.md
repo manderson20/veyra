@@ -1,6 +1,6 @@
 # Configuration verification
 
-Status: **design, for review** (2026-11-07; revised the same day with the owner's answers, §0). Nothing is built yet. Builds on
+Status: **approved 2026-11-07**, being built on branch `config-verification` (slices in §10). Owner's answers in §0. Builds on
 [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) (templates spec 2,
 profiles, firmware), [PROVISIONING_TEMPLATES.md](PROVISIONING_TEMPLATES.md),
 [PROVISIONING_BREADTH.md](PROVISIONING_BREADTH.md) (variables, official
@@ -33,6 +33,10 @@ templates, Base File Edit #372) and
   permissions in the user roles (§8).
 - **Composite settings** take the safest route: they are checked with the
   extreme values and always marked for review (§3.0).
+- **Vendor packs.** Each vendor's checks are a self-contained pack, built
+  one vendor at a time. A pack states the devices it supports, taken from
+  that vendor's documentation and cited. Other developers can build and
+  ship their own packs (§2.0).
 
 ## 1. Goals
 
@@ -64,6 +68,62 @@ firmware images, the phone book and ring tones).
 
 ## 2. The capability catalog
 
+### 2.0 Vendor packs
+
+The catalog is made of **packs**, one per vendor (or one per vendor line
+when a vendor's lines have nothing in common). A pack holds its families
+and their release files (§2.1–§2.5), plus `pack.toml`:
+
+```toml
+schema = 1
+
+[pack]
+id = "veyra.yealink"              # like a module id: lower case, dot segments
+name = "Yealink phones"
+vendor = "yealink"
+version = "0.1.0"                 # the pack's own version, raised with every change
+author = "Veyra Project"
+license = "AGPL-3.0-or-later"
+
+# The devices the pack checks, as the vendor's documentation lists them.
+# A model the pack does not list is "not covered": it is never checked,
+# even if a family's models happen to match it.
+[[supports]]
+family = "t4x"
+models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]
+firmware = ">=86"
+source = { title = "Yealink SIP IP Phones Administrator Guide V86", section = "Supported models", page = "TBD" }
+```
+
+The loader rejects a pack whose `supports` entry names a family the pack
+lacks, or whose family lists a model that no `supports` entry covers. It
+also rejects a `supports` entry without a source.
+
+**Where packs come from**, in this order (a later pack id never replaces
+an earlier one; the loader refuses the duplicate and logs it):
+
+1. **Built in:** `provisioning/capabilities/<pack>/` in this repository,
+   reviewed through pull requests. Poly and Yealink come first, the other
+   vendors one at a time after that.
+2. **Modules:** a module ships a pack with `[provisioning] capabilities =
+   "capabilities"` in `module.toml`. Signing and trust are the same as for
+   any module (docs/MODULE_DEVELOPMENT.md §6). This is the path for other
+   developers. A pack is data only, so no code runs.
+3. **Local:** an administrator imports a pack directory or archive under
+   Provisioning → Checks → Packs, the same way local templates are
+   imported. This is for testing a pack before it is published.
+
+A developer builds a pack with `veyra-cli provisioning pack new <vendor>`
+(writes the skeleton), `pack validate <dir>` (the loader's checks), `pack
+seed <dir> --template <key>` (§2.7) and `pack check <dir>` (runs the checker
+on every template the pack's families list). `docs/CAPABILITY_CATALOG.md`
+is the pack author's guide.
+
+**Coverage page.** Provisioning → Checks → Coverage lists every pack with
+its version, where it came from, the models and firmware it supports and
+their sources. It also lists the models in use in Veyra that no pack covers,
+so it is clear which phones are checked and which are not.
+
 ### 2.1 Layout
 
 ```
@@ -88,10 +148,8 @@ correction** to an existing release edits that release's file and raises its
 `revision`. Releases that extend it pick the correction up unless they
 override that parameter themselves.
 
-Modules (docs/MODULE_DEVELOPMENT.md) may later ship a `capabilities/`
-directory of their own for a vendor Veyra does not cover. The loader merges
-module directories after the built-in one and refuses a family that both
-define (open question 9).
+Each pack is self-contained: a release file can only extend a release in
+the same pack (§2.0).
 
 ### 2.2 `family.toml`
 
@@ -742,7 +800,7 @@ is audited.
 
 ## 10. Build slices (after approval)
 
-1. Field domains on facts and variables (with the validator test), then the catalog schema, loader, `family.toml` + seeded releases for Poly VVX and
+1. Field domains on facts and variables (with the validator test), then the pack and catalog schema, loader, `pack.toml`, `family.toml` + seeded releases for Poly VVX and
    Yealink T4x, the seeding script and the "official templates pass" test.
 2. Checker (`verify.py`): tracer rendering, bindings, value and domain rules, unit tests with fixtures per rule.
 3. Migration 0093, modes, the `acknowledge` contract, the hooks in §4.1 and
@@ -751,8 +809,10 @@ is audited.
 4. Interface: `ConfigFindings`, the save dialog, the Checks page, the mode
    control, and the device list column.
 5. The firmware assignment check (the diff between releases).
-6. The guides, the contributor doc, the prompt, the CHANGELOG, Test: issues
-   and the wiki.
+6. Pack sources from modules and local import, the Coverage page and the
+   `pack` commands.
+7. The guides, the pack author's guide, the prompt, the CHANGELOG, Test:
+   issues and the wiki.
 
 ## 11. Open questions
 
@@ -781,7 +841,8 @@ is audited.
    template text? (Proposed: no; each profile stands on its own.)
 8. ~~Device-level mode.~~ Resolved: per profile at the finest; use a test
    profile.
-9. **Catalogs from modules** (§2.1): in scope now, or later?
+9. ~~Catalogs from modules.~~ Resolved: vendor packs from the repository,
+   modules or a local import (§2.0).
 10. **Grandstream and Algo** families are left for after VVX and T4x; the
     format already allows them.
 11. ~~Composite parameters.~~ Resolved: checked with the extreme values and
