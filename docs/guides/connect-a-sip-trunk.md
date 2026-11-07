@@ -28,6 +28,7 @@ Trunks are set up at [Telephony → SIP Trunks](app:/trunks/).
 
 ## Before you start
 
+- Still choosing a carrier? [Choose a SIP trunk provider](guide:sip-providers) lists providers known to work with Veyra, how each connects, and what each offers for 911.
 - Only platform administrators can add or change trunks. Organization administrators can see the list so they can pick a trunk on an inbound route.
 - Ask the carrier which of the two ways of connecting they use, and for the details below.
 
