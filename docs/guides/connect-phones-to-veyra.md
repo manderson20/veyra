@@ -96,7 +96,7 @@ When the bootstrap is on, the **Phone provisioning** card also shows the switch 
 
 A phone Veyra does not know belongs to no organization yet, so only platform administrators see its requests.
 
-A [configuration check](guide:configuration-checks) never stops a phone from getting its files. A phone served while its configuration has open check errors still gets them, and the server log notes it.
+A [configuration check](guide:configuration-checks) never stops a phone from getting its files. A phone served while its configuration has open check errors still gets them, and the server log notes it with the phone's device id.
 
 ## If something doesn't work
 
