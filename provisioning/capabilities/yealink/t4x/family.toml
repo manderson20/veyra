@@ -1,0 +1,15 @@
+schema = 1
+
+[family]
+vendor = "yealink"
+family = "t4x"
+name = "Yealink T4x"
+models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]
+format = "cfg"
+# 108.86.0.15 and 66.86.0.15 are both release 86.0.15: the first number is
+# the model's prefix.
+version_scheme = "yealink"
+# Yealink ships firmware per model; each release file names its models.
+firmware_packaging = "model"
+files = ["{mac}.cfg"]
+templates = ["yealink.t4x"]

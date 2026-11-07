@@ -174,7 +174,7 @@ firmware_packaging = "family"
 # Files of the family's templates that the checker reads, as their filename
 # patterns in template.toml. Others (such as the Poly master file, which
 # only lists other files) are skipped, and the report says so.
-files = ["{mac}-phone.cfg", "{mac}.cfg"]
+files = ["veyra-{mac}.cfg"]
 # Templates that use this catalog. A template's own family is the first
 # family whose models include the device's model.
 templates = ["poly.vvx.base", "poly.vvx.411", "poly.vvx.450"]
@@ -353,16 +353,22 @@ is.
 
 ### 2.7 Seeding
 
-To start, there are two families, Poly VVX (`poly.vvx.base`, `.411`, `.450`)
-and Yealink T4x (`yealink.base`, `yealink.t4x`). A seeding script,
-`tools/seed-capabilities.py`, renders each official template of the family
-with sample facts for every model it lists: all key types, the maximum
-number of lines and paging on. It collects every parameter through
-`base_edits.settings()`, folds indexed names into `{n}`, and writes the
-entries missing from the catalog with `provenance = "seeded-from-template"`
-and a type guessed from the values seen. The script only adds entries and
-never changes existing ones. It is run by hand, and its output is reviewed
-like any other catalog change.
+To start, there are two families, Poly VVX (`poly.vvx.411`, `.450`, on
+`poly.vvx.base`; first release 5.9.0) and Yealink T4x (`yealink.t4x` on
+`yealink.base`; first release 86). The seeder
+(`python -m veyra.provisioning.capability_seed <family dir>`) **scans** the
+templates' sources instead of rendering them, so that settings written only
+in some branches (daylight saving, one key type) are found too. It blanks
+the Jinja tags, turns each `{{ … }}` into a token, and then finds the
+settings with `base_edits.settings()`. A token in a name becomes `{n}`, and
+a second one becomes `{m}`. The seeder adds the missing entries to the
+family's first release as `type = "string"`, with no value rules and
+`provenance = "seeded-from-template"`. The note says which template writes
+the setting, and `seen` lists what it writes. Such an entry never produces
+an error. The seeder only adds entries and never changes existing ones. It
+is run by hand, and its output is reviewed like any other catalog change.
+The supported-models list in each seeded `pack.toml` is also marked
+`seeded-from-template` until it is replaced with the vendor's list.
 
 A test renders every official template for every model of the two families.
 It asserts the result has **no errors** and lists any parameter missing from
@@ -800,9 +806,13 @@ is audited.
 
 ## 10. Build slices (after approval)
 
-1. Field domains on facts and variables (with the validator test), then the pack and catalog schema, loader, `pack.toml`, `family.toml` + seeded releases for Poly VVX and
-   Yealink T4x, the seeding script and the "official templates pass" test.
-2. Checker (`verify.py`): tracer rendering, bindings, value and domain rules, unit tests with fixtures per rule.
+1. **Done:** the pack and catalog schema, the loader
+   (`provisioning/capabilities.py`), the seeded Poly VVX and Yealink T4x
+   packs, the seeder, and the test that every setting the official
+   templates write is in the catalog.
+2. Field domains on facts and variables (with the validator test), then the
+   checker (`verify.py`): tracer rendering, bindings, the value and domain
+   rules, and unit tests with fixtures for each rule.
 3. Migration 0093, modes, the `acknowledge` contract, the hooks in §4.1 and
    `POST /provisioning/verify`, the `config_check` summary, the serve-time
    log line, and the audit events.

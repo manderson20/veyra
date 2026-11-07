@@ -1,0 +1,333 @@
+# The first release of the family: the full parameter list. Entries marked
+# seeded-from-template were taken from what Veyra's templates write and
+# still need a citation from the Yealink Administrator Guide.
+schema = 1
+
+[release]
+version = "86"
+models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]
+revision = 1
+
+[param."account.{n}.auth_name"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ line.sip_username }}"]
+
+[param."account.{n}.display_name"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ c(line.caller_id_name or line.display_name or line.extension_number) }}"]
+
+[param."account.{n}.enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."account.{n}.label"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ c(line.label or line.extension_number) }}"]
+
+[param."account.{n}.password"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ line.sip_password }}"]
+
+[param."account.{n}.sip_server.1.address"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.sip_host }}"]
+
+[param."account.{n}.sip_server.1.expires"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ registration_expires }}"]
+
+[param."account.{n}.sip_server.1.port"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.sip_port }}"]
+
+[param."account.{n}.sip_server.1.transport_type"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ tr }}"]
+
+[param."account.{n}.srtp_encryption"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ {\"off\": 0, \"optional\": 1, \"required\": 2}[server.srtp] }}"]
+
+[param."account.{n}.subscribe_mwi"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."account.{n}.subscribe_mwi_to_vm"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."account.{n}.user_name"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ line.sip_username }}"]
+
+[param."auto_provision.server.password"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ device.credential_password }}"]
+
+[param."auto_provision.server.url"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.provisioning_url }}"]
+
+[param."auto_provision.server.username"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ device.credential_user }}"]
+
+[param."auto_provision.weekly.begin_time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ \"%02d\" | format(polling_hour % 24) }}:00"]
+
+[param."auto_provision.weekly.dayofweek"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["0123456"]
+
+[param."auto_provision.weekly.enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."auto_provision.weekly.end_time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ \"%02d\" | format((polling_hour + 2) % 24) }}:00"]
+
+[param."features.hotline_delay"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ hl.get(\"hotline_delay\", 0) }}"]
+
+[param."features.hotline_number"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ c(hl.hotline) }}"]
+
+[param."features.intercom.allow"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ intercom_auto_answer | bool01 }}"]
+
+[param."features.intercom.barge"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["0"]
+
+[param."features.intercom.mute"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ intercom_mic_muted | bool01 }}"]
+
+[param."features.intercom.tone"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."features.pickup.direct_pickup_code"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.pickup_prefix }}"]
+
+[param."features.pickup.direct_pickup_enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."features.remote_phonebook.enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."linekey.{n}.extension"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.pickup_prefix }}"]
+
+[param."linekey.{n}.label"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ c(key.label) }}"]
+
+[param."linekey.{n}.line"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1", "{{ key.value }}"]
+
+[param."linekey.{n}.type"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["11", "13", "15", "16", "24", "3"]
+
+[param."linekey.{n}.value"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ key.multicast_address }}:{{ key.multicast_port }}", "{{ key.value }}"]
+
+[param."local_time.dst_time_type"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."local_time.end_time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ e.month }}/{{ e.week }}/{{ ((e.day_of_week + 5) % 7) + 1 }}/{{ e.hour }}"]
+
+[param."local_time.ntp_server1"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.ntp_server }}"]
+
+[param."local_time.offset_time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["60"]
+
+[param."local_time.start_time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ s.month }}/{{ s.week }}/{{ ((s.day_of_week + 5) % 7) + 1 }}/{{ s.hour }}"]
+
+[param."local_time.summer_time"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["0", "1"]
+
+[param."local_time.time_zone"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ \"-\" if off < 0 else \"+\" }}{{ a // 3600 }}                 :{{ \"%02d\" | format((a % 3600) // 60) }}"]
+
+[param."multicast.codec"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ \"G722\" if paging.codec == \"G.722\" else \"PCMU\" }}"]
+
+[param."multicast.listen_address.{n}.ip_address"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ g.multicast_address }}:{{ g.multicast_port }}"]
+
+[param."multicast.listen_address.{n}.label"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ c(g.label) }}"]
+
+[param."remote_phonebook.data.1.name"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ c(organization.name) }}"]
+
+[param."remote_phonebook.data.1.password"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ device.credential_password }}"]
+
+[param."remote_phonebook.data.1.url"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.directory_url }}yealink.xml"]
+
+[param."remote_phonebook.data.1.username"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ device.credential_user }}"]
+
+[param."sip.notify_reboot_enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."static.firmware.url"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.firmware_url }}"]
+
+[param."static.network.vlan.internet_port_enable"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["1"]
+
+[param."static.network.vlan.internet_port_vid"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ vlan_id }}"]
+
+[param."static.security.user_password"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["admin:{{ admin_password }}"]
+
+[param."voice_mail.number.{n}"]
+type = "string"
+provenance = "seeded-from-template"
+note = "Written by yealink.base (phone.cfg.j2)"
+seen = ["{{ server.voicemail_number }}"]

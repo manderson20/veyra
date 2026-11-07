@@ -1,0 +1,21 @@
+# Poly phones: what each model accepts, per UC Software release
+# (docs/CONFIG_VERIFICATION.md §2, docs/CAPABILITY_CATALOG.md).
+schema = 1
+
+[pack]
+id = "veyra.poly"
+name = "Poly phones"
+vendor = "poly"
+version = "0.1.0"
+author = "Veyra Project"
+license = "AGPL-3.0-or-later"
+description = "Poly VVX on UC Software. Seeded from Veyra's official templates; vendor citations still to be added."
+
+# Seeded: the models Veyra's templates list. Replace with the vendor's
+# supported-models list (UC Software release notes) and its citation.
+[[supports]]
+family = "vvx"
+models = ["VVX 410", "VVX 411", "VVX 450"]
+firmware = ">=5.9.0"
+source = { title = "Veyra templates poly.vvx.411 and poly.vvx.450 (template.toml)" }
+provenance = "seeded-from-template"

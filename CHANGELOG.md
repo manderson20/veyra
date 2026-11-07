@@ -10,8 +10,11 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 
 ## Unreleased
 
+### Added
+- **Phone capability packs** (configuration verification, slice 1): `provisioning/capabilities/` holds one pack per vendor, with a file per firmware release that lists only what changed. Poly VVX and Yealink T4x are seeded from Veyra's own templates and still need citations from the vendors' guides. Nothing checks phones yet.
+
 ### Documentation
-- **Configuration verification design** (`docs/CONFIG_VERIFICATION.md`, for review): checking phone settings against a per-firmware catalog of what each model accepts, with overrides, and modes to turn checks off.
+- **Configuration verification design** (`docs/CONFIG_VERIFICATION.md`, approved): checking phone settings against a per-firmware catalog of what each model accepts, with overrides, vendor packs other developers can build, and modes to turn checks off.
 
 ## 0.27.86 — 2026-11-04
 

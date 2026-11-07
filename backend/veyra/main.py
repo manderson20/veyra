@@ -30,6 +30,7 @@ from veyra.core.signing import Keyring
 from veyra.ha.standby import write_blocked
 from veyra.modules.manager import ModuleManager
 from veyra.provisioning import serve
+from veyra.provisioning.capabilities import CapabilityCatalog
 from veyra.provisioning.renderer import TemplateCatalog
 from veyra.telephony import get_adapter
 from veyra.telephony.asterisk.ari import AriClient
@@ -131,6 +132,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.modules = ModuleManager(settings, bus, app.state.keyring)
     app.state.telephony = get_adapter(settings)
     app.state.templates = TemplateCatalog.from_paths(settings.template_paths)
+    app.state.capabilities = CapabilityCatalog.from_paths(settings.capability_paths)
+    for path, errors in app.state.capabilities.load_errors.items():
+        log.warning("capability pack %s not loaded: %s", path, "; ".join(errors))
     app.state.callevents = CallEventHub()
     # High availability (docs/HIGH_AVAILABILITY.md §9): a standby (or a
     # frozen primary) refuses writes; the standby's sign-in lives in memory.
