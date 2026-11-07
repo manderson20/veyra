@@ -98,6 +98,8 @@ The number the called person sees is chosen in this order:
 
 The **Caller ID** column shows **From the extension** when the route has no number of its own.
 
+**With several organizations on the server,** a call presents the extension's **Outbound caller ID number**, else its organization's **Main number** (see [Organizations and sites](guide:organizations-and-sites)). A route for one organization may still **Always send** its own number. The trunk's default and a route for every organization are never used, because they could be another organization's number, and a route for every organization cannot have a caller ID. A call from an organization with no number to present is refused, and the server log says so.
+
 > **Tip:** Most carriers only accept numbers that belong to you. Set the trunk's **Default caller ID** to your main number so there is always a valid one.
 
 ## Warnings at the top of the page

@@ -34,6 +34,7 @@ Both pages are under **Directory** in the menu: [Organizations](app:/organizatio
    - **Intercom:** whether phones answer intercom calls on speaker. This is the default; each extension can override it.
    - **Answer another phone's call:** who may dial `**` and an extension to answer a call ringing there: **Any phone of the organization**, or **Only phones in the same pickup group**.
    - **Callers who ring through Do Not Disturb:** numbers or extensions that ring every phone even when it has Do Not Disturb on, such as the district office. One per line, at most 50.
+   - **Main number** (platform administrators): one of the organization's numbers. With several organizations on the server, outside calls from a phone without its own outbound caller ID present it. Every organization needs one before multi-tenancy can be turned on, and it cannot be withdrawn from the **Numbers** card while it is the main number.
    - **Outbound caller ID allow list:** numbers an extension may send as caller ID besides the organization's own numbers. Changing it also needs the routing permission.
    - **Hold music:** what callers hear on hold.
    - **Fax header** and **Fax station ID:** printed on, and announced with, every fax the organization sends.
@@ -90,7 +91,7 @@ Each organization's page has a **Numbers** card: the phone numbers that belong t
 - When multi-tenancy was turned on, Veyra filled the list from the existing inbound routes and emergency caller IDs (**From existing routes**). On a server with one organization, creating an inbound route assigns its number (**From a route**).
 - If two organizations route the same number, the route of the organization that does not own it is skipped, and the Organizations page lists it under **Numbers routed by an organization that does not own them**. Assign the number to the right organization, or delete the route.
 
-Organization administrators see their own organization's numbers but cannot change them.
+Organization administrators see their own organization's numbers but cannot change them. A site's emergency number must also be one of its organization's numbers.
 
 ## If something doesn't work
 

@@ -5,7 +5,7 @@ audience: admin
 section: Calls and call flows
 order: 40
 reviewed: 0.27.87
-checked: 2026-11-02T06:20Z
+checked: 2026-11-07T22:59Z
 pages:
   - /routing/time-conditions/
   - /routing/time-conditions/view/

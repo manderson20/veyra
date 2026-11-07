@@ -4,7 +4,7 @@ summary: Create an extension for each phone, assign it to a person, and set its 
 audience: admin
 section: Getting started
 order: 50
-reviewed: 0.27.82
+reviewed: 0.27.87
 checked: 2026-10-29
 pages:
   - /extensions/
@@ -63,6 +63,7 @@ Choose an extension in the list to open it. The tabs across the top are:
 
 - **Caller ID name** and **Caller ID number:** what colleagues see on internal calls.
 - **Outbound caller ID number:** sent to the carrier on outside calls. It must be one of the organization's numbers (from its inbound routes) or on the organization's allow list. Empty: the route's or the trunk's number is used.
+- **With several organizations on the server,** the outbound caller ID must be one of the organization's own numbers (its **Numbers** card) or on its allow list, and the **Emergency caller ID number** one of its own numbers, so the 911 center's callback rings here. Only platform administrators may set other numbers. An empty outbound caller ID presents the organization's **Main number**.
 - **Outbound caller ID name:** sent with it; carriers may replace it.
 - **Emergency caller ID number:** sent on 911 calls instead of the regular caller ID.
 

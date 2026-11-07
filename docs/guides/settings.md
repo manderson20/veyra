@@ -98,4 +98,5 @@ Multi-tenancy lets one Veyra server serve several organizations whose phones can
 - **"Unencrypted delivery … is only allowed to a loopback relay":** choose STARTTLS or TLS.
 - **"Enter the password for the SMTP user name":** a user name needs a password.
 - **The card says *Needs attention*:** the saved settings have a problem; it is shown in the yellow box.
-- **Turning on multi-tenancy fails:** the list under the card shows which check failed.
+- **Turning on multi-tenancy fails:** the list under the card shows which check failed. Every organization needs a **Main number** first (see [Organizations and sites](guide:organizations-and-sites)).
+- **A check says Review:** multi-tenancy is on, but some caller IDs are not their organization's numbers, such as an extension's outbound caller ID. The list names each one; correct them on the extension or route.
