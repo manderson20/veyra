@@ -1,11 +1,30 @@
 # Configuration verification
 
-Status: **design, for review** (2026-11-07). Nothing is built yet. Builds on
+Status: **design, for review** (2026-11-07; revised the same day with the owner's answers, §0). Nothing is built yet. Builds on
 [DEVICE_PROVISIONING.md](DEVICE_PROVISIONING.md) (templates spec 2,
 profiles, firmware), [PROVISIONING_TEMPLATES.md](PROVISIONING_TEMPLATES.md),
 [PROVISIONING_BREADTH.md](PROVISIONING_BREADTH.md) (variables, official
 templates, Base File Edit #372) and
 [PROVISIONING_HARDWARE_CHECKS.md](PROVISIONING_HARDWARE_CHECKS.md).
+
+## 0. Owner decisions (2026-11-07)
+
+- **Two layers of variables.** A phone's file holds the *vendor's
+  parameters* (`reg.1.address`). Veyra fills them from *Veyra fields*: data
+  each phone has its own value of (the extension number, the SIP user, the
+  MAC), already stored in the database and listed in
+  `provisioning/catalog.py`. The checker checks the fields, not every
+  phone's values (§3.0).
+- **A precheck, not a check of every phone.** The checker runs against the
+  vendor catalog when a template, profile, Base File Edit or variable is
+  saved. It does not render and check each phone.
+- **Firmware follows the vendor's packaging.** One release file covers
+  several models when the vendor ships one firmware for them (Poly UC
+  Software), or one model when the vendor ships firmware per model (§2.2).
+- **Enforce is the default** for every installation, new and upgraded.
+  Administrators can change it.
+- **Modes are per profile at the finest.** There is no per-phone switch;
+  build a test profile for phones that should not be checked (§5).
 
 ## 1. Goals
 
@@ -82,6 +101,10 @@ format = "xml"                    # xml | cfg | grandstream-p | algo-conf
 # 108) and compares the rest, because the same release line carries a
 # different prefix on each model.
 version_scheme = "dotted"
+# How the vendor ships firmware: "family" (one release for every model
+# listed, as Poly UC Software does) or "model" (each model has its own
+# firmware and release files list the models they cover, as Yealink does).
+firmware_packaging = "family"
 # Files of the family's templates that the checker reads, as their filename
 # patterns in template.toml. Others (such as the Poly master file, which
 # only lists other files) are skipped, and the report says so.
@@ -197,6 +220,7 @@ name = "Yealink T4x"
 models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]
 format = "cfg"
 version_scheme = "yealink"        # 108.86.0.15 and 66.86.0.15 are both release 86.0.15
+firmware_packaging = "model"      # each release file names the models it covers
 files = ["{mac}.cfg"]
 templates = ["yealink.base", "yealink.t4x"]
 
@@ -204,6 +228,7 @@ templates = ["yealink.base", "yealink.t4x"]
 schema = 1
 [release]
 version = "86"
+models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]   # with "model" packaging
 revision = 1
 [release.sources.ag86]
 title = "Yealink SIP IP Phones Administrator Guide V86"
@@ -279,6 +304,49 @@ the catalog. A template change that adds a parameter therefore fails until
 the catalog has it.
 
 ## 3. The checker
+
+### 3.0 Fields, not phones
+
+A template rarely writes a fixed value. Most parameters are filled from a
+Veyra field: `account.1.user_name = {{ line.sip_username }}`. Every phone
+has its own value of that field, but Veyra already knows the field's shape,
+because it enforces that shape when the value is saved. An extension number
+is 2 to 32 digits, a VLAN is 1 to 4094, a display name is at most 80
+characters. So the precheck asks **"can any value this field can hold
+break this parameter?"** once, and does not ask "does phone 47's value
+break it?" for each phone.
+
+1. **Field domains.** Each `Fact` in `provisioning/catalog.py` and each core
+   or template variable (`spec.py` `VariableDef`, provisioning variables)
+   gets a domain: its type and its length, pattern or range. Facts take it
+   from the validator that guards the database field, such as the
+   extension's number pattern. A test asserts that each domain matches its
+   validator, so the two cannot drift apart. These are **not new database
+   columns**. The data stays where it is, and only its description is
+   added.
+2. **Bindings.** The precheck renders the template once with *tracer
+   values*. Each field gets a distinct value of a valid shape, and the
+   checker reads which field ended up in which parameter. This works
+   whatever Jinja the template uses (loops, filters, `if`), and it needs no
+   parser of Jinja expressions. A parameter that holds a fixed value is
+   checked by that value. A parameter fed by one or more fields is checked
+   by their domains.
+3. **Domain against rule.** A field's domain must fit the parameter's
+   rules. If no value of the domain fits, the result is an **error** (a
+   display name in an int parameter). If only some values fit, it is a
+   **warning** that gives an example value that would fail ("a display name
+   over 64 characters would be cut"). If every value fits, the parameter
+   passes.
+4. **Counts.** Index ranges (`reg.{n}`, `linekey.{n}`) come from what the
+   profile defines: its key list is checked as it is, and lines up to the
+   model's most lines.
+
+The rendered values a profile fixes (its values, keys, Base File Edits and
+the provisioning variables it resolves) are real values at profile level,
+and the checker checks them as values. What varies per phone is covered by
+the domains. A device's own overrides (`device.values`, device keys) are the
+only per-phone values, and a device save checks those against the parameters
+they feed. It does not run a full render.
 
 ### 3.1 Function
 
@@ -411,13 +479,13 @@ to. Versions in the same release are checked once.
 | Validate a template | `POST /templates/validate`, the editor's preview | same, findings returned only |
 | Base File Edit | `device_profiles.py` base edits | each model of the profile × its firmware targets |
 | Profile save (values, keys, template) | `device_profiles.py` `POST`, `PATCH` | same |
-| Device save | `devices.py` `POST`, `PATCH`, `use-template` | the device on its firmware |
-| Device Configuration tab preview | `devices.py` preview (adds `findings` next to `warnings`) | the device, findings returned only |
-| Provisioning variable change | `provisioning_variables.py` `POST`, `PATCH` | every profile whose scope the variable reaches, per model × firmware (open question 6) |
+| Device save | `devices.py` `POST`, `PATCH`, `use-template` | only the device's own overrides, against the parameters they feed (§3.0); moving a device to a profile shows that profile's result |
+| Device Configuration tab preview | `devices.py` preview (adds `findings` next to `warnings`) | the profile's precheck for this model and firmware, plus the device's overrides |
+| Provisioning variable change | `provisioning_variables.py` `POST`, `PATCH` | the variable's value against the parameters it feeds in each template that uses it, per model × firmware: one check per template, not per profile or phone, so it runs while you wait |
 | Firmware image assigned | profile or device save with `firmware_image_id` | every phone that would run it: "will the new firmware still take our configuration" |
 
-Rendering reuses `render_device()` and `sample_facts()` with masked secrets
-off. Secret values are hashed as in §3.1 and never leave the checker.
+Rendering reuses `render()` with tracer facts built like `sample_facts()`
+(§3.0). It never uses a real phone's facts. Secret values are hashed as in §3.1 and never leave the checker.
 
 The firmware assignment check returns the findings that are **new** under
 the new release compared with the current one, grouped by phone and
@@ -481,12 +549,15 @@ applies:
 
 1. **Installation**, `installation.config_check_mode`. Default `enforce`.
    Set under Settings → Provisioning by someone with installation
-   settings permission.
+   settings permission. Upgraded installations start on `enforce` too
+   (owner, 2026-11-07).
 2. **Organization**, `organizations.config_check_mode`, nullable (inherits).
    Set by whoever can change the organization.
 3. **Profile**, `device_profiles.config_check_mode`, nullable. This covers
    a lab profile or the one building that is "free willing it". Whoever can
-   save the profile can change its mode.
+   save the profile can change its mode. This is the finest level, and there
+   is no per-phone switch: to leave one phone unchecked, put it on a test
+   profile (owner, 2026-11-07).
 
 Changing a mode is audited. Overrides stay stored while checks are off and
 apply again when checks are turned back on. Templates have no mode of their
@@ -611,9 +682,9 @@ Tell me if overrides of `vendor-doc` errors should need more than
 
 ## 10. Build slices (after approval)
 
-1. Catalog schema, loader, `family.toml` + seeded releases for Poly VVX and
+1. Field domains on facts and variables (with the validator test), then the catalog schema, loader, `family.toml` + seeded releases for Poly VVX and
    Yealink T4x, the seeding script and the "official templates pass" test.
-2. Checker (`verify.py`) and its rules, unit tests with fixtures per rule.
+2. Checker (`verify.py`): tracer rendering, bindings, value and domain rules, unit tests with fixtures per rule.
 3. Migration 0093, modes, the `acknowledge` contract, the hooks in §4.1 and
    `POST /provisioning/verify`, the `config_check` summary, the serve-time
    log line, and the audit events.
@@ -629,10 +700,8 @@ Tell me if overrides of `vendor-doc` errors should need more than
    have no errors but will carry one "unverified" warning per file until
    the entries are cited. Is one summarized warning acceptable, or should
    `seeded-from-template` count as info until the first vendor-doc pass?
-2. **Default mode for existing installations.** `enforce` everywhere is
-   proposed. Because the seeded data has no value rules, errors will at
-   first only come from cited entries, so this should not get in anyone's
-   way. Would you rather start upgraded installations on `advisory`?
+2. ~~Default mode for existing installations.~~ Resolved: `enforce`, and
+   administrators can change it.
 3. **Template firmware minimum.** `template.toml` has only free text
    (`firmware = "UC Software 5.9 / 6.x"`). Should I add an optional
    structured `firmware_min` for §3.5 step 3, or rely on the oldest catalog
@@ -643,17 +712,17 @@ Tell me if overrides of `vendor-doc` errors should need more than
 5. **Expansion modules.** Line keys above the phone's own count depend on
    an attached EXP module (#416). Until devices record that, `index.range`
    on line keys would be a warning, not an error.
-6. **Variable changes at installation scope** can reach hundreds of
-   profiles. The proposal is to check each affected profile once per model
-   and firmware synchronously up to a limit (e.g. 50 profiles) and return a
-   summary, and to run a background job beyond that. Is a background check
-   acceptable there, given that a background check cannot stop the save?
+6. ~~Variable changes at installation scope.~~ Resolved by the precheck
+   (§3.0): one check per template that uses the variable, while you wait.
 7. **Override inheritance.** Should a template-level override also cover
    every profile on that template, for settings that come only from the
    template text? (Proposed: no; each profile stands on its own.)
-8. **Device-level mode.** Only installation, organization and profile are
-   proposed. Is a per-phone switch needed (such as one test phone in a
-   profile)?
+8. ~~Device-level mode.~~ Resolved: per profile at the finest; use a test
+   profile.
 9. **Catalogs from modules** (§2.1): in scope now, or later?
 10. **Grandstream and Algo** families are left for after VVX and T4x; the
     format already allows them.
+11. **Composite parameters.** A parameter built from two fields and text
+    (`{{ line.sip_username }}@{{ server.sip_host }}`) is checked with the
+    shortest and longest value of each domain together. Is that enough, or
+    should such parameters always be marked for review?
