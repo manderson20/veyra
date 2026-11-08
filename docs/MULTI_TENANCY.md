@@ -4,6 +4,15 @@ Design for Milestone 14 (roadmap row 14, 0.20.0): telephony isolation
 between organizations, the tests that prove it, and the switch that
 activates multi-tenancy only after they pass.
 
+> **Update (2026-11-08):** §0 below describes Veyra before Milestone 14.
+> The multi-tenancy for several customers that came after it (an MSP) is in
+> [MULTI_TENANCY_MSP.md](MULTI_TENANCY_MSP.md): active calls matched by
+> phone, a complete isolation check, the number inventory and dedicated
+> trunks, caller ID and 911 per organization, organizations deploying their
+> own changes, limits, usage, onboarding, and working in one organization.
+> Where the two differ, MULTI_TENANCY_MSP.md wins. The admin guide is
+> `docs/guides/host-several-organizations.md`.
+
 ## 0. Where Veyra stands
 
 Every tenant-owned row already carries `organization_id`. The API filters

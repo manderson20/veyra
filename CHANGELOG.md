@@ -31,6 +31,7 @@ Migrations 0093 and 0094 add configuration check overrides and modes, and import
 - **Long extension names:** a phone whose extension had a name over 80 characters got no configuration at all, because the phone template's name variable stopped at 80. It now takes the full 200 characters an extension name can have. The configuration checker found this.
 
 ### Documentation
+- **Host several organizations** (new guide): the order to set up one server for several districts or an MSP's clients (numbers, multi-tenancy, onboarding, who deploys, limits and usage, access per client), linking the detailed guides. `docs/MULTI_TENANCY.md` now points to `docs/MULTI_TENANCY_MSP.md` for everything after Milestone 14.
 - **Configuration verification design** (`docs/CONFIG_VERIFICATION.md`, approved): checking phone settings against a per-firmware catalog of what each model accepts, with overrides, vendor packs other developers can build, and modes to turn checks off.
 
 ### Security

@@ -131,6 +131,21 @@
    "wiki": "https://github.com/manderson20/veyra/wiki/Settings-email-sign-in-policy-and-retention"
   },
   {
+   "slug": "host-several-organizations",
+   "title": "Host several organizations",
+   "summary": "Run one Veyra server for several districts, towns or clients (an MSP) with their phones, numbers, caller IDs and 911 kept apart.",
+   "audience": "admin",
+   "section": "Getting started",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
+   "pages": [
+    "/organizations/",
+    "/organizations/setup/",
+    "/settings/"
+   ],
+   "wiki": "https://github.com/manderson20/veyra/wiki/Host-several-organizations"
+  },
+  {
    "slug": "connect-phones-to-veyra",
    "title": "Connect phones to Veyra",
    "summary": "How a new phone finds this server, signs in for its configuration, and learns to trust Veyra's certificate.",
