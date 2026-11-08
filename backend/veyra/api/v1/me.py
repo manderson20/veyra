@@ -1411,3 +1411,39 @@ def reset_my_layout(
         )
         db.commit()
     return _layout_out(db, principal)
+
+
+# ------------------------------------------------ the organization switcher
+
+
+class MyOrganizationOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+
+
+class MyOrganizationsOut(BaseModel):
+    organizations: list[MyOrganizationOut]
+    # The "System (all organizations)" choice: a platform-scope grant.
+    system: bool
+    # Show the switcher: more than one organization to choose from.
+    switcher: bool
+
+
+@router.get(
+    "/organizations",
+    response_model=MyOrganizationsOut,
+    summary="The organizations the caller can work in (docs/MULTI_TENANCY_MSP.md §10a)",
+)
+def my_organizations(
+    request: Request,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+) -> MyOrganizationsOut:
+    full: Principal = getattr(request.state, "full_principal", principal)
+    ids = full.organization_ids()
+    stmt = select(Organization).where(Organization.is_active.is_(True)).order_by(Organization.name)
+    if ids is not None:
+        stmt = stmt.where(Organization.id.in_(ids or {uuid.UUID(int=0)}))
+    orgs = [MyOrganizationOut(id=o.id, name=o.name, slug=o.slug) for o in db.scalars(stmt)]
+    return MyOrganizationsOut(organizations=orgs, system=ids is None, switcher=len(orgs) > 1)

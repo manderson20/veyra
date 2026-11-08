@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from veyra.core.security.permissions import ALL, registry
 
@@ -30,6 +30,35 @@ class Principal:
     # scope ``me`` covers the caller's own account routes, which check it directly.
     token_scopes: frozenset[str] | None = None
     token_id: uuid.UUID | None = None
+    # Working in one organization (docs/MULTI_TENANCY_MSP.md §10a): the
+    # organization this request was narrowed to, if any.
+    narrowed_to: uuid.UUID | None = None
+
+    def narrowed(self, organization_id: uuid.UUID) -> Principal:
+        """The same caller, holding only what it holds in one organization.
+
+        Platform grants become grants in that organization, so platform-only
+        permissions (trunks, system settings…) drop out; grants in other
+        organizations, and their sites, are left out."""
+        grants = [
+            Grant("organization", organization_id, None, g.permissions)
+            if g.scope_type == "platform"
+            else g
+            for g in self.grants
+            if g.scope_type == "platform" or g.organization_id == organization_id
+        ]
+        return replace(self, grants=grants, narrowed_to=organization_id)
+
+    def organization_ids(self) -> set[uuid.UUID] | None:
+        """Organizations the caller holds any grant in; ``None``: every one
+        (a platform grant)."""
+        out: set[uuid.UUID] = set()
+        for g in self.grants:
+            if g.scope_type == "platform":
+                return None
+            if g.organization_id is not None:
+                out.add(g.organization_id)
+        return out
 
     @property
     def label(self) -> str:
@@ -125,9 +154,18 @@ class Principal:
             return sorted(p.key for p in registry.all())
         keys: set[str] = set()
         for g in self.grants:
-            keys |= set(g.permissions)
-        if ALL in keys:
-            keys = {p.key for p in registry.all()}
+            granted = set(g.permissions)
+            if ALL in granted:
+                granted = {p.key for p in registry.all()}
+            if g.scope_type != "platform":
+                # Platform-only permissions need a platform grant (see has()).
+                granted = {k for k in granted if not _platform_only(k)}
+            keys |= granted
         if self.token_scopes is not None:
             keys &= set(self.token_scopes)
         return sorted(keys)
+
+
+def _platform_only(key: str) -> bool:
+    definition = registry.get(key)
+    return definition.platform_only if definition else True

@@ -4078,3 +4078,10 @@ export interface OnboardingCheck {
   left: string[];
   ok: boolean;
 }
+
+/** docs/MULTI_TENANCY_MSP.md §10a: GET /me/organizations. */
+export interface MyOrganizations {
+  organizations: { id: string; name: string; slug: string }[];
+  system: boolean;
+  switcher: boolean;
+}

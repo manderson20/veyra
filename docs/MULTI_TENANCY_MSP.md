@@ -676,6 +676,28 @@ Owner's request, 2026-11-07:
   - a user without a header gets today's behaviour;
   - one organization: no switcher.
 
+### 10a.5 As built (slice 10)
+
+- `X-Veyra-Organization` takes the organization's ID or short name. A
+  caller without any grant there gets 403 `organization_not_available` and
+  the browser falls back to System. `GET /me/organizations` is never
+  narrowed.
+- Narrowing turns platform grants into grants in that organization, so the
+  platform-only permissions (system settings, firewall, organizations.write,
+  modules, updates, backups, HA…) drop out and the menu follows from the
+  session's permissions. Dialogs already hide the Organization field, and
+  lists their Organization column, when the user sees one organization, so
+  they follow the current one.
+- The session's permission list no longer shows platform-only permissions
+  held only at organization scope (they were never usable there).
+- Requests outside the API client (downloads opened in a new window,
+  event streams) carry no header and use the user's full access. Narrowing
+  is a guard against mistakes, not a security boundary; the grants are.
+- The Access editor is the **Assign role** dialog: "These organizations"
+  (checkboxes, pre-filled) or "All organizations" for platform
+  administrators. The roles table still lists one row per assignment.
+- Not built: the organization colour (needs branding, C1).
+
 ## Part C: for the owner to decide (not built)
 
 ### C1. Branding, portal hostname and SMTP sender per organization
