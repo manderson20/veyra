@@ -93,7 +93,14 @@ Each organization's page has a **Numbers** card: the phone numbers that belong t
 - When multi-tenancy was turned on, Veyra filled the list from the existing inbound routes and emergency caller IDs (**From existing routes**). On a server with one organization, creating an inbound route assigns its number (**From a route**).
 - If two organizations route the same number, the route of the organization that does not own it is skipped, and the Organizations page lists it under **Numbers routed by an organization that does not own them**. Assign the number to the right organization, or delete the route.
 
-Organization administrators see their own organization's numbers but cannot change them. A site's emergency number must also be one of its organization's numbers.
+Organization administrators see their own organization's numbers but cannot change them.
+
+### Limits
+
+The **Limits** card says what the organization may use; empty means no limit. A platform administrator sets them; the organization's administrators see them.
+
+- **Outside calls at once:** calls through any trunk, in and out together. A call over the limit hears that all circuits are busy, and an incoming call gets a busy signal. Emergency calls, and the 911 center's callback, are never counted or refused. Deploy changes after changing it.
+- **Extensions** and **Phones and devices:** adding one more than the limit is refused. A limit can be set below today's count; nothing new can be added until the count is under it. A site's emergency number must also be one of its organization's numbers.
 
 ## If something doesn't work
 

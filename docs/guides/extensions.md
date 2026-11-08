@@ -121,6 +121,7 @@ People who can change system settings see a form in the **Numbering plan** card 
 ## If something doesn't work
 
 - **"Changes not yet deployed":** choose **Deploy changes** in the top bar.
+- **"This organization may have at most … extensions":** the organization is at its limit (the **Limits** card on its page, see [Organizations and sites](guide:organizations-and-sites)). Remove an extension it no longer needs, or ask a platform administrator to raise the limit.
 - **"Installation key missing":** Veyra cannot store or show SIP secrets. Run `sudo veyra installation-key check` on the server.
 - **A *No secret* badge:** choose **New secret** on the Credentials tab.
 - **The phone does not register:** check the user name and secret on the phone against the Credentials tab, and that you deployed. The **Registers from** column shows where a phone connects from; *behind NAT* means it is behind a router.
