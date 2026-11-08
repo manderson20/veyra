@@ -6,13 +6,15 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import Field
 from sqlalchemy import Select, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.numbers import NumberIn, assign
 from veyra.api.v1.schemas import OrganizationIn, OrganizationOut, OrganizationPatch
 from veyra.configmgmt import service as configmgmt
-from veyra.core import audit, tenancy
+from veyra.core import audit, numbers, tenancy
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
@@ -22,6 +24,26 @@ from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
+
+
+class OrganizationCreate(OrganizationIn):
+    """Onboarding step 1 (docs/MULTI_TENANCY_MSP.md §10): the organization
+    with its numbers, main number and emergency number in one save. With
+    multi-tenancy on, all three are required (owner decision, §13)."""
+
+    numbers: list[NumberIn] = Field(default_factory=list, max_length=50)
+    main_number: str | None = Field(None, max_length=24)
+    emergency_caller_id_number: str | None = Field(None, max_length=24)
+
+
+def _invalid(field: str, message: str) -> ProblemError:
+    return ProblemError(
+        422,
+        "Validation failed",
+        message,
+        code="validation_failed",
+        errors=[{"field": field, "message": message}],
+    )
 
 
 def _visible(principal: Principal) -> Select[Organization]:
@@ -54,7 +76,7 @@ def list_organizations(
 
 @router.post("", response_model=OrganizationOut, status_code=201, summary="Create an organization")
 def create_organization(
-    body: OrganizationIn,
+    body: OrganizationCreate,
     principal: Principal = Depends(require("organizations.write")),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
@@ -73,6 +95,22 @@ def create_organization(
     except IntegrityError as e:
         db.rollback()
         raise conflict(f"An organization with slug {body.slug!r} already exists.") from e
+    for n in body.numbers:
+        assign(db, principal, ctx, org, n)
+    multi = tenancy.enabled(db)
+    for field, what in (
+        ("main_number", "main number"),
+        ("emergency_caller_id_number", "emergency number"),
+    ):
+        value = getattr(body, field)
+        if not value:
+            if multi:
+                raise _invalid(field, f"with several organizations, a {what} is required")
+            continue
+        number = numbers.maybe_canonical(value)
+        if number is None or not numbers.owns(db, org.id, number):
+            raise _invalid(field, f"the {what} must be one of the numbers above")
+        setattr(org, field, number)
     audit.record(
         db,
         action="organization.create",
@@ -83,7 +121,7 @@ def create_organization(
         target_id=org.id,
         ip_address=ctx.ip,
         request_id=ctx.request_id,
-        details=body.model_dump(),
+        details=body.model_dump(mode="json", exclude={"numbers"}),
     )
     db.commit()
     bus.publish(Event("organization.created", {"organization_id": str(org.id), "slug": org.slug}))
@@ -119,10 +157,45 @@ def update_organization(
     # The allow list widens what phones may present to the carrier: a routing matter.
     if "caller_id_allow_list" in changes and not principal.has("routing.write", org.id):
         raise forbidden("Changing the caller ID allow list needs routing.write.")
+    for field, what in (
+        ("main_number", "main number"),
+        ("emergency_caller_id_number", "emergency number"),
+    ):
+        if field not in changes:
+            continue
+        if changes[field]:
+            number = numbers.maybe_canonical(changes[field])
+            if number is None or not numbers.owns(db, org.id, number):
+                raise ProblemError(
+                    422,
+                    "Validation failed",
+                    f"The {what} must be one of the organization's numbers.",
+                    code="validation_failed",
+                    errors=[{"field": field, "message": "not one of its numbers"}],
+                )
+            changes[field] = number
+        elif tenancy.enabled(db) and getattr(org, field):
+            # Every organization keeps both while several share the server
+            # (owner decision, docs/MULTI_TENANCY_MSP.md §13).
+            raise ProblemError(
+                422,
+                "Validation failed",
+                f"With several organizations, every organization needs a {what}.",
+                code="validation_failed",
+                errors=[{"field": field, "message": "required with multi-tenancy"}],
+            )
+        else:
+            changes[field] = None
+        if changes[field] != getattr(org, field):
+            configmgmt.mark_changed(
+                db, by=principal.label, what=f"{what} of {org.slug}", organization_id=org.id
+            )
     if changes.get("is_active") and not org.is_active:
         tenancy.check_may_activate(db, exclude=org.id)
     if "is_active" in changes and changes["is_active"] != org.is_active:
-        configmgmt.mark_changed(db, by=principal.label, what=f"organization {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"organization {org.slug}", organization_id=org.id
+        )
     if "moh_class_id" in changes:
         from veyra.api.v1 import hold_music
 
@@ -144,18 +217,29 @@ def update_organization(
             ) from e
         if changes["dnd_allow"] != list(org.dnd_allow or []):
             configmgmt.mark_changed(
-                db, by=principal.label, what=f"Do Not Disturb exceptions of {org.slug}"
+                db,
+                by=principal.label,
+                what=f"Do Not Disturb exceptions of {org.slug}",
+                organization_id=org.id,
             )
     for k, v in changes.items():
         setattr(org, k, v)
     if "moh_class_id" in changes:
-        configmgmt.mark_changed(db, by=principal.label, what=f"hold music of {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"hold music of {org.slug}", organization_id=org.id
+        )
     if "intercom_default" in changes:
-        configmgmt.mark_changed(db, by=principal.label, what=f"intercom default of {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"intercom default of {org.slug}", organization_id=org.id
+        )
     if "monitor_beep" in changes and changes["monitor_beep"] != org.monitor_beep:
-        configmgmt.mark_changed(db, by=principal.label, what=f"monitoring beep of {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"monitoring beep of {org.slug}", organization_id=org.id
+        )
     if "directed_pickup" in changes:
-        configmgmt.mark_changed(db, by=principal.label, what=f"directed pickup of {org.slug}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"directed pickup of {org.slug}", organization_id=org.id
+        )
     audit.record(
         db,
         action="organization.update",

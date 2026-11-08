@@ -259,7 +259,9 @@ def _audit(
         details={"name": row.name, **details},
     )
     if deploy:
-        configmgmt.mark_changed(db, by=principal.label, what=f"{action} {row.name}")
+        configmgmt.mark_changed(
+            db, by=principal.label, what=f"{action} {row.name}", organization_id=row.organization_id
+        )
 
 
 def _name_conflict() -> ProblemError:

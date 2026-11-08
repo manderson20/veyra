@@ -228,6 +228,11 @@ def apply(
         elif FIELDS[field] == "extension":
             if field in ("class_of_service_id", "department_id"):
                 value = uuid.UUID(value) if value else None
+            if field == "outbound_caller_id_number":
+                # The same rule as on the extension (docs/MULTI_TENANCY_MSP.md §5.1).
+                from veyra.core import numbers
+
+                numbers.check_caller_id(db, db.info.get("principal"), ext.organization_id, value)
             setattr(ext, field, value)
         elif field == "ring_seconds":
             row = extension_state.ensure(db, ext)

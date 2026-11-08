@@ -4,7 +4,7 @@ summary: Connect Veyra to your phone carrier so calls can reach and leave the bu
 audience: admin
 section: Calls and call flows
 order: 10
-reviewed: 0.27.81
+reviewed: 0.27.87
 checked: 2026-10-30T15:10Z
 pages:
   - /trunks/
@@ -66,6 +66,8 @@ The password is stored encrypted and is never shown again. To change it later, t
 ## 2. Check the other settings
 
 The trunk's page shows every setting, in sections. Most can stay as they are.
+
+**Organization** (shown when the server has more than one organization): leave it empty for a trunk every organization shares, or choose one organization when the trunk is that organization's own carrier. A dedicated trunk carries only that organization's inbound and outbound routes, and its administrators may route every number arriving on it (`any`). A trunk that other organizations' routes use cannot be dedicated until they are moved.
 
 **Connection**
 - **Enabled:** a disabled trunk is kept but left out of the phone system. Routes that use it skip it and try their next trunk.

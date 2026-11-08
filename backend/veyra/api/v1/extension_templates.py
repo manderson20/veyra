@@ -309,6 +309,11 @@ def apply_template(
             details={"extensions": [c["number"] for c in changes]},
         )
         if deploy:
-            configmgmt.mark_changed(db, by=principal.label, what=f"extension template {row.name}")
+            configmgmt.mark_changed(
+                db,
+                by=principal.label,
+                what=f"extension template {row.name}",
+                organization_id=row.organization_id,
+            )
         db.commit()
     return {"dry_run": body.dry_run, "extensions": changes, "needs_deployment": deploy}

@@ -45,7 +45,7 @@ const GROUPS: { value: ReportGroup; label: string }[] = [
   { value: "answered_by", label: "Answered by" }, { value: "called_extension", label: "Called extension" },
   { value: "calling_extension", label: "Calling extension" }, { value: "did", label: "Number dialled (DID)" },
   { value: "trunk", label: "Trunk" }, { value: "queue", label: "Queue" }, { value: "ring_group", label: "Ring group" },
-  { value: "caller", label: "Caller number" },
+  { value: "caller", label: "Caller number" }, { value: "organization", label: "Organization" },
 ];
 const MEASURES: { value: ReportMeasure; label: string }[] = [
   { value: "calls", label: "Calls" }, { value: "answered", label: "Answered" }, { value: "missed", label: "Missed" },

@@ -300,7 +300,12 @@ def put_my_follow_me(
     ext = _own_extension(db, principal, extension_id)
     row, details = save_follow_me(db, ext, body, by=principal.label)
     _own_audit(db, ctx, principal, "extension.follow_me_update", ext, details)
-    configmgmt.mark_changed(db, by=principal.label, what=f"follow-me of {ext.number}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"follow-me of {ext.number}",
+        organization_id=ext.organization_id,
+    )
     db.commit()
     return _follow_me_out(row, extension_state.get(db, ext.id))
 
@@ -621,7 +626,12 @@ def my_voicemail_pin(
     )
     # The PIN lives in voicemail.conf: the change reaches the phone system at
     # the next deployment.
-    configmgmt.mark_changed(db, by=principal.label, what=f"voicemail.pin_change {ext.number}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"voicemail.pin_change {ext.number}",
+        organization_id=ext.organization_id,
+    )
     db.commit()
     return Response(status_code=204)
 
@@ -662,7 +672,12 @@ def my_voicemail_locater(
         if details:
             db.flush()
             _box_audit(db, ctx, principal, "voicemail.update", box, details)
-            configmgmt.mark_changed(db, by=principal.label, what=f"voicemail locater {ext.number}")
+            configmgmt.mark_changed(
+                db,
+                by=principal.label,
+                what=f"voicemail locater {ext.number}",
+                organization_id=ext.organization_id,
+            )
             db.commit()
         return _my_box_out(box, ext)
     raise not_found("Voicemail box")
@@ -1396,3 +1411,39 @@ def reset_my_layout(
         )
         db.commit()
     return _layout_out(db, principal)
+
+
+# ------------------------------------------------ the organization switcher
+
+
+class MyOrganizationOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+
+
+class MyOrganizationsOut(BaseModel):
+    organizations: list[MyOrganizationOut]
+    # The "System (all organizations)" choice: a platform-scope grant.
+    system: bool
+    # Show the switcher: more than one organization to choose from.
+    switcher: bool
+
+
+@router.get(
+    "/organizations",
+    response_model=MyOrganizationsOut,
+    summary="The organizations the caller can work in (docs/MULTI_TENANCY_MSP.md §10a)",
+)
+def my_organizations(
+    request: Request,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+) -> MyOrganizationsOut:
+    full: Principal = getattr(request.state, "full_principal", principal)
+    ids = full.organization_ids()
+    stmt = select(Organization).where(Organization.is_active.is_(True)).order_by(Organization.name)
+    if ids is not None:
+        stmt = stmt.where(Organization.id.in_(ids or {uuid.UUID(int=0)}))
+    orgs = [MyOrganizationOut(id=o.id, name=o.name, slug=o.slug) for o in db.scalars(stmt)]
+    return MyOrganizationsOut(organizations=orgs, system=ids is None, switcher=len(orgs) > 1)

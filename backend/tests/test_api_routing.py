@@ -2,7 +2,7 @@
 """Milestone 6 API: trunks, inbound and outbound routes, time conditions,
 scoping, pending-change flag and the deployed configuration."""
 
-from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login, org_body
 from fake_adapter import FakeAdapter
 from fastapi.testclient import TestClient
 
@@ -522,7 +522,7 @@ def test_outbound_routes_order_warnings_and_trunk_links(admin):
 def test_org_admin_scope_for_routing_and_trunks(admin, app):
     a = _org(admin)["id"]
     enable_multi_tenancy()
-    b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    b = admin.post("/api/v1/organizations", json=org_body("Beta", "beta")).json()["id"]
     ext_a = _ext(admin, a, "1001", "Alpha phone")
     ext_b = _ext(admin, b, "2001", "Beta phone")
     trunk = _trunk(admin)
@@ -575,15 +575,19 @@ def test_org_admin_scope_for_routing_and_trunks(admin, app):
         json={"organization_id": b, "did": "5735550102", "destination_extension_id": ext_a["id"]},
     )
     assert r.status_code == 422
-    r = c.post(
-        INBOUND,
-        json={
-            "organization_id": b,
-            "did": "5735550102",
-            "trunk_id": trunk["id"],
-            "destination_extension_id": ext_b["id"],
-        },
-    )
+    beta_route = {
+        "organization_id": b,
+        "did": "5735550102",
+        "trunk_id": trunk["id"],
+        "destination_extension_id": ext_b["id"],
+    }
+    # A number nobody assigned to Beta (docs/MULTI_TENANCY_MSP.md §4.2) ...
+    r = c.post(INBOUND, json=beta_route)
+    assert r.status_code == 422 and r.json()["code"] == "number_not_assigned"
+    # ... works once a platform administrator assigns it.
+    r = admin.post(f"/api/v1/organizations/{b}/numbers", json={"first": "5735550102"})
+    assert r.status_code == 201, r.text
+    r = c.post(INBOUND, json=beta_route)
     assert r.status_code == 201, r.text
     # trunks: read yes (org_admin), write no
     assert c.get(TRUNKS).json()["total"] == 1

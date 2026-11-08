@@ -5,7 +5,7 @@ the phone-facing provisioning server (docs/DEVICE_PROVISIONING.md §3, §4)."""
 import base64
 import uuid
 
-from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login, org_body
 from fastapi.testclient import TestClient
 
 from veyra.core.db import session_scope
@@ -298,7 +298,7 @@ def test_provisioning_server_authenticates_logs_and_serves(admin, app):
     assert anon.get(f"{PROV}/veyra-0004f2aabbcc.cfg", headers=dev_auth).status_code == 200
     # A technician of another organization's credential cannot reach this device.
     enable_multi_tenancy()
-    other_org = admin.post("/api/v1/organizations", json={"name": "Other", "slug": "other"}).json()
+    other_org = admin.post("/api/v1/organizations", json=org_body("Other", "other")).json()
     other_cred = admin.post(
         f"/api/v1/organizations/{other_org['id']}/provisioning-credential/rotate"
     ).json()
@@ -370,7 +370,7 @@ def test_snapshot_counts_phones_per_extension_and_site_emergency_default(admin, 
 def test_request_log_api(admin, app):
     """Issue #347: refused requests can be seen, and are scoped."""
     enable_multi_tenancy()
-    other = admin.post("/api/v1/organizations", json={"name": "O2", "slug": "o2"}).json()["id"]
+    other = admin.post("/api/v1/organizations", json=org_body("O2", "o2")).json()["id"]
     anon = TestClient(app, base_url="https://veyra.test")
     # No credential: refused, belongs to no organization.
     assert anon.get(f"{PROV}/veyra-0004f2aabbcc.cfg").status_code == 401

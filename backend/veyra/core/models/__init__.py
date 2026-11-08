@@ -73,6 +73,7 @@ from veyra.core.models.platform import (
     ConfigRevision,
     InstalledModule,
     ModuleConfig,
+    OrganizationConfigSlice,
     ProvisioningTemplate,
     SystemSetting,
     UpdateCheck,
@@ -109,7 +110,15 @@ from veyra.core.models.telephony import (
     ExtensionTemplate,
     FollowMe,
 )
-from veyra.core.models.tenancy import Building, Department, Installation, Organization, Site
+from veyra.core.models.tenancy import (
+    Building,
+    Department,
+    Installation,
+    Organization,
+    OrganizationLimits,
+    OrganizationNumber,
+    Site,
+)
 from veyra.core.models.voicemail import (
     IvrEntry,
     IvrMenu,
@@ -193,6 +202,9 @@ __all__ = [
     "MohClass",
     "MohClassTrack",
     "Organization",
+    "OrganizationConfigSlice",
+    "OrganizationLimits",
+    "OrganizationNumber",
     "OutboundRoute",
     "OutboundRouteTrunk",
     "Page",

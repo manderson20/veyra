@@ -50,6 +50,14 @@ export function EngineStatusProvider({ children }: { children: ReactNode }) {
     try {
       const result = await api.post<ApplyResult>("/telephony/apply", { mode });
       const rev = result.revision;
+      if (result.requested || !rev) {
+        toast.success("Deployment requested", "A platform administrator deploys the changes.");
+        reload();
+        return;
+      }
+      if (result.held_back?.length) {
+        toast.error("Some changes were held back", `The newer changes of ${result.held_back.join(", ")} could not be generated; everything else deploys. See System → Telephony Engine.`);
+      }
       if (rev.state === "failed") {
         toast.error("Configuration could not be generated", rev.validation_errors[0]);
         return;

@@ -10,6 +10,8 @@
 
 export const API_BASE = "/api/v1";
 export const CSRF_COOKIE = "veyra_csrf";
+import { ORG_HEADER, clearWorkingOrg, workingOrg } from "./workingOrg";
+
 export const CSRF_HEADER = "X-CSRF-Token";
 
 export interface FieldError {
@@ -87,6 +89,9 @@ export interface ApiDeps {
   fetch: typeof fetch;
   cookie: () => string;
   location: () => { pathname: string; assign: (url: string) => void } | null;
+  /** The tab's organization (docs/MULTI_TENANCY_MSP.md §10a); "" = System. */
+  org?: () => string;
+  clearOrg?: () => void;
 }
 
 const defaultDeps: ApiDeps = {
@@ -96,6 +101,8 @@ const defaultDeps: ApiDeps = {
     typeof window !== "undefined"
       ? { pathname: window.location.pathname, assign: (u: string) => window.location.assign(u) }
       : null,
+  org: () => workingOrg(),
+  clearOrg: () => clearWorkingOrg(),
 };
 
 export function buildUrl(path: string, query?: ApiOptions["query"]): string {
@@ -141,6 +148,8 @@ export function createApi(deps: ApiDeps = defaultDeps) {
     const method = (opts.method ?? (opts.body !== undefined ? "POST" : "GET")).toUpperCase();
     const headers: Record<string, string> = { Accept: "application/json" };
     if (opts.body !== undefined && !opts.form) headers["Content-Type"] = "application/json";
+    const org = deps.org?.() ?? "";
+    if (org) headers[ORG_HEADER] = org;
     if (!SAFE_METHODS.has(method)) {
       const csrf = readCookie(CSRF_COOKIE, deps.cookie());
       if (csrf) headers[CSRF_HEADER] = csrf;
@@ -170,6 +179,12 @@ export function createApi(deps: ApiDeps = defaultDeps) {
         if (loc && !AUTH_FREE_PATHS.some((p) => loc.pathname.startsWith(p))) {
           loc.assign(`/login/?next=${encodeURIComponent(loc.pathname)}`);
         }
+      }
+      // The tab's organization is no longer available to the user: back to System.
+      if (res.status === 403 && problem.code === "organization_not_available" && org) {
+        deps.clearOrg?.();
+        const loc = deps.location();
+        if (loc) loc.assign(`${loc.pathname}?org=`);
       }
       if (res.status === 403 && problem.code === "reauth_required" && reauthPrompt && !opts.reauthed) {
         if (await reauthPrompt()) return request<T>(path, { ...opts, reauthed: true });

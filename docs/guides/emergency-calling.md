@@ -4,7 +4,7 @@ summary: Set up 911 so it dials directly, sends the right number and location, a
 audience: admin
 section: Calls and call flows
 order: 80
-reviewed: 0.27.81
+reviewed: 0.27.87
 checked: 2026-10-29
 pages:
   - /system/emergency/
@@ -110,10 +110,20 @@ The **Sites** table shows each site as **ready** or how many checks are **missin
 
 **Ready** means Veyra's checks pass. It does not mean the carrier delivers the right address: only the carrier test shows that.
 
+## Several organizations on one server
+
+When the server hosts several organizations (multi-tenancy):
+
+- Every organization has an **Emergency number** of its own, set by a platform administrator on the organization's page (see [Organizations and sites](guide:organizations-and-sites)). It must be one of the organization's numbers, registered with the carrier at its address. An organization cannot do without one, and multi-tenancy cannot be turned on until each has one.
+- A 911 call presents the extension's emergency caller ID, else its site's, else the organization's emergency number. It never presents another organization's number, such as a trunk's default. The call always goes out.
+- A site without its own emergency caller ID is still ready, with an advice that its calls present the organization's number: register that number at the site's address, or give the site its own.
+- Every emergency number belongs to one organization, and the 911 center's callback rings back inside the organization that called.
+- The **Organizations** table shows each organization's emergency number, where its phones' emergency caller IDs come from, how many of its sites are ready and its last test call. Organization administrators see their own organization only.
+
 ## What happens on a 911 call
 
 - The call goes out through the first matching emergency route, ignoring any class of service and channel limit, and rings for up to 120 seconds.
-- The number sent is the extension's **Emergency caller ID number**, else the site's, else the usual outgoing caller ID. Hiding the number (such as `*67`) has no effect on an emergency call.
+- The number sent is the extension's **Emergency caller ID number**, else the site's, else the usual outgoing caller ID (with several organizations: else the organization's emergency number). Hiding the number (such as `*67`) has no effect on an emergency call.
 - The notifications from step 4 go out, and the call is listed under **Emergency calls** with the caller's extension, the number dialled, the location and who was notified. Test notifications are marked **test**, real calls **live**.
 - When the 911 center calls the emergency number back within the callback window, the phone that made the call rings, even if the number has no inbound route of its own. After the window (or when Veyra cannot tell who called), the **Responder extension** rings. Without a responder, the number's normal [inbound route](guide:route-incoming-calls) answers, and a number without an inbound route is not answered, so set a responder.
 

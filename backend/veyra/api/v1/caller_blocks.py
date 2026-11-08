@@ -429,6 +429,8 @@ def put_policy(
                 "destination": body.destination.model_dump(mode="json"),
             },
         )
-        configmgmt.mark_changed(db, by=principal.label, what="caller block policy")
+        configmgmt.mark_changed(
+            db, by=principal.label, what="caller block policy", organization_id=org.id
+        )
     db.commit()
     return _policy_out(db, org, policy)

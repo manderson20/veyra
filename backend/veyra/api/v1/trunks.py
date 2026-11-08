@@ -28,7 +28,13 @@ from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, not_found
 from veyra.core.events import Event, bus
-from veyra.core.models import InboundRoute, OutboundRoute, OutboundRouteTrunk, SipTrunk
+from veyra.core.models import (
+    InboundRoute,
+    Organization,
+    OutboundRoute,
+    OutboundRouteTrunk,
+    SipTrunk,
+)
 from veyra.core.security.principal import Principal
 from veyra.telephony import routing
 from veyra.telephony.adapter import Capability, EngineUnavailable, NotSupported
@@ -91,6 +97,8 @@ class TrunkBase(BaseModel):
     # Of max_channels, kept for emergency calls (issue #171).
     emergency_reserved_channels: int = Field(1, ge=0, le=100)
     default_caller_id: str | None = Field(None, max_length=32)
+    # Dedicated to one organization (docs/MULTI_TENANCY_MSP.md C4); None: shared.
+    organization_id: uuid.UUID | None = None
     caller_id_header: CallerIdHeader = "pai"
     dtmf_mode: DtmfMode = "rfc4733"
     fax_t38: bool = False
@@ -208,6 +216,7 @@ class TrunkPatch(BaseModel):
     max_channels: int | None = Field(None, ge=1, le=10000)
     emergency_reserved_channels: int | None = Field(None, ge=0, le=100)
     default_caller_id: str | None = Field(None, max_length=32)
+    organization_id: uuid.UUID | None = None
     caller_id_header: CallerIdHeader | None = None
     dtmf_mode: DtmfMode | None = None
     fax_t38: bool | None = None
@@ -248,6 +257,7 @@ class TrunkOut(BaseModel):
     max_channels: int | None
     emergency_reserved_channels: int
     default_caller_id: str | None
+    organization_id: uuid.UUID | None = None
     caller_id_header: str
     dtmf_mode: str
     fax_t38: bool
@@ -352,6 +362,7 @@ def _out(trunk: SipTrunk, live: Live | None) -> TrunkOut:
         max_channels=trunk.max_channels,
         emergency_reserved_channels=trunk.emergency_reserved_channels,
         default_caller_id=trunk.default_caller_id,
+        organization_id=trunk.organization_id,
         caller_id_header=trunk.caller_id_header,
         dtmf_mode=trunk.dtmf_mode,
         fax_t38=trunk.fax_t38,
@@ -458,6 +469,7 @@ def create_trunk(
 ) -> TrunkOut:
     if db.scalar(select(func.count()).select_from(SipTrunk).where(SipTrunk.name == body.name)):
         raise conflict(f"A trunk named {body.name!r} already exists.", "name_in_use")
+    _check_owner(db, None, body.organization_id)
     trunk = SipTrunk(
         id=uuid.uuid4(),
         slug=_unique_slug(db, body.name),
@@ -520,6 +532,8 @@ def update_trunk(
         validated = TrunkIn.model_validate(merged)
     except ValueError as e:
         raise _validation("trunk", _first_error(e)) from e
+    if "organization_id" in changes and changes["organization_id"] != trunk.organization_id:
+        _check_owner(db, trunk, changes["organization_id"])
     details: dict[str, Any] = {}
     for field in TrunkBase.model_fields:
         if field not in changes:
@@ -548,6 +562,35 @@ def update_trunk(
     db.commit()
     bus.publish(Event("trunk.updated", {"id": str(trunk.id), "fields": sorted(details)}))
     return _out(trunk, _statuses(request))
+
+
+def _check_owner(db: Session, trunk: SipTrunk | None, org_id: uuid.UUID | None) -> None:
+    """A trunk dedicated to one organization carries only that organization's
+    routes (docs/MULTI_TENANCY_MSP.md C4)."""
+    if org_id is not None and db.get(Organization, org_id) is None:
+        raise _validation("organization_id", "organization not found")
+    if trunk is None or org_id is None:
+        return
+    others = db.scalar(
+        select(func.count())
+        .select_from(InboundRoute)
+        .where(InboundRoute.trunk_id == trunk.id, InboundRoute.organization_id != org_id)
+    )
+    shared = db.scalar(
+        select(func.count())
+        .select_from(OutboundRouteTrunk)
+        .join(OutboundRoute, OutboundRoute.id == OutboundRouteTrunk.route_id)
+        .where(
+            OutboundRouteTrunk.trunk_id == trunk.id,
+            or_(OutboundRoute.organization_id.is_(None), OutboundRoute.organization_id != org_id),
+        )
+    )
+    if others or shared:
+        raise conflict(
+            f"{others or 0} inbound and {shared or 0} outbound route(s) of other organizations, "
+            "or for every organization, use this trunk. Move them first.",
+            "trunk_in_use",
+        )
 
 
 def _first_error(e: ValueError) -> str:

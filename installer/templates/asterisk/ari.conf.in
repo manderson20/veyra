@@ -5,6 +5,9 @@
 enabled = yes
 pretty = no
 allowed_origins =
+; Channel variables included in every channel ARI reports: the active calls
+; page tells organizations apart by VEYRA_ORG (docs/MULTI_TENANCY_MSP.md §2).
+channelvars = VEYRA_ORG
 
 [veyra]
 type = user

@@ -24,7 +24,7 @@ from veyra.api.v1 import destinations
 from veyra.api.v1.destinations import DestinationIn, DestinationOut, Resolver, check_destination
 from veyra.api.v1.extensions import installation_key
 from veyra.configmgmt import service as configmgmt
-from veyra.core import audit
+from veyra.core import audit, numbers
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
@@ -88,7 +88,9 @@ def _audit(
         request_id=ctx.request_id,
         details=details,
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {label}")
+    configmgmt.mark_changed(
+        db, by=principal.label, what=f"{action} {label}", organization_id=organization_id
+    )
 
 
 def _org_filter(stmt: Select[Any], column: Any, principal: Principal, perm: str) -> Select[Any]:
@@ -1029,6 +1031,7 @@ def create_inbound(
         is_enabled=body.is_enabled,
     )
     _check_destinations(db, org.id, route)
+    numbers.check_route(db, principal, route)
     db.add(route)
     try:
         db.flush()
@@ -1170,6 +1173,8 @@ def update_inbound(
             route.description = desc
             details["description"] = True
     _check_destinations(db, route.organization_id, route)
+    if details.keys() & {"did", "trunk_id"}:
+        numbers.check_route(db, principal, route)
     if changes.get("caller_rules") is not None:
         _set_caller_rules(db, route, body.caller_rules or [], route.organization_id)
         details["caller_rules"] = len(body.caller_rules or [])
@@ -1449,11 +1454,35 @@ def _get_or(db: Session, route_id: uuid.UUID) -> OutboundRoute:
     return route
 
 
+def _check_dedicated(
+    db: Session,
+    route: OutboundRoute,
+    trunk_ids: list[uuid.UUID],
+    trunks: dict[uuid.UUID, SipTrunk] | None = None,
+) -> None:
+    """A trunk dedicated to one organization carries only that organization's
+    outbound routes; a route for every organization uses shared trunks only
+    (docs/MULTI_TENANCY_MSP.md C4)."""
+    if trunks is None:
+        trunks = {t.id: t for t in db.scalars(select(SipTrunk).where(SipTrunk.id.in_(trunk_ids)))}
+    for tid in trunk_ids:
+        t = trunks.get(tid)
+        if t is None or t.organization_id is None:
+            continue
+        if route.organization_id != t.organization_id:
+            raise _validation(
+                "trunk_ids",
+                f"the trunk {t.name} is dedicated to one organization; only that "
+                "organization's own routes may use it",
+            )
+
+
 def _set_trunks(db: Session, route: OutboundRoute, trunk_ids: list[uuid.UUID]) -> list[str]:
     trunks = {t.id: t for t in db.scalars(select(SipTrunk).where(SipTrunk.id.in_(trunk_ids)))}
     missing = [str(t) for t in trunk_ids if t not in trunks]
     if missing:
         raise _validation("trunk_ids", "trunk not found: " + ", ".join(missing))
+    _check_dedicated(db, route, trunk_ids, trunks)
     for link in db.scalars(
         select(OutboundRouteTrunk).where(OutboundRouteTrunk.route_id == route.id)
     ).all():
@@ -1512,6 +1541,10 @@ def create_outbound(
         raise conflict(f"An outbound route named {body.name!r} already exists.", "name_in_use")
     _check_route_org(db, body.organization_id)
     _check_route_hours(db, body)
+    if not body.is_emergency:
+        # An emergency call never presents the route's number while several
+        # organizations share the server (docs/MULTI_TENANCY_MSP.md §6.1).
+        numbers.check_route_caller_id(db, body.organization_id, body.caller_id_number)
     position = (db.scalar(select(func.max(OutboundRoute.position))) or 0) + 1
     route = OutboundRoute(
         id=uuid.uuid4(),
@@ -1634,6 +1667,10 @@ def update_outbound(
     if "organization_id" in changes:
         _check_route_org(db, validated.organization_id)
     _check_route_hours(db, validated)
+    if not validated.is_emergency and (
+        changes.keys() & {"caller_id_number", "organization_id", "is_emergency"}
+    ):
+        numbers.check_route_caller_id(db, validated.organization_id, validated.caller_id_number)
     for field in (
         "is_emergency",
         "time_condition_id",
@@ -1654,6 +1691,8 @@ def update_outbound(
             details["patterns"] = len(patterns)
     if "trunk_ids" in changes and validated.trunk_ids != current["trunk_ids"]:
         details["trunks"] = _set_trunks(db, route, validated.trunk_ids)
+    elif "organization_id" in details:
+        _check_dedicated(db, route, [t.id for t in _route_trunks(db, [route])[route.id]])
     if not details:
         return _or_outs(db, [route])[0]
     try:
