@@ -58,6 +58,7 @@
    "pages": [
     "/organizations/",
     "/organizations/view/",
+    "/organizations/setup/",
     "/sites/"
    ],
    "wiki": "https://github.com/manderson20/veyra/wiki/Organizations-and-sites"
