@@ -5,7 +5,14 @@ encrypted at rest, generated configuration and encrypted revision artifacts."""
 import json
 import uuid
 
-from conftest import ADMIN_PASSWORD, csrf_headers, enable_multi_tenancy, login, make_settings
+from conftest import (
+    ADMIN_PASSWORD,
+    csrf_headers,
+    enable_multi_tenancy,
+    login,
+    make_settings,
+    org_body,
+)
 from fake_adapter import FakeAdapter
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -169,7 +176,7 @@ def test_numbers_are_unique_per_organization(admin):
     (docs/MULTI_TENANCY.md §3)."""
     a = _org(admin)["id"]
     enable_multi_tenancy()
-    r = admin.post("/api/v1/organizations", json={"name": "Other", "slug": "other"})
+    r = admin.post("/api/v1/organizations", json=org_body("Other", "other"))
     b = r.json()["id"]
     _create(admin, a, "1001")
     r = admin.post(EXT, json={"organization_id": b, "number": "1001", "display_name": "same"})
@@ -191,7 +198,7 @@ def test_numbers_are_unique_per_organization(admin):
 def test_user_assignment_must_match_the_organization(admin):
     a = _org(admin)["id"]
     enable_multi_tenancy()
-    b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    b = admin.post("/api/v1/organizations", json=org_body("Beta", "beta")).json()["id"]
     r = admin.post(
         "/api/v1/users",
         json={
@@ -394,7 +401,7 @@ def test_sip_secret_is_encrypted_at_rest_revealed_only_on_request_and_rotatable(
 def test_org_admin_is_confined_and_technician_cannot_write(admin, app):
     a = _org(admin)["id"]
     enable_multi_tenancy()
-    b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    b = admin.post("/api/v1/organizations", json=org_body("Beta", "beta")).json()["id"]
     _create(admin, a, "1001", name="Alpha phone")
     ext_b = _create(admin, b, "2001", name="Beta phone")
     for email, role in (("orgadmin@beta.local", "org_admin"), ("tech@beta.local", "technician")):

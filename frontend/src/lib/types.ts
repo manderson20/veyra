@@ -4054,3 +4054,27 @@ export interface UsageRow {
   internal_calls: number;
   peak_concurrent: number;
 }
+
+/** docs/MULTI_TENANCY_MSP.md §10: one onboarding step of an organization. */
+export interface OnboardingStep {
+  key: "organization" | "trunk" | "administrator" | "phones" | "emergency" | "limits";
+  title: string;
+  done: boolean;
+  optional: boolean;
+  detail: string;
+}
+
+export interface Onboarding {
+  organization_id: string;
+  multi_tenancy: boolean;
+  steps: OnboardingStep[];
+  left: string[];
+}
+
+export interface OnboardingCheck {
+  organization_id: string;
+  checks: { name: string; ok: boolean; warning?: boolean; detail: string }[];
+  emergency: { id: string; name: string; emergency_number: string | null; main_number: string | null; sites: number; sites_ready: number; last_test_call: string | null }[];
+  left: string[];
+  ok: boolean;
+}

@@ -148,6 +148,16 @@ def add_number(
     ctx: RequestContext = Depends(request_context),
 ) -> NumberOut:
     org = _org(db, organization_id)
+    row = assign(db, principal, ctx, org, body)
+    db.commit()
+    return _outs(db, [row])[0]
+
+
+def assign(
+    db: Session, principal: Principal, ctx: RequestContext, org: Organization, body: NumberIn
+) -> OrganizationNumber:
+    """Assign a number or block to ``org`` (flushed, audited, not committed).
+    Also used by onboarding, which creates the organization with its numbers."""
     first, last = body.first, body.last or body.first
     if len(first) != len(last) or last < first:
         raise _validation("last", "the last number must have as many digits and come after")
@@ -201,8 +211,7 @@ def add_number(
     configmgmt.mark_changed(
         db, by=principal.label, what=f"numbers of {org.slug}", organization_id=org.id
     )
-    db.commit()
-    return _outs(db, [row])[0]
+    return row
 
 
 @router.delete(

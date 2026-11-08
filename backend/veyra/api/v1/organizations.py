@@ -6,10 +6,12 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import Field
 from sqlalchemy import Select, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from veyra.api.v1.numbers import NumberIn, assign
 from veyra.api.v1.schemas import OrganizationIn, OrganizationOut, OrganizationPatch
 from veyra.configmgmt import service as configmgmt
 from veyra.core import audit, numbers, tenancy
@@ -22,6 +24,26 @@ from veyra.core.pagination import Page, PageParams, page_params, paginate
 from veyra.core.security.principal import Principal
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
+
+
+class OrganizationCreate(OrganizationIn):
+    """Onboarding step 1 (docs/MULTI_TENANCY_MSP.md §10): the organization
+    with its numbers, main number and emergency number in one save. With
+    multi-tenancy on, all three are required (owner decision, §13)."""
+
+    numbers: list[NumberIn] = Field(default_factory=list, max_length=50)
+    main_number: str | None = Field(None, max_length=24)
+    emergency_caller_id_number: str | None = Field(None, max_length=24)
+
+
+def _invalid(field: str, message: str) -> ProblemError:
+    return ProblemError(
+        422,
+        "Validation failed",
+        message,
+        code="validation_failed",
+        errors=[{"field": field, "message": message}],
+    )
 
 
 def _visible(principal: Principal) -> Select[Organization]:
@@ -54,7 +76,7 @@ def list_organizations(
 
 @router.post("", response_model=OrganizationOut, status_code=201, summary="Create an organization")
 def create_organization(
-    body: OrganizationIn,
+    body: OrganizationCreate,
     principal: Principal = Depends(require("organizations.write")),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
@@ -73,6 +95,22 @@ def create_organization(
     except IntegrityError as e:
         db.rollback()
         raise conflict(f"An organization with slug {body.slug!r} already exists.") from e
+    for n in body.numbers:
+        assign(db, principal, ctx, org, n)
+    multi = tenancy.enabled(db)
+    for field, what in (
+        ("main_number", "main number"),
+        ("emergency_caller_id_number", "emergency number"),
+    ):
+        value = getattr(body, field)
+        if not value:
+            if multi:
+                raise _invalid(field, f"with several organizations, a {what} is required")
+            continue
+        number = numbers.maybe_canonical(value)
+        if number is None or not numbers.owns(db, org.id, number):
+            raise _invalid(field, f"the {what} must be one of the numbers above")
+        setattr(org, field, number)
     audit.record(
         db,
         action="organization.create",
@@ -83,7 +121,7 @@ def create_organization(
         target_id=org.id,
         ip_address=ctx.ip,
         request_id=ctx.request_id,
-        details=body.model_dump(),
+        details=body.model_dump(mode="json", exclude={"numbers"}),
     )
     db.commit()
     bus.publish(Event("organization.created", {"organization_id": str(org.id), "slug": org.slug}))

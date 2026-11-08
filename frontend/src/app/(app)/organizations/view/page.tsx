@@ -21,7 +21,8 @@ import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { HoldMusicSelect } from "@/components/holdmusic/HoldMusicSelect";
 import { timeZones } from "@/lib/timezones";
-import type { Organization } from "@/lib/types";
+import Link from "next/link";
+import type { Onboarding, Organization } from "@/lib/types";
 import { DepartmentsCard } from "@/components/organizations/DepartmentsCard";
 import { LimitsCard } from "@/components/organizations/LimitsCard";
 import { NumbersCard } from "@/components/organizations/NumbersCard";
@@ -37,6 +38,7 @@ function OrganizationView() {
   const toast = useToast();
   const errors = useFormErrors();
   const org = useApiData<Organization>(id ? `/organizations/${encodeURIComponent(id)}` : null);
+  const setup = useApiData<Onboarding>(id ? `/organizations/${encodeURIComponent(id)}/onboarding` : null);
   const zones = useMemo(() => timeZones(), []);
   const [name, setName] = useState("");
   const [tz, setTz] = useState("UTC");
@@ -110,6 +112,13 @@ function OrganizationView() {
         title={o.name}
         description={<span className="row"><span className="mono">{o.slug}</span><Badge tone={o.is_active ? "ok" : "neutral"}>{o.is_active ? "Active" : "Inactive"}</Badge></span>}
       />
+      {setup.data?.left.length ? (
+        <Callout tone="warn" title="Setup not finished">
+          Still to do: {setup.data.left.join(", ")}. <Link href={`/organizations/setup/?id=${o.id}`}>Continue the setup</Link>
+        </Callout>
+      ) : (
+        <p className="subtle"><Link href={`/organizations/setup/?id=${o.id}`}>Setup steps and check</Link></p>
+      )}
       <div className="grid grid--2" style={{ alignItems: "start" }}>
         <Card title="Details" subtitle={editable ? undefined : "You can view but not change this organization."}>
           <form className="stack stack--sm" onSubmit={save}>

@@ -562,6 +562,16 @@ left and resumed:
 Step 1 still needs multi-tenancy to be on, or this to be the first
 organization. The page links to the switch.
 
+**As built (slice 9):** step 1 is the **New organization** dialog, which
+creates the organization with its numbers, main number and emergency number
+in one save (`POST /organizations` takes `numbers`, `main_number`,
+`emergency_caller_id_number`; required while multi-tenancy is on). Steps 2
+to 6 are on **Organizations → organization → Set up**
+(`GET /organizations/{id}/onboarding`); step 7 is
+`POST /organizations/{id}/onboarding/check` (platform administrators). Step
+3 adds the administrator with a temporary password; an email invitation is
+not built, as Veyra has no invitation mail yet.
+
 ## 10a. Working in one organization
 
 Owner's request, 2026-11-07:

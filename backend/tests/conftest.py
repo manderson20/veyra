@@ -179,6 +179,23 @@ def login(client: TestClient, email: str, password: str) -> TestClient:
     return client
 
 
+def org_body(name: str, slug: str, **extra: Any) -> dict[str, Any]:
+    """A new organization's create body with a number of its own, its main and
+    emergency number (required with multi-tenancy, docs/MULTI_TENANCY_MSP.md §10).
+    The number starts with 9, which no test dials."""
+    import zlib
+
+    number = f"9{zlib.crc32(slug.encode()) % 10**9:09d}"
+    return {
+        "name": name,
+        "slug": slug,
+        "numbers": [{"first": number}],
+        "main_number": number,
+        "emergency_caller_id_number": number,
+        **extra,
+    }
+
+
 def enable_multi_tenancy() -> None:
     """Let a test create a second active organization (docs/MULTI_TENANCY.md §6);
     the API's switch runs the isolation checks, tests set the flag directly."""
@@ -206,7 +223,7 @@ def two_organizations(
     number. Display names say whose it is, so a wrong label shows."""
     enable_multi_tenancy()
     first = admin.get("/api/v1/organizations").json()["items"][0]
-    r = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"})
+    r = admin.post("/api/v1/organizations", json=org_body("Beta", "beta"))
     assert r.status_code == 201, r.text
     tenants = []
     for org in (first, r.json()):

@@ -12,7 +12,7 @@ import zipfile
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login, org_body
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from test_api_routing import INBOUND, OUTBOUND, _ext, _fake, _org, _trunk
@@ -105,7 +105,7 @@ def test_policies_reach_the_dialplan(admin, app, tmp_path):
 def test_policy_validation_and_scope(admin):
     org = _org(admin)
     enable_multi_tenancy()
-    other = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()
+    other = admin.post("/api/v1/organizations", json=org_body("Beta", "beta")).json()
     b = _ext(admin, other["id"], "2001")
     r = admin.post(
         POL,
