@@ -5,7 +5,7 @@ audience: admin
 section: Getting started
 order: 30
 reviewed: 0.27.87
-checked: 2026-11-08T16:02Z
+checked: 2026-11-08T16:21Z
 pages:
   - /organizations/
   - /organizations/view/
@@ -16,6 +16,7 @@ covers:
   - frontend/src/app/(app)/organizations/view/*
   - frontend/src/app/(app)/organizations/setup/*
   - backend/veyra/api/v1/onboarding.py
+  - frontend/src/components/shell/OrgSwitcher.tsx
   - frontend/src/app/(app)/sites/*
   - frontend/src/components/sites/SiteDialog.tsx
   - frontend/src/components/sites/BuildingsDialog.tsx
@@ -105,6 +106,17 @@ The new organization opens on **Set up**, a list of steps. Each saves on its own
 5. **Emergency:** done once one of its sites is ready for 911 (civic address and ELIN). Links to Sites and Emergency readiness.
 6. **Limits** (optional): the **Limits** card.
 7. **Check** (platform administrators): **Run check** generates the configuration with this organization and a copy of it, checks that no organization can reach another's phones, and runs the caller ID and 911 rules. It lists what is left. When nothing is, deploy the pending changes to put the organization live.
+
+### Working in one organization
+
+When you can see more than one organization, a switcher at the top of every page shows where you are working:
+
+- **An organization:** Veyra behaves like that client's own server. Every list shows only its extensions, groups, phones and so on, new objects belong to it, and **Deploy changes** applies its changes. System pages (trunks, system settings, firewall, updates, backups, usage, onboarding) are not in the menu.
+- **System (all organizations)** (platform-wide roles only): every organization's objects together, and the system pages.
+
+Choosing another organization reloads the same page in it; an open object (such as an extension) goes back to its list. The choice belongs to the browser tab, so you can have client A open in one tab and client B in another. A link can carry it, for example `/extensions/?org=acme`. A new tab starts in your last choice.
+
+The server enforces the choice: while you work in A, an object of B cannot be opened or changed, even by a platform administrator. Downloads and exports opened in a new window use your full access.
 
 ### Numbers
 

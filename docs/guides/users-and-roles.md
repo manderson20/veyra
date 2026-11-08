@@ -5,7 +5,7 @@ audience: admin
 section: Getting started
 order: 40
 reviewed: 0.27.87
-checked: 2026-10-29
+checked: 2026-11-08T16:21Z
 pages:
   - /users/
   - /users/view/
@@ -49,11 +49,24 @@ Every role except Platform Administrator is given for one organization. Only a p
 3. Enter an **Initial password** of at least 12 characters. It is temporary: the user must choose their own at the first sign-in. Give it to them over a channel you trust.
 4. Choose the **Organization**. A platform administrator can leave it empty for a platform-level account.
 5. Choose **Create user**. Veyra opens the new user's page.
-6. Under **Roles**, choose **Assign role**. Pick the **Role** and the **Organization**, then **Assign role**.
+6. Under **Roles**, choose **Assign role**. Pick the **Role**, tick the **Organizations** it applies in, then **Save**.
 
 Veyra may ask for your password again before it assigns a role. This protects against someone using a computer you left signed in.
 
 Veyra refuses passwords that contain the person's name or email address, have fewer than four different characters, or are a common word repeated.
+
+## Access to several organizations
+
+On a server that hosts several organizations (for example a managed service provider's clients), a role can apply in some of them:
+
+1. Open the user and choose **Assign role** under **Roles**.
+2. Pick the **Role**. If the user already has it somewhere, those organizations are ticked.
+3. Under **Applies in**, keep **These organizations** and tick the clients, for example *Technician* in clients A and C. A platform administrator can choose **All organizations** instead.
+4. Choose **Save**. Unticking an organization removes the role there at once, also from sessions that are already open.
+
+Typical set-up: MSP staff get *Technician* (or a custom role) in the clients they look after; a customer's own IT person is *Organization Administrator* in their organization only; the MSP owner is *Platform Administrator*. Only a platform administrator can give someone access to several organizations, and nobody can grant a role holding a permission they do not have in that organization.
+
+The user then picks the organization to work in from the switcher at the top of every page; see [Organizations and sites](guide:organizations-and-sites).
 
 ## The user's page
 
