@@ -2879,7 +2879,7 @@ export interface AlertItem {
 
 export type ReportGroup =
   | "day" | "week" | "month" | "hour" | "weekday" | "direction" | "outcome" | "answered_by"
-  | "called_extension" | "calling_extension" | "did" | "trunk" | "queue" | "ring_group" | "caller";
+  | "called_extension" | "calling_extension" | "did" | "trunk" | "queue" | "ring_group" | "caller" | "organization";
 export type ReportMeasure =
   | "calls" | "answered" | "missed" | "voicemail" | "answer_rate" | "avg_ring" | "total_ring"
   | "avg_talk" | "total_talk" | "within_sl";
@@ -4038,4 +4038,19 @@ export interface OrganizationLimits {
   devices: number;
   updated_at: string | null;
   updated_by: string | null;
+}
+
+/** One row of the usage report (docs/MULTI_TENANCY_MSP.md §9). */
+export interface UsageRow {
+  organization_id: string;
+  organization: string;
+  trunk: string;
+  inbound_calls: number;
+  outbound_calls: number;
+  inbound_minutes: number;
+  outbound_minutes: number;
+  billable_minutes: number;
+  emergency_calls: number;
+  internal_calls: number;
+  peak_concurrent: number;
 }

@@ -13,7 +13,7 @@ import logging
 import re
 import uuid
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,8 @@ from veyra.core.models import (
     CallRecord,
     Extension,
     InboundRoute,
+    OrganizationNumber,
+    OutboundRoute,
     SipTrunk,
     SystemSetting,
 )
@@ -214,6 +216,10 @@ class Directory:
     extensions: dict[str, Extension]
     trunks: dict[str, SipTrunk]
     routes: list[InboundRoute]
+    # The number inventory (docs/MULTI_TENANCY_MSP.md §9): exact owners for billing.
+    numbers: list[OrganizationNumber] = field(default_factory=list)
+    # (prefix, match) of every emergency route's patterns.
+    emergency: list[tuple[str, str]] = field(default_factory=list)
 
     @classmethod
     def load(cls, db: Session) -> Directory:
@@ -221,11 +227,46 @@ class Directory:
             {e.endpoint_name: e for e in db.scalars(select(Extension))},
             {TRUNK_PREFIX + t.slug: t for t in db.scalars(select(SipTrunk))},
             list(db.scalars(select(InboundRoute))),
+            list(db.scalars(select(OrganizationNumber))),
+            [
+                (str(p.get("prefix") or ""), str(p.get("match") or ""))
+                for r in db.scalars(
+                    select(OutboundRoute).where(OutboundRoute.is_emergency.is_(True))
+                )
+                for p in (r.patterns or [])
+            ],
+        )
+
+    def owner_of(self, number: str) -> uuid.UUID | None:
+        """The organization that owns ``number`` in the inventory."""
+        from veyra.core.numbers import in_range, maybe_canonical
+
+        n = maybe_canonical(number)
+        if n is None:
+            return None
+        held = next((r for r in self.numbers if in_range(n, r.first, r.last)), None)
+        return held.organization_id if held is not None else None
+
+    def is_emergency(self, number: str | None) -> bool:
+        from veyra.telephony.routing import pattern_matches
+
+        return bool(number) and any(
+            pattern_matches(prefix, match, str(number)) for prefix, match in self.emergency
         )
 
     def route_for(self, number: str) -> InboundRoute | None:
         digits = re.sub(r"\D", "", number or "")
         if not digits:
+            return None
+        from veyra.core.numbers import maybe_canonical
+
+        exact = maybe_canonical(number)
+        for r in self.routes:
+            if exact and maybe_canonical(r.did) == exact:
+                return r
+        if self.numbers:
+            # With an inventory, a number matches exactly or not at all:
+            # a suffix match could bill one customer's call to another.
             return None
         for r in self.routes:
             canon = re.sub(r"\D", "", r.did_canonical or "")
@@ -292,6 +333,8 @@ def fold(call: CallRecord, legs: list[CallLeg], d: Directory, now: datetime) -> 
             break
     if org is None and route is not None:
         org = route.organization_id
+    if org is None and direction == "inbound" and first.dst:
+        org = d.owner_of(first.dst)
     if org is None:
         # Any phone on any leg (Local hops of groups and queues).
         for e in [*callers, *called]:
@@ -299,6 +342,7 @@ def fold(call: CallRecord, legs: list[CallLeg], d: Directory, now: datetime) -> 
                 org = d.extensions[e].organization_id
                 break
     call.organization_id = org
+    call.is_emergency = direction == "outbound" and d.is_emergency(call.to_number)
 
     answered = sorted(
         (
