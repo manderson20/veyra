@@ -222,6 +222,56 @@ def _check_section(name: str, what: str) -> str:
     return name
 
 
+ORG_GROUP = "veyra_org"
+INBOUND_FULL = [
+    " same => n(orgfull),Log(NOTICE,Veyra: organization ${VEYRA_ORG} is at its limit of "
+    "outside calls; inbound ${EXTEN} refused)",
+    " same => n,Busy(5)",
+    " same => n,Hangup(17)",
+]
+
+
+def _org_limits(snapshot: dict[str, Any]) -> dict[str, int]:
+    """Each organization's concurrent outside call limit (docs/MULTI_TENANCY_MSP.md §8)."""
+    return {
+        str(o.get("slug") or ""): int(o["max_outside_calls"])
+        for o in snapshot.get("organizations") or []
+        if o.get("max_outside_calls")
+    }
+
+
+def _route_limits(limits: dict[str, int], route_org: Any) -> dict[str, int]:
+    """The limits that apply on a route: its own organization's, or every
+    limited organization's on a route for every organization."""
+    if route_org:
+        return {k: v for k, v in limits.items() if k == str(route_org)}
+    return dict(limits)
+
+
+def _org_limit_lines(limits: dict[str, int], route_org: Any) -> list[str]:
+    """Count the call in its organization's group and refuse it over the
+    limit. Never on an emergency route (the caller does not add these)."""
+    applying = _route_limits(limits, route_org)
+    if not applying:
+        return []
+    out = [f' same => n,ExecIf($["${{VEYRA_ORG}}"!=""]?Set(GROUP({ORG_GROUP})=${{VEYRA_ORG}}))']
+    for org, limit in sorted(applying.items()):
+        slug = _check_value(org, "organization")
+        out.append(
+            f' same => n,GotoIf($["${{VEYRA_ORG}}"="{slug}" & '
+            f"${{GROUP_COUNT({slug}@{ORG_GROUP})}} > {int(limit)}]?orgbusy)"
+        )
+    return out
+
+
+def _inbound_limit(org: str, limit: int) -> list[str]:
+    slug = _check_value(org, "organization")
+    return [
+        f" same => n,Set(GROUP({ORG_GROUP})={slug})",
+        f" same => n,GotoIf($[${{GROUP_COUNT({slug}@{ORG_GROUP})}} > {int(limit)}]?orgfull)",
+    ]
+
+
 def _org_mains(snapshot: dict[str, Any], field: str = "main_number") -> dict[str, str]:
     """Each organization's main number (docs/MULTI_TENANCY_MSP.md §5.2), or
     with ``field`` its emergency number (§6.1)."""
@@ -1444,7 +1494,15 @@ def _dialplan(
         "",
     ]
     lines += _outbound_contexts(
-        outbound, trunk_info, recording, prompts_dir, spaces, cos_all, conditions, bool(disa_lines)
+        outbound,
+        trunk_info,
+        recording,
+        prompts_dir,
+        spaces,
+        cos_all,
+        conditions,
+        bool(disa_lines),
+        _org_limits(snapshot),
     )
     policies = {
         str(p.get("organization") or ""): p for p in (snapshot.get("caller_block_policies") or [])
@@ -1459,6 +1517,7 @@ def _dialplan(
         policies,
         len(spaces) > 1,
         _org_mains(snapshot),
+        _org_limits(snapshot),
     )
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -3061,6 +3120,7 @@ def _outbound_contexts(
     cos: Cos | None = None,
     conditions: dict[str, dict[str, Any]] | None = None,
     has_disa: bool = False,
+    org_limits: dict[str, int] | None = None,
 ) -> list[str]:
     """``veyra-outbound`` of each namespace and one shared ``veyra-out-<slug>``
     per route, emergency routes first (docs/TRUNKS_ROUTING.md §4, §6, §7). A
@@ -3082,6 +3142,7 @@ def _outbound_contexts(
     emergency_slugs = [sl for r, sl in zip(ordered, slugs, strict=True) if r.get("is_emergency")]
     lines: list[str] = []
     tenants = spaces is not None and len(spaces) > 1
+    org_limits = org_limits or {}
     for ns in spaces if spaces is not None else [engine_names.LEGACY]:
         lines += [
             f"[{Names(ns).outbound}]",
@@ -3185,6 +3246,7 @@ def _outbound_contexts(
                 ]
             else:
                 lines.append(" same => n,GotoIf($[0${VEYRA_HOPS} > 0]?loop)")
+                lines += _org_limit_lines(org_limits, r.get("organization"))
             lines.append(f" same => n,Set(VEYRA_DIAL={prepend}${{EXTEN{strip}}})")
             timeout = EMERGENCY_DIAL_TIMEOUT if emergency else OUTBOUND_DIAL_TIMEOUT
             if not route_trunks:
@@ -3237,6 +3299,13 @@ def _outbound_contexts(
                 " same => n,Congestion(5)",
                 " same => n,Hangup()",
             ]
+            if not emergency and _route_limits(org_limits, r.get("organization")):
+                lines += [
+                    " same => n(orgbusy),Log(NOTICE,Veyra: organization ${VEYRA_ORG} is at "
+                    "its limit of outside calls)",
+                    " same => n,Playback(all-circuits-busy)",
+                    " same => n,Hangup()",
+                ]
             if tenants and not emergency:
                 lines += [
                     " same => n(nocid),Log(ERROR,Veyra: organization ${VEYRA_ORG} has no "
@@ -3265,8 +3334,12 @@ def _inbound_contexts(
     policies: dict[str, dict[str, Any]] | None = None,
     tenants: bool = False,
     org_main: dict[str, str] | None = None,
+    org_limits: dict[str, int] | None = None,
 ) -> list[str]:
-    """With ``tenants``, each DID sets the organization's VEYRA_ORG and main
+    """``org_limits`` caps each organization's concurrent outside calls
+    (docs/MULTI_TENANCY_MSP.md §8); a 911 callback is never refused.
+
+    With ``tenants``, each DID sets the organization's VEYRA_ORG and main
     number on the trunk channel (docs/MULTI_TENANCY_MSP.md §2, §5.2).
 
     ``veyra-from-trunk`` (shared DIDs), one ``veyra-from-trunk-<slug>`` per
@@ -3358,8 +3431,13 @@ def _inbound_contexts(
         site = elins.get(routing.canonical_did(did))
         if site is not None:
             out += callback_lines(site, did)
+        limit = (org_limits or {}).get(org) if site is None else None
+        if limit:
+            out += _inbound_limit(org, limit)
         out += _destination_lines(r, conditions)
         out += _blocked_tail(r, (policies or {}).get(org))
+        if limit:
+            out += INBOUND_FULL
         for alias in routing.did_aliases(did):
             if (r.get("trunk") or None, alias) not in explicit:
                 out.append(f"exten => {alias},1,Goto({context},{did},1)")
@@ -3405,8 +3483,13 @@ def _inbound_contexts(
                     " same => n,Set(__VEYRA_DID=${EXTEN})",
                     *_blacklist_check(org, (policies or {}).get(org)),
                 ]
+                limit = (org_limits or {}).get(org)
+                if limit:
+                    lines += _inbound_limit(org, limit)
                 lines += _destination_lines(catch, conditions)
                 lines += _blocked_tail(catch, (policies or {}).get(org))
+                if limit:
+                    lines += INBOUND_FULL
         else:
             lines += [
                 "exten => _[0-9+*#].,1,NoOp(Veyra: no inbound route for ${EXTEN} on trunk)",

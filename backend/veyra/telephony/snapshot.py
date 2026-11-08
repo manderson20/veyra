@@ -47,6 +47,7 @@ from veyra.core.models import (
     MohClass,
     MohClassTrack,
     Organization,
+    OrganizationLimits,
     OrganizationNumber,
     OutboundRoute,
     OutboundRouteTrunk,
@@ -507,6 +508,11 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     pickup = _pickup_groups(db, active, ext_by_id)
     smtp = load_smtp_settings(db)
     from_address, from_name = sender(smtp, inst.name if inst else "Veyra")
+    org_limits = {
+        row.organization_id: row.max_outside_calls
+        for row in db.scalars(select(OrganizationLimits))
+        if row.max_outside_calls
+    }
     return {
         "snapshot_version": SNAPSHOT_VERSION,
         "veyra_version": __version__,
@@ -558,6 +564,8 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 # (docs/MULTI_TENANCY_MSP.md §5.2).
                 "main_number": o.main_number,
                 "emergency_caller_id_number": o.emergency_caller_id_number,
+                # Concurrent outside calls (docs/MULTI_TENANCY_MSP.md §8); None: no limit.
+                "max_outside_calls": org_limits.get(o.id),
                 "hold_music": moh_slug(o.moh_class_id, o.id),
                 "fax_header": o.fax_header,
                 "fax_station_id": o.fax_station_id,

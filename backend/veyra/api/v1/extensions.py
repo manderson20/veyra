@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from veyra.api.v1 import wakeup_shared
 from veyra.api.v1.group_helpers import MembershipOut
 from veyra.configmgmt import service as configmgmt
-from veyra.core import audit, numbers
+from veyra.core import audit, limits, numbers
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
@@ -854,6 +854,7 @@ def create_extension(
         raise conflict("The organization is inactive.", code="organization_inactive")
     key = installation_key(request)
     _check_number(db, load_numbering_plan(db), body.number, None, org.id)
+    limits.check_room(db, org.id, "extensions")
     _check_user(db, body.user_id, body.organization_id)
     check_outbound_caller_id(db, principal, org.id, body.outbound_caller_id_number)
     numbers.check_caller_id(

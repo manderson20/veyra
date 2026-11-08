@@ -23,6 +23,7 @@ import { HoldMusicSelect } from "@/components/holdmusic/HoldMusicSelect";
 import { timeZones } from "@/lib/timezones";
 import type { Organization } from "@/lib/types";
 import { DepartmentsCard } from "@/components/organizations/DepartmentsCard";
+import { LimitsCard } from "@/components/organizations/LimitsCard";
 import { NumbersCard } from "@/components/organizations/NumbersCard";
 import { ProvisioningCredentialCard } from "@/components/organizations/ProvisioningCredentialCard";
 import { useApiData } from "@/hooks/useApiData";
@@ -154,6 +155,7 @@ function OrganizationView() {
           </div>
         </Card>
         {can("routing.read") ? <NumbersCard organizationId={o.id} editable={editable} /> : null}
+        <LimitsCard organizationId={o.id} editable={editable} />
         {can("devices.read") ? <ProvisioningCredentialCard organizationId={o.id} editable={can("devices.write") && can("organizations.write")} bootstrapIncludesCredential={o.bootstrap_includes_credential ?? false} /> : null}
         <DepartmentsCard organizationId={o.id} editable={editable} />
       </div>

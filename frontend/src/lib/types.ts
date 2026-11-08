@@ -4027,3 +4027,15 @@ export interface EmergencyOrganizationRow {
   sites_ready: number;
   last_test_call: string | null;
 }
+
+/** What an organization may use (docs/MULTI_TENANCY_MSP.md §8); null: no limit. */
+export interface OrganizationLimits {
+  organization_id: string;
+  max_outside_calls: number | null;
+  max_extensions: number | null;
+  max_devices: number | null;
+  extensions: number;
+  devices: number;
+  updated_at: string | null;
+  updated_by: string | null;
+}

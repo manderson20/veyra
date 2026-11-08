@@ -224,3 +224,22 @@ class OrganizationNumber(UUIDPrimaryKey, Base):
     source: Mapped[str] = mapped_column(String(16), default="manual")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str] = mapped_column(String(320), default="")
+
+
+class OrganizationLimits(Base):
+    """What a platform administrator allows an organization
+    (docs/MULTI_TENANCY_MSP.md §8). None: no limit. MSP plans extend this."""
+
+    __tablename__ = "organization_limits"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Concurrent calls through any trunk, in and out; emergency calls never count.
+    max_outside_calls: Mapped[int | None] = mapped_column(Integer)
+    max_extensions: Mapped[int | None] = mapped_column(Integer)
+    max_devices: Mapped[int | None] = mapped_column(Integer)
+    # Reserved for MSP plans (a later step); not used yet.
+    plan_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_by: Mapped[str] = mapped_column(String(320), default="")

@@ -115,6 +115,7 @@ from veyra.core.models.tenancy import (
     Department,
     Installation,
     Organization,
+    OrganizationLimits,
     OrganizationNumber,
     Site,
 )
@@ -202,6 +203,7 @@ __all__ = [
     "MohClassTrack",
     "Organization",
     "OrganizationConfigSlice",
+    "OrganizationLimits",
     "OrganizationNumber",
     "OutboundRoute",
     "OutboundRouteTrunk",

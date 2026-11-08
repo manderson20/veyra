@@ -22,7 +22,7 @@ from veyra.api.v1.device_common import LineKey
 from veyra.api.v1.enrollment import device_purpose, new_secret
 from veyra.api.v1.extensions import installation_key
 from veyra.api.v1.provisioning import catalog_for
-from veyra.core import audit
+from veyra.core import audit, limits
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import conflict, forbidden, not_found
@@ -820,6 +820,7 @@ def create_device(
     org = db.get(Organization, body.organization_id)
     if org is None:
         raise not_found("Organization")
+    limits.check_room(db, org.id, "devices")
     key = installation_key(request)
     profile_id = body.profile_id
     if "profile_id" not in body.model_fields_set:
