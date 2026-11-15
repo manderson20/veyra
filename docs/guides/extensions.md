@@ -4,8 +4,8 @@ summary: Create an extension for each phone, assign it to a person, and set its 
 audience: admin
 section: Getting started
 order: 50
-reviewed: 0.27.82
-checked: 2026-10-29
+reviewed: 0.27.87
+checked: 2026-11-07T23:43Z
 pages:
   - /extensions/
   - /extensions/view/
@@ -63,6 +63,7 @@ Choose an extension in the list to open it. The tabs across the top are:
 
 - **Caller ID name** and **Caller ID number:** what colleagues see on internal calls.
 - **Outbound caller ID number:** sent to the carrier on outside calls. It must be one of the organization's numbers (from its inbound routes) or on the organization's allow list. Empty: the route's or the trunk's number is used.
+- **With several organizations on the server,** the outbound caller ID must be one of the organization's own numbers (its **Numbers** card) or on its allow list, and the **Emergency caller ID number** one of its own numbers, so the 911 center's callback rings here. Only platform administrators may set other numbers. An empty outbound caller ID presents the organization's **Main number**.
 - **Outbound caller ID name:** sent with it; carriers may replace it.
 - **Emergency caller ID number:** sent on 911 calls instead of the regular caller ID.
 
@@ -120,6 +121,7 @@ People who can change system settings see a form in the **Numbering plan** card 
 ## If something doesn't work
 
 - **"Changes not yet deployed":** choose **Deploy changes** in the top bar.
+- **"This organization may have at most … extensions":** the organization is at its limit (the **Limits** card on its page, see [Organizations and sites](guide:organizations-and-sites)). Remove an extension it no longer needs, or ask a platform administrator to raise the limit.
 - **"Installation key missing":** Veyra cannot store or show SIP secrets. Run `sudo veyra installation-key check` on the server.
 - **A *No secret* badge:** choose **New secret** on the Credentials tab.
 - **The phone does not register:** check the user name and secret on the phone against the Credentials tab, and that you deployed. The **Registers from** column shows where a phone connects from; *behind NAT* means it is behind a router.

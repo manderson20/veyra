@@ -4,7 +4,7 @@ summary: See the calls in progress, hang one up, record it, or listen in, whispe
 audience: admin
 section: Calls and call flows
 order: 90
-reviewed: 0.27.53
+reviewed: 0.27.87
 pages:
   - /calls/
 covers:
@@ -23,7 +23,13 @@ covers:
 | Start and stop recording a call in progress | **Record** | Organization and site administrators |
 | Listen to, whisper on and join calls in progress (supervisor) | **Supervise…** | Organization and site administrators |
 
-Platform administrators see every call. Everyone else sees the calls of extensions in the organizations they manage; a call leg Veyra cannot match to one of those extensions, such as the trunk side of an outside call, is shown only to platform administrators.
+Platform administrators see every call. Everyone else sees the calls of the organizations they manage. Veyra knows whose call a line is by:
+
+- the phone it is on;
+- for the trunk side of an outside call, the phone it is connected to;
+- for an outside call that is still ringing, the organization its number belongs to.
+
+When several organizations share the server, each one's administrators see, hang up and record only their own calls, even if both have an extension 1001. A line Veyra cannot place in an organization is shown only to platform administrators.
 
 ## Read the list
 

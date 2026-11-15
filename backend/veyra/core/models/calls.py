@@ -59,6 +59,9 @@ class CallRecord(UUIDPrimaryKey, TenantScoped, Base):
     ring_group: Mapped[str | None] = mapped_column(String(80), index=True)
     # No leg added for a minute after the last end: the call is complete.
     is_final: Mapped[bool] = mapped_column(default=False)
+    # Left through an emergency route (docs/MULTI_TENANCY_MSP.md §9): never
+    # billable, never limited.
+    is_emergency: Mapped[bool] = mapped_column(default=False, server_default="false")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

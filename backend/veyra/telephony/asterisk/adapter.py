@@ -45,6 +45,8 @@ WATCHED_MODULES = (
 )
 
 
+# Channels asked for VEYRA_ORG one by one when ari.conf lacks channelvars.
+MAX_VARIABLE_LOOKUPS = 50
 _CHANNEL_ENDPOINT_RE = re.compile(r"^PJSIP/([A-Za-z0-9_.-]+)-[0-9a-f]+$")
 
 
@@ -510,18 +512,40 @@ class AsteriskAdapter(TelephonyAdapter):
     def active_calls(self) -> list[ActiveCall]:
         out = []
         now = datetime.now(UTC)
-        for ch in self.ari.channels():
+        channels = self.ari.channels()
+        try:
+            bridged = {
+                str(cid): str(b.get("id"))
+                for b in self.ari.bridges()
+                for cid in (b.get("channels") or [])
+            }
+        except EngineUnavailable:
+            bridged = {}
+        asked = 0
+        for ch in channels:
             caller = ch.get("caller", {}) or {}
             connected = ch.get("connected", {}) or {}
+            cid = str(ch.get("id"))
+            # ari.conf's channelvars puts VEYRA_ORG in the channel; an older
+            # ari.conf does not, so an unbridged channel is asked directly.
+            org = (ch.get("channelvars") or {}).get("VEYRA_ORG")
+            if "channelvars" not in ch and cid not in bridged and asked < MAX_VARIABLE_LOOKUPS:
+                asked += 1
+                try:
+                    org = self.ari.get_variable(cid, "VEYRA_ORG")
+                except EngineUnavailable:
+                    org = None
             out.append(
                 ActiveCall(
-                    channel_id=str(ch.get("id")),
+                    channel_id=cid,
                     caller=caller.get("number") or caller.get("name"),
                     callee=connected.get("number") or ch.get("dialplan", {}).get("exten"),
                     state=str(ch.get("state", "unknown")),
                     duration_seconds=_age_seconds(ch.get("creationtime"), now),
                     endpoint=_endpoint_of(str(ch.get("name", ""))),
                     channel_name=str(ch.get("name") or "") or None,
+                    bridge_id=bridged.get(cid),
+                    organization=str(org) if org else None,
                 )
             )
         return out

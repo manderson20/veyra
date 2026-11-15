@@ -4,7 +4,7 @@ summary: Look up any call, export the history, build your own reports and have t
 audience: admin
 section: Calls and call flows
 order: 100
-reviewed: 0.27.79
+reviewed: 0.27.87
 pages:
   - /call-history/
   - /reports/
@@ -73,13 +73,25 @@ Days and hours are in the organization's time zone.
 On the **Build** tab:
 
 1. Choose the **Period**, from **Today** to **This year**, or **Custom dates**.
-2. Choose **Group by**, for example **Day**, **Hour of day**, **Called extension**, **Number dialled (DID)**, **Queue** or **Caller number**. Add **Then by** and **And by** for up to three levels.
+2. Choose **Group by**, for example **Day**, **Hour of day**, **Called extension**, **Number dialled (DID)**, **Queue**, **Caller number** or **Organization**. Add **Then by** and **And by** for up to three levels.
 3. Tick the **Measures**: **Calls**, **Answered**, **Missed**, **Voicemail**, **Answer rate**, **Average ring**, **Total ring**, **Average talk**, **Total talk**, **Answered within service level** (then set the **Service level (seconds)**).
 4. Open **Filters** to include only some calls: directions, outcomes, extensions (either side of the call), numbers dialled, queues, ring groups, trunks, **Caller number contains**, **At least this much talk (seconds)**, and **Business hours**: inside or outside the hours and holidays of a time condition you choose.
 5. Choose **Show as** (**Table**, **Bars and table**, **Line and table**), the sort order and **Show at most (rows)** (up to 5000).
 6. Choose **Run**. Under the chart, **Chart** picks which measure the chart shows; the table always shows them all, with the totals below.
 
 **Export CSV** downloads the result.
+
+## Usage by organization (for billing)
+
+On a server shared by several organizations, platform administrators have a **Usage** tab. Choose a **Month** to see, for each organization and trunk:
+
+- **Inbound** and **Outbound:** outside calls and their minutes.
+- **Billable minutes:** each answered outside call rounded up to a whole minute.
+- **Emergency:** emergency calls. They are never billable and never count against a limit.
+- **Internal:** calls between the organization's own phones.
+- **Most at once:** the organization's highest number of outside calls at the same time, across all its trunks.
+
+**Download CSV** saves the month for your billing system. A call belongs to the organization of the phone that made or took it, or else of the number it arrived on.
 
 ## Save and email a report
 

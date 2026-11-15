@@ -227,7 +227,9 @@ def _audit(
         request_id=ctx.request_id,
         details={"name": row.name, **details},
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {row.name}")
+    configmgmt.mark_changed(
+        db, by=principal.label, what=f"{action} {row.name}", organization_id=row.organization_id
+    )
 
 
 def _name_conflict(e: IntegrityError) -> ProblemError:

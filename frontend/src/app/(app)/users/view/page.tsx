@@ -262,7 +262,7 @@ function UserView() {
       >
         <p>{u.display_name}&apos;s authenticator devices and recovery codes are removed and they are signed out everywhere. Use this when they lost their phone. They set up a new authenticator at their next sign-in.</p>
       </ConfirmDialog>
-      <AssignRoleDialog open={assignOpen} onClose={() => setAssignOpen(false)} userId={u.id} onAssigned={roles.reload} />
+      <AssignRoleDialog open={assignOpen} onClose={() => setAssignOpen(false)} userId={u.id} current={roles.data ?? []} onAssigned={roles.reload} />
       <ConfirmDialog
         open={removing !== null}
         title="Remove role?"
@@ -412,37 +412,53 @@ function UserSessionsCard({ user }: { user: User }) {
   );
 }
 
-function AssignRoleDialog({ open, onClose, userId, onAssigned }: { open: boolean; onClose: () => void; userId: string; onAssigned: () => void }) {
+/** Assign a role, or change the organizations it applies in
+ * (docs/MULTI_TENANCY_MSP.md §10a.3): "Technician in clients A and C" is one
+ * save. Only a platform administrator grants a role in all organizations. */
+function AssignRoleDialog({ open, onClose, userId, current, onAssigned }: { open: boolean; onClose: () => void; userId: string; current: RoleAssignment[]; onAssigned: () => void }) {
   const toast = useToast();
   const { session } = useSession();
   const errors = useFormErrors();
   const roles = useApiData<Role[]>(open ? "/roles" : null);
   const { organizations } = useOrganizationOptions(open);
   const [roleKey, setRoleKey] = useState("");
-  const [orgId, setOrgId] = useState("");
+  const [where, setWhere] = useState<"orgs" | "all">("orgs");
+  const [orgIds, setOrgIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   useOnChange(open, () => {
     if (open) {
       setRoleKey("");
-      setOrgId("");
+      setWhere("orgs");
+      setOrgIds([]);
       errors.clear();
     }
   });
 
-  const platform = roleKey === "platform_admin";
+  const pickRole = (key: string) => {
+    setRoleKey(key);
+    // Start from where the role already applies.
+    setOrgIds(current.filter((a) => a.role_key === key && a.scope_type === "organization" && a.organization_id).map((a) => a.organization_id as string));
+    setWhere("orgs");
+  };
+
+  const platform = roleKey === "platform_admin" || where === "all";
+  const canAll = !!session?.is_platform_admin;
   const available = (roles.data ?? []).filter((r) => r.key !== "platform_admin" || session?.is_platform_admin);
   const selected = available.find((r) => r.key === roleKey);
+  const toggle = (id: string, on: boolean) => setOrgIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      await api.post(`/users/${userId}/roles`, platform
-        ? { role_key: roleKey, scope_type: "platform" }
-        : { role_key: roleKey, scope_type: "organization", organization_id: orgId });
-      toast.success("Role assigned", selected?.name);
+      if (platform) {
+        await api.post(`/users/${userId}/roles`, { role_key: roleKey, scope_type: "platform" });
+      } else {
+        await api.put(`/users/${userId}/roles/${encodeURIComponent(roleKey)}/organizations`, { organization_ids: orgIds });
+      }
+      toast.success("Roles saved", selected?.name);
       onClose();
       onAssigned();
     } catch (err) {
@@ -454,16 +470,35 @@ function AssignRoleDialog({ open, onClose, userId, onAssigned }: { open: boolean
 
   return (
     <Dialog open={open} onClose={onClose} busy={busy} title="Assign role"
-      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="role-assign" loading={busy} disabled={!roleKey || (!platform && !orgId)}>Assign role</Button></>}>
+      description="Choose a role, then where it applies. Choosing a role the user already has shows its organizations, so you can add or remove clients."
+      footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="role-assign" loading={busy} disabled={!roleKey}>Save</Button></>}>
       <form id="role-assign" className="stack stack--sm" onSubmit={submit}>
         <SelectField label="Role" required value={roleKey} placeholder="Choose a role" options={available.map((r) => ({ value: r.key, label: r.name }))}
-          help={selected?.description} onChange={(e) => setRoleKey(e.target.value)} />
-        {platform ? (
+          help={selected?.description} onChange={(e) => pickRole(e.target.value)} />
+        {roleKey === "platform_admin" ? (
           <Callout tone="warn" title="Platform-wide access">The Platform Administrator role grants full control of this installation and every organization on it.</Callout>
-        ) : (
-          <SelectField label="Organization" required value={orgId} placeholder="Choose an organization" options={organizations.map((o) => ({ value: o.id, label: o.name }))}
-            onChange={(e) => setOrgId(e.target.value)} />
-        )}
+        ) : roleKey ? (
+          <>
+            {canAll ? (
+              <SelectField label="Applies in" value={where} onChange={(e) => setWhere(e.target.value as "orgs" | "all")}
+                options={[{ value: "orgs", label: "These organizations" }, { value: "all", label: "All organizations (and the system pages it allows)" }]} />
+            ) : null}
+            {where === "orgs" ? (
+              <fieldset className="stack stack--xs" style={{ border: 0, padding: 0, margin: 0 }}>
+                <legend className="field__label">Organizations</legend>
+                <div className="picklist">
+                  {organizations.map((o) => (
+                    <label key={o.id} className="row" style={{ gap: 8 }}>
+                      <input type="checkbox" checked={orgIds.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} />
+                      <span>{o.name}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="field__help">The user can work only in the organizations ticked. Unticking one removes the role there at once, also from sessions already open.</p>
+              </fieldset>
+            ) : null}
+          </>
+        ) : null}
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>

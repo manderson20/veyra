@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login, org_body
 
 
 def make_org(admin, slug):
     enable_multi_tenancy()
-    r = admin.post("/api/v1/organizations", json={"name": slug.title(), "slug": slug})
+    r = admin.post("/api/v1/organizations", json=org_body(slug.title(), slug))
     assert r.status_code == 201, r.text
     return r.json()["id"]
 
@@ -56,7 +56,7 @@ def test_org_admin_is_confined_to_their_organization(admin, app):
         },
     )
     assert r.status_code == 403
-    assert c.post("/api/v1/organizations", json={"name": "G", "slug": "g"}).status_code == 403
+    assert c.post("/api/v1/organizations", json=org_body("G", "g")).status_code == 403
 
     # cannot escalate to platform scope
     me = next(

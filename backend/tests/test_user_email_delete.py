@@ -5,7 +5,7 @@ import email
 import email.policy
 import uuid
 
-from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login, org_body
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -138,9 +138,7 @@ def test_delete_refusals(admin):
 def test_other_organizations_guard(admin, app):
     enable_multi_tenancy()
     org_a = _org(admin)
-    org_b = admin.post("/api/v1/organizations", json={"name": "Other", "slug": "other"}).json()[
-        "id"
-    ]
+    org_b = admin.post("/api/v1/organizations", json=org_body("Other", "other")).json()["id"]
     boss = _user(admin, org_a, "boss@example.org")
     r = admin.post(
         f"{USERS}/{boss['id']}/roles",

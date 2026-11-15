@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatDuration, formatPercent, formatRelative, humanize, initials, slugify } from "./format";
+import { formatBytes, formatDuration, formatNumber, formatNumberBlock, formatPercent, formatRelative, humanize, initials, slugify } from "./format";
 
 describe("formatting", () => {
   it("formats bytes", () => {
@@ -52,5 +52,14 @@ describe("isLockedOut", async () => {
     expect(isLockedOut({ locked_until: "2026-10-12T11:00:00Z" }, now)).toBe(false);
     expect(isLockedOut({ locked_until: "2026-10-12T12:10:00Z" }, now)).toBe(true);
     expect(isLockedOut({ locked_until: "garbage" }, now)).toBe(false);
+  });
+});
+
+describe("numbers", () => {
+  it("formats North American numbers and blocks", () => {
+    expect(formatNumber("5735550100")).toBe("(573) 555-0100");
+    expect(formatNumber("442071234567")).toBe("442071234567");
+    expect(formatNumberBlock("5735550100", "5735550100")).toBe("(573) 555-0100");
+    expect(formatNumberBlock("5735550100", "5735550199")).toBe("(573) 555-0100 – (573) 555-0199");
   });
 });

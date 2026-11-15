@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -58,34 +58,122 @@ DEFAULT_IDLE_TIMEOUT = timedelta(minutes=30)
 # ----------------------------------------------------------------- pending flag
 
 PENDING_KEY = "telephony.pending_change"
+# Per organization (docs/MULTI_TENANCY_MSP.md §7): the change an
+# organization's administrators saved and the reason its last changes were
+# held back.
+ORG_PENDING_PREFIX = "telephony.pending_change.org."
+HELD_BACK_PREFIX = "telephony.held_back.org."
+ORG_APPLY_KEY = "telephony.org_apply"
+ORG_APPLIES_KEY = "telephony.org_applies"
+ORG_APPLY_MODES = ("apply", "request")
+ORG_APPLY_EVERY = timedelta(minutes=5)
+ORG_APPLIES_PER_HOUR = 12
 
 
-def mark_changed(db: Session, *, by: str, what: str) -> None:
+def _set(db: Session, key: str, value: dict[str, Any]) -> None:
+    row = db.get(SystemSetting, key)
+    if row is None:
+        db.add(SystemSetting(key=key, value=value))
+    else:
+        row.value = value
+
+
+def _get(db: Session, key: str) -> dict[str, Any] | None:
+    row = db.get(SystemSetting, key)
+    return dict(row.value) if row is not None and isinstance(row.value, dict) else None
+
+
+def mark_changed(
+    db: Session, *, by: str, what: str, organization_id: uuid.UUID | None = None
+) -> None:
     """Record that something the engine configuration is built from was saved.
 
     The flag stays until a deployment runs (or an apply finds nothing to
     change), so the "Deploy changes" button is shown after every relevant
-    save, whether or not the generated files turn out different.
+    save, whether or not the generated files turn out different. With
+    ``organization_id`` the organization's own flag is set too, which its
+    administrators see.
     """
     value = {"at": utcnow().isoformat(), "by": by, "what": what}
-    row = db.get(SystemSetting, PENDING_KEY)
-    if row is None:
-        db.add(SystemSetting(key=PENDING_KEY, value=value))
-    else:
-        row.value = value
+    _set(db, PENDING_KEY, value)
+    if organization_id is not None:
+        _set(db, f"{ORG_PENDING_PREFIX}{organization_id}", value)
     db.flush()
 
 
 def clear_changed(db: Session) -> None:
-    row = db.get(SystemSetting, PENDING_KEY)
-    if row is not None:
+    for row in db.scalars(
+        select(SystemSetting).where(
+            (SystemSetting.key == PENDING_KEY) | SystemSetting.key.startswith(ORG_PENDING_PREFIX)
+        )
+    ):
         db.delete(row)
-        db.flush()
+    db.flush()
 
 
 def pending_change(db: Session) -> dict[str, Any] | None:
-    row = db.get(SystemSetting, PENDING_KEY)
-    return dict(row.value) if row is not None and isinstance(row.value, dict) else None
+    return _get(db, PENDING_KEY)
+
+
+def organization_flags(db: Session, prefix: str) -> dict[uuid.UUID, dict[str, Any]]:
+    """Per-organization rows under ``prefix`` (pending changes, held back)."""
+    out: dict[uuid.UUID, dict[str, Any]] = {}
+    for row in db.scalars(select(SystemSetting).where(SystemSetting.key.startswith(prefix))):
+        try:
+            out[uuid.UUID(row.key[len(prefix) :])] = dict(row.value)
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def org_apply_mode(db: Session) -> str:
+    """Whether organization administrators apply their own changes or only
+    request it (owner decision 3, docs/MULTI_TENANCY_MSP.md §13)."""
+    mode = (_get(db, ORG_APPLY_KEY) or {}).get("mode")
+    return mode if mode in ORG_APPLY_MODES else "apply"
+
+
+def set_org_apply_mode(db: Session, mode: str) -> None:
+    if mode not in ORG_APPLY_MODES:
+        raise ValueError(f"unknown mode {mode!r}")
+    _set(db, ORG_APPLY_KEY, {"mode": mode})
+    db.flush()
+
+
+def org_apply_wait(db: Session, organization_id: uuid.UUID) -> int:
+    """Seconds until the organization may apply again: one apply per
+    organization every five minutes, twelve an hour across organizations."""
+    now = utcnow()
+    from datetime import datetime
+
+    recent = [
+        (str(a.get("org")), datetime.fromisoformat(str(a["at"])))
+        for a in (_get(db, ORG_APPLIES_KEY) or {}).get("applies", [])
+        if a.get("at")
+    ]
+    recent = [(o, at) for o, at in recent if now - at < timedelta(hours=1)]
+    waits = [0.0]
+    mine = [at for o, at in recent if o == str(organization_id)]
+    if mine:
+        waits.append((max(mine) + ORG_APPLY_EVERY - now).total_seconds())
+    if len(recent) >= ORG_APPLIES_PER_HOUR:
+        oldest = sorted(at for _, at in recent)[len(recent) - ORG_APPLIES_PER_HOUR]
+        waits.append((oldest + timedelta(hours=1) - now).total_seconds())
+    return max(0, int(max(waits)) + (1 if max(waits) > 0 else 0))
+
+
+def record_org_apply(db: Session, organization_id: uuid.UUID) -> None:
+    now = utcnow()
+    from datetime import datetime
+
+    applies = [
+        a
+        for a in (_get(db, ORG_APPLIES_KEY) or {}).get("applies", [])
+        if a.get("at") and now - datetime.fromisoformat(str(a["at"])) < timedelta(hours=1)
+    ]
+    applies.append({"org": str(organization_id), "at": now.isoformat()})
+    _set(db, ORG_APPLIES_KEY, {"applies": applies})
+    db.flush()
 
 
 def current_deployed(db: Session, engine: str) -> ConfigRevision | None:
@@ -115,22 +203,75 @@ class Generated:
     files: list[GeneratedFile]
     diff: dict[str, Any]
     unchanged: bool
+    held_back: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class _Generation:
+    files: list[GeneratedFile]
+    errors: list[str]
+    snapshot: dict[str, Any] | None = None
+    # Organizations (by slug) whose newer data was held back, with the reason.
+    held_back: dict[str, str] = field(default_factory=dict)
+
+
+def _try(
+    adapter: TelephonyAdapter, snapshot: dict[str, Any]
+) -> tuple[list[GeneratedFile], list[str]]:
+    try:
+        files = adapter.generate_config(snapshot)
+        return files, adapter.validate_config(files)
+    except NotSupported as e:
+        return [], [str(e)]
+    except ValueError as e:  # GenerationError and pydantic validation
+        return [], [str(e)]
+
+
+def _run(db: Session, adapter: TelephonyAdapter, key: InstallationKey | None) -> _Generation:
+    """Generate from the database. When that fails and several organizations
+    share the server, try each organization's last good data in turn
+    (docs/MULTI_TENANCY_MSP.md §7)."""
+    from veyra.configmgmt import slices
+
+    try:
+        snapshot = build_snapshot(db, key)
+    except ValueError as e:  # SnapshotError
+        return _Generation([], [str(e)])
+    files, errors = _try(adapter, snapshot)
+    if not errors:
+        return _Generation(files, [], snapshot)
+    found = slices.isolate(db, key, snapshot, errors, lambda snap: _try(adapter, snap)[1])
+    if found is None:
+        return _Generation(files, errors, snapshot)
+    files, _ = _try(adapter, found.snapshot)
+    return _Generation(files, [], found.snapshot, found.held_back)
 
 
 def _generate(
     db: Session, adapter: TelephonyAdapter, key: InstallationKey | None
 ) -> tuple[list[GeneratedFile], list[str]]:
     """Generated files and the problems found (empty when valid)."""
-    files: list[GeneratedFile] = []
-    try:
-        snapshot = build_snapshot(db, key)
-        files = adapter.generate_config(snapshot)
-        errors = adapter.validate_config(files)
-    except NotSupported as e:
-        errors = [str(e)]
-    except ValueError as e:  # GenerationError, SnapshotError and pydantic validation
-        errors = [str(e)]
-    return files, errors
+    g = _run(db, adapter, key)
+    return g.files, g.errors
+
+
+def _note_held_back(db: Session, held: dict[str, str]) -> None:
+    """Each organization's held-back reason, shown to its administrators;
+    an organization that generates again loses its note."""
+    from veyra.core.models import Organization
+
+    ids = {o.slug: o.id for o in db.scalars(select(Organization))}
+    current = organization_flags(db, HELD_BACK_PREFIX)
+    for slug, error in held.items():
+        if slug in ids:
+            _set(db, f"{HELD_BACK_PREFIX}{ids[slug]}", {"error": error, "at": utcnow().isoformat()})
+    keep = {ids[s] for s in held if s in ids}
+    for org_id in current:
+        if org_id not in keep:
+            row = db.get(SystemSetting, f"{HELD_BACK_PREFIX}{org_id}")
+            if row is not None:
+                db.delete(row)
+    db.flush()
 
 
 def _previous_files(
@@ -163,7 +304,8 @@ def create_revision(
     """
     deployed = current_deployed(db, adapter.name)
     previous_files = _previous_files(deployed, key)
-    files, errors = _generate(db, adapter, key)
+    generation = _run(db, adapter, key)
+    files, errors = generation.files, generation.errors
     rev_id = uuid.uuid4()
     artifacts: dict[str, Any] = {"files": []}
     if not errors:
@@ -180,6 +322,8 @@ def create_revision(
             summary = "No change from the deployed configuration"
         else:
             summary = f"{len(changes)} file(s) changed" if deployed else "Initial configuration"
+        if generation.held_back:
+            summary += "; held back: " + ", ".join(sorted(generation.held_back))
     rev = ConfigRevision(
         id=rev_id,
         engine=adapter.name,
@@ -194,7 +338,12 @@ def create_revision(
     )
     db.add(rev)
     db.flush()
-    return Generated(rev, files, changes, unchanged)
+    if not errors and generation.snapshot is not None:
+        from veyra.configmgmt import slices
+
+        slices.save(db, key, generation.snapshot, rev_id, skip=set(generation.held_back))
+        _note_held_back(db, generation.held_back)
+    return Generated(rev, files, changes, unchanged, generation.held_back)
 
 
 def changes_pending(

@@ -47,6 +47,8 @@ from veyra.core.models import (
     MohClass,
     MohClassTrack,
     Organization,
+    OrganizationLimits,
+    OrganizationNumber,
     OutboundRoute,
     OutboundRouteTrunk,
     Page,
@@ -75,7 +77,50 @@ from veyra.telephony.numbering import load_numbering_plan
 from veyra.telephony.settings import load_sip_settings
 from veyra.version import __version__
 
-SNAPSHOT_VERSION = 11  # 11: engine namespaces (docs/MULTI_TENANCY.md)
+SNAPSHOT_VERSION = 12  # 11: engine namespaces; 12: the number inventory (MULTI_TENANCY_MSP.md §4)
+
+# What each top-level key of the snapshot holds (docs/MULTI_TENANCY_MSP.md
+# §3.1). The isolation check copies every organization-owned item into a
+# synthetic second organization; a key listed nowhere here fails the test
+# suite, so a new feature cannot be left out of the check.
+ORG_LISTS: tuple[str, ...] = (
+    "announcements",
+    "call_flows",
+    "caller_block_policies",
+    "classes_of_service",
+    "conference_rooms",
+    "disa_lines",
+    "extensions",
+    "fax_inboxes",
+    "hold_music",
+    "inbound_routes",
+    "ivr_menus",
+    "numbers",
+    "outbound_routes",  # only the routes of one organization; shared ones stay
+    "parking_lots",
+    "queues",
+    "recording",
+    "ring_groups",
+    "sites",
+    "time_conditions",
+    "voicemail_boxes",
+)
+# Dicts whose named members are organization-owned lists.
+ORG_NESTED: dict[str, tuple[str, ...]] = {"paging": ("zones", "pages")}
+SHARED_KEYS: tuple[str, ...] = (
+    "custom_dialplan",
+    "feature_codes",
+    "installation",
+    "numbering",
+    "sip",
+    "smtp",
+    "snapshot_version",
+    "trunks",
+    "veyra_version",
+    # Per extension number, a fallback the extension rows always override.
+    "shared_mailboxes",
+)
+ORGANIZATIONS_KEY = "organizations"
 
 
 def secret_purpose(extension_id: Any) -> str:
@@ -463,6 +508,11 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     pickup = _pickup_groups(db, active, ext_by_id)
     smtp = load_smtp_settings(db)
     from_address, from_name = sender(smtp, inst.name if inst else "Veyra")
+    org_limits = {
+        row.organization_id: row.max_outside_calls
+        for row in db.scalars(select(OrganizationLimits))
+        if row.max_outside_calls
+    }
     return {
         "snapshot_version": SNAPSHOT_VERSION,
         "veyra_version": __version__,
@@ -510,6 +560,12 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "timezone": o.timezone,
                 "is_active": o.is_active,
                 "namespace": o.engine_namespace,
+                # Default outbound caller ID with several organizations
+                # (docs/MULTI_TENANCY_MSP.md §5.2).
+                "main_number": o.main_number,
+                "emergency_caller_id_number": o.emergency_caller_id_number,
+                # Concurrent outside calls (docs/MULTI_TENANCY_MSP.md §8); None: no limit.
+                "max_outside_calls": org_limits.get(o.id),
                 "hold_music": moh_slug(o.moh_class_id, o.id),
                 "fax_header": o.fax_header,
                 "fax_station_id": o.fax_station_id,
@@ -1235,11 +1291,23 @@ def _routing(
     caller_rules: dict[Any, list[InboundCallerRule]] = {}
     for rule in db.scalars(select(InboundCallerRule).order_by(InboundCallerRule.position)):
         caller_rules.setdefault(rule.route_id, []).append(rule)
+    # The number inventory (docs/MULTI_TENANCY_MSP.md §4): a route for a
+    # number another organization owns is skipped (a conflict for a platform
+    # administrator to decide); the owner's route works.
+    from veyra.core import numbers as inventory
+
+    held = list(db.scalars(select(OrganizationNumber).order_by(OrganizationNumber.first)))
     inbound_out = []
     for r in inbound:
         if r.organization_id not in active_orgs:
             continue
         if r.trunk_id is not None and r.trunk_id not in enabled_trunks:
+            continue
+        number = inventory.maybe_canonical(r.did)
+        owner = next(
+            (n for n in held if number and inventory.in_range(number, n.first, n.last)), None
+        )
+        if owner is not None and owner.organization_id != r.organization_id:
             continue
         if r.time_condition_id is not None:
             used_conditions.add(r.time_condition_id)
@@ -1297,6 +1365,16 @@ def _routing(
             if t.is_enabled
         ],
         "inbound_routes": inbound_out,
+        "numbers": [
+            {
+                "organization": org_slug.get(n.organization_id, ""),
+                "first": n.first,
+                "last": n.last,
+                "trunk": enabled_trunks[n.trunk_id].slug if n.trunk_id in enabled_trunks else None,
+            }
+            for n in held
+            if n.organization_id in active_orgs
+        ],
         "outbound_routes": [
             {
                 "slug": r.slug,

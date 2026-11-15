@@ -6,6 +6,7 @@ from conftest import (
     csrf_headers,
     enable_multi_tenancy,
     login,
+    org_body,
 )
 
 from veyra.core import bootstrap
@@ -112,14 +113,14 @@ def test_ip_rate_limit(client):
 def test_csrf_required_for_mutations(admin):
     token = admin.headers.pop("X-CSRF-Token")
     enable_multi_tenancy()
-    r = admin.post("/api/v1/organizations", json={"name": "N", "slug": "n"})
+    r = admin.post("/api/v1/organizations", json=org_body("N", "n"))
     assert r.status_code == 403 and r.json()["code"] == "csrf_failed"
     r = admin.post(
         "/api/v1/organizations", json={"name": "N", "slug": "n"}, headers={"X-CSRF-Token": "forged"}
     )
     assert r.status_code == 403
     admin.headers["X-CSRF-Token"] = token
-    assert admin.post("/api/v1/organizations", json={"name": "N", "slug": "n"}).status_code == 201
+    assert admin.post("/api/v1/organizations", json=org_body("N", "n")).status_code == 201
 
 
 def test_cookies_are_httponly_and_strict(client):

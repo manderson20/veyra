@@ -128,11 +128,46 @@ def current_principal(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> Principal:
-    principal = _resolve_principal(request, db, settings)
+    principal = _narrow(request, db, _resolve_principal(request, db, settings))
     # For checks deep in a request that only have the session (custom dialplan
     # destinations); absent outside a request, where they refuse.
     db.info["principal"] = principal
     return principal
+
+
+ORG_HEADER = "X-Veyra-Organization"
+# Paths that answer for the whole user, whichever organization the tab is in.
+UNNARROWED_PATHS = ("/api/v1/me/organizations",)
+
+
+def _narrow(request: Request, db: Session, principal: Principal) -> Principal:
+    """Working in one organization (docs/MULTI_TENANCY_MSP.md §10a): with the
+    header, the request holds only what the caller holds in that organization,
+    even for a platform administrator. Without it, nothing changes."""
+    request.state.full_principal = principal
+    raw = request.headers.get(ORG_HEADER, "").strip()
+    if not raw or request.url.path in UNNARROWED_PATHS:
+        return principal
+    from sqlalchemy import select
+
+    from veyra.core.models import Organization
+
+    try:
+        org = db.get(Organization, uuid.UUID(raw))
+    except ValueError:
+        # A link carries the short name (?org=<slug>).
+        org = db.scalar(select(Organization).where(Organization.slug == raw.lower()))
+    visible = principal.organization_ids()
+    if org is None or (visible is not None and org.id not in visible):
+        raise ProblemError(
+            403,
+            "Organization not available",
+            "You have no access to that organization. Choose another in the organization switcher.",
+            code="organization_not_available",
+        )
+    narrowed = principal.narrowed(org.id)
+    request.state.principal = narrowed
+    return narrowed
 
 
 def _resolve_principal(request: Request, db: Session, settings: Settings) -> Principal:

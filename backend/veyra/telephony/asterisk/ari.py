@@ -103,6 +103,9 @@ class AriClient:
     def channels(self) -> list[dict[str, Any]]:
         return list(self._request("GET", "channels") or [])
 
+    def bridges(self) -> list[dict[str, Any]]:
+        return list(self._request("GET", "bridges") or [])
+
     def channel(self, channel_id: str) -> dict[str, Any]:
         return self._request("GET", f"channels/{urllib.parse.quote(channel_id, safe='')}") or {}
 

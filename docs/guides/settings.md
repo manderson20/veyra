@@ -4,7 +4,7 @@ summary: Set up email delivery, the two-factor rule, how long data is kept, the 
 audience: admin
 section: Getting started
 order: 70
-reviewed: 0.27.45
+reviewed: 0.27.87
 pages:
   - /settings/
 covers:
@@ -89,7 +89,8 @@ To replace it, choose **Rotate the key…**, then **Rotate now**. Veyra makes a 
 
 Multi-tenancy lets one Veyra server serve several organizations whose phones cannot reach each other. The card shows whether it is **On** or **Off**, how many organizations are active, and what every organization shares (trunks, the numbering plan, the mail server, the firewall, updates, modules and sign-in providers).
 
-- **Turn on:** choose **Turn on**, then **Run checks and turn on**. Veyra first builds the configuration with a test copy of your organization and proves that neither can reach the other's phones, voicemail or queues. Your current organization and its phones do not change. Then you can add organizations (see [Organizations and sites](guide:organizations-and-sites)).
+- **Turn on:** choose **Turn on**, then **Run checks and turn on**. Veyra first builds the configuration with a test copy of everything your organization has, with the same numbers and names, and proves that neither can reach the other's phones, voicemail, queues, conference rooms, parking, hold music or phone lamps, and that every number rings in the organization it belongs to. Your current organization and its phones do not change. Then you can add organizations (see [Organizations and sites](guide:organizations-and-sites)).
+- **Organization administrators** (shown while multi-tenancy is on): whether they **Deploy their own changes** (when no calls are active, at most every five minutes) or **Only request a deployment**, which a platform administrator then deploys. See [Deploy changes](guide:deploy-changes).
 - **Turn off:** only possible while a single organization is active.
 
 ## If something doesn't work
@@ -98,4 +99,5 @@ Multi-tenancy lets one Veyra server serve several organizations whose phones can
 - **"Unencrypted delivery … is only allowed to a loopback relay":** choose STARTTLS or TLS.
 - **"Enter the password for the SMTP user name":** a user name needs a password.
 - **The card says *Needs attention*:** the saved settings have a problem; it is shown in the yellow box.
-- **Turning on multi-tenancy fails:** the list under the card shows which check failed.
+- **Turning on multi-tenancy fails:** the list under the card shows which check failed. Every organization needs a **Main number** and an **Emergency number** first (see [Organizations and sites](guide:organizations-and-sites)).
+- **A check says Review:** multi-tenancy is on, but some caller IDs are not their organization's numbers, such as an extension's outbound caller ID. The list names each one; correct them on the extension or route.

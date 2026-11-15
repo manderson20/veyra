@@ -44,6 +44,7 @@ Group = Literal[
     "queue",
     "ring_group",
     "caller",
+    "organization",
 ]
 Measure = Literal[
     "calls",
@@ -83,6 +84,7 @@ GROUP_LABELS: dict[str, str] = {
     "calling_extension": "Calling extension",
     "did": "Number dialled (DID)",
     "trunk": "Trunk",
+    "organization": "Organization",
     "queue": "Queue",
     "ring_group": "Ring group",
     "caller": "Caller",
@@ -295,6 +297,7 @@ def _group_expr(g: str, tz: str) -> Any:
         "queue": CallRecord.queue,
         "ring_group": CallRecord.ring_group,
         "caller": CallRecord.from_number,
+        "organization": cast(CallRecord.organization_id, String),
     }[g]
 
 
@@ -355,6 +358,9 @@ class Labels:
                     for e in self.db.scalars(select(Extension))
                 }
             return self._ext.get(str(key), "(removed extension)")
+        if g == "organization":
+            names = {str(o.id): o.name for o in self.db.scalars(select(Organization))}
+            return names.get(str(key), "(removed organization)")
         if g == "trunk":
             if self._trunk is None:
                 self._trunk = {str(t.id): t.name for t in self.db.scalars(select(SipTrunk))}

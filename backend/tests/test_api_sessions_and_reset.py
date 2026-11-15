@@ -4,7 +4,14 @@ unlock, fetch-metadata rejection and purging."""
 
 from datetime import timedelta
 
-from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, csrf_headers, enable_multi_tenancy, login
+from conftest import (
+    ADMIN_EMAIL,
+    ADMIN_PASSWORD,
+    csrf_headers,
+    enable_multi_tenancy,
+    login,
+    org_body,
+)
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -310,7 +317,7 @@ def test_cross_site_mutations_are_refused(admin):
     assert r.status_code == 403 and r.json()["code"] == "cross_site_request"
     r = admin.post(
         "/api/v1/organizations",
-        json={"name": "N", "slug": "n"},
+        json=org_body("N", "n"),
         headers={"Sec-Fetch-Site": "same-origin"},
     )
     assert r.status_code == 201

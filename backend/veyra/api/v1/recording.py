@@ -263,7 +263,12 @@ def create_policy(
         org.id,
         {"name": policy.name},
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"recording policy {policy.name}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"recording policy {policy.name}",
+        organization_id=policy.organization_id,
+    )
     db.commit()
     return _policy_out(db, policy)
 
@@ -308,7 +313,12 @@ def update_policy(
         policy.organization_id,
         {"changed": sorted(changes)},
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"recording policy {policy.name}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"recording policy {policy.name}",
+        organization_id=policy.organization_id,
+    )
     db.commit()
     return _policy_out(db, policy)
 
@@ -331,7 +341,12 @@ def delete_policy(
         policy.organization_id,
         {"name": policy.name},
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"recording policy {policy.name}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"recording policy {policy.name}",
+        organization_id=policy.organization_id,
+    )
     db.delete(policy)
     db.commit()
     return Response(status_code=204)

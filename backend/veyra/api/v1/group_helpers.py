@@ -157,4 +157,9 @@ def record(
         request_id=ctx.request_id,
         details={"name": target.name, **details},
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {target.name}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"{action} {target.name}",
+        organization_id=target.organization_id,
+    )

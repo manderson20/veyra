@@ -410,7 +410,9 @@ def _audit(
         request_id=ctx.request_id,
         details={"name": menu.name, **details},
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {menu.name}")
+    configmgmt.mark_changed(
+        db, by=principal.label, what=f"{action} {menu.name}", organization_id=menu.organization_id
+    )
 
 
 # ----------------------------------------------------------------- routes

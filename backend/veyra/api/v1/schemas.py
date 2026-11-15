@@ -70,6 +70,12 @@ class OrganizationPatch(BaseModel):
     # Numbers extensions may present as outbound caller ID besides the
     # organization's DIDs (docs/CALL_FEATURES.md §3.5); needs routing.write.
     caller_id_allow_list: list[str] | None = Field(None, max_length=100)
+    # The default outbound caller ID with several organizations: one of the
+    # organization's numbers (docs/MULTI_TENANCY_MSP.md §5.2).
+    main_number: str | None = Field(None, max_length=24)
+    # What a 911 call presents when the phone and its site have none, with
+    # several organizations (docs/MULTI_TENANCY_MSP.md §6.1).
+    emergency_caller_id_number: str | None = Field(None, max_length=24)
     # Intercom default for the organization's phones (docs/CALL_FEATURES.md §3.6).
     intercom_default: str | None = Field(None, pattern=r"^(allow|deny)$")
     # Who may answer with **<extension>: the whole organization or pickup groups.
@@ -114,6 +120,8 @@ class OrganizationOut(ORM):
     moh_class_id: uuid.UUID | None = None
     bootstrap_includes_credential: bool = False
     caller_id_allow_list: list[str] = []
+    main_number: str | None = None
+    emergency_caller_id_number: str | None = None
     intercom_default: str = "allow"
     directed_pickup: str = "organization"
     dnd_allow: list[str] = []

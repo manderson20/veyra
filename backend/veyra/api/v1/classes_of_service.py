@@ -307,7 +307,12 @@ def _check_destinations(
 
 
 def _changed(db: Session, principal: Principal, row: ClassOfService) -> None:
-    configmgmt.mark_changed(db, by=principal.label, what=f"class of service {row.slug}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"class of service {row.slug}",
+        organization_id=row.organization_id,
+    )
 
 
 @router.get("", response_model=Page[ClassOut], summary="List classes of service")

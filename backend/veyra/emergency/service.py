@@ -11,6 +11,7 @@ never declares a site compliant by itself.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -25,6 +26,7 @@ from veyra.core.models import (
     EmergencyCall,
     Extension,
     Installation,
+    Organization,
     OutboundRoute,
     OutboundRouteTrunk,
     SipTrunk,
@@ -82,6 +84,14 @@ def location_of(
 # ------------------------------------------------------------------ the event
 
 
+_CHANNEL_ENDPOINT = re.compile(r"^PJSIP/([A-Za-z0-9_.-]+)-[0-9a-f]+$")
+
+
+def _endpoint_of_channel(channel: str) -> str | None:
+    m = _CHANNEL_ENDPOINT.match(channel.strip())
+    return m.group(1) if m else None
+
+
 def parse_userevent(data: dict[str, Any]) -> dict[str, str]:
     """The ``userevent`` body of an ARI ``ChannelUserevent``: header-style
     pairs written by the dialplan."""
@@ -107,12 +117,30 @@ def record_call(
         site = db.get(Site, uuid.UUID(site_id)) if site_id else None
     except ValueError:
         site = None
+    # The phone the call came from (docs/MULTI_TENANCY_MSP.md §6.4): by its
+    # channel's endpoint, then by number within the call's organization, and
+    # by number alone only while the server has one organization: two
+    # organizations may both have extension 1001.
     ext = None
-    if ext_number:
+    endpoint = _endpoint_of_channel(fields.get("channel") or "")
+    if endpoint:
+        ext = db.scalar(select(Extension).where(Extension.endpoint_name == endpoint))
+    org_id = site.organization_id if site is not None else None
+    if ext is None and org_id is None and fields.get("org"):
+        org_id = db.scalar(select(Organization.id).where(Organization.slug == fields["org"]))
+    if ext is None and ext_number:
         q = select(Extension).where(Extension.number == ext_number)
-        if site is not None:
-            q = q.where(Extension.organization_id == site.organization_id)
-        ext = db.scalar(q.limit(1))
+        if org_id is not None:
+            ext = db.scalar(q.where(Extension.organization_id == org_id).limit(1))
+        elif (
+            db.scalar(
+                select(func.count())
+                .select_from(Organization)
+                .where(Organization.is_active.is_(True))
+            )
+            or 0
+        ) <= 1:
+            ext = db.scalar(q.limit(1))
     if site is None and ext is not None and ext.site_id:
         site = db.get(Site, ext.site_id)
     device = None
@@ -384,12 +412,26 @@ def readiness(db: Session, site: Site, now: datetime | None = None) -> dict[str,
         else "",
         advisory=True,
     )
+    org = db.get(Organization, site.organization_id)
+    shared = bool(db.scalar(select(Installation.multi_tenancy_enabled)))
+    org_ecid = org.emergency_caller_id_number if org is not None and shared else None
     check(
         "elin",
-        bool(site.emergency_caller_id_number),
+        bool(site.emergency_caller_id_number or org_ecid),
         "The site has an emergency caller ID (ELIN or registered DID)",
-        site.emergency_caller_id_number or "",
+        site.emergency_caller_id_number or (f"the organization's: {org_ecid}" if org_ecid else ""),
     )
+    if not site.emergency_caller_id_number and org_ecid:
+        # docs/MULTI_TENANCY_MSP.md §6.2: allowed, but the 911 centre sees the
+        # address registered for the organization's number.
+        check(
+            "own_elin",
+            False,
+            "The site has its own emergency caller ID",
+            f"911 calls present the organization's emergency number {org_ecid}; register it "
+            "at this site's address, or give the site its own",
+            advisory=True,
+        )
     addr = address_of(site, None)
     check("address", bool(addr), "The site has a civic address", addr or "")
     check(
@@ -467,6 +509,49 @@ def sites_overview(
                 "extensions": r["extensions"],
                 "calls": int(calls),
                 "elin": site.emergency_caller_id_number,
+            }
+        )
+    return out
+
+
+def organizations_overview(
+    db: Session, organization_ids: list[uuid.UUID] | None = None
+) -> list[dict[str, Any]]:
+    """Each organization's 911 readiness (docs/MULTI_TENANCY_MSP.md §6.5):
+    its emergency number, where its phones' emergency caller IDs come from,
+    its sites and its last carrier test call."""
+    q = select(Organization).where(Organization.is_active.is_(True)).order_by(Organization.name)
+    if organization_ids is not None:
+        q = q.where(Organization.id.in_(organization_ids))
+    out = []
+    for org in db.scalars(q):
+        sites = list(db.scalars(select(Site).where(Site.organization_id == org.id)))
+        site_elin = {s.id: bool(s.emergency_caller_id_number) for s in sites}
+        own = by_site = by_org = none = 0
+        for e in db.scalars(
+            select(Extension).where(
+                Extension.organization_id == org.id, Extension.is_enabled.is_(True)
+            )
+        ):
+            if e.emergency_caller_id_number:
+                own += 1
+            elif e.site_id and site_elin.get(e.site_id):
+                by_site += 1
+            elif org.emergency_caller_id_number:
+                by_org += 1
+            else:
+                none += 1
+        tested = [s.last_emergency_test_at for s in sites if s.last_emergency_test_at]
+        out.append(
+            {
+                "id": str(org.id),
+                "name": org.name,
+                "emergency_number": org.emergency_caller_id_number,
+                "main_number": org.main_number,
+                "phones": {"own": own, "site": by_site, "organization": by_org, "none": none},
+                "sites": len(sites),
+                "sites_ready": sum(1 for s in sites if readiness(db, s)["ready"]),
+                "last_test_call": max(tested).isoformat() if tested else None,
             }
         )
     return out

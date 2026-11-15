@@ -426,7 +426,12 @@ def create_zone(
         raise _conflict(e, db) from e
     _set_members(db, zone, body.members)
     _record(db, ctx, principal, "paging_zone.create", zone, {"poly_group": zone.poly_group})
-    configmgmt.mark_changed(db, by=principal.label, what=f"paging zone {zone.name}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"paging zone {zone.name}",
+        organization_id=zone.organization_id,
+    )
     db.commit()
     return _outs(db, [zone])[0]
 
@@ -480,7 +485,12 @@ def update_zone(
     except IntegrityError as e:
         raise _conflict(e, db) from e
     _record(db, ctx, principal, "paging_zone.update", zone, details)
-    configmgmt.mark_changed(db, by=principal.label, what=f"paging zone {zone.name}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"paging zone {zone.name}",
+        organization_id=zone.organization_id,
+    )
     db.commit()
     return _outs(db, [zone])[0]
 
@@ -506,6 +516,11 @@ def delete_zone(
         )
     _record(db, ctx, principal, "paging_zone.delete", zone, {"slug": zone.slug})
     db.delete(zone)
-    configmgmt.mark_changed(db, by=principal.label, what=f"delete paging zone {zone.name}")
+    configmgmt.mark_changed(
+        db,
+        by=principal.label,
+        what=f"delete paging zone {zone.name}",
+        organization_id=zone.organization_id,
+    )
     db.commit()
     return Response(status_code=204)

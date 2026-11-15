@@ -90,7 +90,14 @@ def sites(
         if principal.is_platform_admin
         else [r for r in service.sites_overview(db) if uuid.UUID(r["id"]) in set(ids)]
     )
-    return {"sites": rows, "ready": sum(1 for r in rows if r["ready"]), "disclaimer": DISCLAIMER}
+    orgs = principal.organization_ids_with(READ)
+    return {
+        "sites": rows,
+        "ready": sum(1 for r in rows if r["ready"]),
+        # Per organization (docs/MULTI_TENANCY_MSP.md §6.5): each sees its own.
+        "organizations": service.organizations_overview(db, None if orgs is None else list(orgs)),
+        "disclaimer": DISCLAIMER,
+    }
 
 
 @router.get("/sites/{site_id}", summary="A site's readiness, settings and recent emergency calls")

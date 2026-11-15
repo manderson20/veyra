@@ -7,6 +7,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -788,3 +789,93 @@ def remove_assignment(
     )
     db.commit()
     return MessageOut(message="Role removed.")
+
+
+class RoleOrganizationsIn(BaseModel):
+    organization_ids: list[uuid.UUID] = Field(default_factory=list, max_length=500)
+
+
+@router.put(
+    "/users/{user_id}/roles/{role_key}/organizations",
+    dependencies=[Depends(recent_auth)],
+    response_model=list[RoleAssignmentOut],
+    summary="The organizations in which a user holds a role (docs/MULTI_TENANCY_MSP.md §10a.3)",
+)
+def set_role_organizations(
+    user_id: uuid.UUID,
+    role_key: str,
+    body: RoleOrganizationsIn,
+    principal: Principal = Depends(require("roles.write")),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(request_context),
+) -> list[RoleAssignmentOut]:
+    """One save for "Technician in clients A and C": adds and removes the
+    role's organization-scope assignments so they match the list. Rows in
+    organizations the caller cannot manage are left as they are; no one can
+    add an organization they cannot grant roles in, or a role holding a
+    permission they do not hold there."""
+    from veyra.core.models import RolePermission
+
+    user = _get_visible_user(db, principal, user_id, "roles.write")
+    role = db.scalar(select(Role).where(Role.key == role_key, Role.organization_id.is_(None)))
+    if role is None:
+        raise not_found("Role")
+    if role.key == "platform_admin":
+        raise forbidden("The Platform Administrator role is always platform-wide.")
+    wanted = set(body.organization_ids)
+    perms = set(
+        db.scalars(select(RolePermission.permission_key).where(RolePermission.role_id == role.id))
+    )
+    current = {
+        a.organization_id: a
+        for a in db.scalars(
+            select(RoleAssignment).where(
+                RoleAssignment.user_id == user.id,
+                RoleAssignment.role_id == role.id,
+                RoleAssignment.scope_type == "organization",
+            )
+        )
+    }
+    added: list[uuid.UUID] = []
+    removed: list[uuid.UUID] = []
+    for org_id in wanted - set(current):
+        if db.get(Organization, org_id) is None or not principal.has("roles.write", org_id):
+            raise not_found("Organization")
+        missing = sorted(p for p in perms if not principal.has(p, org_id))
+        if missing:
+            raise forbidden(
+                f"You cannot grant {role.name} there: it holds permissions you do not "
+                f"have in that organization ({', '.join(missing[:5])})."
+            )
+        db.add(
+            RoleAssignment(
+                id=uuid.uuid4(),
+                user_id=user.id,
+                role_id=role.id,
+                scope_type="organization",
+                organization_id=org_id,
+                site_id=None,
+            )
+        )
+        added.append(org_id)
+    for held, a in current.items():
+        if held is None or held in wanted or not principal.has("roles.write", held):
+            continue
+        db.delete(a)
+        removed.append(held)
+    for action, ids in (("role.assign", added), ("role.unassign", removed)):
+        for org_id in ids:
+            audit.record(
+                db,
+                action=action,
+                actor_user_id=principal.user_id,
+                actor_label=principal.label,
+                organization_id=org_id,
+                target_type="user",
+                target_id=user.id,
+                ip_address=ctx.ip,
+                request_id=ctx.request_id,
+                details={"role": role.key, "scope_type": "organization"},
+            )
+    db.commit()
+    return [a for a in list_assignments(user.id, principal, db) if a.role_key == role.key]

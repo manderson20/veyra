@@ -21,8 +21,11 @@ import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { HoldMusicSelect } from "@/components/holdmusic/HoldMusicSelect";
 import { timeZones } from "@/lib/timezones";
-import type { Organization } from "@/lib/types";
+import Link from "next/link";
+import type { Onboarding, Organization } from "@/lib/types";
 import { DepartmentsCard } from "@/components/organizations/DepartmentsCard";
+import { LimitsCard } from "@/components/organizations/LimitsCard";
+import { NumbersCard } from "@/components/organizations/NumbersCard";
 import { ProvisioningCredentialCard } from "@/components/organizations/ProvisioningCredentialCard";
 import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
@@ -35,12 +38,15 @@ function OrganizationView() {
   const toast = useToast();
   const errors = useFormErrors();
   const org = useApiData<Organization>(id ? `/organizations/${encodeURIComponent(id)}` : null);
+  const setup = useApiData<Onboarding>(id ? `/organizations/${encodeURIComponent(id)}/onboarding` : null);
   const zones = useMemo(() => timeZones(), []);
   const [name, setName] = useState("");
   const [tz, setTz] = useState("UTC");
   const [active, setActive] = useState(true);
   const [moh, setMoh] = useState("");
   const [allowList, setAllowList] = useState("");
+  const [mainNumber, setMainNumber] = useState("");
+  const [emergencyNumber, setEmergencyNumber] = useState("");
   const [intercom, setIntercom] = useState("allow");
   const [pickup, setPickup] = useState("organization");
   const [dndAllow, setDndAllow] = useState("");
@@ -57,6 +63,8 @@ function OrganizationView() {
       setActive(o.is_active);
       setMoh(o.moh_class_id ?? "");
       setAllowList((o.caller_id_allow_list ?? []).join("\n"));
+      setMainNumber(o.main_number ?? "");
+      setEmergencyNumber(o.emergency_caller_id_number ?? "");
       setIntercom(o.intercom_default ?? "allow");
       setPickup(o.directed_pickup ?? "organization");
       setDndAllow((o.dnd_allow ?? []).join("\n"));
@@ -78,14 +86,16 @@ function OrganizationView() {
   const dndNow = dndAllow.split("\n").map((n) => n.trim()).filter(Boolean);
   const dndChanged = dndNow.join("\n") !== (o.dnd_allow ?? []).join("\n");
   const beepChanged = monitorBeep !== !!o.monitor_beep;
-  const dirty = dndChanged || beepChanged || name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || pickup !== (o.directed_pickup ?? "organization") || ownRecordings !== !!o.users_play_own_recordings || faxHeader !== (o.fax_header ?? "") || faxStation !== (o.fax_station_id ?? "");
+  const mainChanged = mainNumber.trim() !== (o.main_number ?? "");
+  const ecidChanged = emergencyNumber.trim() !== (o.emergency_caller_id_number ?? "");
+  const dirty = ecidChanged || mainChanged || dndChanged || beepChanged || name !== o.name || tz !== o.timezone || active !== o.is_active || moh !== (o.moh_class_id ?? "") || allowListChanged || intercom !== (o.intercom_default ?? "allow") || pickup !== (o.directed_pickup ?? "organization") || ownRecordings !== !!o.users_play_own_recordings || faxHeader !== (o.fax_header ?? "") || faxStation !== (o.fax_station_id ?? "");
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     errors.clear();
     try {
-      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(pickup !== (o.directed_pickup ?? "organization") ? { directed_pickup: pickup } : {}), ...(dndChanged ? { dnd_allow: dndNow } : {}), ...(beepChanged ? { monitor_beep: monitorBeep } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}), ...(faxHeader !== (o.fax_header ?? "") ? { fax_header: faxHeader.trim() || null } : {}), ...(faxStation !== (o.fax_station_id ?? "") ? { fax_station_id: faxStation.trim() || null } : {}) });
+      const updated = await api.patch<Organization>(`/organizations/${o.id}`, { name: name.trim(), timezone: tz, is_active: active, ...(moh !== (o.moh_class_id ?? "") ? { moh_class_id: moh || null } : {}), ...(allowListChanged ? { caller_id_allow_list: allowListNow } : {}), ...(mainChanged ? { main_number: mainNumber.trim() || null } : {}), ...(ecidChanged ? { emergency_caller_id_number: emergencyNumber.trim() || null } : {}), ...(intercom !== (o.intercom_default ?? "allow") ? { intercom_default: intercom } : {}), ...(pickup !== (o.directed_pickup ?? "organization") ? { directed_pickup: pickup } : {}), ...(dndChanged ? { dnd_allow: dndNow } : {}), ...(beepChanged ? { monitor_beep: monitorBeep } : {}), ...(ownRecordings !== !!o.users_play_own_recordings ? { users_play_own_recordings: ownRecordings } : {}), ...(faxHeader !== (o.fax_header ?? "") ? { fax_header: faxHeader.trim() || null } : {}), ...(faxStation !== (o.fax_station_id ?? "") ? { fax_station_id: faxStation.trim() || null } : {}) });
       org.setData(updated);
       toast.success("Organization saved", moh !== (o.moh_class_id ?? "") ? "Deploy changes to apply the hold music." : undefined);
     } catch (err) {
@@ -102,6 +112,13 @@ function OrganizationView() {
         title={o.name}
         description={<span className="row"><span className="mono">{o.slug}</span><Badge tone={o.is_active ? "ok" : "neutral"}>{o.is_active ? "Active" : "Inactive"}</Badge></span>}
       />
+      {setup.data?.left.length ? (
+        <Callout tone="warn" title="Setup not finished">
+          Still to do: {setup.data.left.join(", ")}. <Link href={`/organizations/setup/?id=${o.id}`}>Continue the setup</Link>
+        </Callout>
+      ) : (
+        <p className="subtle"><Link href={`/organizations/setup/?id=${o.id}`}>Setup steps and check</Link></p>
+      )}
       <div className="grid grid--2" style={{ alignItems: "start" }}>
         <Card title="Details" subtitle={editable ? undefined : "You can view but not change this organization."}>
           <form className="stack stack--sm" onSubmit={save}>
@@ -114,8 +131,12 @@ function OrganizationView() {
               onChange={(e) => setPickup(e.target.value)} help="Who may dial ** and an extension to answer the call ringing there. *8 always stays within the pickup groups. Needs a deployment." />
             <TextArea label="Callers who ring through Do Not Disturb" rows={3} value={dndAllow} disabled={!editable} error={errors.fields.dnd_allow} spellCheck={false} placeholder="5735550100"
               help="Numbers or extensions that ring every phone of this organization even when it has Do Not Disturb on, such as the district office or emergency responders; one per line, at most 50. Each phone can add its own. Needs a deployment." onChange={(e) => setDndAllow(e.target.value)} />
+            <TextField label="Main number" value={mainNumber} disabled={!editable} error={errors.fields.main_number} inputMode="tel" placeholder="5735550100"
+              help="One of the organization's numbers (the Numbers card). With several organizations on the server, outside calls from a phone without its own outbound caller ID present this number. Needs a deployment." onChange={(e) => setMainNumber(e.target.value)} />
+            <TextField label="Emergency number" value={emergencyNumber} disabled={!editable} error={errors.fields.emergency_caller_id_number} inputMode="tel" placeholder="5735550100"
+              help="One of the organization's numbers, registered with the carrier at the organization's address. With several organizations on the server, a 911 call from a phone whose extension and site have no emergency caller ID presents it. Needs a deployment." onChange={(e) => setEmergencyNumber(e.target.value)} />
             <TextArea label="Outbound caller ID allow list" rows={3} value={allowList} disabled={!routingEditable} error={errors.fields.caller_id_allow_list} spellCheck={false} placeholder="5735550100"
-              help="Numbers an extension may send as outbound caller ID besides the organization's own numbers (inbound routes), one per line. Changing it needs the routing permission." onChange={(e) => setAllowList(e.target.value)} />
+              help="Numbers an extension may send as outbound caller ID besides the organization's own numbers, one per line, such as a number the organization keeps with another carrier. Changing it needs the routing permission." onChange={(e) => setAllowList(e.target.value)} />
             <HoldMusicSelect organizationId={o.id} label="Hold music" value={moh} disabled={!editable} error={errors.fields.moh_class_id}
               help="What callers hear when a phone of this organization puts them on hold. Sets are managed under Telephony → Hold Music." onChange={setMoh} />
             <TextField label="Fax header" value={faxHeader} disabled={!editable} error={errors.fields.fax_header} maxLength={64} placeholder="Example Schools"
@@ -142,6 +163,8 @@ function OrganizationView() {
             <Callout tone="neutral">Sites and their buildings are managed under Directory → Sites.</Callout>
           </div>
         </Card>
+        {can("routing.read") ? <NumbersCard organizationId={o.id} editable={editable} /> : null}
+        <LimitsCard organizationId={o.id} editable={editable} />
         {can("devices.read") ? <ProvisioningCredentialCard organizationId={o.id} editable={can("devices.write") && can("organizations.write")} bootstrapIncludesCredential={o.bootstrap_includes_credential ?? false} /> : null}
         <DepartmentsCard organizationId={o.id} editable={editable} />
       </div>

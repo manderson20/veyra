@@ -121,3 +121,21 @@ describe("step-up authentication", () => {
     setReauthPrompt(null);
   });
 });
+
+describe("working in one organization", () => {
+  it("sends the tab's organization and falls back to System when it is gone", async () => {
+    const ok = deps(jsonResponse(200, { ok: true }));
+    await createApi({ ...ok.d, org: () => "acme" }).get("/extensions");
+    expect(((ok.fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>)["X-Veyra-Organization"]).toBe("acme");
+
+    const none = deps(jsonResponse(200, { ok: true }));
+    await createApi({ ...none.d, org: () => "" }).get("/extensions");
+    expect(((none.fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>)["X-Veyra-Organization"]).toBeUndefined();
+
+    const gone = deps(jsonResponse(403, { title: "Organization not available", code: "organization_not_available" }), { pathname: "/extensions/" });
+    const clearOrg = vi.fn();
+    await expect(createApi({ ...gone.d, org: () => "acme", clearOrg }).get("/extensions")).rejects.toBeInstanceOf(ApiError);
+    expect(clearOrg).toHaveBeenCalled();
+    expect(gone.assign).toHaveBeenCalledWith("/extensions/?org=");
+  });
+});

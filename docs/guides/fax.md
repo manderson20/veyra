@@ -5,7 +5,7 @@ audience: admin
 section: Voicemail and fax
 order: 20
 reviewed: 0.27.44
-checked: 2026-10-29T20:28Z
+checked: 2026-11-07T23:43Z
 pages:
   - /fax/
 covers:

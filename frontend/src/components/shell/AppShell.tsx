@@ -16,6 +16,7 @@ import { useSession } from "@/hooks/useSession";
 import { ApplyChanges } from "./ApplyChanges";
 import { UpdateAvailable } from "./UpdateAvailable";
 import { GlobalSearch } from "./GlobalSearch";
+import { OrgSwitcher } from "./OrgSwitcher";
 import { HelpButton } from "./HelpButton";
 import { CentralNotice } from "./CentralNotice";
 import { StandbyBanner } from "./StandbyBanner";
@@ -96,6 +97,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <strong>{location.item.label}</strong>
             </nav>
           ) : null}
+          <OrgSwitcher />
           <GlobalSearch />
           <div className="topbar__spacer" />
           <UpdateAvailable />

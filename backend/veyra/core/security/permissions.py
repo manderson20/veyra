@@ -90,6 +90,12 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
     PermissionDef("ha.manage", "Change HA roles and perform switchover", platform_only=True),
     PermissionDef("config.read", "View configuration revisions", default_roles=("org_admin",)),
     PermissionDef("config.deploy", "Deploy telephony configuration", platform_only=True),
+    # docs/MULTI_TENANCY_MSP.md §7: only while several organizations share the server.
+    PermissionDef(
+        "config.apply",
+        "Apply the organization's saved changes (servers shared by several organizations)",
+        default_roles=("org_admin",),
+    ),
     PermissionDef(
         "provisioning.read",
         "View provisioning templates",

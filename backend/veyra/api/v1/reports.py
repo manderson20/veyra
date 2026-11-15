@@ -5,6 +5,7 @@ with saved and scheduled reports (docs/REPORT_BUILDER.md)."""
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -32,7 +33,7 @@ from veyra.core.models import (
 )
 from veyra.core.models.base import utcnow
 from veyra.core.security.principal import Principal
-from veyra.reporting import builder, reports
+from veyra.reporting import builder, reports, usage
 from veyra.reporting import schedule as report_schedule
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -479,3 +480,44 @@ def send_saved(
     )
     db.commit()
     return _saved_out(r, principal)
+
+
+# ------------------------------------------------------- usage (MSP billing)
+
+
+def _usage_rows(db: Session, principal: Principal, month: str) -> list[usage.UsageRow]:
+    try:
+        return usage.usage(db, month, principal.organization_ids_with(READ))
+    except ValueError as e:
+        raise ProblemError(
+            422,
+            "Validation failed",
+            "Choose a month as YYYY-MM.",
+            code="validation_failed",
+            errors=[{"field": "month", "message": str(e)}],
+        ) from e
+
+
+@router.get("/usage", summary="Outside calls and minutes per organization and trunk for a month")
+def usage_report(
+    month: str = Query(pattern=r"^\d{4}-\d{2}$"),
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """docs/MULTI_TENANCY_MSP.md §9: platform administrators see every
+    organization; anyone else, their own."""
+    rows = _usage_rows(db, principal, month)
+    return {"month": month, "rows": [asdict(r) for r in rows]}
+
+
+@router.get("/usage.csv", summary="The usage report as CSV, for billing")
+def usage_report_csv(
+    month: str = Query(pattern=r"^\d{4}-\d{2}$"),
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> PlainTextResponse:
+    return PlainTextResponse(
+        usage.to_csv(_usage_rows(db, principal, month), month),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="usage-{month}.csv"'},
+    )

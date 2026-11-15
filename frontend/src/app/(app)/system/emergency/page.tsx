@@ -22,8 +22,8 @@ import {
   type Column,
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
-import type { EmergencyCallRow, EmergencySiteDetail, EmergencySiteRow, Extension, Page, PagingPage } from "@/lib/types";
+import { formatDateTime, formatNumber } from "@/lib/format";
+import type { EmergencyCallRow, EmergencyOrganizationRow, EmergencySiteDetail, EmergencySiteRow, Extension, Page, PagingPage } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
@@ -181,8 +181,23 @@ const callColumns: Column<EmergencyCallRow>[] = [
 ];
 
 export default function EmergencyPage() {
-  const overview = useApiData<{ sites: EmergencySiteRow[]; ready: number; disclaimer: string }>("/emergency/sites");
+  const overview = useApiData<{ sites: EmergencySiteRow[]; ready: number; disclaimer: string; organizations?: EmergencyOrganizationRow[] }>("/emergency/sites");
   const calls = useApiData<EmergencyCallRow[]>("/emergency/calls", { limit: 50 });
+  const orgColumns: Column<EmergencyOrganizationRow>[] = [
+    { key: "name", header: "Organization", render: (r) => <span className="table__primary">{r.name}</span> },
+    { key: "number", header: "Emergency number", render: (r) => r.emergency_number ? <span className="mono">{formatNumber(r.emergency_number)}</span> : <Badge tone="danger">None</Badge> },
+    {
+      key: "phones",
+      header: "Phones present",
+      render: (r) => (
+        <span className="table__secondary">
+          {[r.phones.own ? `${r.phones.own} their own` : null, r.phones.site ? `${r.phones.site} their site's` : null, r.phones.organization ? `${r.phones.organization} the organization's` : null, r.phones.none ? `${r.phones.none} none` : null].filter(Boolean).join(" · ") || "No phones"}
+        </span>
+      ),
+    },
+    { key: "sites", header: "Sites ready", render: (r) => <Badge tone={r.sites && r.sites_ready === r.sites ? "ok" : "warn"}>{`${r.sites_ready} of ${r.sites}`}</Badge> },
+    { key: "test", header: "Last test call", render: (r) => <span className="subtle nowrap">{r.last_test_call ? formatDateTime(r.last_test_call) : "Never"}</span> },
+  ];
   const [open, setOpen] = useState<string | null>(null);
   const columns: Column<EmergencySiteRow>[] = [
     { key: "name", header: "Site", render: (s) => <span><span className="table__primary" style={{ display: "block" }}>{s.name}</span><span className="table__secondary">{s.extensions} extension{s.extensions === 1 ? "" : "s"} · ELIN {s.elin ?? "—"}</span></span> },
@@ -196,6 +211,11 @@ export default function EmergencyPage() {
     <div className="stack">
       <PageHeader title="Emergency calling" description="Readiness per site: an emergency route, a registered ELIN and address, locations on every phone, on-site notification, and a test call with the carrier. Veyra checks the data; the operator validates with the carrier." />
       {o ? <Callout tone={o.ready === o.sites.length && o.sites.length ? "ok" : "warn"} title={`${o.ready} of ${o.sites.length} site${o.sites.length === 1 ? "" : "s"} ready`}>{o.disclaimer}</Callout> : null}
+      {(o?.organizations?.length ?? 0) > 1 ? (
+        <Card title="Organizations" subtitle="Each organization's 911 calls present its own numbers. Phones without an emergency caller ID of their own, or of their site, present the organization's emergency number." flush>
+          <DataTable columns={orgColumns} rows={o?.organizations ?? []} rowKey={(r) => r.id} caption="Organizations" />
+        </Card>
+      ) : null}
       <Card title="Sites" flush>
         {overview.error ? <ErrorState compact error={overview.error} onRetry={overview.reload} /> : !o ? <LoadingState /> : (
           <DataTable columns={columns} rows={o.sites} rowKey={(s) => s.id} caption="Sites" empty={<EmptyState compact icon="alert" title="No sites">Create sites under Directory → Sites with their civic address and ELIN.</EmptyState>} />

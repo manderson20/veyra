@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Buildings, departments and the site/building/department of an extension (#126)."""
 
-from conftest import enable_multi_tenancy
+from conftest import enable_multi_tenancy, org_body
 
 
 def _org(admin):
@@ -85,7 +85,7 @@ def test_extension_site_and_building_rules(admin):
     assert r.json()["site_id"] is None
 
     enable_multi_tenancy()
-    other = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    other = admin.post("/api/v1/organizations", json=org_body("Beta", "beta")).json()["id"]
     elsewhere = _site(admin, other, "Beta HQ")
     r = admin.patch(f"/api/v1/extensions/{ext['id']}", json={"site_id": elsewhere["id"]})
     assert r.status_code == 422

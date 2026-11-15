@@ -2,7 +2,7 @@
 """Milestone 7 API: voicemail boxes, own-box PIN change, SMTP settings, and
 the deployed voicemail.conf."""
 
-from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login, org_body
 from fake_adapter import FakeAdapter
 from fastapi.testclient import TestClient
 
@@ -156,7 +156,7 @@ def test_own_voicemail_and_pin_change(admin, app):
 def test_box_in_use_cannot_be_deleted_and_scoping(admin, app):
     a = _org(admin)["id"]
     enable_multi_tenancy()
-    b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    b = admin.post("/api/v1/organizations", json=org_body("Beta", "beta")).json()["id"]
     ext_a = _ext(admin, a, "1001", "Alpha")
     ext_b = _ext(admin, b, "2001", "Beta")
     box_a = admin.post(VM, json={"extension_id": ext_a["id"]}).json()

@@ -15,7 +15,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, csrf_headers, login, make_settings
+from conftest import ADMIN_EMAIL, ADMIN_PASSWORD, csrf_headers, login, make_settings, org_body
 from sqlalchemy import select
 
 from veyra import __version__
@@ -504,7 +504,7 @@ def test_standby_refuses_writes_and_signs_in_from_memory(node):
     client, app, settings, fake, priv, pub = node  # noqa: RUF059
     app.state.ha_guard.flags = lambda now=None: Flags(standby=True, checked_at=time.monotonic())
     assert client.get("/api/v1/extensions").status_code == 200
-    r = client.post("/api/v1/organizations", json={"name": "X", "slug": "x"})
+    r = client.post("/api/v1/organizations", json=org_body("X", "x"))
     assert r.status_code == 503 and r.json()["code"] == "ha_standby"
     # The HA routes still answer.
     assert client.post("/api/v1/ha/resume").status_code == 200
@@ -518,7 +518,7 @@ def test_standby_refuses_writes_and_signs_in_from_memory(node):
     me = client.get("/api/v1/auth/session").json()
     assert me["user"]["email"] == ADMIN_EMAIL and me["is_platform_admin"]
     # Writes other than HA still refused; CSRF still checked.
-    assert client.post("/api/v1/organizations", json={"name": "X", "slug": "x"}).status_code == 503
+    assert client.post("/api/v1/organizations", json=org_body("X", "x")).status_code == 503
     assert client.post("/api/v1/ha/resume", headers={"X-CSRF-Token": "nope"}).status_code == 403
     assert client.post("/api/v1/auth/logout").status_code == 200
     assert client.get("/api/v1/auth/session").status_code == 401
@@ -527,7 +527,7 @@ def test_standby_refuses_writes_and_signs_in_from_memory(node):
     # A frozen primary says so.
     app.state.ha_guard.flags = lambda now=None: Flags(frozen=True, checked_at=time.monotonic())
     login(client, ADMIN_EMAIL, ADMIN_PASSWORD)
-    r = client.post("/api/v1/organizations", json={"name": "X", "slug": "x"})
+    r = client.post("/api/v1/organizations", json=org_body("X", "x"))
     assert r.status_code == 503 and r.json()["code"] == "ha_switchover"
 
 

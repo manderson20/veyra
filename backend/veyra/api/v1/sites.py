@@ -17,7 +17,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from veyra.core import audit
+from veyra.core import audit, numbers
 from veyra.core.db import get_db
 from veyra.core.deps import RequestContext, request_context, require
 from veyra.core.errors import ProblemError, conflict, forbidden, not_found
@@ -309,6 +309,7 @@ def create_site(
     if org is None:
         raise not_found("Organization")
     _check_name(db, org.id, body.name, None)
+    numbers.check_owned(db, org.id, body.emergency_caller_id_number, "emergency_caller_id_number")
     site = Site(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -347,6 +348,13 @@ def update_site(
     changes = body.model_dump(exclude_unset=True)
     if changes.get("name"):
         _check_name(db, site.organization_id, changes["name"], site.id)
+    if changes.get("emergency_caller_id_number"):
+        numbers.check_owned(
+            db,
+            site.organization_id,
+            changes["emergency_caller_id_number"],
+            "emergency_caller_id_number",
+        )
     details: dict[str, Any] = {}
     for field, value in changes.items():
         if value != getattr(site, field):

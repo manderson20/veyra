@@ -169,7 +169,12 @@ def _audit(
         details=details,
     )
     if changed:
-        configmgmt.mark_changed(db, by=principal.label, what=f"{action} {details.get('name', '')}")
+        configmgmt.mark_changed(
+            db,
+            by=principal.label,
+            what=f"{action} {details.get('name', '')}",
+            organization_id=row.organization_id,
+        )
 
 
 # ----------------------------------------------------------------- inboxes

@@ -140,7 +140,9 @@ def _changed(
         request_id=ctx.request_id,
         details=details,
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {org.slug}")
+    configmgmt.mark_changed(
+        db, by=principal.label, what=f"{action} {org.slug}", organization_id=org.id
+    )
 
 
 @router.get("", response_model=DirectoryOut, summary="The directory's entries and operator")

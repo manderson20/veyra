@@ -3,7 +3,7 @@
 
 from datetime import timedelta
 
-from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login
+from conftest import ADMIN_PASSWORD, enable_multi_tenancy, login, org_body
 from fake_adapter import FakeAdapter
 from fastapi.testclient import TestClient
 
@@ -98,7 +98,7 @@ def test_active_calls_are_scoped(admin, app, tmp_path):
     adapter, _, _ = _fake(app, tmp_path)
     a = _org(admin)["id"]
     enable_multi_tenancy()
-    b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    b = admin.post("/api/v1/organizations", json=org_body("Beta", "beta")).json()["id"]
     ea = _create(admin, a, "1001", "Alpha desk")
     eb = _create(admin, b, "2001", "Beta desk")
     adapter.calls = [
@@ -230,7 +230,7 @@ def test_hang_up_a_call(admin, app, tmp_path):
     adapter, _, _ = _fake(app, tmp_path)
     a = _org(admin)["id"]
     enable_multi_tenancy()
-    b = admin.post("/api/v1/organizations", json={"name": "Beta", "slug": "beta"}).json()["id"]
+    b = admin.post("/api/v1/organizations", json=org_body("Beta", "beta")).json()["id"]
     ea = _create(admin, a, "1001", "Alpha desk")
     eb = _create(admin, b, "2001", "Beta desk")
     adapter.calls = [

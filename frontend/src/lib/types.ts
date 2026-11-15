@@ -171,6 +171,9 @@ export interface Organization {
   bootstrap_includes_credential?: boolean;
   /** Numbers extensions may present as outbound caller ID besides the organization's DIDs. */
   caller_id_allow_list?: string[];
+  /** Default outbound caller ID with several organizations: one of its numbers. */
+  main_number?: string | null;
+  emergency_caller_id_number?: string | null;
   /** Intercom default for the organization's phones: allow or deny. */
   intercom_default?: "allow" | "deny" | string;
   /** Who may answer with **<extension> (#138). */
@@ -251,6 +254,11 @@ export interface EngineStatus {
   pending_mode: "now" | "when_idle" | null;
   pending_requested_at: string | null;
   pending_active_calls: number | null;
+  organization_pending?: OrganizationNote[];
+  held_back?: OrganizationNote[];
+  apply_requests?: OrganizationNote[];
+  /** Set when the caller applies as an organization administrator. */
+  org_apply?: "apply" | "request" | null;
   active_calls: number | null;
 }
 
@@ -337,9 +345,22 @@ export interface Registrations {
 }
 
 export interface ApplyResult {
-  revision: ConfigRevision;
+  /** Null when the apply was only requested from the platform. */
+  revision: ConfigRevision | null;
   applied: boolean;
   unchanged: boolean;
+  requested?: boolean;
+  /** Organizations whose newer changes could not be generated. */
+  held_back?: string[];
+}
+
+/** A per-organization note in the engine status (docs/MULTI_TENANCY_MSP.md §7). */
+export interface OrganizationNote {
+  organization_id: string;
+  at?: string;
+  by?: string;
+  what?: string;
+  error?: string;
 }
 
 export interface NumberingPlan {
@@ -1062,6 +1083,8 @@ export interface Trunk {
   /** Of max_channels, kept for emergency calls (issue #171). */
   emergency_reserved_channels?: number;
   default_caller_id: string | null;
+  /** Dedicated to one organization (bring your own carrier); null: shared. */
+  organization_id?: string | null;
   caller_id_header: CallerIdHeader;
   dtmf_mode: DtmfMode;
   fax_t38: boolean;
@@ -1100,6 +1123,7 @@ export interface TrunkInput {
   max_channels?: number | null;
   emergency_reserved_channels?: number;
   default_caller_id?: string | null;
+  organization_id?: string | null;
   caller_id_header?: CallerIdHeader;
   dtmf_mode?: DtmfMode;
   fax_t38?: boolean;
@@ -2855,7 +2879,7 @@ export interface AlertItem {
 
 export type ReportGroup =
   | "day" | "week" | "month" | "hour" | "weekday" | "direction" | "outcome" | "answered_by"
-  | "called_extension" | "calling_extension" | "did" | "trunk" | "queue" | "ring_group" | "caller";
+  | "called_extension" | "calling_extension" | "did" | "trunk" | "queue" | "ring_group" | "caller" | "organization";
 export type ReportMeasure =
   | "calls" | "answered" | "missed" | "voicemail" | "answer_rate" | "avg_ring" | "total_ring"
   | "avg_talk" | "total_talk" | "within_sl";
@@ -3137,6 +3161,8 @@ export interface WebhookDeliveryOut {
 export interface MultiTenancyCheck {
   name: string;
   ok: boolean;
+  /** Passed, with things to review (docs/MULTI_TENANCY_MSP.md §5.3). */
+  warning?: boolean;
   detail: string;
 }
 
@@ -3146,6 +3172,8 @@ export interface MultiTenancyStatus {
   organizations: { id: string; name: string; slug: string; namespace: string; is_active: boolean }[];
   shared: string[];
   checks?: MultiTenancyCheck[];
+  /** Whether organization administrators apply their own changes or request it. */
+  org_apply?: "apply" | "request";
 }
 
 // --- Central management (docs/CENTRAL_MANAGEMENT.md) ---------------------------
@@ -3959,4 +3987,101 @@ export interface CapabilityCoverage {
   packs: CapabilityPackInfo[];
   load_errors: Record<string, string[]>;
   uncovered: { manufacturer: string; model: string; phones: number }[];
+}
+
+/** A number or block of numbers assigned to an organization (docs/MULTI_TENANCY_MSP.md §4). */
+export interface OrganizationNumber {
+  id: string;
+  organization_id: string;
+  first: string;
+  last: string;
+  count: number;
+  trunk_id: string | null;
+  trunk_name: string | null;
+  label: string | null;
+  source: "manual" | "migration" | "auto";
+  routed: number;
+  created_at: string;
+  created_by: string;
+}
+
+/** An inbound route for a number another organization owns. */
+export interface NumberConflict {
+  route_id: string;
+  did: string;
+  route_organization_id: string;
+  route_organization_name: string;
+  owner_organization_id: string;
+  owner_organization_name: string;
+}
+
+/** An organization's 911 readiness (docs/MULTI_TENANCY_MSP.md §6.5). */
+export interface EmergencyOrganizationRow {
+  id: string;
+  name: string;
+  emergency_number: string | null;
+  main_number: string | null;
+  /** Where its enabled phones' emergency caller IDs come from. */
+  phones: { own: number; site: number; organization: number; none: number };
+  sites: number;
+  sites_ready: number;
+  last_test_call: string | null;
+}
+
+/** What an organization may use (docs/MULTI_TENANCY_MSP.md §8); null: no limit. */
+export interface OrganizationLimits {
+  organization_id: string;
+  max_outside_calls: number | null;
+  max_extensions: number | null;
+  max_devices: number | null;
+  extensions: number;
+  devices: number;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+/** One row of the usage report (docs/MULTI_TENANCY_MSP.md §9). */
+export interface UsageRow {
+  organization_id: string;
+  organization: string;
+  trunk: string;
+  inbound_calls: number;
+  outbound_calls: number;
+  inbound_minutes: number;
+  outbound_minutes: number;
+  billable_minutes: number;
+  emergency_calls: number;
+  internal_calls: number;
+  peak_concurrent: number;
+}
+
+/** docs/MULTI_TENANCY_MSP.md §10: one onboarding step of an organization. */
+export interface OnboardingStep {
+  key: "organization" | "trunk" | "administrator" | "phones" | "emergency" | "limits";
+  title: string;
+  done: boolean;
+  optional: boolean;
+  detail: string;
+}
+
+export interface Onboarding {
+  organization_id: string;
+  multi_tenancy: boolean;
+  steps: OnboardingStep[];
+  left: string[];
+}
+
+export interface OnboardingCheck {
+  organization_id: string;
+  checks: { name: string; ok: boolean; warning?: boolean; detail: string }[];
+  emergency: { id: string; name: string; emergency_number: string | null; main_number: string | null; sites: number; sites_ready: number; last_test_call: string | null }[];
+  left: string[];
+  ok: boolean;
+}
+
+/** docs/MULTI_TENANCY_MSP.md §10a: GET /me/organizations. */
+export interface MyOrganizations {
+  organizations: { id: string; name: string; slug: string }[];
+  system: boolean;
+  switcher: boolean;
 }

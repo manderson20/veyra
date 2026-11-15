@@ -359,7 +359,9 @@ def _record(
         request_id=ctx.request_id,
         details={"name": page.name, **details},
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {page.name}")
+    configmgmt.mark_changed(
+        db, by=principal.label, what=f"{action} {page.name}", organization_id=page.organization_id
+    )
 
 
 def _conflict(e: IntegrityError, db: Session) -> Exception:

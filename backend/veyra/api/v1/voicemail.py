@@ -456,7 +456,9 @@ def _audit(
         request_id=ctx.request_id,
         details={"extension": number, **details},
     )
-    configmgmt.mark_changed(db, by=principal.label, what=f"{action} {number}")
+    configmgmt.mark_changed(
+        db, by=principal.label, what=f"{action} {number}", organization_id=box.organization_id
+    )
 
 
 # ----------------------------------------------------------------- routes
