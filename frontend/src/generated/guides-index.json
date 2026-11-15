@@ -886,8 +886,8 @@
    "summary": "Add features to Veyra with signed modules from a catalog or a package file, and enable, update, roll back or remove them.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/modules/",
     "/modules/view/"

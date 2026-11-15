@@ -256,6 +256,11 @@ class ModuleManager:
         except Exception as e:  # never let vendor data break a module change
             log.error("Capability packs not reloaded: %s", e)
 
+    def ships_packs(self, module_id: str) -> bool:
+        loaded = self.loaded.get(module_id)
+        spec = loaded.manifest.provisioning if loaded else None
+        return bool(spec and spec.capabilities)
+
     def _enable(self, db: Session, module_id: str) -> InstalledModule:
         row = self._row(db, module_id)
         if row.state == "enabled" and module_id in self.enabled:
@@ -448,6 +453,9 @@ class ModuleManager:
         ship (docs/CONFIG_VERIFICATION.md §2.0)."""
         out = []
         for module_id, loaded in sorted(self.loaded.items()):
+            # A disabled module stays loaded until restart; its packs do not count.
+            if module_id not in self.enabled:
+                continue
             spec = loaded.manifest.provisioning
             if spec is None or not spec.capabilities:
                 continue

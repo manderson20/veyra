@@ -71,7 +71,14 @@ def _check(
         stmt = stmt.where(DeviceProfile.id == row.scope_id)
     profiles = list(db.scalars(stmt.order_by(DeviceProfile.name)))
     return run_variable_check(
-        request, db, principal, ctx, profiles, catalog_for(request, db), acknowledge
+        request,
+        db,
+        principal,
+        ctx,
+        profiles,
+        catalog_for(request, db),
+        acknowledge,
+        site_id=row.scope_id if row.scope == "site" else None,
     )
 
 

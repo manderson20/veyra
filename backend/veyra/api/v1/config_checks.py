@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -46,11 +46,15 @@ Mode = Literal["enforce", "advisory", "off"]
 
 
 def capabilities(request: Request, db: Session) -> CapabilityCatalog:
+    return capabilities_for_app(request.app, db)
+
+
+def capabilities_for_app(app: Any, db: Session) -> CapabilityCatalog:
     from veyra.provisioning import packs
 
-    if getattr(request.app.state, "capabilities", None) is None:
+    if getattr(app.state, "capabilities", None) is None:
         return CapabilityCatalog()
-    return packs.current(request.app, db)
+    return packs.current(app, db)
 
 
 def run_profile_check(
@@ -65,16 +69,21 @@ def run_profile_check(
     *,
     gate: bool = True,
     previous_firmware: uuid.UUID | Literal[False] | None = False,
+    site_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Check a profile as it is in the session (after the change is flushed)
     and stop the save when enforced errors are open. Returns the report for
     the response. ``previous_firmware``, when the firmware image changed,
-    adds what the change brings (``firmware``)."""
+    adds what the change brings (``firmware``). ``site_id``: render with this
+    site's variables (a site variable reaching phones of another site's
+    profile); only the summaries of that site's phones are refreshed."""
     mode = checks.effective_mode(db, profile.organization_id, profile)
     if mode[0] == "off":
         return {"mode": "off", "level": mode[1], "findings": [], "clean": None}
     try:
-        results = checks.check_profile(db, templates, capabilities(request, db), profile, served)
+        results = checks.check_profile(
+            db, templates, capabilities(request, db), profile, served, site_id=site_id
+        )
     except TemplateError:
         # A template that does not render is reported by the template's own checks.
         return {"mode": mode[0], "level": mode[1], "findings": [], "clean": None}
@@ -90,7 +99,7 @@ def run_profile_check(
             ip=ctx.ip,
             request_id=ctx.request_id,
         )
-        checks.store_summaries(db, profile, report)
+        checks.store_summaries(db, profile, report, site_id=site_id)
     else:
         report = checks.Report(mode[0], mode[1], results, checks.live_overrides(db, subject.scopes))
     out = report.as_dict()
@@ -125,42 +134,66 @@ def run_device_check(
     keys, on its own firmware. The profile's checks cover the rest.
     ``previous_firmware``: the phone's image before this save, to report
     what the firmware change brings."""
-    from veyra.api.v1.device_profiles import served_models
-
     if profile is None:
         return None
     mode = checks.effective_mode(db, profile.organization_id, profile)
     if mode[0] == "off":
         device.config_check = {"mode": "off"}
         return {"mode": "off", "level": mode[1], "findings": [], "clean": None}
+    caps = capabilities(request, db)
+    found = device_results(db, templates, caps, device, profile, device.firmware_image_id)
+    if found is None:
+        return None
+    _key, results = found
+    subject = checks.Subject(
+        "device", str(device.id), device.organization_id, also=[("profile", str(profile.id))]
+    )
+    report = checks.gate(
+        db, principal, subject, results, mode, acknowledge, ip=ctx.ip, request_id=ctx.request_id
+    )
+    device.config_check = checks.summarize(report, device.model)
+    out = report.as_dict()
+    if previous_firmware is not False:
+        prior = device_results(db, templates, caps, device, profile, previous_firmware)
+        before = prior[1] if prior is not None else []
+        out["firmware"] = checks.firmware_diff(before, results, {device.model: 1})
+    return out
+
+
+def device_results(
+    db: Session,
+    templates: TemplateCatalog,
+    caps: CapabilityCatalog,
+    device: Device,
+    profile: DeviceProfile,
+    image_id: uuid.UUID | None,
+) -> tuple[str, list[checks.ModelResult]] | None:
+    """What a phone adds to its profile, on its firmware (``image_id``, its
+    own image or the one it had): the template key and the results, or None
+    when its model is not served or the template does not render."""
+    from veyra.api.v1.device_profiles import served_models
+
     key = served_models(templates, profile.template_key, profile.organization_id).get(device.model)
     if key is None:
         return None
     vendor = templates.records[key].manifest.template.manufacturer
-
-    def targets_with(image_id: uuid.UUID | None) -> list[Target]:
-        ids = [x for x in (image_id, profile.firmware_image_id) if x]
-        images = {
-            i.id: i.version
-            for i in db.scalars(select(FirmwareImage).where(FirmwareImage.id.in_(ids)))
-        }
-        return firmware_targets(
-            vendor,
-            device.model,
-            device_image=images.get(image_id) if image_id else None,
-            profile_image=images.get(profile.firmware_image_id)
-            if profile.firmware_image_id
-            else None,
-            reported=[device.firmware_reported],
-            catalog=capabilities(request, db),
-        )
-
-    targets = targets_with(device.firmware_image_id)
+    ids = [x for x in (image_id, profile.firmware_image_id) if x]
+    images = {
+        i.id: i.version for i in db.scalars(select(FirmwareImage).where(FirmwareImage.id.in_(ids)))
+    }
+    targets = firmware_targets(
+        vendor,
+        device.model,
+        device_image=images.get(image_id) if image_id else None,
+        profile_image=images.get(profile.firmware_image_id) if profile.firmware_image_id else None,
+        reported=[device.firmware_reported],
+        catalog=caps,
+    )
     try:
         results = checks.check_profile(
             db,
             templates,
-            capabilities(request, db),
+            caps,
             profile,
             {device.model: key},
             device_values=dict(device.values or {}),
@@ -171,32 +204,7 @@ def run_device_check(
         )
     except TemplateError:
         return None
-    subject = checks.Subject(
-        "device", str(device.id), device.organization_id, also=[("profile", str(profile.id))]
-    )
-    report = checks.gate(
-        db, principal, subject, results, mode, acknowledge, ip=ctx.ip, request_id=ctx.request_id
-    )
-    device.config_check = checks.summarize(report, device.model)
-    out = report.as_dict()
-    if previous_firmware is not False:
-        try:
-            before = checks.check_profile(
-                db,
-                templates,
-                capabilities(request, db),
-                profile,
-                {device.model: key},
-                device_values=dict(device.values or {}),
-                device_keys=device.keys,
-                models=[device.model],
-                targets={device.model: targets_with(previous_firmware)},
-                site_id=device.site_id,
-            )
-        except TemplateError:
-            before = []
-        out["firmware"] = checks.firmware_diff(before, results, {device.model: 1})
-    return out
+    return key, results
 
 
 def run_template_check(
@@ -210,28 +218,31 @@ def run_template_check(
     acknowledge: list[Acknowledgement],
 ) -> dict[str, Any] | None:
     """Check a saved template on its own (defaults, one key of each type),
-    for each model it lists, on the family's oldest release. Profiles on it
-    are checked with their own values when they are saved."""
+    for each model it lists: on the family's oldest release, and on every
+    release the profiles and phones it serves have or report. Profiles on
+    it are checked with their own values when they are saved."""
     mode = checks.effective_mode(db, organization_id)
     if mode[0] == "off":
         return {"mode": "off", "level": mode[1], "findings": [], "clean": None}
     rec = templates.records.get(key)
     if rec is None or rec.manifest.template.abstract:
         return None
+    caps = capabilities(request, db)
+    vendor = rec.manifest.template.manufacturer
+    in_use = _targets_in_use(db, templates, caps, key, vendor)
     try:
         resolved = templates.resolve(key)
-        results = [
-            checks.ModelResult(
-                model,
-                key,
-                precheck(
-                    capabilities(request, db),
-                    resolved,
-                    Target(rec.manifest.template.manufacturer, model, None, "oldest"),
-                ),
+        results: list[checks.ModelResult] = []
+        for model in rec.manifest.template.models:
+            targets: dict[tuple[str | None, str], Target] = {
+                (None, "oldest"): Target(vendor, model, None, "oldest")
+            }
+            for t in in_use.get(model, []):
+                targets.setdefault((t.firmware, ""), t)
+            results.extend(
+                checks.ModelResult(model, key, precheck(caps, resolved, t))
+                for t in targets.values()
             )
-            for model in rec.manifest.template.models
-        ]
     except TemplateError:
         return None
     report = checks.gate(
@@ -247,6 +258,102 @@ def run_template_check(
     return report.as_dict()
 
 
+def _targets_in_use(
+    db: Session, templates: TemplateCatalog, caps: CapabilityCatalog, key: str, vendor: str
+) -> dict[str, list[Target]]:
+    """Model -> the firmware releases the profiles serving a model from
+    template ``key`` have, or their phones have or report."""
+    from veyra.api.v1.device_profiles import served_models
+
+    out: dict[str, list[Target]] = {}
+    served: dict[tuple[str, uuid.UUID], dict[str, str]] = {}
+    for profile in db.scalars(select(DeviceProfile)):
+        scope = (profile.template_key, profile.organization_id)
+        if scope not in served:
+            served[scope] = served_models(templates, *scope)
+        for model, served_key in served[scope].items():
+            if served_key != key:
+                continue
+            for t in checks.targets_for(db, caps, profile, vendor, model):
+                if t.firmware is not None:
+                    out.setdefault(model, []).append(t)
+    return out
+
+
+# ------------------------------------------------------------------ catalog change (§4.4)
+
+
+def recheck_all(app: Any, db: Session) -> dict[str, int]:
+    """Re-check every profile and phone after the vendor data changed and
+    refresh the phones' summaries; overrides whose finding no longer occurs
+    are marked stale (and unmarked when it comes back). Nothing is blocked."""
+    from veyra.api.v1.device_profiles import served_models
+    from veyra.api.v1.provisioning import catalog_for_app
+
+    templates = catalog_for_app(app, db)
+    caps = capabilities_for_app(app, db)
+    found: dict[tuple[str, str], set[str]] = {}
+    profiles = phones = 0
+    for profile in db.scalars(select(DeviceProfile)):
+        mode = checks.effective_mode(db, profile.organization_id, profile)
+        if mode[0] == "off":
+            continue
+        served = served_models(templates, profile.template_key, profile.organization_id)
+        try:
+            results = checks.check_profile(db, templates, caps, profile, served)
+        except TemplateError:
+            continue
+        pscope = ("profile", str(profile.id))
+        report = checks.Report(mode[0], mode[1], results, checks.live_overrides(db, [pscope]))
+        checks.store_summaries(db, profile, report)
+        seen = found.setdefault(pscope, set())
+        seen.update(f.fingerprint for _r, f in report.findings())
+        profiles += 1
+        for device in db.scalars(select(Device).where(Device.profile_id == profile.id)):
+            got = device_results(db, templates, caps, device, profile, device.firmware_image_id)
+            if got is None:
+                continue
+            dscope = ("device", str(device.id))
+            dreport = checks.Report(
+                mode[0], mode[1], got[1], checks.live_overrides(db, [dscope, pscope])
+            )
+            device.config_check = checks.summarize(dreport, device.model)
+            fps = {f.fingerprint for _r, f in dreport.findings()}
+            found[dscope] = fps
+            seen.update(fps)
+            phones += 1
+    now, stale, back = utcnow(), 0, 0
+    for row in db.scalars(
+        select(ConfigCheckOverride).where(
+            ConfigCheckOverride.revoked_at.is_(None),
+            ConfigCheckOverride.scope_type.in_(("profile", "device")),
+        )
+    ):
+        now_found = found.get((row.scope_type, row.scope_id))
+        if now_found is None:
+            continue
+        if row.fingerprint in now_found:
+            if row.stale_at is not None:
+                row.stale_at, back = None, back + 1
+        elif row.stale_at is None:
+            row.stale_at, stale = now, stale + 1
+    return {"profiles": profiles, "phones": phones, "stale": stale, "unstale": back}
+
+
+def recheck_in_background(app: Any) -> None:
+    """``recheck_all`` in its own session (run after the response)."""
+    import logging
+
+    from veyra.core.db import session_scope
+
+    try:
+        with session_scope() as db:
+            counts = recheck_all(app, db)
+        logging.getLogger(__name__).info("Configuration recheck: %s", counts)
+    except Exception:
+        logging.getLogger(__name__).exception("Configuration recheck failed")
+
+
 MAX_VARIABLE_PROFILES = 50
 
 
@@ -258,10 +365,13 @@ def run_variable_check(
     profiles: list[DeviceProfile],
     templates: TemplateCatalog,
     acknowledge: list[Acknowledgement],
+    *,
+    site_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Check every profile a variable reaches (§4.1), up to a limit, and
     stop the save when any has open enforced errors: all of them are listed
-    together, each with its profile."""
+    together, each with its profile. ``site_id``: a site variable, rendered
+    with that site's values for every profile."""
     from veyra.api.v1.device_profiles import served_models
 
     reports: list[dict[str, Any]] = []
@@ -270,7 +380,15 @@ def run_variable_check(
         served = served_models(templates, profile.template_key, profile.organization_id)
         try:
             report = run_profile_check(
-                request, db, principal, ctx, profile, templates, served, acknowledge
+                request,
+                db,
+                principal,
+                ctx,
+                profile,
+                templates,
+                served,
+                acknowledge,
+                site_id=site_id,
             )
         except ProblemError as e:
             if e.code != "config_findings":
@@ -421,6 +539,7 @@ def list_overrides(
     organization_id: uuid.UUID | None = None,
     checker_wrong: bool | None = None,
     include_revoked: bool = False,
+    include_stale: bool = False,
     q: str | None = Query(None, max_length=200),
     params: PageParams = Depends(page_params),
     principal: Principal = Depends(require(READ)),
@@ -435,6 +554,9 @@ def list_overrides(
         stmt = stmt.where(ConfigCheckOverride.checker_wrong.is_(checker_wrong))
     if not include_revoked:
         stmt = stmt.where(ConfigCheckOverride.revoked_at.is_(None))
+    if not include_stale:
+        # A stale override's finding no longer occurs (§4.4); it stays in the history.
+        stmt = stmt.where(ConfigCheckOverride.stale_at.is_(None))
     if q:
         stmt = stmt.where(ConfigCheckOverride.parameter.ilike(f"%{q.strip()}%"))
     rows, total = paginate(db, stmt, params)
@@ -660,6 +782,7 @@ def _platform(principal: Principal) -> None:
 async def import_pack(
     request: Request,
     file: UploadFile,
+    background: BackgroundTasks,
     principal: Principal = Depends(require(WRITE)),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
@@ -718,6 +841,7 @@ async def import_pack(
     )
     db.commit()
     caps = packs.rebuild(request.app, db)
+    background.add_task(recheck_in_background, request.app)
     return _pack_out(caps.packs[pack.info.id])
 
 
@@ -725,6 +849,7 @@ async def import_pack(
 def delete_pack(
     pack_id: str,
     request: Request,
+    background: BackgroundTasks,
     principal: Principal = Depends(require(WRITE)),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(request_context),
@@ -750,6 +875,7 @@ def delete_pack(
     )
     db.commit()
     packs.rebuild(request.app, db)
+    background.add_task(recheck_in_background, request.app)
     return Response(status_code=204)
 
 

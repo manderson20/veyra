@@ -489,8 +489,15 @@ def summarize(report: Report, model: str | None = None) -> dict[str, Any]:
     return {**counts, "mode": report.mode, "checked_at": utcnow().isoformat()}
 
 
-def store_summaries(db: Session, profile: DeviceProfile, report: Report) -> None:
+def store_summaries(
+    db: Session, profile: DeviceProfile, report: Report, *, site_id: uuid.UUID | None = None
+) -> None:
+    """Refresh the summaries of the profile's phones; with ``site_id`` (the
+    report was rendered for that site), only of the phones it reaches."""
     if profile.id is None:
         return
-    for device in db.scalars(select(Device).where(Device.profile_id == profile.id)):
+    stmt = select(Device).where(Device.profile_id == profile.id)
+    if site_id is not None and site_id != profile.site_id:
+        stmt = stmt.where(Device.site_id == site_id)
+    for device in db.scalars(stmt):
         device.config_check = summarize(report, device.model)

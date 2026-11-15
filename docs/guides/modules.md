@@ -4,7 +4,7 @@ summary: Add features to Veyra with signed modules from a catalog or a package f
 audience: admin
 section: Maintenance
 order: 90
-reviewed: 0.27.44
+reviewed: 0.27.87
 pages:
   - /modules/
   - /modules/view/
@@ -39,6 +39,8 @@ The **Installed** tab shows a card per module with its state, trust, version, au
 - **Install:** creates its database tables and registers its permissions. It stays off until you enable it.
 - **Enable:** its pages and features become available to people with its permissions. Module pages appear under **Modules** in the menu.
 - **Disable:** it stops working; its data and settings are kept.
+
+A module can bring vendor data for [Configuration checks](guide:configuration-checks). Enabling or disabling such a module adds or removes that data right away, and Veyra checks every phone again in the background.
 - **Settings:** the module's own settings. **Settings for** chooses installation-wide settings or those of one organization, if the module has any.
 - **Apply update:** runs the new version's database changes now.
 - **Roll back:** goes back to the previous version.
