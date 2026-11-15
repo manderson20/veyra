@@ -1,0 +1,14 @@
+schema = 1
+
+[family]
+vendor = "poly"
+family = "vvx"
+name = "Poly VVX (UC Software)"
+models = ["VVX 410", "VVX 411", "VVX 450"]
+format = "xml"
+version_scheme = "dotted"
+# Poly ships one UC Software release for every VVX model.
+firmware_packaging = "family"
+# The per-phone file. The master file ({mac}.cfg) only lists other files.
+files = ["veyra-{mac}.cfg"]
+templates = ["poly.vvx.411", "poly.vvx.450"]

@@ -14,10 +14,12 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -110,6 +112,9 @@ class DeviceProfile(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     firmware_image_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("firmware_images.id", ondelete="SET NULL")
     )
+    # Configuration checks (docs/CONFIG_VERIFICATION.md §5): enforce |
+    # advisory | off; NULL follows the organization.
+    config_check_mode: Mapped[str | None] = mapped_column(String(16))
 
     def keys_for(self, model: str) -> list[dict[str, Any]]:
         own = (self.model_keys or {}).get(model)
@@ -173,3 +178,78 @@ class ProvisioningVariable(UUIDPrimaryKey, Timestamps, Base):
     value: Mapped[str] = mapped_column(Text)
     sensitive: Mapped[bool] = mapped_column(Boolean, default=False)
     description: Mapped[str | None] = mapped_column(Text)
+
+
+class ConfigCheckOverride(UUIDPrimaryKey, Base):
+    """An administrator's decision to save despite one configuration check
+    finding (docs/CONFIG_VERIFICATION.md §6). It covers exactly one
+    fingerprint on one template, profile or device: a change of value,
+    model or firmware release is a new finding."""
+
+    __tablename__ = "config_check_overrides"
+    __table_args__ = (
+        # One live override per finding and scope; a revoked one stays as history.
+        Index(
+            "uq_config_check_overrides_live",
+            "scope_type",
+            "scope_id",
+            "fingerprint",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+    )
+
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    scope_type: Mapped[str] = mapped_column(String(16))  # template | profile | device
+    scope_id: Mapped[str] = mapped_column(String(128))
+    fingerprint: Mapped[str] = mapped_column(String(80))
+    severity: Mapped[str] = mapped_column(String(16))
+    rule: Mapped[str] = mapped_column(String(40))
+    vendor: Mapped[str] = mapped_column(String(40))
+    family: Mapped[str] = mapped_column(String(40))
+    model: Mapped[str] = mapped_column(String(64))
+    release: Mapped[str] = mapped_column(String(40))
+    catalog_revision: Mapped[int] = mapped_column(Integer, default=0)
+    file: Mapped[str] = mapped_column(String(128))
+    parameter: Mapped[str] = mapped_column(String(200))
+    # NULL for a secret: only its hash is kept.
+    value: Mapped[str | None] = mapped_column(Text)
+    value_sha256: Mapped[str] = mapped_column(String(64))
+    message: Mapped[str] = mapped_column(Text, default="")
+    reason: Mapped[str] = mapped_column(Text)
+    checker_wrong: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_by_label: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The finding no longer occurs (after a catalog or configuration change).
+    stale_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CapabilityPack(UUIDPrimaryKey, Base):
+    """A capability pack an administrator imported (docs/CONFIG_VERIFICATION.md
+    §2.0), kept in the database so it reaches an HA standby and backups with
+    the rest; installation-wide, like the built-in packs."""
+
+    __tablename__ = "capability_packs"
+
+    pack_id: Mapped[str] = mapped_column(String(100), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    vendor: Mapped[str] = mapped_column(String(40))
+    version: Mapped[str] = mapped_column(String(40))
+    # {relative path: text} of every file of the pack.
+    files: Mapped[dict[str, str]] = mapped_column(JSONB)
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    uploaded_by_label: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Each import sets it: running services notice and reload the packs.
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

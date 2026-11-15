@@ -15,6 +15,7 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useProfileOptions } from "@/hooks/useProfileOptions";
 import { useSession } from "@/hooks/useSession";
+import { ProfileCheckMode, useConfigCheck } from "@/components/provisioning/ConfigCheck";
 
 /** A model's own line keys, or the template's. Changes join the template's draft. */
 function ModelKeysDialog({ model, draft, zones, disabled, onChange, onClose }: { model: string | null; draft: ProfileDraft; zones: PagingZone[]; disabled: boolean; onChange: (model: string, keys: LineKey[] | null) => void; onClose: () => void }) {
@@ -49,6 +50,7 @@ function TemplateView() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const options = useProfileOptions(profile.data?.organization_id ?? "", draft.template_key || undefined);
+  const check = useConfigCheck();
 
   useOnChange(profile.data, (p) => { if (p) setDraft(profileDraft(p)); });
 
@@ -63,7 +65,11 @@ function TemplateView() {
     setBusy(updatePhones ? "update" : "save");
     errors.clear();
     try {
-      if (dirty) profile.setData(await api.patch<DeviceProfile>(`/device-profiles/${p.id}`, profileBody(draft)));
+      if (dirty) {
+        const saved = await check.run((acknowledge) => api.patch<DeviceProfile>(`/device-profiles/${p.id}`, { ...profileBody(draft), acknowledge }));
+        if (!saved) return; // cancelled in the check window: nothing was saved
+        profile.setData(saved);
+      }
       if (updatePhones) {
         const r = await api.post<{ phones: number; asked: number }>(`/device-profiles/${p.id}/update-phones`, {});
         toast.success("Phones asked to update", `${r.asked} of ${r.phones} accepted the request. A phone that did not picks up the change at its next check.`);
@@ -106,6 +112,7 @@ function TemplateView() {
 
   return (
     <div className="stack">
+      {check.dialog}
       <PageHeader back={{ href: brandHref, label: p.manufacturer ?? "Brands" }} title={p.name}
         description={<span className="row"><span>{p.organization_name}</span>{p.site_name ? <span className="subtle">· {p.site_name}</span> : null}{p.is_default ? <Badge tone="info">Default</Badge> : null}{p.problems.length ? <Badge tone="warn" icon="alert">{p.problems[0]}</Badge> : <Badge tone="ok">Ready</Badge>}</span>}
         actions={editable ? <Button variant="ghost" icon="trash" onClick={() => setDeleting(true)} disabled={p.devices > 0} title={p.devices > 0 ? "Move its phones to another template first" : undefined}>Delete</Button> : null} />
@@ -113,6 +120,7 @@ function TemplateView() {
         <form className="stack stack--sm" onSubmit={submit}>
           <ProfileFields brand={p.manufacturer} draft={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} templates={options.templates} template={options.template}
             zones={options.zones} sites={options.sites} firmware={options.firmware} errors={errors.fields} disabled={!editable} />
+          <ProfileCheckMode profileId={p.id} />
           {errors.fields.model_keys ? <p className="field__error">{errors.fields.model_keys}</p> : null}
           {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
           {editable ? (

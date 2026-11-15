@@ -25,6 +25,7 @@ from veyra.core.errors import ProblemError, conflict, forbidden
 from veyra.core.models import DeviceProfile, ProvisioningTemplate
 from veyra.core.security.principal import Principal
 from veyra.provisioning.catalog import payload as catalog_payload
+from veyra.provisioning.checks import Acknowledgement
 from veyra.provisioning.renderer import (
     MAX_SOURCE_BYTES,
     TemplateCatalog,
@@ -53,7 +54,12 @@ class ImportIn(BaseModel):
 
 
 def _catalog(request: Request, db: Session) -> TemplateCatalog:
-    base: TemplateCatalog = request.app.state.templates
+    return catalog_for_app(request.app, db)
+
+
+def catalog_for_app(app: Any, db: Session) -> TemplateCatalog:
+    """The app's catalog with the local templates merged in."""
+    base: TemplateCatalog = app.state.templates
     catalog = TemplateCatalog()
     catalog.records = dict(base.records)
     catalog.load_errors = dict(base.load_errors)
@@ -350,6 +356,8 @@ class TemplateUpdateIn(BaseModel):
 
     manifest: dict[str, Any]
     sources: dict[str, str]
+    # Configuration check findings saved past (docs/CONFIG_VERIFICATION.md §4.2).
+    acknowledge: list[Acknowledgement] = Field(default_factory=list, max_length=500)
 
 
 class CustomizeIn(BaseModel):
@@ -507,6 +515,18 @@ def update_template(
     except IntegrityError as e:
         db.rollback()
         raise conflict(f"Local template {key} version {t.version} already exists.") from e
+    from veyra.api.v1.config_checks import run_template_check
+
+    report = run_template_check(
+        request,
+        db,
+        principal,
+        ctx,
+        key,
+        row.organization_id,
+        _catalog(request, db),
+        body.acknowledge,
+    )
     audit.record(
         db,
         action="provisioning.template.update",
@@ -520,7 +540,9 @@ def update_template(
         details={"version": t.version, "files": sorted(record.sources)},
     )
     db.commit()
-    return get_template(key, request, principal, db)
+    out = get_template(key, request, principal, db)
+    out["config_check"] = report
+    return out
 
 
 @router.post(

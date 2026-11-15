@@ -441,6 +441,14 @@ def get_file(filename: str, request: Request, db: Session = Depends(get_db)) -> 
         # Trusted from now on: no more plain-HTTP bootstrap for this phone.
         device.https_seen_at = utcnow()
         device.allow_bootstrap = False
+    # Never refuse a file over a configuration check (docs/CONFIG_VERIFICATION.md §4.3).
+    check = device.config_check or {}
+    if check.get("open_errors"):
+        log.info(
+            "served a file to device %s with %d open configuration check error(s)",
+            device.id,
+            int(check["open_errors"]),
+        )
     _log(
         db,
         request,

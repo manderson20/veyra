@@ -165,6 +165,21 @@ class Database(_Strict):
     table_prefix: str
 
 
+class Provisioning(_Strict):
+    """Data a module adds to phone provisioning (docs/CONFIG_VERIFICATION.md §2.0)."""
+
+    capabilities: str | None = Field(
+        None, description="Directory of capability packs (vendor data), relative to the module"
+    )
+
+    @field_validator("capabilities")
+    @classmethod
+    def _relative(cls, v: str | None) -> str | None:
+        if v is not None and (v.startswith("/") or ".." in v.split("/") or "\\" in v):
+            raise ValueError("must be a relative path inside the module")
+        return v
+
+
 class Api(_Strict):
     prefix: str = Field(description="Mounted at /api/v1/ext/<prefix>")
 
@@ -275,6 +290,7 @@ class Manifest(_Strict):
     api: Api | None = None
     events: Events = Field(default_factory=Events)
     ui: Ui = Field(default_factory=Ui)
+    provisioning: Provisioning | None = None
     health_check: bool = False
 
     @property

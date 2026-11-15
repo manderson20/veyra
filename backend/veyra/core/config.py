@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     template_paths: Annotated[list[Path], NoDecode] = Field(
         default_factory=lambda: [Path("/opt/veyra/provisioning/templates")]
     )
+    # Built-in capability packs (docs/CONFIG_VERIFICATION.md §2.0).
+    capability_paths: Annotated[list[Path], NoDecode] = Field(
+        default_factory=lambda: [Path("/opt/veyra/current/provisioning/capabilities")]
+    )
 
     # --- Provisioning (docs/DEVICE_PROVISIONING.md §3) --------------------------
     # Host name phones reach this server by (the certificate's name); defaults
@@ -133,7 +137,7 @@ class Settings(BaseSettings):
     # address of the web interface is under; empty: the host name in use.
     webauthn_rp_id: str = ""
 
-    @field_validator("module_paths", "template_paths", mode="before")
+    @field_validator("module_paths", "template_paths", "capability_paths", mode="before")
     @classmethod
     def _split_paths(cls, value: object) -> object:
         if isinstance(value, str):

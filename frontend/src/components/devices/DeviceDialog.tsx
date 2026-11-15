@@ -12,12 +12,14 @@ import { useOnChange } from "@/hooks/useOnChange";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useProfileOptions } from "@/hooks/useProfileOptions";
 import { useSession } from "@/hooks/useSession";
+import { useConfigCheck } from "@/components/provisioning/ConfigCheck";
 
 /** Register a phone by MAC address (docs/DEVICE_PROVISIONING.md §2). */
 export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean; onClose: () => void; onCreated: (d: Device) => void; seen?: UnregisteredDevice }) {
   const toast = useToast();
   const { session } = useSession();
   const errors = useFormErrors();
+  const check = useConfigCheck();
   const { organizations } = useOrganizationOptions(open);
   const [org, setOrg] = useState("");
   const [mac, setMac] = useState("");
@@ -57,7 +59,8 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
     setBusy(true);
     errors.clear();
     try {
-      const created = await api.post<Device>("/devices", {
+      const created = await check.run((acknowledge) => api.post<Device>("/devices", {
+        acknowledge,
         organization_id: effectiveOrg,
         mac_address: mac.trim(),
         manufacturer: manufacturer.trim(),
@@ -67,7 +70,8 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
         site_id: siteId || null,
         profile_id: profileId || null,
         primary_extension_id: extensionId || null,
-      });
+      }));
+      if (!created) return; // cancelled in the check window: nothing was saved
       toast.success(`Phone ${created.mac_display} registered`, "It receives its configuration at the next provisioning check.");
       onClose();
       onCreated(created);
@@ -79,6 +83,8 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
   };
 
   return (
+    <>
+    {check.dialog}
     <Dialog open={open} onClose={onClose} busy={busy} title={seen ? `Register phone ${seen.mac_display}` : "Register a phone"}
       description="The phone is identified by its MAC address. Its template decides the settings, keys and paging zones; the extension is line 1."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="device-form" loading={busy} disabled={!effectiveOrg || !mac.trim() || !manufacturer.trim() || !model.trim()}>Register phone</Button></>}>
@@ -111,5 +117,6 @@ export function DeviceDialog({ open, onClose, onCreated, seen }: { open: boolean
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>
+    </>
   );
 }

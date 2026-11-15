@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -196,26 +196,45 @@ def install(
     )
 
 
+def _recheck_if_packs(
+    request: Request, background: BackgroundTasks, mgr: ModuleManager, module_id: str
+) -> None:
+    """A module's capability packs came or went: re-check the phones
+    (docs/CONFIG_VERIFICATION.md §4.4)."""
+    from veyra.api.v1.config_checks import recheck_in_background
+
+    if mgr.ships_packs(module_id):
+        background.add_task(recheck_in_background, request.app)
+
+
 @router.post("/{module_id}/enable", summary="Enable an installed module")
 def enable(
     module_id: str,
+    request: Request,
+    background: BackgroundTasks,
     principal: Principal = Depends(require("modules.manage")),
     db: Session = Depends(get_db),
     mgr: ModuleManager = Depends(manager),
     ctx: RequestContext = Depends(request_context),
 ) -> dict[str, Any]:
-    return _lifecycle("enable", module_id, principal, db, ctx, lambda: mgr.enable(db, module_id))
+    out = _lifecycle("enable", module_id, principal, db, ctx, lambda: mgr.enable(db, module_id))
+    _recheck_if_packs(request, background, mgr, module_id)
+    return out
 
 
 @router.post("/{module_id}/disable", summary="Disable a module (keeps its data)")
 def disable(
     module_id: str,
+    request: Request,
+    background: BackgroundTasks,
     principal: Principal = Depends(require("modules.manage")),
     db: Session = Depends(get_db),
     mgr: ModuleManager = Depends(manager),
     ctx: RequestContext = Depends(request_context),
 ) -> dict[str, Any]:
-    return _lifecycle("disable", module_id, principal, db, ctx, lambda: mgr.disable(db, module_id))
+    out = _lifecycle("disable", module_id, principal, db, ctx, lambda: mgr.disable(db, module_id))
+    _recheck_if_packs(request, background, mgr, module_id)
+    return out
 
 
 @router.post("/{module_id}/update", summary="Apply a newer module version present on disk")

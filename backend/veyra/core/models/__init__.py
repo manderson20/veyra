@@ -81,6 +81,8 @@ from veyra.core.models.platform import (
 )
 from veyra.core.models.portal import PortalTemplate, UserContact
 from veyra.core.models.provisioning import (
+    CapabilityPack,
+    ConfigCheckOverride,
     DeviceProfile,
     DeviceProfilePaging,
     FirmwareImage,
@@ -142,6 +144,7 @@ __all__ = [
     "CallSample",
     "CallerBlock",
     "CallerBlockPolicy",
+    "CapabilityPack",
     "Capture",
     "CatalogSource",
     "CentralCommand",
@@ -155,6 +158,7 @@ __all__ = [
     "ClusterNode",
     "ConferenceRoom",
     "ConferenceRoomOwner",
+    "ConfigCheckOverride",
     "ConfigRevision",
     "Department",
     "Device",

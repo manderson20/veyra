@@ -11,6 +11,7 @@ import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useProfileOptions } from "@/hooks/useProfileOptions";
+import { useConfigCheck } from "@/components/provisioning/ConfigCheck";
 import { useSession } from "@/hooks/useSession";
 
 /** A new template of one brand. */
@@ -18,6 +19,7 @@ export function NewTemplateDialog({ brand, open, onClose, onCreated }: { brand: 
   const toast = useToast();
   const { session } = useSession();
   const errors = useFormErrors();
+  const check = useConfigCheck();
   const { organizations } = useOrganizationOptions(open);
   const [org, setOrg] = useState("");
   const [draft, setDraft] = useState<ProfileDraft>(EMPTY_PROFILE);
@@ -39,10 +41,12 @@ export function NewTemplateDialog({ brand, open, onClose, onCreated }: { brand: 
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     errors.clear();
     try {
-      const created = await api.post<DeviceProfile>("/device-profiles", { organization_id: effectiveOrg, ...profileBody(draft) });
+      const created = await check.run((acknowledge) => api.post<DeviceProfile>("/device-profiles", { organization_id: effectiveOrg, ...profileBody(draft), acknowledge }));
+      if (!created) return; // cancelled in the check window: nothing was saved
       toast.success(`Template "${created.name}" created`, "Choose it for phones under Devices.");
       onClose();
       onCreated(created);
@@ -54,6 +58,8 @@ export function NewTemplateDialog({ brand, open, onClose, onCreated }: { brand: 
   };
 
   return (
+    <>
+    {check.dialog}
     <Dialog open={open} onClose={onClose} busy={busy} size="lg" title={`New ${brand} template`}
       description="Settings, line keys and paging zones for a group of phones. Make one template per building when only the paging differs."
       footer={<><Button onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" form="template-form" loading={busy} disabled={!effectiveOrg || !draft.name.trim() || !draft.template_key}>Create template</Button></>}>
@@ -67,5 +73,6 @@ export function NewTemplateDialog({ brand, open, onClose, onCreated }: { brand: 
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>
     </Dialog>
+    </>
   );
 }

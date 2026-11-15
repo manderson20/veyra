@@ -100,6 +100,17 @@ CORE_PERMISSIONS: tuple[PermissionDef, ...] = (
         "Create and edit local provisioning templates",
         default_roles=("org_admin",),
     ),
+    # Configuration checks (docs/CONFIG_VERIFICATION.md §8).
+    PermissionDef(
+        "provisioning.check.override",
+        "Save phone configuration past checker errors, with a reason",
+        default_roles=("org_admin",),
+    ),
+    PermissionDef(
+        "provisioning.check.mode",
+        "Turn configuration checks on, to advisory or off for an organization or template",
+        default_roles=("org_admin",),
+    ),
     PermissionDef(
         "extensions.read",
         "View extensions",

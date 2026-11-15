@@ -11,6 +11,7 @@ import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOnChange } from "@/hooks/useOnChange";
 import { useSession } from "@/hooks/useSession";
+import { useConfigCheck } from "@/components/provisioning/ConfigCheck";
 
 /** The file with each setting's value as a button; secrets stay plain text. */
 function FileText({ file, edits, model, chosen, onChoose }: { file: BaseFile; edits: BaseEdit[]; model: string; chosen: string | null; onChoose: (s: BaseFileSetting) => void }) {
@@ -53,6 +54,7 @@ function BaseFileEdit() {
   const [panel, setPanel] = useState<Panel | null>(null);
   const [busy, setBusy] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const check = useConfigCheck();
 
   const template = useApiData<DeviceProfile>(templateId ? `/device-profiles/${encodeURIComponent(templateId)}` : null);
   const shownBrand = brand || template.data?.manufacturer || "";
@@ -82,7 +84,9 @@ function BaseFileEdit() {
     setBusy(true);
     errors.clear();
     try {
-      template.setData(await api.put<DeviceProfile>(`/device-profiles/${t.id}/base-edits`, { edits: next }));
+      const saved = await check.run((acknowledge) => api.put<DeviceProfile>(`/device-profiles/${t.id}/base-edits`, { edits: next, acknowledge }));
+      if (!saved) return; // cancelled in the check window: nothing was saved
+      template.setData(saved);
       files.reload();
       setPanel(null);
       toast.success(done, "Phones pick it up at their next check, or choose Update Phones.");
@@ -118,6 +122,7 @@ function BaseFileEdit() {
 
   return (
     <div className="stack">
+      {check.dialog}
       <PageHeader title="Base File Edit" description="Change single settings of the files a template's phones download. Changes belong to the template, survive updates and are applied after the file is built."
         actions={t && editable ? <Button loading={updating} disabled={!t.devices} onClick={() => void updatePhones()}>Update Phones</Button> : null} />
       <Card>

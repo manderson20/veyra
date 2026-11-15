@@ -67,7 +67,8 @@ sudo -u postgres createdb -O veyra_dev veyra_dev
 export VEYRA_ENV_FILE=/dev/null VEYRA_ENVIRONMENT=development \
   VEYRA_DATABASE_URL=postgresql+psycopg://veyra_dev:veyra_dev@127.0.0.1/veyra_dev \
   VEYRA_COOKIE_SECURE=false VEYRA_ALLOW_UNSIGNED_MODULES=true \
-  VEYRA_MODULE_PATHS=$PWD/../modules VEYRA_TEMPLATE_PATHS=$PWD/../provisioning/templates
+  VEYRA_MODULE_PATHS=$PWD/../modules VEYRA_TEMPLATE_PATHS=$PWD/../provisioning/templates \
+  VEYRA_CAPABILITY_PATHS=$PWD/../provisioning/capabilities
 .venv/bin/veyra db upgrade
 # the key that encrypts SIP secrets (the installer creates it on a server)
 VEYRA_INSTALLATION_KEY_FILE=$PWD/.dev-installation.key .venv/bin/veyra installation-key generate

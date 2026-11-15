@@ -16,6 +16,7 @@ import { useApiData } from "@/hooks/useApiData";
 import { useFormErrors } from "@/hooks/useFormErrors";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
+import { useConfigCheck } from "@/components/provisioning/ConfigCheck";
 
 const LIMIT = 50;
 export const DEVICE_STATUS: Record<DeviceStatus, { label: string; tone: "ok" | "warn" | "danger" | "neutral" }> = {
@@ -60,6 +61,7 @@ function ExtensionMapping() {
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [bulkBusy, setBulkBusy] = useState<"use" | "update" | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const check = useConfigCheck();
 
   useEffect(() => {
     const t = window.setTimeout(() => { setDebounced(q.trim()); setOffset(0); }, 250);
@@ -82,7 +84,7 @@ function ExtensionMapping() {
 
   const patchRow = async (d: Device, patch: { profile_id?: string | null; model?: string; values?: Record<string, never> }) => {
     try {
-      await api.patch<Device>(`/devices/${d.id}`, patch);
+      await check.run((acknowledge) => api.patch<Device>(`/devices/${d.id}`, { ...patch, acknowledge }));
       list.reload();
     } catch (err) {
       toast.error("The phone was not changed", errorMessage(err));
@@ -96,14 +98,16 @@ function ExtensionMapping() {
     errors.clear();
     try {
       const defaultTemplate = templatesFor(draftOrg, draft.manufacturer).find((p) => p.is_default)?.id ?? "";
-      await api.post<Device>("/devices", {
+      const created = await check.run((acknowledge) => api.post<Device>("/devices", {
+        acknowledge,
         organization_id: draftOrg,
         mac_address: draft.mac.trim(),
         manufacturer: draft.manufacturer,
         model: draft.model,
         profile_id: (draft.profile ?? defaultTemplate) || null,
         primary_extension_id: draft.extension_id || null,
-      });
+      }));
+      if (!created) return; // cancelled in the check window: nothing was saved
       toast.success("Phone added", "It receives its configuration at its next check.");
       setDraft(null);
       reload();
@@ -189,6 +193,7 @@ function ExtensionMapping() {
         <span>
           <span className="mono" style={{ display: "block" }}>{r.last_seen_ip ?? "—"}</span>
           <ConfigStatus d={r} />
+          <CheckBadge d={r} />
           {r.last_seen_at ? <span className="table__secondary" style={{ display: "block" }}>{formatRelative(r.last_seen_at)}</span> : null}
           {r.problems.length ? <Badge tone="warn" icon="alert">{r.problems[0]}</Badge> : null}
         </span>
@@ -243,6 +248,7 @@ function ExtensionMapping() {
 
   return (
     <div className="stack">
+      {check.dialog}
       <PageHeader title="Extension Mapping" description="Every phone: its extension, brand, address, template and model. Green means the phone has the current configuration; yellow means it has not fetched since the last change."
         actions={
           <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -285,6 +291,17 @@ function ExtensionMapping() {
       <ImportListDialog open={importOpen} organizationId={homeOrg} onClose={() => setImportOpen(false)} onImported={reload} />
     </div>
   );
+}
+
+/** The phone's last configuration check (docs/CONFIG_VERIFICATION.md §7.2). */
+function CheckBadge({ d }: { d: Device }) {
+  const c = d.config_check_summary;
+  if (!c) return null;
+  if (c.mode === "off" || !("open_errors" in c)) return <span style={{ display: "block" }}><Badge tone="neutral">Checks off</Badge></span>;
+  if (c.open_errors) return <span style={{ display: "block" }}><Badge tone="danger" icon="alert">{`Check: ${c.open_errors} error${c.open_errors === 1 ? "" : "s"}`}</Badge></span>;
+  if (c.overridden) return <span style={{ display: "block" }}><Badge tone="ok">Check: overridden</Badge></span>;
+  if (c.warnings) return <span style={{ display: "block" }}><Badge tone="warn">{`Check: ${c.warnings} warning${c.warnings === 1 ? "" : "s"}`}</Badge></span>;
+  return null;
 }
 
 export default function Page() {

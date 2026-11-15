@@ -36,6 +36,10 @@ class Installation(UUIDPrimaryKey, Timestamps, Base):
     # replicated so a promoted standby carries it, and the switchover freeze.
     ha_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     ha_frozen: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Configuration checks (docs/CONFIG_VERIFICATION.md §5): enforce | advisory | off.
+    config_check_mode: Mapped[str] = mapped_column(
+        String(16), default="enforce", server_default="enforce"
+    )
 
 
 class Organization(UUIDPrimaryKey, Timestamps, Base):
@@ -80,6 +84,9 @@ class Organization(UUIDPrimaryKey, Timestamps, Base):
     intercom_default: Mapped[str] = mapped_column(
         String(8), default="allow", server_default="allow"
     )
+    # Configuration checks (docs/CONFIG_VERIFICATION.md §5); NULL follows
+    # the installation.
+    config_check_mode: Mapped[str | None] = mapped_column(String(16))
     # Who may answer a phone's ringing call with **<extension> (issue #138):
     # "organization" (anyone of it) or "group" (phones sharing a pickup group).
     directed_pickup: Mapped[str] = mapped_column(
