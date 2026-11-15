@@ -121,6 +121,31 @@ def queues(
     }
 
 
+@router.get("/queues/missed", summary="Queue calls nobody answered, with the agents rung")
+def queues_missed(
+    organization_id: uuid.UUID | None = None,
+    queue_id: uuid.UUID | None = None,
+    since: datetime | None = Query(None, alias="from"),
+    until: datetime | None = Query(None, alias="to"),
+    principal: Principal = Depends(require(READ)),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    start, end = _period(since, until)
+    orgs, _ = _scope(db, principal, organization_id)
+    return {
+        "from": start,
+        "to": end,
+        "calls": reports.missed_queue_calls(
+            db,
+            since=start,
+            until=end,
+            org_ids=orgs,
+            organization_id=organization_id,
+            queue_id=queue_id,
+        ),
+    }
+
+
 # ------------------------------------------------- report builder (M10b)
 
 WRITE = "reports.write"

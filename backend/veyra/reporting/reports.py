@@ -451,3 +451,110 @@ def queues_report(
             }
         )
     return out
+
+
+# ------------------------------------------------- missed queue calls (#392)
+
+MISSED_ENDINGS = {
+    "ABANDON": "hung up",
+    "EXITWITHTIMEOUT": "timed out",
+    "EXITEMPTY": "no agents",
+    "EXITWITHKEY": "left with a key",
+}
+MAX_MISSED = 500
+
+
+def missed_queue_calls(
+    db: Session,
+    *,
+    since: datetime,
+    until: datetime,
+    org_ids: set[uuid.UUID] | None,
+    organization_id: uuid.UUID | None,
+    queue_id: uuid.UUID | None = None,
+) -> list[dict[str, Any]]:
+    """Q-Xact missed-call detail (issue #392): each queue call nobody
+    answered, with the caller, when it came, how long the caller waited,
+    how it ended and the agents whose phones rang without an answer."""
+    stmt = select(CallQueue)
+    if org_ids is not None:
+        stmt = stmt.where(CallQueue.organization_id.in_(org_ids or {uuid.UUID(int=0)}))
+    if organization_id is not None:
+        stmt = stmt.where(CallQueue.organization_id == organization_id)
+    if queue_id is not None:
+        stmt = stmt.where(CallQueue.id == queue_id)
+    spaces = tenancy.namespaces(db)
+    queues = {
+        Names(spaces.get(q.organization_id, "")).queue_key(q.slug): q for q in db.scalars(stmt)
+    }
+    if not queues:
+        return []
+    events = db.scalars(
+        select(QueueEvent)
+        .where(
+            QueueEvent.at >= since,
+            QueueEvent.at < until,
+            QueueEvent.queue.in_(set(queues)),
+            QueueEvent.event.in_({"ENTERQUEUE", "CONNECT", "RINGNOANSWER", *MISSED_ENDINGS}),
+        )
+        .order_by(QueueEvent.at)
+    ).all()
+    by_endpoint = {e.endpoint_name: e for e in db.scalars(select(Extension))}
+
+    def agent_label(agent: str) -> str:
+        ext = by_endpoint.get(endpoint_of(f"{agent}-00000000") or agent.removeprefix("PJSIP/"))
+        return f"{ext.number} {ext.display_name}" if ext else agent
+
+    calls: dict[tuple[str, str], dict[str, Any]] = {}
+    for e in events:
+        key = (e.queue, e.callid)
+        call = calls.setdefault(
+            key, {"entered": None, "caller": "", "rang": {}, "ended": None, "connected": False}
+        )
+        if e.event == "ENTERQUEUE":
+            call["entered"] = call["entered"] or e.at
+            call["caller"] = e.data2 or call["caller"]
+        elif e.event == "CONNECT":
+            call["connected"] = True
+        elif e.event == "RINGNOANSWER" and e.agent:
+            rang = call["rang"].setdefault(e.agent, {"times": 0, "seconds": 0})
+            rang["times"] += 1
+            rang["seconds"] += int(e.data1) // 1000 if e.data1.isdigit() else 0
+        elif e.event in MISSED_ENDINGS:
+            raw = e.data3 if e.event != "EXITWITHKEY" else ""
+            call["ended"] = {
+                "at": e.at,
+                "how": MISSED_ENDINGS[e.event],
+                "wait": int(raw) if raw.isdigit() else None,
+                "position": int(e.data1)
+                if e.event != "EXITWITHKEY" and e.data1.isdigit()
+                else None,
+            }
+    out = []
+    for (queue, callid), call in calls.items():
+        if call["connected"] or call["ended"] is None:
+            continue
+        q = queues[queue]
+        ended = call["ended"]
+        waited = ended["wait"]
+        if waited is None and call["entered"] is not None:
+            waited = int((ended["at"] - call["entered"]).total_seconds())
+        out.append(
+            {
+                "queue_id": str(q.id),
+                "queue": f"{q.number} {q.name}",
+                "call_id": callid,
+                "caller": call["caller"],
+                "entered_at": (call["entered"] or ended["at"]).isoformat(),
+                "ended_at": ended["at"].isoformat(),
+                "ended": ended["how"],
+                "wait_seconds": waited,
+                "position": ended["position"],
+                "agents_rung": [
+                    {"agent": agent_label(a), "times": r["times"], "seconds": r["seconds"]}
+                    for a, r in sorted(call["rang"].items(), key=lambda kv: -kv[1]["times"])
+                ],
+            }
+        )
+    out.sort(key=lambda c: c["entered_at"], reverse=True)
+    return out[:MAX_MISSED]

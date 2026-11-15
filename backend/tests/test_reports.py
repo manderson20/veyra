@@ -241,3 +241,38 @@ def test_peak_calls_per_trunk(admin):
     ).json()
     peaks = {t["name"]: t["peak_calls"] for t in r["trunks"]}
     assert peaks == {"Carrier A": 3, "Carrier B": 2}
+
+
+def test_missed_queue_calls_detail(admin, app):
+    """Q-Xact missed-call detail (issue #392): each unanswered queue call with
+    its caller, wait, ending and the agents rung."""
+    org, (a, _), (b, _), _, _ = _setup(admin)
+    q = admin.post(
+        "/api/v1/queues",
+        json={"organization_id": org["id"], "name": "Help desk", "number": "2401"},
+    ).json()
+    slug = q["slug"]
+    base = int(datetime.now(UTC).timestamp()) - 600
+    log = [
+        f"{base + 1}|m1|veyra-{slug}|NONE|ENTERQUEUE||5735551234|1",
+        f"{base + 16}|m1|veyra-{slug}|PJSIP/{a}|RINGNOANSWER|15000",
+        f"{base + 31}|m1|veyra-{slug}|PJSIP/{b}|RINGNOANSWER|15000",
+        f"{base + 46}|m1|veyra-{slug}|PJSIP/{a}|RINGNOANSWER|15000",
+        f"{base + 50}|m1|veyra-{slug}|NONE|ABANDON|1|1|49",
+        f"{base + 100}|m2|veyra-{slug}|NONE|ENTERQUEUE||5735559999|1",
+        f"{base + 400}|m2|veyra-{slug}|NONE|EXITWITHTIMEOUT|1|1|300",
+        f"{base + 500}|ok|veyra-{slug}|NONE|ENTERQUEUE||5735550000|1",
+        f"{base + 505}|ok|veyra-{slug}|PJSIP/{a}|RINGNOANSWER|5000",
+        f"{base + 510}|ok|veyra-{slug}|PJSIP/{b}|CONNECT|10|ok.2|1",
+    ]
+    with session_scope() as db:
+        queues.ingest(db, log)
+    r = admin.get(f"{REP}/queues/missed", params={"organization_id": org["id"]})
+    assert r.status_code == 200, r.text
+    calls = r.json()["calls"]
+    assert [c["call_id"] for c in calls] == ["m2", "m1"]  # newest first; answered left out
+    m1 = calls[1]
+    assert (m1["caller"], m1["ended"], m1["wait_seconds"]) == ("5735551234", "hung up", 49)
+    assert m1["agents_rung"][0] == {"agent": "1001 Front Office", "times": 2, "seconds": 30}
+    assert m1["agents_rung"][1]["agent"] == "1002 Nurse"
+    assert calls[0]["ended"] == "timed out" and calls[0]["agents_rung"] == []
