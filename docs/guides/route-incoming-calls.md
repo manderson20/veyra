@@ -38,6 +38,7 @@ Inbound routes are at [Telephony → Inbound Routes](app:/routing/inbound/). You
    - **Destination:** first the kind, then which one. See the table below.
    - **Time condition:** leave **Always (no time condition)**, or pick one. With a time condition, an **After-hours destination** appears, and it is required.
    - **Caller ID prefix:** optional text put in front of the caller's name on the ringing phone, such as `Sales:`, so people can see which number was called. Up to 40 letters, digits, spaces and `. ' & ( ) - :`.
+   - **Look up the caller's name:** when a call arrives without a name (or with only the number as its name), Veyra asks the caller name lookup service before the phones ring (see [Caller name lookup](#caller-name-lookup)).
    - **Description** and **Enabled**.
 4. Choose **Create route**, then **Deploy changes** in the top bar.
 
@@ -77,6 +78,15 @@ Inbound routes are at [Telephony → Inbound Routes](app:/routing/inbound/). You
 Rules are checked in order and the first match wins. They run before the route's destination and business hours, so a matching caller goes to the rule's destination at any hour. Calls refused by the [block list](guide:block-callers) never reach them, and neither does a 911 center calling back within the callback window.
 
 Caller ID can be faked, so don't use a rule to give a caller extra access. Save, then choose **Deploy changes**.
+
+## Caller name lookup
+
+A platform administrator sets one lookup service under [System → Telephony Engine](app:/system/telephony/), **Caller name lookup**: an https address with `{number}` where the caller's number goes, an optional header (such as an API key, stored encrypted), and for a JSON answer the field that holds the name. **Try a number** shows what the service answers. The settings apply after **Deploy changes**.
+
+- Only routes with **Look up the caller's name** ticked use it, and only for calls that arrive without a name.
+- The phone rings after **Wait at most** even if the service has not answered; the call is never held up longer.
+- Names are kept for **Keep names for**, so a regular caller is not looked up on every call.
+- The caller's number is sent to the service for each lookup. Use a service your district has an agreement with.
 
 ## Business hours
 

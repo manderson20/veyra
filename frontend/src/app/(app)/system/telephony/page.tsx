@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { CallerNameCard } from "@/components/account/CallerNameCard";
 import { CustomDialplanCard } from "@/components/account/CustomDialplanCard";
 import { REVISION_STATE, TELEPHONY_STATE } from "@/components/common/labels";
 import {
@@ -47,7 +48,7 @@ function Count({ value, unit }: { value: number | null; unit: string }) {
 }
 
 export default function TelephonyEnginePage() {
-  const { can } = useSession();
+  const { can, session } = useSession();
   const toast = useToast();
   const engine = useApiData<EngineStatus>("/telephony/engine");
   const revisions = useApiData<Page<ConfigRevision>>("/telephony/revisions", { limit: 25 });
@@ -163,6 +164,7 @@ export default function TelephonyEnginePage() {
       </Card>
       {can("system.settings.read") ? <SipSettingsCard editable={can("system.settings.write")} /> : null}
       {can("system.settings.read") ? <CustomDialplanCard editable={can("system.settings.write")} /> : null}
+      {session?.is_platform_admin ? <CallerNameCard editable={can("system.settings.write")} /> : null}
       <RevisionDialog revision={open} onClose={() => setOpen(null)} canDeploy={canDeploy} onChanged={refreshAll} />
     </div>
   );

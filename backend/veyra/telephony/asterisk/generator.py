@@ -1629,6 +1629,7 @@ def _dialplan(
         _org_mains(snapshot),
         _org_limits(snapshot),
         _org_mains(snapshot, "emergency_caller_id_number"),
+        snapshot.get("caller_name"),
     )
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -3514,8 +3515,12 @@ def _inbound_contexts(
     org_main: dict[str, str] | None = None,
     org_limits: dict[str, int] | None = None,
     org_ecid: dict[str, str] | None = None,
+    caller_name: dict[str, Any] | None = None,
 ) -> list[str]:
-    """``org_limits`` caps each organization's concurrent outside calls
+    """``caller_name``: where routes with ``name_lookup`` ask for the caller's
+    name (issue #392).
+
+    ``org_limits`` caps each organization's concurrent outside calls
     (docs/MULTI_TENANCY_MSP.md §8); a 911 callback is never refused.
     ``org_ecid``: each organization's emergency number (§6.1), presented by
     its phones with no site or own emergency number; a PSAP callback to it
@@ -3628,6 +3633,7 @@ def _inbound_contexts(
             f" same => n,Set(__VEYRA_DID={did})",
             *_blacklist_check(org, (policies or {}).get(org)),
             *_record_inbound(recording or [], r, prompts_dir),
+            *_name_lookup(r, caller_name),
         ]
         site = elins.get(routing.canonical_did(did))
         if site is not None:
@@ -3683,6 +3689,7 @@ def _inbound_contexts(
                     " same => n,Set(__VEYRA_HOPS=1)",
                     " same => n,Set(__VEYRA_DID=${EXTEN})",
                     *_blacklist_check(org, (policies or {}).get(org)),
+                    *_name_lookup(catch, caller_name),
                 ]
                 limit = (org_limits or {}).get(org)
                 if limit:
@@ -3717,6 +3724,33 @@ def _weighted_start(route: str, weights: list[int]) -> list[str]:
         out.append(f" same => n,GotoIf($[${{VEYRA_PICK}} <= {upto}]?t{i + 1})")
     out.append(f" same => n,Goto(t{len(weights)})")
     return out
+
+
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,100}$")
+
+
+def _name_lookup(r: dict[str, Any], cfg: dict[str, Any] | None) -> list[str]:
+    """Issue #392: when the caller sent no name (or only the number), ask
+    Veyra's API on this server; it answers a name or nothing. A failed or
+    slow lookup leaves the call as it was."""
+    if not cfg or not r.get("name_lookup"):
+        return []
+    url = str(cfg.get("url") or "")
+    token = str(cfg.get("token") or "")
+    if not re.fullmatch(r"http://127\.0\.0\.1:[0-9]{1,5}/[A-Za-z0-9/_-]+", url):
+        raise GenerationError("caller name lookup: the API address is not valid")
+    if not _TOKEN_RE.match(token):
+        raise GenerationError("caller name lookup: the token is not valid")
+    timeout = max(1, min(5, int(cfg.get("timeout_seconds") or 3)))
+    return [
+        ' same => n,GotoIf($["${CALLERID(name)}"!="" & "${CALLERID(name)}"!="${CALLERID(num)}"]'
+        "?cnamdone)",
+        f" same => n,Set(CURLOPT(httptimeout)={timeout})",
+        f" same => n,Set(VEYRA_CNAM=${{CURL({url}?token={token}"
+        "&number=${URIENCODE(${CALLERID(num)})})})",
+        ' same => n,ExecIf($["${VEYRA_CNAM}"!=""]?Set(CALLERID(name)=${VEYRA_CNAM}))',
+        " same => n(cnamdone),NoOp()",
+    ]
 
 
 def _destination_lines(r: dict[str, Any], conditions: dict[str, dict[str, Any]]) -> list[str]:

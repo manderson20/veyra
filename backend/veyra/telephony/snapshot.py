@@ -364,6 +364,22 @@ def _callflow(
     }
 
 
+def _caller_name(db: Session) -> dict[str, Any] | None:
+    """Where the dialplan asks for caller names (issue #392); None: off."""
+    from veyra.core.config import get_settings
+    from veyra.telephony import caller_name
+
+    s = caller_name.load(db)
+    if not s.enabled or not s.url or not s.token:
+        return None
+    return {
+        "url": f"http://127.0.0.1:{get_settings().api_port}/api/v1/internal/caller-name",
+        "token": s.token,
+        # The API answers within its own timeout; the dialplan waits a little longer.
+        "timeout_seconds": s.timeout_ms // 1000 + 1,
+    }
+
+
 def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     inst = db.scalar(select(Installation))
     orgs = db.scalars(select(Organization).order_by(Organization.slug)).all()
@@ -536,6 +552,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         if row.max_outside_calls
     }
     return {
+        "caller_name": _caller_name(db),
         "snapshot_version": SNAPSHOT_VERSION,
         "veyra_version": __version__,
         "installation": {
@@ -1354,6 +1371,7 @@ def _routing(
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
                 "caller_id_prefix": r.caller_id_prefix,
                 "queue_priority": r.queue_priority,
+                **({"name_lookup": True} if r.name_lookup else {}),
                 # A rule whose target was deleted is skipped: the call takes the route.
                 "caller_rules": [
                     {"match": c.match, "number": c.number, "destination": dest}

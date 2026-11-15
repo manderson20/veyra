@@ -1222,6 +1222,7 @@ export interface InboundRoute {
   after_hours: Destination | null;
   caller_id_prefix: string | null;
   queue_priority?: number;
+  name_lookup?: boolean;
   is_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -1258,6 +1259,7 @@ export interface InboundRouteInput {
   after_hours_custom_context?: string | null;
   caller_id_prefix?: string | null;
   queue_priority?: number;
+  name_lookup?: boolean;
   is_enabled?: boolean;
 }
 
@@ -4111,4 +4113,15 @@ export interface MyOrganizations {
   organizations: { id: string; name: string; slug: string }[];
   system: boolean;
   switcher: boolean;
+}
+
+/** Caller name lookup over HTTP (issue #392); platform setting. */
+export interface CallerNameSettings {
+  enabled: boolean;
+  url: string | null;
+  header_name: string | null;
+  has_header_value: boolean;
+  json_field: string | null;
+  timeout_ms: number;
+  cache_minutes: number;
 }

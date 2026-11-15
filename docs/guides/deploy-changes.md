@@ -78,6 +78,10 @@ The newer revision is marked **Rolled back**. The database is not changed, so th
 
 The **SIP and media settings** card on the same page holds the ports and addresses phones and trunks use: the UDP, TCP and TLS ports, the **TLS certificate**, the **RTP port range**, the **External signaling address** and **External media address** for a server behind NAT, the **Local networks**, the **Default language** and the **Codecs**. Saved settings apply at the next deployment; use **Deploy when no calls are active** for them.
 
+## Caller name lookup
+
+The **Caller name lookup** card (platform administrators) sets the online service that inbound routes ask for callers' names. See [Route incoming calls](guide:route-incoming-calls#caller-name-lookup).
+
 ## From the server console
 
 - `sudo veyra config status` shows the engine and recent revisions.

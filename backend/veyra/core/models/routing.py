@@ -193,6 +193,9 @@ class InboundRoute(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     caller_id_prefix: Mapped[str | None] = mapped_column(String(40))
     # How far up a queue's line the caller goes (issue #392); higher goes first.
     queue_priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Look up the caller's name before ringing (issue #392), when the
+    # installation's caller name lookup is on.
+    name_lookup: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
