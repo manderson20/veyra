@@ -117,7 +117,7 @@ When the server hosts several organizations (multi-tenancy):
 - Every organization has an **Emergency number** of its own, set by a platform administrator on the organization's page (see [Organizations and sites](guide:organizations-and-sites)). It must be one of the organization's numbers, registered with the carrier at its address. An organization cannot do without one, and multi-tenancy cannot be turned on until each has one.
 - A 911 call presents the extension's emergency caller ID, else its site's, else the organization's emergency number. It never presents another organization's number, such as a trunk's default. The call always goes out.
 - A site without its own emergency caller ID is still ready, with an advice that its calls present the organization's number: register that number at the site's address, or give the site its own.
-- Every emergency number belongs to one organization, and the 911 center's callback rings back inside the organization that called.
+- Every emergency number belongs to one organization, and the 911 center's callback rings back inside the organization that called. A callback to the organization's emergency number rings the phone that made the 911 call, within the callback window; after that, the number's own inbound route answers it. A site cannot use another organization's emergency number.
 - The **Organizations** table shows each organization's emergency number, where its phones' emergency caller IDs come from, how many of its sites are ready and its last test call. Organization administrators see their own organization only.
 
 ## What happens on a 911 call
