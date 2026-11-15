@@ -6,6 +6,7 @@ never logged."""
 
 from __future__ import annotations
 
+import re
 import secrets
 import uuid
 from datetime import datetime
@@ -174,6 +175,23 @@ def check_locater(
 MAX_COPIES = 20
 
 
+def _notify_numbers(db: Session, org_id: uuid.UUID, numbers: list[str]) -> list[str]:
+    """VM Notify numbers (issue #392): extensions or outside numbers, each
+    once; never an emergency number."""
+    from veyra.api.v1.conferences import _is_emergency_number
+
+    out: list[str] = []
+    for raw in numbers:
+        n = re.sub(r"[\s().-]", "", raw or "")
+        if not re.fullmatch(r"\+?[0-9]{2,20}", n):
+            raise _validation("notify_numbers", f"{raw!r} is not a number")
+        if n.lstrip("+") in ("911", "933") or _is_emergency_number(db, org_id, n.lstrip("+")):
+            raise _validation("notify_numbers", f"{n} is an emergency number")
+        if n not in out:
+            out.append(n)
+    return out
+
+
 def _copies(
     db: Session, organization_id: uuid.UUID, box_id: uuid.UUID | None, ids: list[uuid.UUID]
 ) -> list[str]:
@@ -258,6 +276,11 @@ class VoicemailBoxPatch(BaseModel):
     copy_to_box_ids: list[uuid.UUID] | None = Field(None, max_length=MAX_COPIES)
     max_messages: int | None = Field(None, ge=1, le=9999)
     max_message_seconds: int | None = Field(None, ge=10, le=3600)
+    # VM Notify (issue #392).
+    notify_numbers: list[str] | None = Field(None, max_length=5)
+    notify_rounds: int | None = Field(None, ge=1, le=5)
+    notify_retry_minutes: int | None = Field(None, ge=1, le=120)
+    notify_urgent_only: bool | None = None
     is_enabled: bool | None = None
 
     @field_validator("pin")
@@ -297,6 +320,10 @@ class VoicemailBoxOut(BaseModel):
     copy_to_box_ids: list[uuid.UUID] = []
     max_messages: int | None = None
     max_message_seconds: int | None = None
+    notify_numbers: list[str] = []
+    notify_rounds: int = 2
+    notify_retry_minutes: int = 10
+    notify_urgent_only: bool = False
     alternate_greeting: bool = False
     is_enabled: bool
     # Email delivery (Settings → Email delivery) is on; without it messages
@@ -417,6 +444,10 @@ def _outs(db: Session, rows: list[VoicemailBox]) -> list[VoicemailBoxOut]:
                 max_messages=r.max_messages,
                 max_message_seconds=r.max_message_seconds,
                 alternate_greeting=r.alternate_greeting,
+                notify_numbers=list(r.notify_numbers or []),
+                notify_rounds=r.notify_rounds,
+                notify_retry_minutes=r.notify_retry_minutes,
+                notify_urgent_only=r.notify_urgent_only,
                 is_enabled=r.is_enabled,
                 email_delivery_enabled=delivery,
                 in_use_by=shared_uses.get(r.id, 0) if shared else uses.get(r.extension_id, 0),
@@ -659,6 +690,40 @@ class BoxUsageOut(BaseModel):
     new: int
     messages: int
     bytes: int
+    # When the oldest new message came (epoch seconds; 0: none).
+    oldest_new: int = 0
+
+
+DEFAULT_MAX_MESSAGES = 100  # voicemail.conf's [general] maxmsg
+
+
+class BoxReportRow(BaseModel):
+    """One box of the voicemail report (FreePBX Voicemail Reports, issue #392)."""
+
+    box_id: uuid.UUID
+    organization_name: str
+    number: str
+    name: str
+    new: int | None
+    messages: int | None
+    bytes: int | None
+    oldest_new_at: datetime | None
+    max_messages: int
+    percent_full: int | None
+    readable: bool
+
+
+REPORT_COLUMNS = [
+    ("organization_name", "Organization"),
+    ("number", "Box"),
+    ("name", "Name"),
+    ("new", "New messages"),
+    ("messages", "All messages"),
+    ("bytes", "Bytes"),
+    ("oldest_new_at", "Oldest new message"),
+    ("max_messages", "Most messages kept"),
+    ("percent_full", "Percent full"),
+]
 
 
 @router.get(
@@ -682,6 +747,79 @@ def boxes_usage(
         except (ProblemError, vmsvc.StoreClientError):
             continue
     return out
+
+
+@router.get(
+    "/report",
+    response_model=list[BoxReportRow],
+    summary="Every box with its messages, oldest new message and how full it is",
+)
+def boxes_report(
+    request: Request,
+    organization_id: uuid.UUID | None = None,
+    format: str = Query("json", pattern="^(json|csv)$"),
+    principal: Principal = Depends(require("voicemail.read")),
+    db: Session = Depends(get_db),
+) -> Any:
+    from datetime import UTC
+
+    stmt = _org_filter(
+        select(VoicemailBox), VoicemailBox.organization_id, principal, "voicemail.read"
+    )
+    if organization_id is not None:
+        stmt = stmt.where(VoicemailBox.organization_id == organization_id)
+    boxes = list(db.scalars(stmt.limit(2000)))
+    outs = {o.id: o for o in _outs(db, boxes)}
+    c = vmsvc.client(request.app.state.settings)
+    rows: list[BoxReportRow] = []
+    for box in boxes:
+        out = outs[box.id]
+        limit = box.max_messages or DEFAULT_MAX_MESSAGES
+        usage: dict[str, int] | None = None
+        try:
+            context, mailbox = vmsvc.location(db, box)
+            usage = c.usage(context, mailbox)
+        except (ProblemError, vmsvc.StoreClientError):
+            usage = None
+        oldest = int((usage or {}).get("oldest_new") or 0)
+        rows.append(
+            BoxReportRow(
+                box_id=box.id,
+                organization_name=out.organization_name,
+                number=out.number,
+                name=out.name,
+                new=usage["new"] if usage else None,
+                messages=usage["messages"] if usage else None,
+                bytes=usage["bytes"] if usage else None,
+                oldest_new_at=datetime.fromtimestamp(oldest, UTC) if oldest else None,
+                max_messages=limit,
+                percent_full=min(100, round(100 * usage["messages"] / limit)) if usage else None,
+                readable=usage is not None,
+            )
+        )
+    rows.sort(key=lambda r: (r.organization_name, r.number))
+    if format == "json":
+        return rows
+    import csv
+    import io
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([label for _, label in REPORT_COLUMNS])
+    for r in rows:
+        d = r.model_dump()
+        w.writerow(
+            [
+                d[k].isoformat() if isinstance(d[k], datetime) else ("" if d[k] is None else d[k])
+                for k, _ in REPORT_COLUMNS
+            ]
+        )
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    return Response(
+        buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="voicemail-{stamp}.csv"'},
+    )
 
 
 @router.get("/{box_id}", response_model=VoicemailBoxOut)
@@ -743,6 +881,15 @@ def update_box(
         details["keep_days"] = box.keep_days
     for field in ("max_messages", "max_message_seconds"):  # None: the defaults
         if field in changes and changes[field] != getattr(box, field):
+            setattr(box, field, changes[field])
+            details[field] = changes[field]
+    if changes.get("notify_numbers") is not None:
+        wanted = _notify_numbers(db, box.organization_id, changes["notify_numbers"])
+        if wanted != list(box.notify_numbers or []):
+            box.notify_numbers = wanted
+            details["notify_numbers"] = wanted
+    for field in ("notify_rounds", "notify_retry_minutes", "notify_urgent_only"):
+        if changes.get(field) is not None and changes[field] != getattr(box, field):
             setattr(box, field, changes[field])
             details[field] = changes[field]
     if changes.get("copy_to_box_ids") is not None:

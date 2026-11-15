@@ -364,11 +364,117 @@ def _page_event(org: str, kind: str, slug: str) -> str:
     )
 
 
-def _paging_contexts(paging: dict[str, Any], prompts: str, cos: Cos | None = None) -> list[str]:
+DELAYED_PAGE_MIN_BYTES = 4000  # about a quarter second of audio: nothing said
+DELAYED_PAGE_QUEUE_WAITS = 60  # 2 s each: how long a delayed page waits its turn
+
+
+def _delayed_dir(prompts: str) -> str:
+    """Where delayed pages are recorded: ``paging-delayed`` next to the prompts
+    (shared with Asterisk like the prompts; the worker removes old files)."""
+    return f"{prompts.rstrip('/').rsplit('/', 1)[0]}/paging-delayed"
+
+
+def _delayed_paging(
+    entries: list[tuple[str, dict[str, Any]]],
+    zones: list[dict[str, Any]],
+    code: str | None,
+    prompts: str,
+    cos: Cos | None,
+) -> tuple[list[str], list[str]]:
+    """Delayed paging (Grandstream, issue #392): ``<code><number>`` records a
+    message; when the caller presses # or hangs up, a Local channel waits the
+    zone's delay, waits for an earlier delayed page to the same zone to end,
+    and plays the message into the page. Returns the lines for the paging
+    context and for the play context."""
+    if not code:
+        return [], []
+    play = engine_names.current().page_play
+    folder = _delayed_dir(prompts)
+    dial: list[str] = []
+    playing: list[str] = []
+    for kind, e in entries:
+        delay = e.get("delayed_seconds")
+        number = e.get("number")
+        if delay is None or not number:
+            continue
+        delay = int(delay)
+        if not 0 <= delay <= 3600:
+            raise GenerationError(f"paging {kind} {e.get('slug')}: delay {delay} is out of range")
+        number = _check_value(str(number), f"{kind} number")
+        org = _check_value(str(e.get("organization") or ""), "organization")
+        slug = _check_section(str(e["slug"]), f"{kind} slug")
+        key = f"{kind}-{slug}"
+        zone_slugs = [slug] if kind == "zone" else [str(x) for x in e.get("zones") or []]
+        if not zone_slugs:
+            continue
+        seconds = int(e.get("max_seconds") or 120)
+        dial += [
+            f"exten => {code}{number},1,NoOp(Veyra delayed page {key} by ${{CALLERID(num)}})",
+            *_allowed_lines(e, org, cos),
+            " same => n,Answer()",
+            f" same => n,Set(VEYRA_DFILE={folder}/${{UNIQUEID}})",
+            f" same => n,Set(VEYRA_DSEND={key})",
+            f" same => n,Set(VEYRA_DTIMEOUT={delay + DELAYED_PAGE_QUEUE_WAITS * 2 + 60})",
+            # Press # to finish; hanging up also sends it (the h extension).
+            f" same => n,Record(${{VEYRA_DFILE}}.wav,0,{seconds},k)",
+            " same => n,Gosub(veyra-delayed-send,1)",
+            " same => n,Playback(beep)",
+            " same => n,Hangup()",
+            " same => n(denied),NoOp(Veyra: not allowed to page)",
+            " same => n,Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
+        pre_tone = [" same => n,Playback(beep)"] if e.get("pre_tone", True) else []
+        playing += [
+            f"exten => dpage-{key},1,NoOp(Veyra delayed page {key})",
+            " same => n,Answer()",
+            _page_dial(zones, zone_slugs, seconds),
+            " same => n,Hangup()",
+            f"exten => dplay-{key},1,NoOp(Veyra plays a delayed page into {key})",
+            f" same => n,Wait({delay})" if delay else " same => n,NoOp(no delay)",
+            # Messages to the same zone play one after another.
+            " same => n,Set(VEYRA_N=0)",
+            f" same => n(queue),GotoIf($[${{GROUP_COUNT({key}@veyra_dpage)}} = 0"
+            f" | ${{VEYRA_N}} >= {DELAYED_PAGE_QUEUE_WAITS}]?go)",
+            " same => n,Set(VEYRA_N=$[${VEYRA_N} + 1])",
+            " same => n,Wait(2)",
+            " same => n,Goto(queue)",
+            f" same => n(go),Set(GROUP(veyra_dpage)={key})",
+            " same => n,Answer()",
+            *pre_tone,
+            " same => n,Playback(${VEYRA_DFILE})",
+            " same => n,Hangup()",
+        ]
+    if dial:
+        dial += [
+            # Sends the recorded message once: after #, or when the caller
+            # hangs up while recording.
+            'exten => veyra-delayed-send,1,GotoIf($["${VEYRA_DSEND}"=""]?done)',
+            f" same => n,GotoIf($[${{STAT(s,${{VEYRA_DFILE}}.wav)}}"
+            f" < {DELAYED_PAGE_MIN_BYTES}]?drop)",
+            f" same => n,Originate(Local/dplay-${{VEYRA_DSEND}}@{play}/n,exten,{play},"
+            "dpage-${VEYRA_DSEND},1,${VEYRA_DTIMEOUT},av(__VEYRA_DFILE=${VEYRA_DFILE}))",
+            " same => n(drop),Set(VEYRA_DSEND=)",
+            " same => n(done),Return()",
+            'exten => h,1,ExecIf($["${VEYRA_DSEND}"!=""]?Gosub(veyra-delayed-send,1))',
+        ]
+    return dial, playing
+
+
+def _paging_contexts(
+    paging: dict[str, Any], prompts: str, cos: Cos | None = None, delayed_code: str | None = None
+) -> list[str]:
     """``veyra-paging`` (zone and page numbers dialled from phones) and
     ``veyra-page-play`` (recordings played into a page by Veyra)."""
     zones = list(paging.get("zones") or [])
     pages = list(paging.get("pages") or [])
+    delayed_dial, delayed_play = _delayed_paging(
+        [("zone", z) for z in zones] + [("page", p) for p in pages],
+        zones,
+        delayed_code,
+        prompts,
+        cos,
+    )
     lines = [
         f"[{engine_names.current().paging}]",
         "; Paging zones and pages dialled from phones (docs/PAGING_RECORDINGS.md §2.3).",
@@ -431,10 +537,12 @@ def _paging_contexts(paging: dict[str, Any], prompts: str, cos: Cos | None = Non
             " same => n,Playback(pbx-invalid)",
             " same => n,Hangup()",
         ]
+    lines += delayed_dial
     lines += [
         "",
         f"[{engine_names.current().page_play}]",
         "; Recorded pages: the far leg plays the recording into the Page().",
+        *delayed_play,
     ]
     for p in pages:
         if not p.get("audio") or not p.get("zones"):
@@ -1475,7 +1583,9 @@ def _dialplan(
                 "zones": mine(list(paging.get("zones") or []), ns),
                 "pages": mine(list(paging.get("pages") or []), ns),
             }
-            lines += _paging_contexts(part, prompts_dir, _cos_for(snapshot, ns))
+            lines += _paging_contexts(
+                part, prompts_dir, _cos_for(snapshot, ns), codes.get("delayed_page")
+            )
     lines += _lastcid_context()
     lines += _alert_info_context()
     lines += _rg_answered_context()
@@ -1519,6 +1629,7 @@ def _dialplan(
         _org_mains(snapshot),
         _org_limits(snapshot),
         _org_mains(snapshot, "emergency_caller_id_number"),
+        snapshot.get("caller_name"),
     )
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -1529,6 +1640,7 @@ def _dialplan(
             lines += _fax_contexts(mine(fax_inboxes, ns), fax_dir)
             lines += _disa_contexts(mine(disa_lines, ns))
             lines += _wakeup_context()
+            lines += _vm_notify_context()
             lines += _agent_contexts(codes, mine(queues, ns))
             lines += _parking_contexts(mine(lots, ns))
             lines += _directory_context(_directory_operator(snapshot, ns))
@@ -1682,6 +1794,31 @@ class Cos:
             )
         return lines
 
+    def period_limits(self) -> list[str]:
+        """Outbound Call Limit (issue #392): each phone of a class may place
+        so many outside calls per period. The count is kept per phone in the
+        AstDB as ``<period>|<count>``, so a new period starts again at 0."""
+        lines: list[str] = []
+        for i, c in enumerate(x for x in self.classes if x.get("calls_per_period")):
+            slug = str(c["slug"])
+            fmt = PERIOD_FORMATS.get(str(c.get("call_period") or "day"))
+            if fmt is None:
+                raise GenerationError(f"class of service {slug}: unknown call period")
+            limit = int(c["calls_per_period"])
+            end = f"ocl{i}"
+            lines += [
+                f' same => n,GotoIf($["${{VEYRA_COS}}"!="{slug}" | "${{VEYRA_EXT}}"=""]?{end})',
+                " same => n,Set(VEYRA_OCLK=veyra/ocl/${VEYRA_ORG}/${VEYRA_EXT})",
+                f" same => n,Set(VEYRA_OCLP=${{STRFTIME(${{EPOCH}},,{fmt})}})",
+                " same => n,Set(VEYRA_OCLV=${DB(${VEYRA_OCLK})})",
+                ' same => n,Set(VEYRA_OCLN=${IF($["${CUT(VEYRA_OCLV,|,1)}"="${VEYRA_OCLP}"]'
+                "?${CUT(VEYRA_OCLV,|,2)}:0)})",
+                f" same => n,GotoIf($[0${{VEYRA_OCLN}} >= {limit}]?cosquota)",
+                " same => n,Set(DB(${VEYRA_OCLK})=${VEYRA_OCLP}|$[0${VEYRA_OCLN} + 1])",
+                f" same => n({end}),NoOp()",
+            ]
+        return lines
+
     def code_guard(self, key: str) -> list[str]:
         return self.guard(
             self._denied(
@@ -1761,6 +1898,14 @@ COS_DENIED = [
     " same => n,Set(CDR(veyra_flag)=denied)",
     " same => n,Answer()",
     " same => n,Playback(pbx-invalid)",
+    " same => n,Hangup(21)",
+]
+PERIOD_FORMATS = {"hour": "%Y%m%d%H", "day": "%Y%m%d", "week": "%G%V", "month": "%Y%m"}
+COS_QUOTA = [
+    " same => n(cosquota),NoOp(Veyra: this phone has used its outside calls for the period)",
+    " same => n,Set(CDR(veyra_flag)=denied)",
+    " same => n,Answer()",
+    " same => n,Playback(cannot-complete-as-dialed)",
     " same => n,Hangup(21)",
 ]
 COS_BUSY = [
@@ -2814,8 +2959,60 @@ def _features(
         f"[{n.call_codes}]",
         *_call_codes(codes, cos),
         *_spy_codes(codes, cos, extensions, beep_orgs or set()),
+        *_pickup_incall(codes, extensions),
     ]
     lines.append("")
+    return lines
+
+
+PICKUP_INCALL_TRIES = 4  # channels of the target phone looked at
+
+
+def _pickup_incall(codes: dict[str, str], extensions: list[dict[str, Any]]) -> list[str]:
+    """Pickup In-call (Grandstream, issue #392): ``<code><extension>`` takes
+    over that phone's answered call; the other party is moved to the caller
+    with ``Bridge`` and the phone drops. Written only for extensions with a
+    list; only the extensions listed may use it. A PJSIP channel is
+    ``PJSIP/<endpoint>-`` plus 8 hex digits, so the phone's channels are cut
+    from ``CHANNELS()`` by length; the first with a bridged party is taken."""
+    code = codes.get("pickup_incall")
+    if not code:
+        return []
+    lines: list[str] = []
+    for ext in extensions:
+        allowed = [str(x) for x in ext.get("pickup_incall_by") or []]
+        if not allowed:
+            continue
+        number = str(ext["number"])
+        endpoint = _check_value(str(ext["endpoint_name"]), "endpoint name")
+        prefix = f"PJSIP/{endpoint}-"
+        width = len(prefix) + 8
+        alternatives = "|".join(re.escape(a) for a in allowed)
+        lines += [
+            f"exten => {code}{number},1,NoOp(Veyra pickup in-call of {number} by ${{VEYRA_EXT}})",
+            f' same => n,GotoIf(${{REGEX("^({alternatives})$" ${{VEYRA_EXT}})}}?ok:denied)',
+            f" same => n(ok),Set(VEYRA_CHANS=${{CHANNELS(^{re.escape(prefix)}[0-9a-f]{{8}}$)}})",
+            " same => n,Set(VEYRA_PEER=)",
+        ]
+        for i in range(PICKUP_INCALL_TRIES):
+            at = i * (width + 1)
+            lines += [
+                f" same => n,Set(VEYRA_C=${{VEYRA_CHANS:{at}:{width}}})",
+                ' same => n,ExecIf($["${VEYRA_PEER}"="" & "${VEYRA_C}"!=""]'
+                "?Set(VEYRA_PEER=${IMPORT(${VEYRA_C},BRIDGEPEER)}))",
+            ]
+        lines += [
+            ' same => n,GotoIf($["${VEYRA_PEER}"=""]?none)',
+            # The phone itself must not be the one taken (a call between two
+            # of its own lines); BRIDGEPEER names the other side.
+            f' same => n,GotoIf($["${{VEYRA_PEER:0:{len(prefix)}}}"="{prefix}"]?none)',
+            " same => n,Bridge(${VEYRA_PEER})",
+            " same => n,Hangup()",
+            " same => n(none),Playback(pbx-invalid)",
+            " same => n,Hangup()",
+            " same => n(denied),Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
     return lines
 
 
@@ -3168,7 +3365,9 @@ def _outbound_contexts(
             + (" (emergency)" if emergency else ""),
         ]
         cos_guard = cos.route_guard(slug) if cos else []
+        cos_guard = cos_guard + _route_extensions(slug, r.get("allowed_extensions"))
         cos_limits = cos.route_limits() if cos else []
+        cos_quota = cos.period_limits() if cos else []
         for pat in r.get("patterns") or []:
             try:
                 prefix, match, prepend = routing.check_pattern(
@@ -3186,6 +3385,7 @@ def _outbound_contexts(
                 # The class of service (docs/CALL_FEATURES.md §3.8) never blocks an emergency route.
                 *(cos_guard if not emergency else []),
                 *(cos_limits if not emergency else []),
+                *(cos_quota if not emergency else []),
                 *(
                     _route_hours((conditions or {}).get(str(r.get("time_condition"))))
                     if not emergency
@@ -3252,9 +3452,17 @@ def _outbound_contexts(
             timeout = EMERGENCY_DIAL_TIMEOUT if emergency else OUTBOUND_DIAL_TIMEOUT
             if not route_trunks:
                 lines.append(" same => n,Goto(failed)")
+            weights = [int(w) for w in r.get("trunk_weights") or []]
+            weighted = not emergency and len(route_trunks) > 1 and len(weights) == len(route_trunks)
+            if weighted:
+                lines += _weighted_start(slug, weights)
             for i, tslug in enumerate(route_trunks):
-                label = f"t{i + 1}" if i else None
-                nxt = f"t{i + 2}" if i + 1 < len(route_trunks) else "failed"
+                label = f"t{i + 1}" if i or weighted else None
+                if weighted:
+                    # A ring: after the last trunk, the first; each trunk once.
+                    nxt = f"t{i + 2}" if i + 1 < len(route_trunks) else "t1"
+                else:
+                    nxt = f"t{i + 2}" if i + 1 < len(route_trunks) else "failed"
                 trunk = trunks[tslug]
                 cid = cid_override or trunk.get("default_caller_id")
                 if tenants and not emergency:
@@ -3265,7 +3473,14 @@ def _outbound_contexts(
                     own = bool(r.get("organization"))
                     cid = cid_override if own and cid_force else "${VEYRA_ORG_MAIN}"
                 first = f" same => n({label})," if label else " same => n,"
-                step = [f"{first}Set(GROUP(veyra_trunk)={tslug})"]
+                if weighted:
+                    step = [
+                        f"{first}Set(VEYRA_TRIED=$[0${{VEYRA_TRIED}} + 1])",
+                        f" same => n,GotoIf($[${{VEYRA_TRIED}} > {len(route_trunks)}]?failed)",
+                        f" same => n,Set(GROUP(veyra_trunk)={tslug})",
+                    ]
+                else:
+                    step = [f"{first}Set(GROUP(veyra_trunk)={tslug})"]
                 if trunk.get("max_channels") and not emergency:
                     # Channels kept for emergency calls (issue #171): another
                     # call may use only the rest; an emergency call is never
@@ -3320,6 +3535,7 @@ def _outbound_contexts(
                     " same => n,Hangup(21)",
                     *(COS_DENIED if cos_guard else []),
                     *(COS_BUSY if cos_limits else []),
+                    *(COS_QUOTA if cos_quota and not emergency else []),
                 ]
         lines.append("")
     return lines
@@ -3337,8 +3553,12 @@ def _inbound_contexts(
     org_main: dict[str, str] | None = None,
     org_limits: dict[str, int] | None = None,
     org_ecid: dict[str, str] | None = None,
+    caller_name: dict[str, Any] | None = None,
 ) -> list[str]:
-    """``org_limits`` caps each organization's concurrent outside calls
+    """``caller_name``: where routes with ``name_lookup`` ask for the caller's
+    name (issue #392).
+
+    ``org_limits`` caps each organization's concurrent outside calls
     (docs/MULTI_TENANCY_MSP.md §8); a 911 callback is never refused.
     ``org_ecid``: each organization's emergency number (§6.1), presented by
     its phones with no site or own emergency number; a PSAP callback to it
@@ -3451,6 +3671,7 @@ def _inbound_contexts(
             f" same => n,Set(__VEYRA_DID={did})",
             *_blacklist_check(org, (policies or {}).get(org)),
             *_record_inbound(recording or [], r, prompts_dir),
+            *_name_lookup(r, caller_name),
         ]
         site = elins.get(routing.canonical_did(did))
         if site is not None:
@@ -3506,6 +3727,7 @@ def _inbound_contexts(
                     " same => n,Set(__VEYRA_HOPS=1)",
                     " same => n,Set(__VEYRA_DID=${EXTEN})",
                     *_blacklist_check(org, (policies or {}).get(org)),
+                    *_name_lookup(catch, caller_name),
                 ]
                 limit = (org_limits or {}).get(org)
                 if limit:
@@ -3523,6 +3745,69 @@ def _inbound_contexts(
             ]
         lines.append("")
     return lines
+
+
+def _route_extensions(route: str, allowed: list[str] | None) -> list[str]:
+    """Extension Routing (FreePBX, issue #392): only these phones
+    (``<organization>/<extension>``) may use the route; the others are refused
+    like a class of service refusal. None: every phone."""
+    if allowed is None:
+        return []
+    items = sorted({str(a) for a in allowed})
+    for a in items:
+        if not re.fullmatch(r"[a-z0-9-]{1,40}/[0-9*#]{1,32}", a):
+            raise GenerationError(f"outbound route {route}: extension {a!r} is not valid")
+    if not items:
+        return [" same => n,Goto(cosdenied)"]
+    pattern = "|".join(re.escape(a) for a in items)
+    return [
+        f' same => n,GotoIf($[!${{REGEX("^({pattern})$" ${{VEYRA_ORG}}/${{VEYRA_EXT}})}}]'
+        "?cosdenied)"
+    ]
+
+
+def _weighted_start(route: str, weights: list[int]) -> list[str]:
+    """Issue #392: pick the first trunk at random in proportion to the
+    trunks' weights; the others are tried after it, in order."""
+    if any(not 1 <= w <= 100 for w in weights):
+        raise GenerationError(f"outbound route {route}: trunk weights are 1 to 100")
+    out = [
+        " same => n,Set(VEYRA_TRIED=0)",
+        f" same => n,Set(VEYRA_PICK=${{RAND(1,{sum(weights)})}})",
+    ]
+    upto = 0
+    for i, w in enumerate(weights[:-1]):
+        upto += w
+        out.append(f" same => n,GotoIf($[${{VEYRA_PICK}} <= {upto}]?t{i + 1})")
+    out.append(f" same => n,Goto(t{len(weights)})")
+    return out
+
+
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,100}$")
+
+
+def _name_lookup(r: dict[str, Any], cfg: dict[str, Any] | None) -> list[str]:
+    """Issue #392: when the caller sent no name (or only the number), ask
+    Veyra's API on this server; it answers a name or nothing. A failed or
+    slow lookup leaves the call as it was."""
+    if not cfg or not r.get("name_lookup"):
+        return []
+    url = str(cfg.get("url") or "")
+    token = str(cfg.get("token") or "")
+    if not re.fullmatch(r"http://127\.0\.0\.1:[0-9]{1,5}/[A-Za-z0-9/_-]+", url):
+        raise GenerationError("caller name lookup: the API address is not valid")
+    if not _TOKEN_RE.match(token):
+        raise GenerationError("caller name lookup: the token is not valid")
+    timeout = max(1, min(5, int(cfg.get("timeout_seconds") or 3)))
+    return [
+        ' same => n,GotoIf($["${CALLERID(name)}"!="" & "${CALLERID(name)}"!="${CALLERID(num)}"]'
+        "?cnamdone)",
+        f" same => n,Set(CURLOPT(httptimeout)={timeout})",
+        f" same => n,Set(VEYRA_CNAM=${{CURL({url}?token={token}"
+        "&number=${URIENCODE(${CALLERID(num)})})})",
+        ' same => n,ExecIf($["${VEYRA_CNAM}"!=""]?Set(CALLERID(name)=${VEYRA_CNAM}))',
+        " same => n(cnamdone),NoOp()",
+    ]
 
 
 def _destination_lines(r: dict[str, Any], conditions: dict[str, dict[str, Any]]) -> list[str]:
@@ -4346,6 +4631,35 @@ def _wakeup_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
     return lines
 
 
+VM_NOTIFY_EVENT = "VeyraVmNotify"
+
+
+def _vm_notify_context() -> list[str]:
+    """Where the worker's VM Notify call goes once answered (issue #392): the
+    called person presses 1 to accept, which stops the calls to the others,
+    then hears the box's menu and must enter its PIN."""
+    return [
+        f"[{engine_names.current().vm_notify}]",
+        "exten => s,1,Answer()",
+        " same => n,Wait(1)",
+        " same => n,Set(VEYRA_N=0)",
+        " same => n(ask),Playback(vm-youhave&vm-INBOX&vm-message)",
+        " same => n,Read(VEYRA_KEY,vm-press&digits/1,1,,1,6)",
+        ' same => n,GotoIf($["${VEYRA_KEY}"="1"]?yes)',
+        " same => n,Set(VEYRA_N=$[${VEYRA_N} + 1])",
+        " same => n,GotoIf($[${VEYRA_N} < 3]?ask)",
+        " same => n,Playback(vm-goodbye)",
+        " same => n,Hangup()",
+        f" same => n(yes),UserEvent({VM_NOTIFY_EVENT},Job: ${{VEYRA_VMN_JOB}},Result: accepted)",
+        ' same => n,GotoIf($[!${REGEX("^[0-9]{1,32}$" ${VEYRA_VMN_BOX})}]?bad)',
+        ' same => n,GotoIf($[!${REGEX("^veyra[a-z0-9_]*$" ${VEYRA_VMN_CONTEXT})}]?bad)',
+        " same => n,VoiceMailMain(${VEYRA_VMN_BOX}@${VEYRA_VMN_CONTEXT})",
+        " same => n,Hangup()",
+        " same => n(bad),Hangup()",
+        "",
+    ]
+
+
 def _wakeup_context() -> list[str]:
     """Where the worker's wake-up call goes once answered (issue #392). The
     answer is reported first, so hanging up during the message still counts."""
@@ -4592,6 +4906,40 @@ def _conference_profiles(slug: str) -> tuple[str, str, str, str, str]:
     return stem, f"{stem}-bridge", f"{stem}-user", f"{stem}-admin", f"{stem}-menu"
 
 
+def _conference_outcall(r: dict[str, Any], room: str, org: str) -> list[str]:
+    """Issue #392: when the first caller joins, call each number of
+    ``auto_outcall`` into the room (``VEYRA_CONF_INVITED``: no PIN), from the
+    room's number. An extension of the organization is rung directly, any
+    other number goes out through the outbound routes."""
+    calls = list(r.get("auto_outcall") or [])
+    if not calls:
+        return []
+    names = engine_names.current()
+    label = re.sub(r"[^A-Za-z0-9 ._-]", "", str(r.get("name") or ""))[:40] or "Conference"
+    number = str(r.get("number") or "")
+    if not _NUMBER_RE.match(number):
+        raise GenerationError(f"conference room number {number!r} is not valid")
+    org_var = f"^__VEYRA_ORG={org}" if org else ""
+    # Not for a caller who was called in, a silent listener, or a room
+    # already in progress.
+    out = [
+        ' same => n,GotoIf($["${VEYRA_CONF_INVITED}"="1"]?enter)',
+        ' same => n,GotoIf($["${VEYRA_CONF_PROFILE}"="${VEYRA_CONF_LISTENER}"]?enter)',
+        f' same => n,GotoIf($["${{CONFBRIDGE_INFO(parties,{room})}}"!=""]?enter)',
+    ]
+    for call in calls:
+        target = str(call.get("number") or "")
+        if not re.fullmatch(r"\+?[0-9]{2,20}", target):
+            raise GenerationError(f"conference room {r['slug']}: {target!r} is not a number")
+        ctx = names.internal if call.get("local") else names.outbound
+        conf = names.conference(r["slug"])
+        out.append(
+            f" same => n,Originate(Local/{target}@{ctx}/n,exten,{conf},s,1,45,"
+            f"ac({number})n({label})v(VEYRA_CONF_INVITED=1{org_var}))"
+        )
+    return out
+
+
 def _fax_contexts(inboxes: list[dict[str, Any]], fax_dir: str) -> list[str]:
     """``veyra-fax-out`` of the namespace (the worker originates a Local
     channel over the outbound routes; once it answers, ``send`` runs SendFAX
@@ -4671,13 +5019,18 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
         guard = cos.destination_guard("allowed_conferences", slug) if cos else []
         user_pin = str(r.get("user_pin") or "")
         admin_pin = str(r.get("admin_pin") or "")
-        for which, pin in (("user", user_pin), ("admin", admin_pin)):
+        listener_pin = str(r.get("listener_pin") or "")
+        for which, pin in (("user", user_pin), ("admin", admin_pin), ("listener", listener_pin)):
             if pin and not _PIN_RE.match(pin):
                 raise GenerationError(
                     f"conference room {slug}: the {which} PIN must be 4 to 10 digits"
                 )
         if user_pin and admin_pin and user_pin == admin_pin:
             raise GenerationError(f"conference room {slug}: the user and admin PINs are the same")
+        if listener_pin and listener_pin in (user_pin, admin_pin):
+            raise GenerationError(
+                f"conference room {slug}: the listener PIN is the same as another PIN"
+            )
         lines += [
             f"[{engine_names.current().conference(slug)}]",
             f"exten => s,1,NoOp(Veyra conference {name} ({org}))",
@@ -4685,7 +5038,7 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
             " same => n,Answer()",
             f" same => n,Set(VEYRA_CONF_PROFILE={user})",
         ]
-        if user_pin or admin_pin:
+        if user_pin or admin_pin or listener_pin:
             lines += [
                 # Invited from the web (#96): whoever invited them vouches.
                 ' same => n,GotoIf($["${VEYRA_CONF_INVITED}"="1"]?join)',
@@ -4694,6 +5047,8 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
             ]
             if admin_pin:
                 lines.append(f' same => n,GotoIf($["${{VEYRA_PIN}}"="{admin_pin}"]?admin)')
+            if listener_pin:
+                lines.append(f' same => n,GotoIf($["${{VEYRA_PIN}}"="{listener_pin}"]?listener)')
             if user_pin:
                 lines.append(f' same => n,GotoIf($["${{VEYRA_PIN}}"="{user_pin}"]?join)')
             else:
@@ -4707,8 +5062,27 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
             ]
             if admin_pin:
                 lines.append(f" same => n(admin),Set(VEYRA_CONF_PROFILE={admin})")
+            if listener_pin:
+                lines += [
+                    f" same => n(listener),Set(VEYRA_CONF_PROFILE={user}-listener)",
+                    " same => n,Goto(join)",
+                ]
+        outcall = _conference_outcall(r, room, org)
+        silence = bool(r.get("end_on_silence_seconds"))
+        if outcall or silence:
+            lines.append(" same => n(join),NoOp(Veyra conference start)")
+            if outcall:
+                lines += [
+                    f" same => n,Set(VEYRA_CONF_LISTENER={user}-listener)",
+                    *outcall,
+                    " same => n(enter),NoOp()",
+                ]
+            if silence:
+                # The API's event listener ends the room after the silence (#392).
+                lines.append(" same => n,Set(TALK_DETECT(set)=)")
         lines += [
-            f" same => n(join),ConfBridge({room},{bridge},${{VEYRA_CONF_PROFILE}},{menu})",
+            f" same => n{'' if outcall or silence else '(join)'},"
+            f"ConfBridge({room},{bridge},${{VEYRA_CONF_PROFILE}},{menu})",
             " same => n,Hangup()",
             " same => n(bye),Playback(vm-goodbye)",
             " same => n,Hangup()",
@@ -4716,6 +5090,19 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
             "",
         ]
     return lines
+
+
+def _count_options(r: dict[str, Any]) -> list[str]:
+    """Issue #392: tell a joining caller how many are in the room, and
+    everyone when more than ``announce_count_above`` are (0: always)."""
+    out = ["announce_user_count=yes"] if r.get("announce_count") else []
+    above = r.get("announce_count_above")
+    if above is not None:
+        n = int(above)
+        if not 0 <= n <= CONFERENCE_MAX_MEMBERS:
+            raise GenerationError(f"conference room {r.get('slug')}: count {n} is out of range")
+        out.append("announce_user_count_all=" + ("yes" if n == 0 else str(n)))
+    return out
 
 
 def _personal_room_profiles(stem: str) -> list[str]:
@@ -4798,6 +5185,7 @@ def _confbridge(
             f"music_on_hold_class={music}",
             f"wait_marked={wait}",
             "dsp_drop_silence=yes",
+            *_count_options(r),
             f"[{admin}]",
             "type=user",
             "admin=yes",
@@ -4806,6 +5194,7 @@ def _confbridge(
             f"music_on_hold_when_empty={alone}",
             f"music_on_hold_class={music}",
             "dsp_drop_silence=yes",
+            *_count_options(r),
             f"[{menu}]",
             "type=menu",
             "*1=toggle_mute",
@@ -4818,6 +5207,20 @@ def _confbridge(
             "*8=admin_toggle_mute_participants",
             "",
         ]
+        if r.get("listener_pin"):
+            # A silent listener ("ghost member", #392): muted, unannounced.
+            lines += [
+                f"[{user}-listener]",
+                "type=user",
+                "startmuted=yes",
+                "quiet=yes",
+                "announce_join_leave=no",
+                f"music_on_hold_when_empty={alone}",
+                f"music_on_hold_class={music}",
+                f"wait_marked={wait}",
+                "dsp_drop_silence=yes",
+                "",
+            ]
     for stem in personal_stems or []:
         lines += _personal_room_profiles(stem)
     return GeneratedFile(FILE_CONFBRIDGE, "\n".join(lines).rstrip("\n") + "\n")

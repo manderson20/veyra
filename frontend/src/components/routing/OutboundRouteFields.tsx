@@ -3,7 +3,9 @@
 
 import { Checkbox, SelectField, Switch, TextArea, TextField } from "@/components/ui";
 import { useApiData } from "@/hooks/useApiData";
-import type { Page, Site, TimeCondition } from "@/lib/types";
+import { ExtensionListPicker, type ListedExtension } from "@/components/common/ExtensionListPicker";
+import { useOrganizationOptions } from "@/hooks/useOrganizations";
+import type { Extension, Page, Site, TimeCondition } from "@/lib/types";
 import type { OutboundPattern, OutboundRoute, OutboundRouteInput } from "@/lib/types";
 import { EMPTY_PATTERN, PatternsEditor } from "./PatternsEditor";
 import { TrunkOrderEditor, type TrunkOption } from "./TrunkOrderEditor";
@@ -17,6 +19,14 @@ export interface OutboundRouteDraft {
   is_enabled: boolean;
   patterns: OutboundPattern[];
   trunk_ids: string[];
+  /** Issue #392: weighted spreads calls over the trunks; emergency routes always fail over. */
+  trunk_strategy: "failover" | "weighted";
+  /** Trunk id -> weight as typed (1-100). */
+  trunk_weights: Record<string, string>;
+  /** Extension Routing (issue #392): null = every phone; else only these. */
+  allowed_extensions: ListedExtension[] | null;
+  /** Ids from the saved route, resolved to names when the field shows. */
+  allowed_extension_ids: string[] | null;
   caller_id_number: string;
   caller_id_force: boolean;
   /** "" = every organization (docs/MULTI_TENANCY.md §4). */
@@ -33,6 +43,10 @@ export const EMPTY_OUTBOUND_ROUTE: OutboundRouteDraft = {
   is_enabled: true,
   patterns: [{ ...EMPTY_PATTERN }],
   trunk_ids: [],
+  trunk_strategy: "failover",
+  trunk_weights: {},
+  allowed_extensions: null,
+  allowed_extension_ids: null,
   caller_id_number: "",
   caller_id_force: false,
   organization_id: "",
@@ -48,6 +62,10 @@ export function outboundRouteDraft(r: OutboundRoute): OutboundRouteDraft {
     is_enabled: r.is_enabled,
     patterns: r.patterns.map((p) => ({ ...p })),
     trunk_ids: r.trunks.map((t) => t.id),
+    trunk_strategy: r.trunk_strategy ?? "failover",
+    trunk_weights: Object.fromEntries(r.trunks.map((t) => [t.id, String(t.weight ?? 1)])),
+    allowed_extensions: null,
+    allowed_extension_ids: r.allowed_extension_ids ?? null,
     caller_id_number: r.caller_id_number ?? "",
     caller_id_force: r.caller_id_force ?? false,
     organization_id: r.organization_id ?? "",
@@ -64,6 +82,9 @@ export function outboundRouteBody(d: OutboundRouteDraft): OutboundRouteInput {
     is_enabled: d.is_enabled,
     patterns: d.patterns.map((p) => ({ prefix: p.prefix.trim(), match: p.match.trim(), prepend: p.prepend.trim() })),
     trunk_ids: d.trunk_ids,
+    trunk_strategy: d.is_emergency ? "failover" : d.trunk_strategy,
+    trunk_weights: d.trunk_ids.map((id) => Number(d.trunk_weights[id] || 1)),
+    allowed_extension_ids: d.is_emergency ? null : d.allowed_extensions ? d.allowed_extensions.map((x) => x.id) : d.allowed_extension_ids,
     caller_id_number: d.caller_id_number.trim() || null,
     caller_id_force: d.caller_id_force,
     organization_id: d.organization_id || null,
@@ -71,8 +92,11 @@ export function outboundRouteBody(d: OutboundRouteDraft): OutboundRouteInput {
   };
 }
 
+const weightOk = (v: string | undefined) => v === undefined || v === "" || (/^[0-9]+$/.test(v) && Number(v) >= 1 && Number(v) <= 100);
+
 export function outboundRouteValid(d: OutboundRouteDraft): boolean {
-  return d.name.trim().length > 0 && d.patterns.length > 0 && d.patterns.every((p) => p.match.trim()) && d.trunk_ids.length > 0;
+  return d.name.trim().length > 0 && d.patterns.length > 0 && d.patterns.every((p) => p.match.trim()) && d.trunk_ids.length > 0
+    && d.trunk_ids.every((id) => weightOk(d.trunk_weights[id]));
 }
 
 export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled, autoFocus, organizations }: {
@@ -120,8 +144,54 @@ export function OutboundRouteFields({ draft, onChange, errors, trunks, disabled,
       ) : null}
       <PatternsEditor patterns={draft.patterns} onChange={(patterns) => onChange({ patterns })} error={errors.patterns ?? errors.route} disabled={disabled} />
       <TrunkOrderEditor trunkIds={draft.trunk_ids} trunks={trunks} onChange={(trunk_ids) => onChange({ trunk_ids })} error={errors.trunk_ids} disabled={disabled} />
+      {!draft.is_emergency && draft.trunk_ids.length > 1 ? (
+        <SelectField label="How calls use the trunks" value={draft.trunk_strategy} disabled={disabled} error={errors.trunk_strategy}
+          options={[{ value: "failover", label: "In order: the next trunk only when one is full or down" }, { value: "weighted", label: "Spread by weight, then the others in order" }]}
+          help={draft.trunk_strategy === "weighted" ? "Each call starts on a trunk picked at random in proportion to its weight; weights 3 and 1 send about three calls in four to the first." : undefined}
+          onChange={(e) => onChange({ trunk_strategy: e.target.value as "failover" | "weighted" })} />
+      ) : null}
+      {!draft.is_emergency ? <RouteExtensions draft={draft} onChange={onChange} error={errors.allowed_extension_ids} disabled={disabled} /> : null}
+      {!draft.is_emergency && draft.trunk_strategy === "weighted" && draft.trunk_ids.length > 1 ? (
+        <div className="form-grid">
+          {draft.trunk_ids.map((id) => (
+            <TextField key={id} label={`Weight: ${trunks.find((t) => t.id === id)?.name ?? "trunk"}`} type="number" min={1} max={100} disabled={disabled}
+              value={draft.trunk_weights[id] ?? "1"} error={weightOk(draft.trunk_weights[id]) ? errors.trunk_weights : "1 to 100"}
+              onChange={(e) => onChange({ trunk_weights: { ...draft.trunk_weights, [id]: e.target.value } })} />
+          ))}
+        </div>
+      ) : null}
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />
       <Switch label="Enabled" description="Disabled routes are kept but never match a dialled number." checked={draft.is_enabled} disabled={disabled} onChange={(e) => onChange({ is_enabled: e.target.checked })} />
     </>
+  );
+}
+
+/** Extension Routing (issue #392): the route for listed phones only. */
+function RouteExtensions({ draft, onChange, error, disabled }: {
+  draft: OutboundRouteDraft;
+  onChange: (patch: Partial<OutboundRouteDraft>) => void;
+  error?: string;
+  disabled?: boolean;
+}) {
+  const { organizations } = useOrganizationOptions();
+  const org = draft.organization_id || (organizations.length === 1 ? organizations[0]!.id : "");
+  const ids = draft.allowed_extension_ids ?? [];
+  const known = useApiData<Page<Extension>>(draft.allowed_extensions === null && ids.length && org ? "/extensions" : null, { organization_id: org, limit: 200 });
+  const limited = draft.allowed_extensions !== null || draft.allowed_extension_ids !== null;
+  const listed: ListedExtension[] = draft.allowed_extensions ?? ids.map((id) => {
+    const e = known.data?.items.find((x) => x.id === id);
+    return { id, number: e?.number ?? "…", name: e?.display_name ?? "" };
+  });
+  if (!org) return null;
+  return (
+    <div className="stack stack--xs">
+      <Checkbox label="Only some extensions may use this route" checked={limited} disabled={disabled}
+        description="On top of their class of service; other phones hear that the call is not allowed."
+        onChange={(e) => onChange(e.target.checked ? { allowed_extensions: listed, allowed_extension_ids: ids } : { allowed_extensions: null, allowed_extension_ids: null })} />
+      {limited ? (
+        <ExtensionListPicker label="Extensions that may use it" organizationId={org} value={listed} disabled={disabled} error={error}
+          onChange={(next) => onChange({ allowed_extensions: next })} emptyText="None yet: no phone can use this route." />
+      ) : null}
+    </div>
   );
 }

@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # Host name phones reach this server by (the certificate's name); defaults
     # to the system's fully qualified name.
     public_host: str | None = None
+    # The API's own port on 127.0.0.1 (the installer's API_PORT): the
+    # dialplan asks it for caller names (issue #392).
+    api_port: int = 8100
     # Plain-HTTP provisioning server block enabled by the installer (opt-in).
     provisioning_http: bool = False
     # What plain HTTP serves (docs/FIREWALL_TRUST.md §6.3): "bootstrap" (the

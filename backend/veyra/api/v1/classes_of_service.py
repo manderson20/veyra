@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field, field_validator
@@ -66,6 +66,9 @@ class ClassIn(BaseModel):
     allow_monitor: bool = False
     monitor_protected: bool = False
     max_outbound_calls: int | None = Field(None, ge=1, le=500)
+    # Outside calls per phone per period (issue #392); None: no limit.
+    calls_per_period: int | None = Field(None, ge=1, le=10000)
+    call_period: Literal["hour", "day", "week", "month"] = "day"
     # None: all of them.
     allowed_ring_group_ids: list[uuid.UUID] | None = Field(None, max_length=500)
     allowed_queue_ids: list[uuid.UUID] | None = Field(None, max_length=500)
@@ -111,6 +114,9 @@ class ClassPatch(BaseModel):
     monitor_protected: bool | None = None
     max_outbound_calls: int | None = Field(None, ge=1, le=500)
     no_call_limit: bool | None = None
+    calls_per_period: int | None = Field(None, ge=1, le=10000)
+    call_period: Literal["hour", "day", "week", "month"] | None = None
+    no_period_limit: bool | None = None
     # An explicit null: back to all of them.
     allowed_ring_group_ids: list[uuid.UUID] | None = Field(None, max_length=500)
     allowed_queue_ids: list[uuid.UUID] | None = Field(None, max_length=500)
@@ -146,6 +152,8 @@ class ClassOut(BaseModel):
     allow_monitor: bool = False
     monitor_protected: bool = False
     max_outbound_calls: int | None
+    calls_per_period: int | None = None
+    call_period: str = "day"
     allowed_ring_group_ids: list[uuid.UUID] | None = None
     allowed_queue_ids: list[uuid.UUID] | None = None
     allowed_conference_ids: list[uuid.UUID] | None = None
@@ -211,6 +219,8 @@ def _outs(db: Session, rows: list[ClassOfService]) -> list[ClassOut]:
             allow_monitor=r.allow_monitor,
             monitor_protected=r.monitor_protected,
             max_outbound_calls=r.max_outbound_calls,
+            calls_per_period=r.calls_per_period,
+            call_period=r.call_period or "day",
             allowed_ring_group_ids=_uuids(r.allowed_ring_group_ids),
             allowed_queue_ids=_uuids(r.allowed_queue_ids),
             allowed_conference_ids=_uuids(r.allowed_conference_ids),
@@ -360,6 +370,8 @@ def create_class(
         allow_monitor=body.allow_monitor,
         monitor_protected=body.monitor_protected,
         max_outbound_calls=body.max_outbound_calls,
+        calls_per_period=body.calls_per_period,
+        call_period=body.call_period,
         allow_paging=body.allow_paging,
         **{f: _check_destinations(db, org.id, f, getattr(body, f)) for f in DESTINATIONS},
     )
@@ -467,6 +479,19 @@ def update_class(
     elif changes.get("max_outbound_calls") is not None:
         row.max_outbound_calls = changes["max_outbound_calls"]
         details["max_outbound_calls"] = row.max_outbound_calls
+    if changes.get("no_period_limit"):
+        if row.calls_per_period is not None:
+            row.calls_per_period = None
+            details["calls_per_period"] = None
+    elif (
+        changes.get("calls_per_period") is not None
+        and changes["calls_per_period"] != row.calls_per_period
+    ):
+        row.calls_per_period = changes["calls_per_period"]
+        details["calls_per_period"] = row.calls_per_period
+    if changes.get("call_period") is not None and changes["call_period"] != row.call_period:
+        row.call_period = changes["call_period"]
+        details["call_period"] = row.call_period
     if not details:
         return _outs(db, [row])[0]
     try:

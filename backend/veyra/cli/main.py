@@ -1514,6 +1514,26 @@ def ensure_prompt_dirs(db: Any, settings: Any) -> None:
     audio.ensure_org_dirs(settings.prompts_dir, slugs)
 
 
+DELAYED_PAGE_KEEP_SECONDS = 3600
+
+
+def clean_delayed_pages(folder: Path, now: float | None = None) -> int:
+    """Delayed pages (issue #392) are played within minutes; recordings older
+    than an hour are removed. Returns how many."""
+    if not folder.is_dir():
+        return 0
+    cutoff = (now if now is not None else time.time()) - DELAYED_PAGE_KEEP_SECONDS
+    removed = 0
+    for f in folder.iterdir():
+        try:
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                f.unlink()
+                removed += 1
+        except OSError as e:
+            logging.getLogger("veyra.worker").warning("Delayed page %s not removed: %s", f.name, e)
+    return removed
+
+
 def cmd_pager(args: argparse.Namespace) -> int:
     """The page sender service (docs/PAGING_RECORDINGS.md §2.2)."""
     import asyncio
@@ -1708,6 +1728,7 @@ def cmd_worker(args: argparse.Namespace) -> int:
                         log.warning("Recording archive not started: %s", e.message)
                     if settings.telephony_engine != "none":
                         ensure_prompt_dirs(db, settings)
+                        clean_delayed_pages(settings.data_dir / "paging-delayed")
                         # Dashboard graphs: one reading per iteration (docs/INTERFACE_REWORK.md §2).
                         from veyra.telephony import get_adapter
                         from veyra.telephony.metrics import record_sample
@@ -1789,6 +1810,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     wakeup.tick(db, get_adapter(settings))
+                # VM Notify calls (issue #392).
+                from veyra.voicemail import notify as vm_notify
+
+                with session_scope() as db:
+                    vm_notify.tick(db, get_adapter(settings))
             # Outgoing webhooks (docs/INTEGRATIONS.md §3.5): voicemail
             # notifications in, due deliveries out.
             deliver_webhooks(settings, log)

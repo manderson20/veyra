@@ -25,6 +25,7 @@ from veyra.core.models import (
     VoicemailBox,
 )
 from veyra.integrations import webhooks
+from veyra.voicemail import notify as vm_notify
 
 log = logging.getLogger("veyra.webhooks")
 
@@ -221,12 +222,19 @@ def voicemail_notifications(
         # Counts recorded before 0.27.24 are keyed by the number alone.
         before = int(counts.pop(number, counts.get(key, 0)))
         counts[key] = new
+        if new == 0 and before > 0:
+            # Every new message was heard: VM Notify stops calling (issue #392).
+            listened = _box_of(db, context, number)
+            if listened is not None:
+                vm_notify.cancel(db, listened[0].id)
         if new <= before:
             continue
         found = _box_of(db, context, number)
         if found is None:
             continue
         box, name = found
+        if not box.notify_urgent_only or urgent > 0:
+            vm_notify.start(db, box)
         payload: dict[str, Any] = {
             "box": {"number": number, "name": name},
             "new_messages": new,

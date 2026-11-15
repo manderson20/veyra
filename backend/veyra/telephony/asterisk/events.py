@@ -14,7 +14,9 @@ import asyncio
 import contextlib
 import json
 import logging
+import time
 import urllib.parse
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -22,6 +24,8 @@ from typing import Any
 from veyra.core.callevents import CallEvent, CallEventHub
 from veyra.telephony.asterisk.ari import AriClient
 from veyra.telephony.asterisk.transfer_recording import is_attended_transfer
+from veyra.telephony.conference_watch import EVENTS as CONFERENCE_EVENTS
+from veyra.telephony.conference_watch import ConferenceWatch, Rule
 
 log = logging.getLogger("veyra.events")
 
@@ -389,6 +393,27 @@ def _wakeup(event: dict[str, Any]) -> None:
         log.exception("Could not handle the wake-up event")
 
 
+VM_NOTIFY_EVENT = "VeyraVmNotify"
+
+
+def is_vm_notify_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == VM_NOTIFY_EVENT
+
+
+def _vm_notify(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraVmNotify)``: someone accepted a VM Notify call; the
+    others are not called (issue #392)."""
+    try:
+        from veyra.core.db import session_scope
+        from veyra.voicemail import notify
+
+        job = str((event.get("userevent") or {}).get("Job") or "")
+        with session_scope() as db:
+            notify.accept(db, job)
+    except Exception:
+        log.exception("Could not handle the VM Notify event")
+
+
 FAX_EVENT = "VeyraFax"
 
 
@@ -433,6 +458,14 @@ def _fax_channel(event: dict[str, Any]) -> None:
         log.exception("Could not handle the ended fax channel")
 
 
+def _conference_rules() -> dict[str, Rule]:
+    from veyra.core.db import session_scope
+    from veyra.telephony.conference_watch import load_rules
+
+    with session_scope() as db:
+        return load_rules(db)
+
+
 def _webhook(ce: CallEvent) -> None:
     """Queue live call webhooks (docs/INTEGRATIONS.md §3.2); never raises."""
     try:
@@ -458,12 +491,23 @@ def _transfer_recording(ari: AriClient, event: dict[str, Any]) -> None:
         log.exception("Could not check a transferred call for recording")
 
 
+ConferenceAct = Callable[[str, str], None]
+_WATCH_TICK = 5
+_RULES_EVERY = 60
+
+
 class AriEventListener:
-    def __init__(self, ari: AriClient, hub: CallEventHub) -> None:
+    def __init__(
+        self, ari: AriClient, hub: CallEventHub, conference_act: ConferenceAct | None = None
+    ) -> None:
         self.ari = ari
         self.hub = hub
         self.translator = AriEventTranslator()
         self._task: asyncio.Task[None] | None = None
+        self._watch_task: asyncio.Task[None] | None = None
+        # Issue #392: end on silence, record at N members.
+        self.conferences = ConferenceWatch()
+        self.conference_act = conference_act
 
     def websocket_url(self) -> str | None:
         password = self.ari.password()
@@ -479,8 +523,39 @@ class AriEventListener:
         if self._task is None:
             self.hub.state = "connecting"
             self._task = asyncio.create_task(self.run(), name="ari-events")
+        if self._watch_task is None and self.conference_act is not None:
+            self._watch_task = asyncio.create_task(self.watch(), name="conference-watch")
+
+    async def _act(self, actions: list[tuple[str, str]]) -> None:
+        if self.conference_act is None:
+            return
+        for room, action in actions:
+            try:
+                await asyncio.to_thread(self.conference_act, room, action)
+                log.info("conference %s: %s", room, action)
+            except Exception as e:  # an ended room, a recording already running
+                log.info("conference %s: %s not done (%s)", room, action, e)
+
+    async def watch(self) -> None:
+        """Refresh the watched rooms and end the quiet ones (#392)."""
+        last_rules = -float(_RULES_EVERY)
+        while True:
+            now = time.monotonic()
+            if now - last_rules >= _RULES_EVERY:
+                try:
+                    self.conferences.set_rules(await asyncio.to_thread(_conference_rules))
+                except Exception as e:
+                    log.warning("conference rules not loaded: %s", e)
+                last_rules = now
+            await self._act(self.conferences.tick(now))
+            await asyncio.sleep(_WATCH_TICK)
 
     async def stop(self) -> None:
+        if self._watch_task is not None:
+            self._watch_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._watch_task
+            self._watch_task = None
         if self._task is not None:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -531,12 +606,16 @@ class AriEventListener:
                             _agent(event)
                         elif is_wakeup_event(event):
                             _wakeup(event)
+                        elif is_vm_notify_event(event):
+                            await asyncio.to_thread(_vm_notify, event)
                         elif is_fax_event(event):
                             _fax(event)
                         elif event.get("type") == "ChannelDestroyed":
                             _fax_channel(event)
                         elif is_attended_transfer(event):
                             await asyncio.to_thread(_transfer_recording, self.ari, event)
+                        if event.get("type") in CONFERENCE_EVENTS:
+                            await self._act(self.conferences.handle(event, time.monotonic()))
                         for ce in self.translator.translate(event):
                             self.hub.publish(ce)
                             if ce.type in LIVE_WEBHOOK_EVENTS:
@@ -548,5 +627,6 @@ class AriEventListener:
                 log.warning("ARI event stream lost (%s); reconnecting", e)
             self.hub.state = "reconnecting"
             self.translator.channels.clear()
+            self.conferences.reset()
             await asyncio.sleep(_BACKOFF[min(attempt, len(_BACKOFF) - 1)])
             attempt += 1

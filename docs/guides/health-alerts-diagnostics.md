@@ -4,7 +4,7 @@ summary: See whether everything is running, get emailed when something breaks, a
 audience: admin
 section: Maintenance
 order: 50
-reviewed: 0.27.44
+reviewed: 0.27.87
 checked: 2026-11-07T23:43Z
 pages:
   - /system/health/
@@ -48,6 +48,7 @@ From the server console, `sudo veyra status` prints the same summary.
 |---|---|
 | **Telephony engine down** | Asterisk does not answer |
 | **Trunk down** | A trunk to your phone provider is not registered or not reachable |
+| **Trunk near its channel limit** | A trunk with **Maximum channels** set has this share of its channels in use (80 % by default) for the delay; time to buy more channels or add a trunk |
 | **Veyra service not running** | One of Veyra's background services stopped |
 | **Disk space low** | Free space falls below the limit (10 % by default) |
 | **HTTPS certificate expiring** | The web certificate expires within the limit (21 days by default) |

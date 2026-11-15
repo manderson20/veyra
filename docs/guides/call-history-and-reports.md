@@ -81,6 +81,12 @@ On the **Build** tab:
 
 **Export CSV** downloads the result.
 
+## Missed queue calls
+
+The **Missed queue calls** tab lists each queue call nobody answered in the last 24 hours, 7 days or 30 days: when it came in, the queue, the caller's number, how long they waited, how the call ended (**hung up**, **timed out**, **no agents**, or **left with a key** through the queue's menu) and the agents whose phones rang without an answer (×2 when one rang twice). Use it to call people back and to see who was not picking up. The newest 500 calls are shown.
+
+**Queue log for QueueMetrics** downloads every queue event of the same period in Asterisk's `queue_log` format, for QueueMetrics or another queue reporting tool.
+
 ## Usage by organization (for billing)
 
 On a server shared by several organizations, platform administrators have a **Usage** tab. Choose a **Month** to see, for each organization and trunk:

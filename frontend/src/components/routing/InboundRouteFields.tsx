@@ -2,7 +2,7 @@
 "use client";
 
 import { DestinationPicker, useDestinationOptions } from "@/components/routing/DestinationPicker";
-import { Button, SelectField, Switch, TextArea, TextField } from "@/components/ui";
+import { Button, Checkbox, SelectField, Switch, TextArea, TextField } from "@/components/ui";
 import { destinationBody, destinationComplete, destinationDraft, EMPTY_DESTINATION, type DestinationDraft } from "@/lib/routing";
 import type { CallerRule, InboundRoute, InboundRouteInput, Page, RouteDestinationType, TimeCondition, TrunkPage } from "@/lib/types";
 import { useApiData } from "@/hooks/useApiData";
@@ -23,6 +23,8 @@ export interface InboundRouteDraft {
   after_hours: DestinationDraft;
   caller_id_prefix: string;
   queue_priority: string;
+  /** Issue #392: look up the caller's name (when the installation has a lookup service). */
+  name_lookup: boolean;
   is_enabled: boolean;
 }
 
@@ -36,6 +38,7 @@ export const EMPTY_INBOUND_ROUTE: InboundRouteDraft = {
   after_hours: EMPTY_DESTINATION,
   caller_id_prefix: "",
   queue_priority: "0",
+  name_lookup: false,
   is_enabled: true,
 };
 
@@ -76,6 +79,7 @@ export function inboundRouteDraft(r: InboundRoute): InboundRouteDraft {
       : destinationDraft(null),
     caller_id_prefix: r.caller_id_prefix ?? "",
     queue_priority: String(r.queue_priority ?? 0),
+    name_lookup: r.name_lookup ?? false,
     is_enabled: r.is_enabled,
   };
 }
@@ -113,6 +117,7 @@ export function inboundRouteBody(d: InboundRouteDraft): InboundRouteInput {
     after_hours_custom_context: after?.custom_context ?? null,
     caller_id_prefix: d.caller_id_prefix.trim() || null,
     queue_priority: Number(d.queue_priority),
+    name_lookup: d.name_lookup,
     is_enabled: d.is_enabled,
   };
 }
@@ -200,6 +205,7 @@ export function InboundRouteFields({ draft, onChange, errors, organizationId, cu
         help="0 to 10. Callers on this number wait ahead of callers with a lower number." onChange={(e) => onChange({ queue_priority: e.target.value })} />
       <TextField label="Caller ID prefix" disabled={disabled} value={draft.caller_id_prefix} error={errors.caller_id_prefix} placeholder="e.g. Sales:" autoComplete="off"
         help="Text put in front of the caller's name so the answering phone shows which number was called." onChange={(e) => onChange({ caller_id_prefix: e.target.value })} />
+      <Checkbox label="Look up the caller's name" description="When a call arrives without a name, ask the caller name lookup service set under System → Telephony Engine. Off there: nothing happens." checked={draft.name_lookup} disabled={disabled} onChange={(e) => onChange({ name_lookup: e.target.checked })} />
       <TextArea label="Description" rows={2} disabled={disabled} value={draft.description} error={errors.description} onChange={(e) => onChange({ description: e.target.value })} />
       <Switch label="Enabled" description="Disabled routes are kept but calls to the DID are not answered by them." checked={draft.is_enabled} disabled={disabled} onChange={(e) => onChange({ is_enabled: e.target.checked })} />
     </>

@@ -60,6 +60,8 @@ class Page(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     )  # everyone|members|administrators
     max_seconds: Mapped[int] = mapped_column(Integer, default=120)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Delayed paging (issue #392): as on a zone; not for a recorded page.
+    delayed_seconds: Mapped[int | None] = mapped_column(Integer)
 
 
 class PageZone(Base):

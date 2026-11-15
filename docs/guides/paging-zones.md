@@ -4,7 +4,7 @@ summary: Group your overhead speakers and Poly phones into paging zones that any
 audience: admin
 section: Paging and bells
 order: 10
-reviewed: 0.27.45
+reviewed: 0.27.87
 checked: 2026-11-07T23:43Z
 pages:
   - /paging-zones/
@@ -50,6 +50,7 @@ Zones are listed under [Telephony → Paging Zones](app:/paging-zones/).
 | **Codec** | **G.711 µ-law (default)** works everywhere. **G.722 (wideband)** sounds better if all your speakers and phones support it. |
 | **Number to dial (optional)** | The number people dial to page this zone live. It comes from the same numbering plan as extensions, groups and pages, so it cannot be in use already. |
 | **Longest page (seconds)** | 5 to 600, default 120. The page is cut off after this. |
+| **Delayed paging (seconds)** | Empty: not offered. Otherwise a phone may dial the **Delayed page** code (`*59`) and the zone's number, record a message, and hang up (or press `#`); the message is paged this many seconds later, 0 to 300. Two delayed pages to the same zone play one after the other. |
 | **Who may page it** | See below. |
 | **Description** | Optional notes. |
 | **Enabled** | A disabled zone is left out of the phones' paging groups. |
@@ -74,6 +75,8 @@ Speakers need no change in Veyra: they already listen to their multicast address
 ## Page a zone from a phone
 
 Dial the zone's number from a phone that is allowed to page it. After the short tone, speak; hang up to end the page. A phone that is not allowed hears an "invalid" message. The page stops by itself after the zone's **Longest page** time.
+
+To record the message first, dial `*59` and the zone's number instead (when the zone offers delayed paging). After the tone, speak, then press `#` or hang up. The message is paged after the zone's delay, so you can walk away from the phone or wait for a quiet moment. A message shorter than a moment is not sent.
 
 ## Reading the list
 

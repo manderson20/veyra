@@ -189,6 +189,25 @@ DEFAULTS: tuple[FeatureCodeDef, ...] = (
         19,
     ),
     FeatureCodeDef(
+        "pickup_incall",
+        "*51",
+        "Pickup In-call",
+        "Followed by an extension: takes over that phone's answered call; the "
+        "other phone drops. Only extensions on that extension's Pickup In-call "
+        "list may do it.",
+        19,
+        True,
+    ),
+    FeatureCodeDef(
+        "delayed_page",
+        "*59",
+        "Delayed page",
+        "Followed by a paging zone or page number: record a message, hang up, "
+        "and it is paged after the zone's delay.",
+        19,
+        True,
+    ),
+    FeatureCodeDef(
         "queue_login",
         "*45",
         "Queue log in / log out",

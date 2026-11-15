@@ -36,6 +36,7 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
   const [number, setNumber] = useState("");
   const [allowed, setAllowed] = useState<PagingAllowed>("everyone");
   const [members, setMembers] = useState<MemberDraft[]>([]);
+  const [delayed, setDelayed] = useState("");
   const [maxSeconds, setMaxSeconds] = useState("120");
   const [busy, setBusy] = useState(false);
   const effectiveOrg = zone?.organization_id ?? (org || (organizations.length === 1 ? organizations[0]!.id : ""));
@@ -60,6 +61,7 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
       setAllowed(zone?.allowed ?? "everyone");
       setMembers(zone ? membersFromIds(zone.members) : []);
       setMaxSeconds(String(zone?.max_seconds ?? 120));
+      setDelayed(zone?.delayed_seconds == null ? "" : String(zone.delayed_seconds));
       errors.clear();
     }
   });
@@ -85,6 +87,7 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
         allowed,
         members: allowed === "members" ? members.map((m) => m.extension_id) : [],
         max_seconds: Number(maxSeconds) || 120,
+        delayed_seconds: delayed.trim() === "" ? null : Number(delayed),
       };
       const saved = zone
         ? await api.patch<PagingZone>(`/paging-zones/${zone.id}`, body)
@@ -128,6 +131,8 @@ export function PagingZoneDialog({ open, onClose, zone, onSaved }: { open: boole
         <div className="form-grid">
           <TextField label="Number to dial (optional)" inputMode="numeric" value={number} error={errors.fields.number} help="From the numbering plan; shares the space with extensions, groups and pages. Dialling it pages this zone live." onChange={(e) => setNumber(e.target.value.replace(/\D/g, ""))} />
           <TextField label="Longest page (seconds)" type="number" min={5} max={600} value={maxSeconds} error={errors.fields.max_seconds} onChange={(e) => setMaxSeconds(e.target.value)} />
+          <TextField label="Delayed paging (seconds)" type="number" min={0} max={300} value={delayed} error={errors.fields.delayed_seconds}
+            help="Callers dial the Delayed page code, then this number, record a message and hang up; it is paged after this many seconds. Empty: not offered." onChange={(e) => setDelayed(e.target.value)} />
         </div>
         <SelectField label="Who may page it" value={allowed} error={errors.fields.allowed} options={(Object.keys(PAGING_ALLOWED_LABELS) as PagingAllowed[]).map((a) => ({ value: a, label: PAGING_ALLOWED_LABELS[a] }))} onChange={(e) => setAllowed(e.target.value as PagingAllowed)} />
         {allowed === "members" ? (

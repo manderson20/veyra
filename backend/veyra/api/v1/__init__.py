@@ -18,6 +18,7 @@ from veyra.api.v1 import (
     call_flows,
     call_history,
     caller_blocks,
+    caller_name,
     calls,
     central,
     certificate,
@@ -164,6 +165,7 @@ for r in (
     webhooks,
     automation,
     central,
+    caller_name,
 ):
     api_router.include_router(r.router)
 api_router.include_router(automation.hooks_router)

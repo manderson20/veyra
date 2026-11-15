@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { EMPTY_DEFINITION, ReportBuilder } from "@/components/reports/Builder";
+import { MissedQueueCalls } from "@/components/reports/MissedQueueCalls";
 import { ReportsOverview } from "@/components/reports/Overview";
 import { SavedReports } from "@/components/reports/SavedReports";
 import { UsageReport } from "@/components/reports/Usage";
@@ -29,7 +30,7 @@ export default function ReportsPage() {
     <div className="stack">
       <PageHeader title="Reports" description="An overview of the phone system, and reports you build, save and have emailed." />
       <Tabs idBase="rep" active={tab} onChange={setTab}
-        tabs={[{ id: "overview", label: "Overview" }, { id: "build", label: saved ? `Build: ${saved.name}` : "Build" }, { id: "saved", label: "Saved" }, ...(usage ? [{ id: "usage", label: "Usage" }] : [])]} />
+        tabs={[{ id: "overview", label: "Overview" }, { id: "build", label: saved ? `Build: ${saved.name}` : "Build" }, { id: "saved", label: "Saved" }, { id: "missed", label: "Missed queue calls" }, ...(usage ? [{ id: "usage", label: "Usage" }] : [])]} />
       <TabPanel idBase="rep" id="overview" active={tab}><ReportsOverview /></TabPanel>
       <TabPanel idBase="rep" id="build" active={tab}>
         <ReportBuilder definition={definition} setDefinition={setDefinition} saved={saved}
@@ -37,6 +38,7 @@ export default function ReportsPage() {
         {saved ? <p className="subtle"><button type="button" className="link" onClick={() => { setSaved(null); setDefinition(EMPTY_DEFINITION); }}>Start a new report</button></p> : null}
       </TabPanel>
       <TabPanel idBase="rep" id="saved" active={tab}><SavedReports onOpen={open} version={version} /></TabPanel>
+      <TabPanel idBase="rep" id="missed" active={tab}>{tab === "missed" ? <MissedQueueCalls /> : null}</TabPanel>
       {usage ? <TabPanel idBase="rep" id="usage" active={tab}><UsageReport /></TabPanel> : null}
     </div>
   );

@@ -405,6 +405,8 @@ export interface Extension {
   class_of_service_name?: string | null;
   /** Phones that may register at once (EXTENSIONS.md §1); null: as many as are provisioned, at least one. */
   max_registrations?: number | null;
+  /** Pickup In-call (issue #392): extensions that may take over this phone's answered calls. */
+  pickup_incall_ids?: string[];
   /** Enabled devices provisioned with this extension. */
   provisioned_phones?: number;
   /** The effective limit: the larger of max_registrations and provisioned_phones, at least 1. */
@@ -1220,6 +1222,7 @@ export interface InboundRoute {
   after_hours: Destination | null;
   caller_id_prefix: string | null;
   queue_priority?: number;
+  name_lookup?: boolean;
   is_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -1256,6 +1259,7 @@ export interface InboundRouteInput {
   after_hours_custom_context?: string | null;
   caller_id_prefix?: string | null;
   queue_priority?: number;
+  name_lookup?: boolean;
   is_enabled?: boolean;
 }
 
@@ -1270,6 +1274,8 @@ export interface RouteTrunk {
   name: string;
   slug: string;
   is_enabled: boolean;
+  /** Share of a weighted route's calls that start on this trunk (issue #392). */
+  weight?: number;
 }
 
 export interface OutboundRoute {
@@ -1287,6 +1293,10 @@ export interface OutboundRoute {
   examples: string[];
   /** Failover order. */
   trunks: RouteTrunk[];
+  /** "failover" (in order) or "weighted" (start chosen by weight, issue #392). */
+  trunk_strategy?: "failover" | "weighted";
+  /** Extension Routing (#392): null = every phone. */
+  allowed_extension_ids?: string[] | null;
   caller_id_number: string | null;
   /** The route's caller ID also replaces an extension's outbound caller ID. */
   caller_id_force?: boolean;
@@ -1310,6 +1320,9 @@ export interface OutboundRouteInput {
   is_enabled?: boolean;
   patterns?: OutboundPattern[];
   trunk_ids?: string[];
+  trunk_strategy?: "failover" | "weighted";
+  trunk_weights?: number[];
+  allowed_extension_ids?: string[] | null;
   caller_id_number?: string | null;
   caller_id_force?: boolean;
   organization_id?: string | null;
@@ -1405,6 +1418,11 @@ export interface VoicemailBox {
   max_message_seconds?: number | null;
   /** The alternate greeting plays instead of unavailable and busy (#392). */
   alternate_greeting?: boolean;
+  /** VM Notify (#392). */
+  notify_numbers?: string[];
+  notify_rounds?: number;
+  notify_retry_minutes?: number;
+  notify_urgent_only?: boolean;
   is_enabled: boolean;
   /** Settings → Email delivery is enabled; without it messages stay in the box. */
   email_delivery_enabled: boolean;
@@ -1443,6 +1461,10 @@ export interface VoicemailBoxInput {
   copy_to_box_ids?: string[];
   max_messages?: number | null;
   max_message_seconds?: number | null;
+  notify_numbers?: string[];
+  notify_rounds?: number;
+  notify_retry_minutes?: number;
+  notify_urgent_only?: boolean;
 }
 
 export interface MyVoicemail {
@@ -1713,6 +1735,7 @@ export interface ConferenceRoom {
   description: string | null;
   has_user_pin: boolean;
   has_admin_pin: boolean;
+  has_listener_pin: boolean;
   max_participants: number;
   record: boolean;
   announce_join_leave: boolean;
@@ -1721,6 +1744,12 @@ export interface ConferenceRoom {
   moh_class_id: string | null;
   moh_class_name: string | null;
   is_enabled: boolean;
+  /** Issue #392. */
+  announce_count: boolean;
+  announce_count_above: number | null;
+  end_on_silence_seconds: number | null;
+  auto_outcall: string[];
+  record_at_members: number | null;
   problems: string[];
   in_use_by: number;
   owners: string[];
@@ -1742,6 +1771,12 @@ export interface ConferenceRoomInput {
   wait_for_admin?: boolean;
   moh_class_id?: string | null;
   is_enabled?: boolean;
+  listener_pin?: string | null;
+  announce_count?: boolean;
+  announce_count_above?: number | null;
+  end_on_silence_seconds?: number | null;
+  auto_outcall?: string[];
+  record_at_members?: number | null;
 }
 
 /** A day/night switch between two destinations (§4.5). */
@@ -2161,6 +2196,8 @@ export interface PagingZone {
   allowed: PagingAllowed;
   members: GroupMember[];
   max_seconds: number;
+  /** Delayed paging (issue #392): seconds after recording; null: not offered. */
+  delayed_seconds?: number | null;
   profiles: { id: string; name: string }[];
   problems: string[];
   created_at: string;
@@ -2186,6 +2223,7 @@ export interface PagingZoneInput {
   allowed?: PagingAllowed;
   members?: string[];
   max_seconds?: number;
+  delayed_seconds?: number | null;
 }
 
 export type PagePriority = "normal" | "priority" | "emergency";
@@ -2206,6 +2244,8 @@ export interface PagingPage {
   allowed: PagingAllowed;
   members: GroupMember[];
   max_seconds: number;
+  /** Delayed paging (issue #392): seconds after recording; null: not offered. */
+  delayed_seconds?: number | null;
   is_enabled: boolean;
   last_sent_at: string | null;
   problems: string[];
@@ -2226,6 +2266,7 @@ export interface PagingPageInput {
   allowed?: PagingAllowed;
   members?: string[];
   max_seconds?: number;
+  delayed_seconds?: number | null;
   is_enabled?: boolean;
 }
 
@@ -3452,6 +3493,9 @@ export interface ClassOfService {
   monitor_protected?: boolean;
   allow_fax: boolean;
   max_outbound_calls: number | null;
+  /** Outbound Call Limit (#392): outside calls per phone per period. */
+  calls_per_period?: number | null;
+  call_period?: string;
   /** null: all of them. */
   allowed_ring_group_ids?: string[] | null;
   allowed_queue_ids?: string[] | null;
@@ -3479,6 +3523,9 @@ export interface ClassOfServiceInput {
   allow_fax?: boolean;
   max_outbound_calls?: number | null;
   no_call_limit?: boolean;
+  calls_per_period?: number | null;
+  call_period?: "hour" | "day" | "week" | "month";
+  no_period_limit?: boolean;
   allowed_ring_group_ids?: string[] | null;
   allowed_queue_ids?: string[] | null;
   allowed_conference_ids?: string[] | null;
@@ -4084,4 +4131,15 @@ export interface MyOrganizations {
   organizations: { id: string; name: string; slug: string }[];
   system: boolean;
   switcher: boolean;
+}
+
+/** Caller name lookup over HTTP (issue #392); platform setting. */
+export interface CallerNameSettings {
+  enabled: boolean;
+  url: string | null;
+  header_name: string | null;
+  has_header_value: boolean;
+  json_field: string | null;
+  timeout_ms: number;
+  cache_minutes: number;
 }

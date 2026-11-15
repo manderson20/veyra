@@ -31,6 +31,8 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
   const [protectedCls, setProtectedCls] = useState(false);
   const [fax, setFax] = useState(true);
   const [maxCalls, setMaxCalls] = useState("");
+  const [perPeriod, setPerPeriod] = useState("");
+  const [period, setPeriod] = useState<"hour" | "day" | "week" | "month">("day");
   const [paging, setPaging] = useState(true);
   const [ringGroupIds, setRingGroupIds] = useState<string[] | null>(null);
   const [queueIds, setQueueIds] = useState<string[] | null>(null);
@@ -60,6 +62,8 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
       setProtectedCls(cls?.monitor_protected ?? false);
       setFax(cls?.allow_fax ?? true);
       setMaxCalls(cls?.max_outbound_calls ? String(cls.max_outbound_calls) : "");
+      setPerPeriod(cls?.calls_per_period ? String(cls.calls_per_period) : "");
+      setPeriod((cls?.call_period as "hour" | "day" | "week" | "month" | undefined) ?? "day");
       setPaging(cls?.allow_paging ?? true);
       setRingGroupIds(cls?.allowed_ring_group_ids ?? null);
       setQueueIds(cls?.allowed_queue_ids ?? null);
@@ -94,6 +98,8 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
         allowed_extension_ids: listed === null ? null : listed.map((x) => x.id),
         ...(allCodes ? (cls ? { all_feature_codes: true } : { allowed_feature_code_keys: null }) : { allowed_feature_code_keys: codes }),
         ...(maxCalls.trim() ? { max_outbound_calls: Number(maxCalls) } : (cls ? { no_call_limit: true } : {})),
+        ...(perPeriod.trim() ? { calls_per_period: Number(perPeriod) } : (cls ? { no_period_limit: true } : {})),
+        call_period: period,
       };
       const saved = cls
         ? await api.patch<ClassOfService>(`/classes-of-service/${cls.id}`, body)
@@ -166,6 +172,12 @@ export function ClassOfServiceDialog({ open, onClose, cls, onSaved }: { open: bo
           <Checkbox label="Never monitored" checked={protectedCls} onChange={(e) => setProtectedCls(e.target.checked)}
             description="For counselors, nurses and others whose calls must stay private: no supervisor code or web button reaches these phones." />
           <TextField label="Outside calls at once (empty: no limit)" type="number" min={1} max={500} value={maxCalls} error={errors.fields.max_outbound_calls} onChange={(e) => setMaxCalls(e.target.value)} help="Counted across all phones of the class." />
+          <div className="form-grid">
+            <TextField label="Outside calls per phone (empty: no limit)" type="number" min={1} max={10000} value={perPeriod} error={errors.fields.calls_per_period}
+              help="Each phone of the class may place this many outside calls in the period; then it hears that the call cannot be completed. Emergency calls are never counted." onChange={(e) => setPerPeriod(e.target.value)} />
+            <SelectField label="Per" value={period} error={errors.fields.call_period} onChange={(e) => setPeriod(e.target.value as "hour" | "day" | "week" | "month")}
+              options={[{ value: "hour", label: "Hour" }, { value: "day", label: "Day" }, { value: "week", label: "Week (Monday to Sunday)" }, { value: "month", label: "Month" }]} />
+          </div>
         </div>
         {errors.message ? <Callout tone="danger">{errors.message}</Callout> : null}
       </form>

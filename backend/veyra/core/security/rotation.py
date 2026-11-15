@@ -128,6 +128,13 @@ def ciphers(db: Session) -> Iterator[Cipher]:
         "conference room",
     )
     yield from _column(
+        db,
+        ConferenceRoom,
+        "listener_pin_ciphertext",
+        lambda r: conference_pin_purpose(r.id, "listener"),
+        "conference room",
+    )
+    yield from _column(
         db, CallFlow, "pin_ciphertext", lambda r: call_flow_pin_purpose(r.id), "call flow"
     )
     yield from _column(

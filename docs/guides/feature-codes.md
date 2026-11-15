@@ -4,7 +4,7 @@ summary: The star codes phones dial to forward calls, turn on Do Not Disturb, pi
 audience: admin
 section: Getting started
 order: 60
-reviewed: 0.27.79
+reviewed: 0.27.87
 checked: 2026-11-01
 pages:
   - /feature-codes/
@@ -52,6 +52,8 @@ These are the defaults. Your installation may have changed some of them: the pag
 | `*45` | Queue log in / log out | Alone: every queue this phone may join. With a queue number: that queue only. |
 | `*46` | Queue pause / unpause | Alone, with a queue number, or with `**` and a pause reason's number. |
 | `*47` | Queue waiting count | With a queue number: says how many callers are waiting. |
+| `*51` | Pickup In-call | With an extension: takes over that phone's answered call, and that phone drops out. Only phones on the extension's **Pickup In-call** list may do it (see [Extensions](guide:extensions)). |
+| `*59` | Delayed page | With a paging zone or page number: record a message, press `#` or hang up, and it is paged after the zone's delay (see [Paging zones](guide:paging-zones)). |
 | `*1` | Record this call | During a call: starts recording (a beep); again, stops it. |
 | `*2` | Attended transfer | During a call, then the number: talk first, hang up to connect. |
 | `##` | Blind transfer | During a call, then the number: the call goes straight across. |

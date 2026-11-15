@@ -65,7 +65,11 @@ def _start_event_listener(app: FastAPI) -> AriEventListener | None:
     if ari is None or not isinstance(ari, AriClient):
         app.state.callevents.state = "disabled"
         return None
-    listener = AriEventListener(ari, app.state.callevents)
+    listener = AriEventListener(
+        ari,
+        app.state.callevents,
+        conference_act=getattr(adapter, "conference_action", None),
+    )
     listener.start()
     app.state.callevents_listener = listener
     return listener

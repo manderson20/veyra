@@ -65,6 +65,8 @@ class PageIn(BaseModel):
     allowed: Allowed = "everyone"
     members: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_MEMBERS)
     max_seconds: int = Field(120, ge=5, le=600)
+    # Delayed paging (issue #392); not for a recorded page.
+    delayed_seconds: int | None = Field(None, ge=0, le=300)
     is_enabled: bool = True
 
     @field_validator("name")
@@ -95,6 +97,7 @@ class PagePatch(BaseModel):
     allowed: Allowed | None = None
     members: list[uuid.UUID] | None = Field(None, max_length=MAX_MEMBERS)
     max_seconds: int | None = Field(None, ge=5, le=600)
+    delayed_seconds: int | None = Field(None, ge=0, le=300)
     is_enabled: bool | None = None
 
     @field_validator("name")
@@ -138,6 +141,7 @@ class PageOut(BaseModel):
     allowed: str
     members: list[MemberOut]
     max_seconds: int
+    delayed_seconds: int | None = None
     is_enabled: bool
     last_sent_at: datetime | None
     problems: list[str]
@@ -239,6 +243,8 @@ def _outs(db: Session, rows: list[PageModel]) -> list[PageOut]:
             problems.append("A zone of this page is disabled.")
         if r.allowed == "members" and not members[r.id]:
             problems.append("Only members may start this page, and it has none.")
+        if r.audio_id and r.delayed_seconds is not None:
+            problems.append("A recorded page plays its recording; delayed paging does not apply.")
         a = audio.get(r.audio_id) if r.audio_id else None
         if r.audio_id and a is None:
             problems.append("The recording no longer exists.")
@@ -276,6 +282,7 @@ def _outs(db: Session, rows: list[PageModel]) -> list[PageOut]:
                     key=lambda m: m.number,
                 ),
                 max_seconds=r.max_seconds,
+                delayed_seconds=r.delayed_seconds,
                 is_enabled=r.is_enabled,
                 last_sent_at=last.get(r.id),
                 problems=problems,
@@ -461,6 +468,7 @@ def create_page(
         priority=body.priority,
         allowed=body.allowed,
         max_seconds=body.max_seconds,
+        delayed_seconds=body.delayed_seconds,
         is_enabled=body.is_enabled,
     )
     db.add(page)
@@ -528,6 +536,10 @@ def update_page(
         elif field == "description" and field in changes and changes[field] != page.description:
             page.description = changes[field]
             details[field] = True
+    # None turns delayed paging off, so it is not skipped like the fields above.
+    if "delayed_seconds" in changes and changes["delayed_seconds"] != page.delayed_seconds:
+        page.delayed_seconds = changes["delayed_seconds"]
+        details["delayed_seconds"] = page.delayed_seconds
     zones = list(changes["zones"]) if changes.get("zones") is not None else None
     members = list(changes["members"]) if changes.get("members") is not None else None
     if zones is not None or members is not None:

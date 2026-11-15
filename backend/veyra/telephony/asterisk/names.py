@@ -116,6 +116,11 @@ class Names:
         """What a wake-up call plays when answered (issue #392)."""
         return self._p("wakeup")
 
+    @property
+    def vm_notify(self) -> str:
+        """Where a VM Notify call goes once answered (issue #392)."""
+        return self._p("vmnotify")
+
     def disa(self, slug: str) -> str:
         """Outside line access: the PIN, then a dial tone (issue #392)."""
         return self._p(f"disa-{slug}")

@@ -108,6 +108,9 @@ ORG_LISTS: tuple[str, ...] = (
 # Dicts whose named members are organization-owned lists.
 ORG_NESTED: dict[str, tuple[str, ...]] = {"paging": ("zones", "pages")}
 SHARED_KEYS: tuple[str, ...] = (
+    # The installation's caller name lookup (issue #392): one service and
+    # token; routes of any organization opt in.
+    "caller_name",
     "custom_dialplan",
     "feature_codes",
     "installation",
@@ -148,7 +151,7 @@ def time_condition_pin_purpose(tc_id: Any) -> str:
 
 
 def conference_pin_purpose(room_id: Any, which: str) -> str:
-    """Encryption purpose of a conference room's user or admin PIN."""
+    """Encryption purpose of a conference room's user, admin or listener PIN."""
     return f"conference.pin:{room_id}:{which}"
 
 
@@ -268,6 +271,15 @@ def _callflow(
     """Announcements and conference rooms of active organizations
     (docs/CALL_FEATURES.md §4.1, §4.3). ``targets`` already knows their slugs."""
     prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
+    # Numbers a room calls when it starts (#392) that are the organization's
+    # own extensions are rung directly.
+    wanted = {n for r in rooms for n in r.auto_outcall or []}
+    local_numbers: dict[Any, set[str]] = {}
+    if wanted:
+        for org_id, number in db.execute(
+            select(Extension.organization_id, Extension.number).where(Extension.number.in_(wanted))
+        ):
+            local_numbers.setdefault(org_id, set()).add(number)
 
     def prompt_slug(prompt_id: Any, org_id: Any) -> str | None:
         p = prompts.get(prompt_id) if prompt_id else None
@@ -339,9 +351,35 @@ def _callflow(
                 "music_on_hold_alone": r.music_on_hold_alone,
                 "wait_for_admin": r.wait_for_admin,
                 "hold_music": moh_slug(r.moh_class_id, r.organization_id),
+                # Issue #392; written only when set, so other output is unchanged.
+                "announce_count": r.announce_count,
+                "announce_count_above": r.announce_count_above,
+                "listener_pin": _conference_pin(r, "listener", key),
+                "end_on_silence_seconds": r.end_on_silence_seconds,
+                "auto_outcall": [
+                    {"number": n, "local": n in local_numbers.get(r.organization_id, set())}
+                    for n in r.auto_outcall or []
+                ],
+                "record_at_members": r.record_at_members,
             }
             for r in rooms
         ],
+    }
+
+
+def _caller_name(db: Session) -> dict[str, Any] | None:
+    """Where the dialplan asks for caller names (issue #392); None: off."""
+    from veyra.core.config import get_settings
+    from veyra.telephony import caller_name
+
+    s = caller_name.load(db)
+    if not s.enabled or not s.url or not s.token:
+        return None
+    return {
+        "url": f"http://127.0.0.1:{get_settings().api_port}/api/v1/internal/caller-name",
+        "token": s.token,
+        # The API answers within its own timeout; the dialplan waits a little longer.
+        "timeout_seconds": s.timeout_ms // 1000 + 1,
     }
 
 
@@ -376,6 +414,9 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     class_slug = {c.id: c.slug for c in classes}
     route_slug = {r.id: r.slug for r in db.scalars(select(OutboundRoute))}
     extension_number = {str(e.id): e.number for e in extensions}
+    same_org: dict[Any, set[str]] = {}
+    for e in extensions:
+        same_org.setdefault(e.organization_id, set()).add(str(e.id))
     destination_slug = {
         str(row_id): slug
         for model in (RingGroup, CallQueue, ConferenceRoom)
@@ -514,6 +555,7 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
         if row.max_outside_calls
     }
     return {
+        "caller_name": _caller_name(db),
         "snapshot_version": SNAPSHOT_VERSION,
         "veyra_version": __version__,
         "installation": {
@@ -548,6 +590,11 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "allow_monitor": c.allow_monitor,
                 "monitor_protected": c.monitor_protected,
                 "max_outbound_calls": c.max_outbound_calls,
+                **(
+                    {"calls_per_period": c.calls_per_period, "call_period": c.call_period}
+                    if c.calls_per_period
+                    else {}
+                ),
             }
             for c in classes
             if c.organization_id in active
@@ -630,6 +677,12 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "srtp": srtp_modes.get(e.id, "off"),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
+                # Pickup In-call (issue #392): who may take over its calls.
+                "pickup_incall_by": sorted(
+                    extension_number[x]
+                    for x in e.pickup_incall_ids or []
+                    if x in extension_number and x in same_org.get(e.organization_id, set())
+                ),
                 "shared_mailboxes": shared_by_ext.get(e.id, []),
                 "site": str(e.site_id) if e.site_id else None,
                 # The organization's Do Not Disturb exceptions (issue #170).
@@ -742,6 +795,7 @@ def _paging(
                 "allowed": z.allowed,
                 "members": sorted(zone_members.get(z.id, [])),
                 "max_seconds": z.max_seconds,
+                "delayed_seconds": z.delayed_seconds,
             }
         )
     zone_by_id = {z.id: z for z in zones}
@@ -775,6 +829,7 @@ def _paging(
                 "allowed": p.allowed,
                 "members": sorted(page_members.get(p.id, [])),
                 "max_seconds": p.max_seconds,
+                "delayed_seconds": None if p.audio_id else p.delayed_seconds,
             }
         )
     return {"zones": zone_rows, "pages": page_rows, "defaults": {"delay_ms": 200, "ttl": 1}}
@@ -1255,6 +1310,8 @@ def _routing(
 ) -> dict[str, Any]:
     """Trunks, routes and time conditions (docs/TRUNKS_ROUTING.md §8)."""
     org_slug = org_slug or {}
+    # Extension Routing (issue #392): "<organization>/<number>" of each phone.
+    phone_key = {str(e.id): f"{org_slug.get(e.organization_id, '')}/{e.number}" for e in extensions}
     trunks = db.scalars(select(SipTrunk).order_by(SipTrunk.slug)).all()
     enabled_trunks = {t.id: t for t in trunks if t.is_enabled}
     conditions = db.scalars(select(TimeCondition).order_by(TimeCondition.name)).all()
@@ -1270,10 +1327,12 @@ def _routing(
     ).all()
     links = db.scalars(select(OutboundRouteTrunk).order_by(OutboundRouteTrunk.position)).all()
     route_trunks: dict[Any, list[str]] = {}
+    route_weights: dict[Any, list[int]] = {}
     for link in links:
         trunk = enabled_trunks.get(link.trunk_id)
         if trunk is not None:
             route_trunks.setdefault(link.route_id, []).append(trunk.slug)
+            route_weights.setdefault(link.route_id, []).append(link.weight or 1)
     # Time conditions of voicemail after-hours greetings (issue #169).
     used_conditions: set[Any] = set(
         db.scalars(
@@ -1322,6 +1381,7 @@ def _routing(
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
                 "caller_id_prefix": r.caller_id_prefix,
                 "queue_priority": r.queue_priority,
+                **({"name_lookup": True} if r.name_lookup else {}),
                 # A rule whose target was deleted is skipped: the call takes the route.
                 "caller_rules": [
                     {"match": c.match, "number": c.number, "destination": dest}
@@ -1383,11 +1443,26 @@ def _routing(
                 "site": str(r.site_id) if r.site_id else None,
                 "patterns": list(r.patterns or []),
                 "trunks": route_trunks.get(r.id, []),
+                **(
+                    {
+                        "allowed_extensions": sorted(
+                            phone_key[x] for x in r.allowed_extension_ids if x in phone_key
+                        )
+                    }
+                    if r.allowed_extension_ids is not None and not r.is_emergency
+                    else {}
+                ),
                 "caller_id_number": r.caller_id_number,
                 "caller_id_force": bool(r.caller_id_force),
                 # None: every organization (docs/MULTI_TENANCY.md §4).
                 "organization": org_slug.get(r.organization_id) if r.organization_id else None,
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
+                # Issue #392; only a weighted route carries its weights.
+                **(
+                    {"trunk_weights": route_weights.get(r.id, [])}
+                    if r.trunk_strategy == "weighted" and not r.is_emergency
+                    else {}
+                ),
             }
             for r in outbound
             if r.organization_id is None or r.organization_id in active_orgs

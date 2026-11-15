@@ -346,7 +346,7 @@ write_env() {
         "VEYRA_ETC=$VEYRA_ETC" "VEYRA_DATA=$VEYRA_DATA" "VEYRA_LOG_DIR=$VEYRA_LOG_DIR" \
         "VEYRA_PREFIX=$VEYRA_PREFIX" "DB_NAME=$VEYRA_DB_NAME" "TELEPHONY_ENGINE=$TELEPHONY_ENGINE" \
         "PUBLIC_HOST=$(public_host)" "PROVISIONING_HTTP=$(provisioning_http)" \
-        "PROVISIONING_HTTP_MODE=$(provisioning_http_mode)"
+        "PROVISIONING_HTTP_MODE=$(provisioning_http_mode)" "API_PORT=$VEYRA_API_PORT"
     if [[ -f "$VEYRA_ETC/veyra.env" ]] && ! cmp -s "$tmp" "$VEYRA_ETC/veyra.env"; then
         # Keep a locally configured update source across re-installs.
         local url
@@ -620,10 +620,10 @@ do_telephony() {
     run install -d -m 2770 -o "$VEYRA_USER" -g asterisk "$VEYRA_DATA/prompts" \
         "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" "$VEYRA_DATA/moh" \
         "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming" "$VEYRA_DATA/recordings/conferences" \
-        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming"
+        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming" "$VEYRA_DATA/paging-delayed"
     run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" \
         "$VEYRA_DATA/moh" "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming" "$VEYRA_DATA/recordings/conferences" \
-        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming"
+        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming" "$VEYRA_DATA/paging-delayed"
     # Firmware images uploaded through the API, served by NGINX (www-data reads).
     run install -d -m 0755 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firmware"
     local role

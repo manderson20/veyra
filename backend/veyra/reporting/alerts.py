@@ -54,6 +54,8 @@ RULES: dict[str, RuleDef] = {
     for r in (
         RuleDef("engine_down", "Telephony engine down", 2),
         RuleDef("trunk_down", "Trunk down", 5),
+        # Issue #392: a trunk near its channel limit (trunks with a limit only).
+        RuleDef("trunk_busy", "Trunk near its channel limit", 5, 80, "% of channels"),
         RuleDef("service_down", "Veyra service not running", 2),
         RuleDef("disk_space", "Disk space low", 5, 10, "% free"),
         RuleDef("certificate", "HTTPS certificate expiring", 0, 21, "days"),
@@ -135,6 +137,36 @@ def check_trunks(db: Session, adapter: Any) -> list[Finding]:
         elif t.qualify_frequency and name in live and not live[name]:
             out.append(
                 Finding("trunk_down", t.slug, f"Trunk {t.name} is not reachable or not registered.")
+            )
+    return out
+
+
+def check_trunk_load(db: Session, adapter: Any, threshold: int) -> list[Finding]:
+    """Trunks whose calls in progress reach ``threshold`` percent of their
+    channel limit (issue #392). Counts the trunk's channels the engine
+    reports (``PJSIP/trunk-<slug>-…``)."""
+    trunks = [
+        t
+        for t in db.scalars(select(SipTrunk).where(SipTrunk.is_enabled.is_(True)))
+        if t.max_channels
+    ]
+    if not trunks:
+        return []
+    counts: dict[str, int] = {}
+    for call in adapter.active_calls():
+        if call.endpoint:
+            counts[call.endpoint] = counts.get(call.endpoint, 0) + 1
+    out = []
+    for t in trunks:
+        in_use = counts.get(f"trunk-{t.slug}", 0)
+        assert t.max_channels is not None
+        if in_use and 100 * in_use >= threshold * t.max_channels:
+            out.append(
+                Finding(
+                    "trunk_busy",
+                    t.slug,
+                    f"Trunk {t.name}: {in_use} of {t.max_channels} channels in use.",
+                )
             )
     return out
 
@@ -569,6 +601,7 @@ def run(db: Session, settings: Any, adapter: Any | None, now: datetime | None = 
         checks += [
             lambda: check_engine(adapter),
             lambda: check_trunks(db, adapter),
+            lambda: check_trunk_load(db, adapter, threshold("trunk_busy")),
             lambda: check_phones(db, adapter, threshold("phones_unregistered")),
         ]
     for check in checks:

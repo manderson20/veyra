@@ -4,7 +4,7 @@ summary: Combine paging zones into pages such as an all-call, give them a record
 audience: admin
 section: Paging and bells
 order: 20
-reviewed: 0.27.44
+reviewed: 0.27.87
 checked: 2026-11-07T23:43Z
 pages:
   - /paging/
@@ -42,6 +42,7 @@ Typical pages are an *All call* over every zone, *Building A and B* for two buil
 | **Repeat the recording** | 1 to 5 times. Only with a recording. |
 | **Priority** | **Normal**, **Priority (interrupts calls on Poly phones)** or **Emergency**. |
 | **Longest page (seconds)** | 5 to 600, default 120. |
+| **Delayed paging (seconds)** | Empty: not offered. Otherwise phones may dial `*59` and the page's number to record a message that is paged this many seconds later, as for a [paging zone](guide:paging-zones). Not used by a page that plays a recording. |
 | **Who may start it from a phone** | **Everyone in the organization**, **Listed phones only** (add them under **Phones allowed to start it**), or **Only from Veyra (interface, bells, API)**. |
 | **Description** | Optional; shown under the name in the list. |
 | **Play a tone before the page** | On by default: a short tone warns people before the page starts. |

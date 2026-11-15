@@ -48,8 +48,8 @@ export default function ConferencesPage() {
       ),
     },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (c: ConferenceRoom) => <span>{c.organization_name}</span> }] : []),
-    { key: "pins", header: "PINs", render: (c) => <span className="row" style={{ gap: 4 }}>{c.has_user_pin ? <Badge tone="outline" icon="lock">Participants</Badge> : null}{c.has_admin_pin ? <Badge tone="outline" icon="key">Administrator</Badge> : null}{!c.has_user_pin && !c.has_admin_pin ? <span className="subtle">Open</span> : null}</span> },
-    { key: "options", header: "Options", render: (c) => <span className="table__secondary">{[c.max_participants ? `up to ${c.max_participants}` : null, c.record ? "recorded" : null, c.wait_for_admin ? "waits for administrator" : null].filter(Boolean).join(", ") || "—"}</span> },
+    { key: "pins", header: "PINs", render: (c) => <span className="row" style={{ gap: 4 }}>{c.has_user_pin ? <Badge tone="outline" icon="lock">Participants</Badge> : null}{c.has_admin_pin ? <Badge tone="outline" icon="key">Administrator</Badge> : null}{c.has_listener_pin ? <Badge tone="outline" icon="lock">Listener</Badge> : null}{!c.has_user_pin && !c.has_admin_pin && !c.has_listener_pin ? <span className="subtle">Open</span> : null}</span> },
+    { key: "options", header: "Options", render: (c) => <span className="table__secondary">{[c.max_participants ? `up to ${c.max_participants}` : null, c.record ? "recorded" : c.record_at_members ? `recorded from ${c.record_at_members}` : null, c.wait_for_admin ? "waits for administrator" : null, c.end_on_silence_seconds ? `ends after ${Math.round(c.end_on_silence_seconds / 60)} min silence` : null, c.auto_outcall.length ? `calls ${c.auto_outcall.length} on start` : null].filter(Boolean).join(", ") || "—"}</span> },
     { key: "status", header: "Status", render: (c) => !c.is_enabled ? <Badge tone="neutral">Disabled</Badge> : c.problems.length ? <Badge tone="warn" icon="alert">{c.problems.length} problem{c.problems.length === 1 ? "" : "s"}</Badge> : <Badge tone="ok" icon="checkCircle">Ready</Badge> },
   ];
 
