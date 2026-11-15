@@ -64,6 +64,9 @@ class PagingZone(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         String(16), default="everyone"
     )  # everyone|members|administrators
     max_seconds: Mapped[int] = mapped_column(Integer, default=120)
+    # Delayed paging (Grandstream, issue #392): record first, page after this
+    # many seconds. None: not offered.
+    delayed_seconds: Mapped[int | None] = mapped_column(Integer)
 
 
 class FirmwareImage(UUIDPrimaryKey, Timestamps, Base):

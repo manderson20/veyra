@@ -80,6 +80,8 @@ Rings other numbers, such as a mobile, as well as the desk phone. Add up to 10 n
 
 To switch it automatically, choose a calendar under **On during events of a calendar** and choose **Save calendar link**. Follow me comes on when an event starts and goes off when it ends, within a few minutes, with no deployment. Fill in **Only events whose title contains** to use only some events. A switch by hand during an event stands until the next event, and if follow me was already on, the event's end leaves it on. Only administrators can set this link.
 
+**Pickup In-call** (also on this tab) lists the phones that may take over this phone's answered call: someone at a listed phone dials the **Pickup In-call** code (`*51`) and this extension's number, takes over the conversation, and this phone drops out of the call. With nobody listed, no phone can do it. Choose **Save** on the card, then deploy.
+
 ### Voicemail
 
 Shows the extension's voicemail box. Without a box, unanswered calls simply end. Choose **Create box** (or **Edit box**) to set:

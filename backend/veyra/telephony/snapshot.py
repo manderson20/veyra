@@ -395,6 +395,9 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
     class_slug = {c.id: c.slug for c in classes}
     route_slug = {r.id: r.slug for r in db.scalars(select(OutboundRoute))}
     extension_number = {str(e.id): e.number for e in extensions}
+    same_org: dict[Any, set[str]] = {}
+    for e in extensions:
+        same_org.setdefault(e.organization_id, set()).add(str(e.id))
     destination_slug = {
         str(row_id): slug
         for model in (RingGroup, CallQueue, ConferenceRoom)
@@ -649,6 +652,12 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "srtp": srtp_modes.get(e.id, "off"),
                 "secret": _secret(e, key),
                 "pickup_groups": pickup.get(e.id, []),
+                # Pickup In-call (issue #392): who may take over its calls.
+                "pickup_incall_by": sorted(
+                    extension_number[x]
+                    for x in e.pickup_incall_ids or []
+                    if x in extension_number and x in same_org.get(e.organization_id, set())
+                ),
                 "shared_mailboxes": shared_by_ext.get(e.id, []),
                 "site": str(e.site_id) if e.site_id else None,
                 # The organization's Do Not Disturb exceptions (issue #170).
@@ -761,6 +770,7 @@ def _paging(
                 "allowed": z.allowed,
                 "members": sorted(zone_members.get(z.id, [])),
                 "max_seconds": z.max_seconds,
+                "delayed_seconds": z.delayed_seconds,
             }
         )
     zone_by_id = {z.id: z for z in zones}
@@ -794,6 +804,7 @@ def _paging(
                 "allowed": p.allowed,
                 "members": sorted(page_members.get(p.id, [])),
                 "max_seconds": p.max_seconds,
+                "delayed_seconds": None if p.audio_id else p.delayed_seconds,
             }
         )
     return {"zones": zone_rows, "pages": page_rows, "defaults": {"delay_ms": 200, "ttl": 1}}

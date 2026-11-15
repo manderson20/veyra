@@ -364,11 +364,117 @@ def _page_event(org: str, kind: str, slug: str) -> str:
     )
 
 
-def _paging_contexts(paging: dict[str, Any], prompts: str, cos: Cos | None = None) -> list[str]:
+DELAYED_PAGE_MIN_BYTES = 4000  # about a quarter second of audio: nothing said
+DELAYED_PAGE_QUEUE_WAITS = 60  # 2 s each: how long a delayed page waits its turn
+
+
+def _delayed_dir(prompts: str) -> str:
+    """Where delayed pages are recorded: ``paging-delayed`` next to the prompts
+    (shared with Asterisk like the prompts; the worker removes old files)."""
+    return f"{prompts.rstrip('/').rsplit('/', 1)[0]}/paging-delayed"
+
+
+def _delayed_paging(
+    entries: list[tuple[str, dict[str, Any]]],
+    zones: list[dict[str, Any]],
+    code: str | None,
+    prompts: str,
+    cos: Cos | None,
+) -> tuple[list[str], list[str]]:
+    """Delayed paging (Grandstream, issue #392): ``<code><number>`` records a
+    message; when the caller presses # or hangs up, a Local channel waits the
+    zone's delay, waits for an earlier delayed page to the same zone to end,
+    and plays the message into the page. Returns the lines for the paging
+    context and for the play context."""
+    if not code:
+        return [], []
+    play = engine_names.current().page_play
+    folder = _delayed_dir(prompts)
+    dial: list[str] = []
+    playing: list[str] = []
+    for kind, e in entries:
+        delay = e.get("delayed_seconds")
+        number = e.get("number")
+        if delay is None or not number:
+            continue
+        delay = int(delay)
+        if not 0 <= delay <= 3600:
+            raise GenerationError(f"paging {kind} {e.get('slug')}: delay {delay} is out of range")
+        number = _check_value(str(number), f"{kind} number")
+        org = _check_value(str(e.get("organization") or ""), "organization")
+        slug = _check_section(str(e["slug"]), f"{kind} slug")
+        key = f"{kind}-{slug}"
+        zone_slugs = [slug] if kind == "zone" else [str(x) for x in e.get("zones") or []]
+        if not zone_slugs:
+            continue
+        seconds = int(e.get("max_seconds") or 120)
+        dial += [
+            f"exten => {code}{number},1,NoOp(Veyra delayed page {key} by ${{CALLERID(num)}})",
+            *_allowed_lines(e, org, cos),
+            " same => n,Answer()",
+            f" same => n,Set(VEYRA_DFILE={folder}/${{UNIQUEID}})",
+            f" same => n,Set(VEYRA_DSEND={key})",
+            f" same => n,Set(VEYRA_DTIMEOUT={delay + DELAYED_PAGE_QUEUE_WAITS * 2 + 60})",
+            # Press # to finish; hanging up also sends it (the h extension).
+            f" same => n,Record(${{VEYRA_DFILE}}.wav,0,{seconds},k)",
+            " same => n,Gosub(veyra-delayed-send,1)",
+            " same => n,Playback(beep)",
+            " same => n,Hangup()",
+            " same => n(denied),NoOp(Veyra: not allowed to page)",
+            " same => n,Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
+        pre_tone = [" same => n,Playback(beep)"] if e.get("pre_tone", True) else []
+        playing += [
+            f"exten => dpage-{key},1,NoOp(Veyra delayed page {key})",
+            " same => n,Answer()",
+            _page_dial(zones, zone_slugs, seconds),
+            " same => n,Hangup()",
+            f"exten => dplay-{key},1,NoOp(Veyra plays a delayed page into {key})",
+            f" same => n,Wait({delay})" if delay else " same => n,NoOp(no delay)",
+            # Messages to the same zone play one after another.
+            " same => n,Set(VEYRA_N=0)",
+            f" same => n(queue),GotoIf($[${{GROUP_COUNT({key}@veyra_dpage)}} = 0"
+            f" | ${{VEYRA_N}} >= {DELAYED_PAGE_QUEUE_WAITS}]?go)",
+            " same => n,Set(VEYRA_N=$[${VEYRA_N} + 1])",
+            " same => n,Wait(2)",
+            " same => n,Goto(queue)",
+            f" same => n(go),Set(GROUP(veyra_dpage)={key})",
+            " same => n,Answer()",
+            *pre_tone,
+            " same => n,Playback(${VEYRA_DFILE})",
+            " same => n,Hangup()",
+        ]
+    if dial:
+        dial += [
+            # Sends the recorded message once: after #, or when the caller
+            # hangs up while recording.
+            'exten => veyra-delayed-send,1,GotoIf($["${VEYRA_DSEND}"=""]?done)',
+            f" same => n,GotoIf($[${{STAT(s,${{VEYRA_DFILE}}.wav)}}"
+            f" < {DELAYED_PAGE_MIN_BYTES}]?drop)",
+            f" same => n,Originate(Local/dplay-${{VEYRA_DSEND}}@{play}/n,exten,{play},"
+            "dpage-${VEYRA_DSEND},1,${VEYRA_DTIMEOUT},av(__VEYRA_DFILE=${VEYRA_DFILE}))",
+            " same => n(drop),Set(VEYRA_DSEND=)",
+            " same => n(done),Return()",
+            'exten => h,1,ExecIf($["${VEYRA_DSEND}"!=""]?Gosub(veyra-delayed-send,1))',
+        ]
+    return dial, playing
+
+
+def _paging_contexts(
+    paging: dict[str, Any], prompts: str, cos: Cos | None = None, delayed_code: str | None = None
+) -> list[str]:
     """``veyra-paging`` (zone and page numbers dialled from phones) and
     ``veyra-page-play`` (recordings played into a page by Veyra)."""
     zones = list(paging.get("zones") or [])
     pages = list(paging.get("pages") or [])
+    delayed_dial, delayed_play = _delayed_paging(
+        [("zone", z) for z in zones] + [("page", p) for p in pages],
+        zones,
+        delayed_code,
+        prompts,
+        cos,
+    )
     lines = [
         f"[{engine_names.current().paging}]",
         "; Paging zones and pages dialled from phones (docs/PAGING_RECORDINGS.md §2.3).",
@@ -431,10 +537,12 @@ def _paging_contexts(paging: dict[str, Any], prompts: str, cos: Cos | None = Non
             " same => n,Playback(pbx-invalid)",
             " same => n,Hangup()",
         ]
+    lines += delayed_dial
     lines += [
         "",
         f"[{engine_names.current().page_play}]",
         "; Recorded pages: the far leg plays the recording into the Page().",
+        *delayed_play,
     ]
     for p in pages:
         if not p.get("audio") or not p.get("zones"):
@@ -1475,7 +1583,9 @@ def _dialplan(
                 "zones": mine(list(paging.get("zones") or []), ns),
                 "pages": mine(list(paging.get("pages") or []), ns),
             }
-            lines += _paging_contexts(part, prompts_dir, _cos_for(snapshot, ns))
+            lines += _paging_contexts(
+                part, prompts_dir, _cos_for(snapshot, ns), codes.get("delayed_page")
+            )
     lines += _lastcid_context()
     lines += _alert_info_context()
     lines += _rg_answered_context()
@@ -2814,8 +2924,60 @@ def _features(
         f"[{n.call_codes}]",
         *_call_codes(codes, cos),
         *_spy_codes(codes, cos, extensions, beep_orgs or set()),
+        *_pickup_incall(codes, extensions),
     ]
     lines.append("")
+    return lines
+
+
+PICKUP_INCALL_TRIES = 4  # channels of the target phone looked at
+
+
+def _pickup_incall(codes: dict[str, str], extensions: list[dict[str, Any]]) -> list[str]:
+    """Pickup In-call (Grandstream, issue #392): ``<code><extension>`` takes
+    over that phone's answered call; the other party is moved to the caller
+    with ``Bridge`` and the phone drops. Written only for extensions with a
+    list; only the extensions listed may use it. A PJSIP channel is
+    ``PJSIP/<endpoint>-`` plus 8 hex digits, so the phone's channels are cut
+    from ``CHANNELS()`` by length; the first with a bridged party is taken."""
+    code = codes.get("pickup_incall")
+    if not code:
+        return []
+    lines: list[str] = []
+    for ext in extensions:
+        allowed = [str(x) for x in ext.get("pickup_incall_by") or []]
+        if not allowed:
+            continue
+        number = str(ext["number"])
+        endpoint = _check_value(str(ext["endpoint_name"]), "endpoint name")
+        prefix = f"PJSIP/{endpoint}-"
+        width = len(prefix) + 8
+        alternatives = "|".join(re.escape(a) for a in allowed)
+        lines += [
+            f"exten => {code}{number},1,NoOp(Veyra pickup in-call of {number} by ${{VEYRA_EXT}})",
+            f' same => n,GotoIf(${{REGEX("^({alternatives})$" ${{VEYRA_EXT}})}}?ok:denied)',
+            f" same => n(ok),Set(VEYRA_CHANS=${{CHANNELS(^{re.escape(prefix)}[0-9a-f]{{8}}$)}})",
+            " same => n,Set(VEYRA_PEER=)",
+        ]
+        for i in range(PICKUP_INCALL_TRIES):
+            at = i * (width + 1)
+            lines += [
+                f" same => n,Set(VEYRA_C=${{VEYRA_CHANS:{at}:{width}}})",
+                ' same => n,ExecIf($["${VEYRA_PEER}"="" & "${VEYRA_C}"!=""]'
+                "?Set(VEYRA_PEER=${IMPORT(${VEYRA_C},BRIDGEPEER)}))",
+            ]
+        lines += [
+            ' same => n,GotoIf($["${VEYRA_PEER}"=""]?none)',
+            # The phone itself must not be the one taken (a call between two
+            # of its own lines); BRIDGEPEER names the other side.
+            f' same => n,GotoIf($["${{VEYRA_PEER:0:{len(prefix)}}}"="{prefix}"]?none)',
+            " same => n,Bridge(${VEYRA_PEER})",
+            " same => n,Hangup()",
+            " same => n(none),Playback(pbx-invalid)",
+            " same => n,Hangup()",
+            " same => n(denied),Playback(pbx-invalid)",
+            " same => n,Hangup()",
+        ]
     return lines
 
 

@@ -58,6 +58,9 @@ class Extension(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # as many as are provisioned with the extension, at least one. The
     # generator takes the larger of this and the provisioned count (1..16).
     max_registrations: Mapped[int | None] = mapped_column(Integer)
+    # Pickup In-call (Grandstream, issue #392): the extensions (ids) that may
+    # take over this extension's answered calls with the feature code.
+    pickup_incall_ids: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     # Dispatchable location (docs/PRODUCTION_HARDENING.md §6): the building
     # and the floor/room text the on-site notification carries.
     building_id: Mapped[uuid.UUID | None] = mapped_column(

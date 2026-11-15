@@ -620,10 +620,10 @@ do_telephony() {
     run install -d -m 2770 -o "$VEYRA_USER" -g asterisk "$VEYRA_DATA/prompts" \
         "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" "$VEYRA_DATA/moh" \
         "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming" "$VEYRA_DATA/recordings/conferences" \
-        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming"
+        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming" "$VEYRA_DATA/paging-delayed"
     run chmod 2770 "$VEYRA_DATA/prompts" "$VEYRA_DATA/mailqueue" "$VEYRA_DATA/mailqueue/failed" \
         "$VEYRA_DATA/moh" "$VEYRA_DATA/recordings" "$VEYRA_DATA/recordings/incoming" "$VEYRA_DATA/recordings/conferences" \
-        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming"
+        "$VEYRA_DATA/fax" "$VEYRA_DATA/fax/incoming" "$VEYRA_DATA/paging-delayed"
     # Firmware images uploaded through the API, served by NGINX (www-data reads).
     run install -d -m 0755 -o "$VEYRA_USER" -g "$VEYRA_USER" "$VEYRA_DATA/firmware"
     local role

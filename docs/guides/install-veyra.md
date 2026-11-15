@@ -5,6 +5,7 @@ audience: admin
 section: Getting started
 order: 5
 reviewed: 0.27.60
+checked: 2026-11-15T17:21Z
 covers:
   - installer/install.sh
   - installer/preflight.sh

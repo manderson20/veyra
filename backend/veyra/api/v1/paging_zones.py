@@ -82,6 +82,8 @@ class ZoneIn(BaseModel):
     allowed: Allowed = "everyone"
     members: list[uuid.UUID] = Field(default_factory=list, max_length=64)
     max_seconds: int = Field(120, ge=5, le=600)
+    # Delayed paging (issue #392): seconds after recording; None: not offered.
+    delayed_seconds: int | None = Field(None, ge=0, le=300)
 
     @field_validator("number")
     @classmethod
@@ -125,6 +127,7 @@ class ZonePatch(BaseModel):
     allowed: Allowed | None = None
     members: list[uuid.UUID] | None = Field(None, max_length=64)
     max_seconds: int | None = Field(None, ge=5, le=600)
+    delayed_seconds: int | None = Field(None, ge=0, le=300)
 
     @field_validator("number")
     @classmethod
@@ -174,6 +177,7 @@ class ZoneOut(BaseModel):
     allowed: str
     members: list[MemberOut]
     max_seconds: int
+    delayed_seconds: int | None = None
     profiles: list[ProfileRef]
     problems: list[str]
     created_at: datetime
@@ -290,6 +294,7 @@ def _outs(db: Session, rows: list[PagingZone]) -> list[ZoneOut]:
                     key=lambda m: m.number,
                 ),
                 max_seconds=r.max_seconds,
+                delayed_seconds=r.delayed_seconds,
                 profiles=profiles[r.id],
                 problems=problems,
                 created_at=r.created_at,
@@ -464,7 +469,7 @@ def update_zone(
     members = changes.pop("members", None)
     details: dict[str, Any] = {}
     for field, value in changes.items():
-        if value is None and field not in ("site_id", "description", "number"):
+        if value is None and field not in ("site_id", "description", "number", "delayed_seconds"):
             continue
         if value != getattr(zone, field):
             details[field] = value

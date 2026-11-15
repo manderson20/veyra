@@ -32,6 +32,7 @@ export function PageDialog({ open, onClose, page, onSaved }: { open: boolean; on
   const [priority, setPriority] = useState<PagePriority>("normal");
   const [allowed, setAllowed] = useState<PagingAllowed>("everyone");
   const [members, setMembers] = useState<MemberDraft[]>([]);
+  const [delayed, setDelayed] = useState("");
   const [maxSeconds, setMaxSeconds] = useState("120");
   const [enabled, setEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -54,6 +55,7 @@ export function PageDialog({ open, onClose, page, onSaved }: { open: boolean; on
       setAllowed(page?.allowed ?? "everyone");
       setMembers(page ? membersFromIds(page.members) : []);
       setMaxSeconds(String(page?.max_seconds ?? 120));
+      setDelayed(page?.delayed_seconds == null ? "" : String(page.delayed_seconds));
       setEnabled(page?.is_enabled ?? true);
       errors.clear();
     }
@@ -76,6 +78,7 @@ export function PageDialog({ open, onClose, page, onSaved }: { open: boolean; on
         allowed,
         members: allowed === "members" ? members.map((m) => m.extension_id) : [],
         max_seconds: Number(maxSeconds) || 120,
+        delayed_seconds: delayed.trim() === "" ? null : Number(delayed),
         is_enabled: enabled,
       };
       const saved = page
@@ -125,6 +128,8 @@ export function PageDialog({ open, onClose, page, onSaved }: { open: boolean; on
         <div className="form-grid">
           <SelectField label="Priority" value={priority} options={(Object.keys(PRIORITY_LABELS) as PagePriority[]).map((p) => ({ value: p, label: PRIORITY_LABELS[p] }))} onChange={(e) => setPriority(e.target.value as PagePriority)} />
           <TextField label="Longest page (seconds)" type="number" min={5} max={600} value={maxSeconds} error={errors.fields.max_seconds} onChange={(e) => setMaxSeconds(e.target.value)} />
+          <TextField label="Delayed paging (seconds)" type="number" min={0} max={300} value={delayed} error={errors.fields.delayed_seconds}
+            help="Callers dial the Delayed page code, then this number, record a message and hang up; it is paged after this many seconds. Empty: not offered." onChange={(e) => setDelayed(e.target.value)} />
         </div>
         <SelectField label="Who may start it from a phone" value={allowed} options={(Object.keys(PAGING_ALLOWED_LABELS) as PagingAllowed[]).map((a) => ({ value: a, label: PAGING_ALLOWED_LABELS[a] }))} onChange={(e) => setAllowed(e.target.value as PagingAllowed)} />
         {allowed === "members" ? (

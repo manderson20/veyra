@@ -405,6 +405,8 @@ export interface Extension {
   class_of_service_name?: string | null;
   /** Phones that may register at once (EXTENSIONS.md §1); null: as many as are provisioned, at least one. */
   max_registrations?: number | null;
+  /** Pickup In-call (issue #392): extensions that may take over this phone's answered calls. */
+  pickup_incall_ids?: string[];
   /** Enabled devices provisioned with this extension. */
   provisioned_phones?: number;
   /** The effective limit: the larger of max_registrations and provisioned_phones, at least 1. */
@@ -2174,6 +2176,8 @@ export interface PagingZone {
   allowed: PagingAllowed;
   members: GroupMember[];
   max_seconds: number;
+  /** Delayed paging (issue #392): seconds after recording; null: not offered. */
+  delayed_seconds?: number | null;
   profiles: { id: string; name: string }[];
   problems: string[];
   created_at: string;
@@ -2199,6 +2203,7 @@ export interface PagingZoneInput {
   allowed?: PagingAllowed;
   members?: string[];
   max_seconds?: number;
+  delayed_seconds?: number | null;
 }
 
 export type PagePriority = "normal" | "priority" | "emergency";
@@ -2219,6 +2224,8 @@ export interface PagingPage {
   allowed: PagingAllowed;
   members: GroupMember[];
   max_seconds: number;
+  /** Delayed paging (issue #392): seconds after recording; null: not offered. */
+  delayed_seconds?: number | null;
   is_enabled: boolean;
   last_sent_at: string | null;
   problems: string[];
@@ -2239,6 +2246,7 @@ export interface PagingPageInput {
   allowed?: PagingAllowed;
   members?: string[];
   max_seconds?: number;
+  delayed_seconds?: number | null;
   is_enabled?: boolean;
 }
 

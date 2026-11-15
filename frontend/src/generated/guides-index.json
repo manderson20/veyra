@@ -110,8 +110,8 @@
    "summary": "The star codes phones dial to forward calls, turn on Do Not Disturb, pick up calls and more, and how to change them.",
    "audience": "admin",
    "section": "Getting started",
-   "reviewed": "0.27.79",
-   "reviewed_date": "2026-11-01",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/feature-codes/"
    ],
@@ -612,8 +612,8 @@
    "summary": "Group your overhead speakers and Poly phones into paging zones that anyone allowed can page by dialling a number.",
    "audience": "admin",
    "section": "Paging and bells",
-   "reviewed": "0.27.45",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/paging-zones/"
    ],
@@ -625,8 +625,8 @@
    "summary": "Combine paging zones into pages such as an all-call, give them a recording, and start them from a phone, from Veyra, from a bell or from another system.",
    "audience": "admin",
    "section": "Paging and bells",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/paging/"
    ],

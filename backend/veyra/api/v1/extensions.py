@@ -196,8 +196,43 @@ class ExtensionIn(BaseModel):
         return _hotline_target(v)
 
 
+MAX_PICKUP_INCALL = 50
+
+
+def _pickup_incall(db: Session, ext: Extension, ids: list[uuid.UUID] | None) -> list[str]:
+    """The Pickup In-call list (issue #392): other extensions of the same
+    organization, each once."""
+    wanted = list(dict.fromkeys(ids or []))
+    if ext.id in wanted:
+        raise ProblemError(
+            422,
+            "Validation failed",
+            "An extension cannot take over its own calls.",
+            code="validation_failed",
+            errors=[{"field": "pickup_incall_ids", "message": "remove this extension"}],
+        )
+    found = set(
+        db.scalars(
+            select(Extension.id).where(
+                Extension.id.in_(wanted), Extension.organization_id == ext.organization_id
+            )
+        )
+    )
+    if len(found) != len(wanted):
+        raise ProblemError(
+            422,
+            "Validation failed",
+            "Pick extensions of the same organization.",
+            code="validation_failed",
+            errors=[{"field": "pickup_incall_ids", "message": "unknown extension"}],
+        )
+    return [str(x) for x in wanted]
+
+
 class ExtensionPatch(BaseModel):
     number: str | None = Field(None, min_length=1, max_length=32)
+    # Pickup In-call (issue #392): extensions that may take over its calls.
+    pickup_incall_ids: list[uuid.UUID] | None = Field(None, max_length=MAX_PICKUP_INCALL)
     display_name: str | None = Field(None, min_length=1, max_length=200)
     user_id: uuid.UUID | None = None
     caller_id_name: str | None = Field(None, max_length=80)
@@ -373,6 +408,7 @@ class ExtensionOut(BaseModel):
     # Phones that may register (docs/EXTENSIONS.md §1): the administrator's
     # limit, the provisioned-phone count and the effective limit (the larger).
     max_registrations: int | None = None
+    pickup_incall_ids: list[uuid.UUID] = Field(default_factory=list)
     provisioned_phones: int = 0
     registration_limit: int = 1
     site_id: uuid.UUID | None = None
@@ -594,6 +630,7 @@ def _outs(db: Session, rows: list[Extension], request: Request | None = None) ->
                     classes.get(r.class_of_service_id) if r.class_of_service_id else None
                 ),
                 max_registrations=r.max_registrations,
+                pickup_incall_ids=[uuid.UUID(x) for x in r.pickup_incall_ids or []],
                 provisioned_phones=phones.get(r.id, 0),
                 registration_limit=registration_limit(r.max_registrations, phones.get(r.id, 0)),
                 site_id=r.site_id,
@@ -1037,6 +1074,11 @@ def update_extension(
         if field in changes and changes[field] != getattr(ext, field):
             setattr(ext, field, changes[field])
             details[field] = changes[field]
+    if "pickup_incall_ids" in changes:
+        listed = _pickup_incall(db, ext, changes["pickup_incall_ids"])
+        if listed != list(ext.pickup_incall_ids or []):
+            ext.pickup_incall_ids = listed
+            details["pickup_incall_ids"] = listed
     if new_template is not None:
         # The engine's copy of the state switches follows at the worker's
         # next sync (bulk import calls this without a request).
