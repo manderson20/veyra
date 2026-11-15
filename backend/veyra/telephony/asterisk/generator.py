@@ -4592,6 +4592,40 @@ def _conference_profiles(slug: str) -> tuple[str, str, str, str, str]:
     return stem, f"{stem}-bridge", f"{stem}-user", f"{stem}-admin", f"{stem}-menu"
 
 
+def _conference_outcall(r: dict[str, Any], room: str, org: str) -> list[str]:
+    """Issue #392: when the first caller joins, call each number of
+    ``auto_outcall`` into the room (``VEYRA_CONF_INVITED``: no PIN), from the
+    room's number. An extension of the organization is rung directly, any
+    other number goes out through the outbound routes."""
+    calls = list(r.get("auto_outcall") or [])
+    if not calls:
+        return []
+    names = engine_names.current()
+    label = re.sub(r"[^A-Za-z0-9 ._-]", "", str(r.get("name") or ""))[:40] or "Conference"
+    number = str(r.get("number") or "")
+    if not _NUMBER_RE.match(number):
+        raise GenerationError(f"conference room number {number!r} is not valid")
+    org_var = f"^__VEYRA_ORG={org}" if org else ""
+    # Not for a caller who was called in, a silent listener, or a room
+    # already in progress.
+    out = [
+        ' same => n,GotoIf($["${VEYRA_CONF_INVITED}"="1"]?enter)',
+        ' same => n,GotoIf($["${VEYRA_CONF_PROFILE}"="${VEYRA_CONF_LISTENER}"]?enter)',
+        f' same => n,GotoIf($["${{CONFBRIDGE_INFO(parties,{room})}}"!=""]?enter)',
+    ]
+    for call in calls:
+        target = str(call.get("number") or "")
+        if not re.fullmatch(r"\+?[0-9]{2,20}", target):
+            raise GenerationError(f"conference room {r['slug']}: {target!r} is not a number")
+        ctx = names.internal if call.get("local") else names.outbound
+        conf = names.conference(r["slug"])
+        out.append(
+            f" same => n,Originate(Local/{target}@{ctx}/n,exten,{conf},s,1,45,"
+            f"ac({number})n({label})v(VEYRA_CONF_INVITED=1{org_var}))"
+        )
+    return out
+
+
 def _fax_contexts(inboxes: list[dict[str, Any]], fax_dir: str) -> list[str]:
     """``veyra-fax-out`` of the namespace (the worker originates a Local
     channel over the outbound routes; once it answers, ``send`` runs SendFAX
@@ -4671,13 +4705,18 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
         guard = cos.destination_guard("allowed_conferences", slug) if cos else []
         user_pin = str(r.get("user_pin") or "")
         admin_pin = str(r.get("admin_pin") or "")
-        for which, pin in (("user", user_pin), ("admin", admin_pin)):
+        listener_pin = str(r.get("listener_pin") or "")
+        for which, pin in (("user", user_pin), ("admin", admin_pin), ("listener", listener_pin)):
             if pin and not _PIN_RE.match(pin):
                 raise GenerationError(
                     f"conference room {slug}: the {which} PIN must be 4 to 10 digits"
                 )
         if user_pin and admin_pin and user_pin == admin_pin:
             raise GenerationError(f"conference room {slug}: the user and admin PINs are the same")
+        if listener_pin and listener_pin in (user_pin, admin_pin):
+            raise GenerationError(
+                f"conference room {slug}: the listener PIN is the same as another PIN"
+            )
         lines += [
             f"[{engine_names.current().conference(slug)}]",
             f"exten => s,1,NoOp(Veyra conference {name} ({org}))",
@@ -4685,7 +4724,7 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
             " same => n,Answer()",
             f" same => n,Set(VEYRA_CONF_PROFILE={user})",
         ]
-        if user_pin or admin_pin:
+        if user_pin or admin_pin or listener_pin:
             lines += [
                 # Invited from the web (#96): whoever invited them vouches.
                 ' same => n,GotoIf($["${VEYRA_CONF_INVITED}"="1"]?join)',
@@ -4694,6 +4733,8 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
             ]
             if admin_pin:
                 lines.append(f' same => n,GotoIf($["${{VEYRA_PIN}}"="{admin_pin}"]?admin)')
+            if listener_pin:
+                lines.append(f' same => n,GotoIf($["${{VEYRA_PIN}}"="{listener_pin}"]?listener)')
             if user_pin:
                 lines.append(f' same => n,GotoIf($["${{VEYRA_PIN}}"="{user_pin}"]?join)')
             else:
@@ -4707,8 +4748,27 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
             ]
             if admin_pin:
                 lines.append(f" same => n(admin),Set(VEYRA_CONF_PROFILE={admin})")
+            if listener_pin:
+                lines += [
+                    f" same => n(listener),Set(VEYRA_CONF_PROFILE={user}-listener)",
+                    " same => n,Goto(join)",
+                ]
+        outcall = _conference_outcall(r, room, org)
+        silence = bool(r.get("end_on_silence_seconds"))
+        if outcall or silence:
+            lines.append(" same => n(join),NoOp(Veyra conference start)")
+            if outcall:
+                lines += [
+                    f" same => n,Set(VEYRA_CONF_LISTENER={user}-listener)",
+                    *outcall,
+                    " same => n(enter),NoOp()",
+                ]
+            if silence:
+                # The API's event listener ends the room after the silence (#392).
+                lines.append(" same => n,Set(TALK_DETECT(set)=)")
         lines += [
-            f" same => n(join),ConfBridge({room},{bridge},${{VEYRA_CONF_PROFILE}},{menu})",
+            f" same => n{'' if outcall or silence else '(join)'},"
+            f"ConfBridge({room},{bridge},${{VEYRA_CONF_PROFILE}},{menu})",
             " same => n,Hangup()",
             " same => n(bye),Playback(vm-goodbye)",
             " same => n,Hangup()",
@@ -4716,6 +4776,19 @@ def _conference_contexts(rooms: list[dict[str, Any]], cos: Cos | None = None) ->
             "",
         ]
     return lines
+
+
+def _count_options(r: dict[str, Any]) -> list[str]:
+    """Issue #392: tell a joining caller how many are in the room, and
+    everyone when more than ``announce_count_above`` are (0: always)."""
+    out = ["announce_user_count=yes"] if r.get("announce_count") else []
+    above = r.get("announce_count_above")
+    if above is not None:
+        n = int(above)
+        if not 0 <= n <= CONFERENCE_MAX_MEMBERS:
+            raise GenerationError(f"conference room {r.get('slug')}: count {n} is out of range")
+        out.append("announce_user_count_all=" + ("yes" if n == 0 else str(n)))
+    return out
 
 
 def _personal_room_profiles(stem: str) -> list[str]:
@@ -4798,6 +4871,7 @@ def _confbridge(
             f"music_on_hold_class={music}",
             f"wait_marked={wait}",
             "dsp_drop_silence=yes",
+            *_count_options(r),
             f"[{admin}]",
             "type=user",
             "admin=yes",
@@ -4806,6 +4880,7 @@ def _confbridge(
             f"music_on_hold_when_empty={alone}",
             f"music_on_hold_class={music}",
             "dsp_drop_silence=yes",
+            *_count_options(r),
             f"[{menu}]",
             "type=menu",
             "*1=toggle_mute",
@@ -4818,6 +4893,20 @@ def _confbridge(
             "*8=admin_toggle_mute_participants",
             "",
         ]
+        if r.get("listener_pin"):
+            # A silent listener ("ghost member", #392): muted, unannounced.
+            lines += [
+                f"[{user}-listener]",
+                "type=user",
+                "startmuted=yes",
+                "quiet=yes",
+                "announce_join_leave=no",
+                f"music_on_hold_when_empty={alone}",
+                f"music_on_hold_class={music}",
+                f"wait_marked={wait}",
+                "dsp_drop_silence=yes",
+                "",
+            ]
     for stem in personal_stems or []:
         lines += _personal_room_profiles(stem)
     return GeneratedFile(FILE_CONFBRIDGE, "\n".join(lines).rstrip("\n") + "\n")

@@ -489,8 +489,8 @@
    "summary": "Create a dial-in meeting room with optional PINs, see who is in it, and mute, remove or end from the web.",
    "audience": "admin",
    "section": "Calls and call flows",
-   "reviewed": "0.27.49",
-   "reviewed_date": "2026-10-30",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/conferences/",
     "/conferences/view/"

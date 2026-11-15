@@ -1713,6 +1713,7 @@ export interface ConferenceRoom {
   description: string | null;
   has_user_pin: boolean;
   has_admin_pin: boolean;
+  has_listener_pin: boolean;
   max_participants: number;
   record: boolean;
   announce_join_leave: boolean;
@@ -1721,6 +1722,12 @@ export interface ConferenceRoom {
   moh_class_id: string | null;
   moh_class_name: string | null;
   is_enabled: boolean;
+  /** Issue #392. */
+  announce_count: boolean;
+  announce_count_above: number | null;
+  end_on_silence_seconds: number | null;
+  auto_outcall: string[];
+  record_at_members: number | null;
   problems: string[];
   in_use_by: number;
   owners: string[];
@@ -1742,6 +1749,12 @@ export interface ConferenceRoomInput {
   wait_for_admin?: boolean;
   moh_class_id?: string | null;
   is_enabled?: boolean;
+  listener_pin?: string | null;
+  announce_count?: boolean;
+  announce_count_above?: number | null;
+  end_on_silence_seconds?: number | null;
+  auto_outcall?: string[];
+  record_at_members?: number | null;
 }
 
 /** A day/night switch between two destinations (§4.5). */

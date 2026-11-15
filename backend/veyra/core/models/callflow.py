@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from veyra.core.models.base import Base, TenantScoped, Timestamps, UUIDPrimaryKey
@@ -216,6 +217,20 @@ class ConferenceRoom(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
         ForeignKey("moh_classes.id", ondelete="SET NULL")
     )
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Issue #392 (FreeSWITCH conference features). Tell a joining caller how
+    # many are in the room; and everyone, when more than ``announce_count_above``
+    # are (0: on every join; None: never).
+    announce_count: Mapped[bool] = mapped_column(Boolean, default=False)
+    announce_count_above: Mapped[int | None] = mapped_column(Integer)
+    # A silent listener ("ghost member"): joins muted and unannounced
+    # (purpose ``conference.pin:<id>:listener``).
+    listener_pin_ciphertext: Mapped[str | None] = mapped_column(Text)
+    # End the conference after this long with nobody talking.
+    end_on_silence_seconds: Mapped[int | None] = mapped_column(Integer)
+    # Numbers called into the room when its first caller joins.
+    auto_outcall: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    # Start recording when this many are in the room.
+    record_at_members: Mapped[int | None] = mapped_column(Integer)
 
 
 class ConferenceRoomOwner(Base):

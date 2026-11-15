@@ -41,6 +41,8 @@ router = APIRouter(prefix="/conferences", tags=["conferences"])
 
 _PIN_RE = re.compile(r"^[0-9]{4,10}$")
 MAX_PARTICIPANTS = 500
+MAX_OUTCALL = 10
+PINS = ("user", "admin", "listener")
 
 
 def _pin(v: str | None) -> str | None:
@@ -69,6 +71,25 @@ class ConferenceIn(BaseModel):
     wait_for_admin: bool = False
     moh_class_id: uuid.UUID | None = None
     is_enabled: bool = True
+    # Issue #392.
+    announce_count: bool = False
+    announce_count_above: int | None = Field(None, ge=0, le=MAX_PARTICIPANTS)
+    listener_pin: str | None = Field(None, max_length=10)
+    end_on_silence_seconds: int | None = Field(None, ge=60, le=86400)
+    auto_outcall: list[str] = Field(default_factory=list, max_length=MAX_OUTCALL)
+    record_at_members: int | None = Field(None, ge=2, le=MAX_PARTICIPANTS)
+
+    @field_validator("auto_outcall")
+    @classmethod
+    def _outcall(cls, v: list[str]) -> list[str]:
+        out: list[str] = []
+        for n in v:
+            n = re.sub(r"[\s().-]", "", n or "")
+            if not re.fullmatch(r"\+?[0-9]{2,20}", n):
+                raise ValueError(f"{n or 'an empty entry'} is not a number")
+            if n not in out:
+                out.append(n)
+        return out
 
     @field_validator("name")
     @classmethod
@@ -87,7 +108,7 @@ class ConferenceIn(BaseModel):
             raise ValueError("digits only")
         return v
 
-    @field_validator("user_pin", "admin_pin")
+    @field_validator("user_pin", "admin_pin", "listener_pin")
     @classmethod
     def _pins(cls, v: str | None) -> str | None:
         return _pin(v)
@@ -106,6 +127,12 @@ class ConferencePatch(BaseModel):
     wait_for_admin: bool | None = None
     moh_class_id: uuid.UUID | None = None
     is_enabled: bool | None = None
+    announce_count: bool | None = None
+    announce_count_above: int | None = Field(None, ge=0, le=MAX_PARTICIPANTS)
+    listener_pin: str | None = Field(None, max_length=10)
+    end_on_silence_seconds: int | None = Field(None, ge=60, le=86400)
+    auto_outcall: list[str] | None = Field(None, max_length=MAX_OUTCALL)
+    record_at_members: int | None = Field(None, ge=2, le=MAX_PARTICIPANTS)
 
 
 class ConferenceOut(BaseModel):
@@ -119,6 +146,7 @@ class ConferenceOut(BaseModel):
     description: str | None
     has_user_pin: bool
     has_admin_pin: bool
+    has_listener_pin: bool
     max_participants: int
     record: bool
     announce_join_leave: bool
@@ -127,6 +155,11 @@ class ConferenceOut(BaseModel):
     moh_class_id: uuid.UUID | None
     moh_class_name: str | None
     is_enabled: bool
+    announce_count: bool
+    announce_count_above: int | None
+    end_on_silence_seconds: int | None
+    auto_outcall: list[str]
+    record_at_members: int | None
     problems: list[str]
     # Routes, menus, groups and announcements that point at the room.
     in_use_by: int
@@ -164,6 +197,11 @@ def _outs(db: Session, rows: list[ConferenceRoom]) -> list[ConferenceOut]:
             problems.append(
                 "Participants wait for an administrator, but the room has no administrator PIN."
             )
+        if r.record and r.record_at_members:
+            problems.append(
+                "The room records every conference, so recording at a number of members"
+                " does nothing."
+            )
         out.append(
             ConferenceOut(
                 id=r.id,
@@ -176,6 +214,7 @@ def _outs(db: Session, rows: list[ConferenceRoom]) -> list[ConferenceOut]:
                 description=r.description,
                 has_user_pin=bool(r.user_pin_ciphertext),
                 has_admin_pin=bool(r.admin_pin_ciphertext),
+                has_listener_pin=bool(r.listener_pin_ciphertext),
                 max_participants=r.max_participants,
                 record=r.record,
                 announce_join_leave=r.announce_join_leave,
@@ -184,6 +223,11 @@ def _outs(db: Session, rows: list[ConferenceRoom]) -> list[ConferenceOut]:
                 moh_class_id=r.moh_class_id,
                 moh_class_name=moh_names.get(r.moh_class_id) if r.moh_class_id else None,
                 is_enabled=r.is_enabled,
+                announce_count=r.announce_count,
+                announce_count_above=r.announce_count_above,
+                end_on_silence_seconds=r.end_on_silence_seconds,
+                auto_outcall=list(r.auto_outcall or []),
+                record_at_members=r.record_at_members,
                 problems=problems,
                 in_use_by=uses.get(r.id, 0),
                 owners=owners.get(r.id, []),
@@ -209,20 +253,44 @@ def _check(
 ) -> None:
     helpers.check_number(db, body.number, "conference room", self_id, org_id)
     hold_music.check_set(db, org_id, body.moh_class_id, "moh_class_id")
-    if body.user_pin and body.admin_pin and body.user_pin == body.admin_pin:
+    _check_pins(body.user_pin, body.admin_pin, body.listener_pin)
+    _check_options(db, org_id, body)
+
+
+def _check_pins(user: str | None, admin: str | None, listener: str | None) -> None:
+    if user and admin and user == admin:
         raise validation("admin_pin", "the administrator PIN must differ from the user PIN")
+    if listener and listener in (user, admin):
+        raise validation("listener_pin", "the listener PIN must differ from the other PINs")
+
+
+def _check_options(db: Session, org_id: uuid.UUID, body: ConferenceIn) -> None:
+    """Issue #392 options."""
+    limit = body.max_participants
+    if body.record_at_members and limit and body.record_at_members > limit:
+        raise validation(
+            "record_at_members", f"the room holds at most {limit}, so it never reaches that"
+        )
+    for n in body.auto_outcall:
+        # 911 and 933 always, whether or not an emergency route lists them.
+        if n.lstrip("+") in ("911", "933") or _is_emergency_number(db, org_id, n.lstrip("+")):
+            raise validation("auto_outcall", f"{n} is an emergency number")
 
 
 def _set_pins(
-    room: ConferenceRoom, request: Request, user_pin: str | None, admin_pin: str | None
+    room: ConferenceRoom,
+    request: Request,
+    user_pin: str | None,
+    admin_pin: str | None,
+    listener_pin: str | None = None,
 ) -> None:
     key = installation_key(request)
-    room.user_pin_ciphertext = (
-        key.encrypt(user_pin, conference_pin_purpose(room.id, "user")) if user_pin else None
-    )
-    room.admin_pin_ciphertext = (
-        key.encrypt(admin_pin, conference_pin_purpose(room.id, "admin")) if admin_pin else None
-    )
+    for which, pin in zip(PINS, (user_pin, admin_pin, listener_pin), strict=True):
+        setattr(
+            room,
+            f"{which}_pin_ciphertext",
+            key.encrypt(pin, conference_pin_purpose(room.id, which)) if pin else None,
+        )
 
 
 def _stored_pin(room: ConferenceRoom, which: str, key: Any) -> str | None:
@@ -289,8 +357,13 @@ def create_room(
         wait_for_admin=body.wait_for_admin,
         moh_class_id=body.moh_class_id,
         is_enabled=body.is_enabled,
+        announce_count=body.announce_count,
+        announce_count_above=body.announce_count_above,
+        end_on_silence_seconds=body.end_on_silence_seconds,
+        auto_outcall=body.auto_outcall,
+        record_at_members=body.record_at_members,
     )
-    _set_pins(room, request, body.user_pin, body.admin_pin)
+    _set_pins(room, request, body.user_pin, body.admin_pin, body.listener_pin)
     db.add(room)
     try:
         db.flush()
@@ -341,6 +414,7 @@ def update_room(
         "description": room.description,
         "user_pin": "0000" if room.user_pin_ciphertext else None,
         "admin_pin": "0000" if room.admin_pin_ciphertext else None,
+        "listener_pin": "0000" if room.listener_pin_ciphertext else None,
         "max_participants": room.max_participants,
         "record": room.record,
         "announce_join_leave": room.announce_join_leave,
@@ -348,20 +422,25 @@ def update_room(
         "wait_for_admin": room.wait_for_admin,
         "moh_class_id": room.moh_class_id,
         "is_enabled": room.is_enabled,
+        "announce_count": room.announce_count,
+        "announce_count_above": room.announce_count_above,
+        "end_on_silence_seconds": room.end_on_silence_seconds,
+        "auto_outcall": list(room.auto_outcall or []),
+        "record_at_members": room.record_at_members,
     }
     try:
         validated = ConferenceIn.model_validate({**current, **changes})
     except ValueError as e:
         raise validation("conference", str(e).splitlines()[0]) from e
-    if "user_pin" in changes or "admin_pin" in changes:
-        # Compare against the PIN that stays when only one of them changes.
+    if any(f"{w}_pin" in changes for w in PINS):
+        # Compare against the PINs that stay when only some of them change.
         key = installation_key(request)
-        user_pin = validated.user_pin if "user_pin" in changes else _stored_pin(room, "user", key)
-        admin_pin = (
-            validated.admin_pin if "admin_pin" in changes else _stored_pin(room, "admin", key)
-        )
-        if user_pin and admin_pin and user_pin == admin_pin:
-            raise validation("admin_pin", "the administrator PIN must differ from the user PIN")
+        pins = [
+            getattr(validated, f"{w}_pin") if f"{w}_pin" in changes else _stored_pin(room, w, key)
+            for w in PINS
+        ]
+        _check_pins(*pins)
+    _check_options(db, room.organization_id, validated)
     helpers.check_number(db, validated.number, "conference room", room.id, room.organization_id)
     hold_music.check_set(db, room.organization_id, validated.moh_class_id, "moh_class_id")
     details: dict[str, Any] = {}
@@ -383,25 +462,28 @@ def update_room(
         "wait_for_admin",
         "moh_class_id",
         "is_enabled",
+        "announce_count",
+        "announce_count_above",
+        "end_on_silence_seconds",
+        "auto_outcall",
+        "record_at_members",
     ):
         value = getattr(validated, field)
         if value != getattr(room, field):
             setattr(room, field, value)
             details[field] = str(value) if value is not None else None
-    if "user_pin" in changes or "admin_pin" in changes:
+    if any(f"{w}_pin" in changes for w in PINS):
         key = installation_key(request)
-        if "user_pin" in changes:
-            pin = validated.user_pin
-            room.user_pin_ciphertext = (
-                key.encrypt(pin, conference_pin_purpose(room.id, "user")) if pin else None
+        for which in PINS:
+            if f"{which}_pin" not in changes:
+                continue
+            pin = getattr(validated, f"{which}_pin")
+            setattr(
+                room,
+                f"{which}_pin_ciphertext",
+                key.encrypt(pin, conference_pin_purpose(room.id, which)) if pin else None,
             )
-            details["user_pin"] = "set" if pin else "removed"
-        if "admin_pin" in changes:
-            pin = validated.admin_pin
-            room.admin_pin_ciphertext = (
-                key.encrypt(pin, conference_pin_purpose(room.id, "admin")) if pin else None
-            )
-            details["admin_pin"] = "set" if pin else "removed"
+            details[f"{which}_pin"] = "set" if pin else "removed"
     if not details:
         return _outs(db, [room])[0]
     try:

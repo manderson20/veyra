@@ -148,7 +148,7 @@ def time_condition_pin_purpose(tc_id: Any) -> str:
 
 
 def conference_pin_purpose(room_id: Any, which: str) -> str:
-    """Encryption purpose of a conference room's user or admin PIN."""
+    """Encryption purpose of a conference room's user, admin or listener PIN."""
     return f"conference.pin:{room_id}:{which}"
 
 
@@ -268,6 +268,15 @@ def _callflow(
     """Announcements and conference rooms of active organizations
     (docs/CALL_FEATURES.md §4.1, §4.3). ``targets`` already knows their slugs."""
     prompts = {p.id: p for p in db.scalars(select(Prompt)).all()}
+    # Numbers a room calls when it starts (#392) that are the organization's
+    # own extensions are rung directly.
+    wanted = {n for r in rooms for n in r.auto_outcall or []}
+    local_numbers: dict[Any, set[str]] = {}
+    if wanted:
+        for org_id, number in db.execute(
+            select(Extension.organization_id, Extension.number).where(Extension.number.in_(wanted))
+        ):
+            local_numbers.setdefault(org_id, set()).add(number)
 
     def prompt_slug(prompt_id: Any, org_id: Any) -> str | None:
         p = prompts.get(prompt_id) if prompt_id else None
@@ -339,6 +348,16 @@ def _callflow(
                 "music_on_hold_alone": r.music_on_hold_alone,
                 "wait_for_admin": r.wait_for_admin,
                 "hold_music": moh_slug(r.moh_class_id, r.organization_id),
+                # Issue #392; written only when set, so other output is unchanged.
+                "announce_count": r.announce_count,
+                "announce_count_above": r.announce_count_above,
+                "listener_pin": _conference_pin(r, "listener", key),
+                "end_on_silence_seconds": r.end_on_silence_seconds,
+                "auto_outcall": [
+                    {"number": n, "local": n in local_numbers.get(r.organization_id, set())}
+                    for n in r.auto_outcall or []
+                ],
+                "record_at_members": r.record_at_members,
             }
             for r in rooms
         ],

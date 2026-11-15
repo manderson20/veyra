@@ -4,7 +4,7 @@ summary: Create a dial-in meeting room with optional PINs, see who is in it, and
 audience: admin
 section: Calls and call flows
 order: 50
-reviewed: 0.27.49
+reviewed: 0.27.87
 checked: 2026-10-30
 pages:
   - /conferences/
@@ -40,6 +40,12 @@ You need permission to change ring groups, queues and conference rooms. Organiza
 - **Play hold music to a participant who is alone**.
 - **Participants wait until an administrator joins**: the meeting starts when someone joins with the administrator PIN. This needs an administrator PIN; without one the room shows a warning.
 - **Record the conference**: the whole meeting is recorded. The recordings are listed under [Call Recording](app:/recording/) with a *Conference* badge. See [Record calls](guide:call-recording).
+- **Tell each caller how many are in the room**: a caller hears the count as they join.
+- **Announce the count to everyone above**: when someone joins and more than this many are in the room, everyone hears how many are there. 0 announces it on every join; leave it empty for never.
+- **Start recording at**: recording starts by itself when this many participants are in the room, and runs to the end of the meeting. Not needed when **Record the conference** is on.
+- **End after silence (minutes)**: the meeting ends for everyone when nobody has spoken for this long, for example a call left open after everyone walked away. Hold music does not count as speaking.
+- **Silent listener PIN**: someone who joins with it is muted and is not announced, for example a supervisor or an interpreter who only listens. It must differ from the other PINs.
+- **Call when the conference starts**: up to 10 extensions or phone numbers, one per line. When the first caller joins, Veyra calls each one into the room from the room's number, and they join without the PIN. An outside number goes out through the organization's outbound routes. Emergency numbers are refused.
 - **Enabled**: a disabled room is left out of the phone system.
 
 Choose **Save**, then **Deploy changes** in the top bar.
@@ -84,4 +90,6 @@ In **Room owners** on the room's page, add the phones of the people who run this
 - **The Live card says the engine is unavailable**: the telephony engine is not running or cannot report rooms. Check [System → Telephony Engine](app:/system/telephony/).
 - **An invited person hears a PIN prompt**: changes have not been deployed since the update. Choose **Deploy changes**.
 - **An invited number never rings**: the number has no outbound route, or your phone's class of service does not allow it.
+- **Recording or the silence limit does not start**: they are run by Veyra watching the room, not by the phone system. They work after changes are deployed, while the telephony engine is connected (System → Telephony Engine).
+- **Nobody is called when the meeting starts**: the numbers are called only when the first caller joins, not when someone joins an ongoing meeting or is invited, and an outside number needs an outbound route.
 - **Deleting a room**: routes, menus, groups and announcements that point at it must be changed first.
