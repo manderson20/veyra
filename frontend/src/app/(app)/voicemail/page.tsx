@@ -7,8 +7,9 @@ import { BulkAbsenceDialog } from "@/components/voicemail/BulkAbsenceDialog";
 import { VoicemailBoxDialog } from "@/components/voicemail/VoicemailBoxDialog";
 import { VoicemailBoxPanel } from "@/components/voicemail/VoicemailBoxPanel";
 import { Badge, Button, Callout, Card, DataTable, Dialog, EmptyState, PageHeader, Pagination, SearchInput, SelectField, type Column } from "@/components/ui";
+import { API_BASE } from "@/lib/api";
 import type { Page, VoicemailBox } from "@/lib/types";
-import { formatBytes } from "@/lib/format";
+import { formatBytes, formatRelative } from "@/lib/format";
 import { useApiData } from "@/hooks/useApiData";
 import { useOrganizationOptions } from "@/hooks/useOrganizations";
 import { useSession } from "@/hooks/useSession";
@@ -38,7 +39,7 @@ export default function VoicemailPage() {
 
   const list = useApiData<Page<VoicemailBox>>("/voicemail", { q: debounced, organization_id: org || undefined, limit: LIMIT, offset });
   const boxIds = (list.data?.items ?? []).map((b) => b.id);
-  const usage = useApiData<{ box_id: string; new: number; messages: number; bytes: number }[]>(boxIds.length ? `/voicemail/usage?${boxIds.map((id) => `box_id=${id}`).join("&")}` : null);
+  const usage = useApiData<{ box_id: string; new: number; messages: number; bytes: number; oldest_new?: number }[]>(boxIds.length ? `/voicemail/usage?${boxIds.map((id) => `box_id=${id}`).join("&")}` : null);
   const manyOrgs = organizations.length > 1;
   const editable = can("voicemail.write");
   const canRead = can("voicemail.read");
@@ -66,7 +67,7 @@ export default function VoicemailPage() {
     },
     ...(manyOrgs ? [{ key: "org", header: "Organization", render: (b: VoicemailBox) => <span>{b.organization_name}</span> }] : []),
     { key: "email", header: "Email", render: (b) => b.email ? <span>{b.email}{b.delete_after_email ? <span className="table__secondary" style={{ display: "block" }}>deleted after sending</span> : null}</span> : <span className="subtle">No email</span> },
-    { key: "usage", header: "Messages", render: (b) => { const u = usage.data?.find((x) => x.box_id === b.id); return u ? <span>{u.messages}{u.new ? <span className="subtle"> ({u.new} new)</span> : null}<span className="table__secondary" style={{ display: "block" }}>{formatBytes(u.bytes)}</span></span> : <span className="subtle">—</span>; } },
+    { key: "usage", header: "Messages", render: (b) => { const u = usage.data?.find((x) => x.box_id === b.id); return u ? <span>{u.messages}{u.new ? <span className="subtle"> ({u.new} new)</span> : null}<span className="table__secondary" style={{ display: "block" }}>{formatBytes(u.bytes)}{u.oldest_new ? ` · oldest new ${formatRelative(new Date(u.oldest_new * 1000).toISOString())}` : ""}</span></span> : <span className="subtle">—</span>; } },
     { key: "ring", header: "Rings for", render: (b) => <span>{b.ring_seconds} s</span> },
     { key: "use", header: "Used by", render: (b) => b.in_use_by ? <span>{b.in_use_by} route{b.in_use_by === 1 ? "" : "s"} or key{b.in_use_by === 1 ? "" : "s"}</span> : <span className="subtle">—</span> },
     { key: "enabled", header: "Enabled", render: (b) => <Badge tone={b.is_enabled ? "ok" : "neutral"}>{b.is_enabled ? "Enabled" : "Disabled"}</Badge> },
@@ -80,6 +81,7 @@ export default function VoicemailPage() {
         description="One box per extension, plus shared inboxes with their own number that several phones watch: a PIN, the ring time before voicemail answers, and email delivery of new messages. Users record their greeting and listen to messages with *97 from the phone."
         actions={editable ? (
           <>
+            <Button icon="download" onClick={() => window.location.assign(`${API_BASE}/voicemail/report?format=csv`)}>Report (CSV)</Button>
             <Button onClick={() => setBulkAbsence(true)}>Extended absence…</Button>
             <Button icon="plus" onClick={() => setCreateShared(true)}>New shared inbox</Button>
             <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>New voicemail box</Button>

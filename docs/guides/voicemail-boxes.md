@@ -33,6 +33,8 @@ Voicemail boxes are listed under [Telephony → Voicemail](app:/voicemail/).
 
 The **Messages** column lists each box's messages, how many are new, and the storage they use. A dash means the count could not be read just then.
 
+**Report (CSV)** downloads every box you can see, with its new and saved messages, storage, when the oldest new message came, and how full it is against **Most messages kept**. Use it to find boxes nobody checks, or boxes about to refuse messages. The Messages column also shows how old the oldest new message is.
+
 ## Create a box for an extension
 
 1. Choose **New voicemail box**.

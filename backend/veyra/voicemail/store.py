@@ -378,22 +378,30 @@ class VoicemailStore:
         return {"removed": removed}
 
     def usage(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Messages and bytes of a box (issue #142); new means the INBOX."""
+        """Messages and bytes of a box (issue #142); new means the INBOX;
+        ``oldest_new``: when the oldest new message came (epoch, 0: none)."""
         box = self._box_dir(args.get("context"), args.get("mailbox"))
-        new = messages = size = 0
+        new = messages = size = oldest = 0
         for folder_name in FOLDERS:
             folder = box / folder_name
             if not folder.is_dir():
                 continue
-            count = len(self._messages(folder))
+            numbers = self._messages(folder)
+            count = len(numbers)
             messages += count
             if folder_name == "INBOX":
                 new = count
+                # The oldest unheard message (Voicemail Reports, issue #392).
+                times = []
+                for n in numbers:
+                    with contextlib.suppress(StoreError, OSError, ValueError):
+                        times.append(int(self._entry(folder, folder_name, n)["origtime"] or 0))
+                oldest = min((t for t in times if t > 0), default=0)
             for f in folder.iterdir():
                 if f.is_file() and not f.is_symlink():
                     with contextlib.suppress(FileNotFoundError):
                         size += f.stat().st_size
-        return {"new": new, "messages": messages, "bytes": size}
+        return {"new": new, "messages": messages, "bytes": size, "oldest_new": oldest}
 
     def copy(self, args: dict[str, Any]) -> dict[str, Any]:
         """Forward: copy a message into another mailbox's INBOX (same context

@@ -456,3 +456,29 @@ def test_usage_counts_messages_and_storage(admin, helper):
     assert rows[box["id"]]["messages"] == 2 and rows[box["id"]]["new"] == 1
     assert rows[box["id"]]["bytes"] > 0
     assert rows[empty["id"]]["messages"] == 0
+
+
+def test_voicemail_report(admin, helper):
+    """Voicemail Reports (issue #392): every box with its oldest new message
+    and how full it is, as JSON or CSV."""
+    mine = _ext(admin, "1001")
+    box = admin.post("/api/v1/voicemail", json={"extension_id": mine["id"]}).json()
+    admin.patch(f"/api/v1/voicemail/{box['id']}", json={"max_messages": 4})
+    other = admin.post("/api/v1/voicemail", json={"extension_id": _ext(admin, "1002")["id"]})
+    assert other.status_code == 201
+    ctx = _context(admin)
+    _msg(helper / ctx / "1001" / "INBOX", 0, ctx, "1001", origtime=1760800000)
+    _msg(helper / ctx / "1001" / "INBOX", 1, ctx, "1001", origtime=1760900000)
+    _msg(helper / ctx / "1001" / "Old", 0, ctx, "1001")
+    r = admin.get("/api/v1/voicemail/report")
+    assert r.status_code == 200, r.text
+    rows = {x["number"]: x for x in r.json()}
+    first = rows["1001"]
+    assert (first["new"], first["messages"], first["percent_full"]) == (2, 3, 75)
+    assert first["oldest_new_at"].startswith("2025-10-18")
+    assert rows["1002"]["messages"] == 0 and rows["1002"]["oldest_new_at"] is None
+    r = admin.get("/api/v1/voicemail/report", params={"format": "csv"})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    lines = r.text.strip().splitlines()
+    assert lines[0].startswith("Organization,Box,Name,New messages")
+    assert any(",1001," in line and ",75" in line for line in lines[1:])

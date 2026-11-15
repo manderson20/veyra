@@ -690,6 +690,40 @@ class BoxUsageOut(BaseModel):
     new: int
     messages: int
     bytes: int
+    # When the oldest new message came (epoch seconds; 0: none).
+    oldest_new: int = 0
+
+
+DEFAULT_MAX_MESSAGES = 100  # voicemail.conf's [general] maxmsg
+
+
+class BoxReportRow(BaseModel):
+    """One box of the voicemail report (FreePBX Voicemail Reports, issue #392)."""
+
+    box_id: uuid.UUID
+    organization_name: str
+    number: str
+    name: str
+    new: int | None
+    messages: int | None
+    bytes: int | None
+    oldest_new_at: datetime | None
+    max_messages: int
+    percent_full: int | None
+    readable: bool
+
+
+REPORT_COLUMNS = [
+    ("organization_name", "Organization"),
+    ("number", "Box"),
+    ("name", "Name"),
+    ("new", "New messages"),
+    ("messages", "All messages"),
+    ("bytes", "Bytes"),
+    ("oldest_new_at", "Oldest new message"),
+    ("max_messages", "Most messages kept"),
+    ("percent_full", "Percent full"),
+]
 
 
 @router.get(
@@ -713,6 +747,79 @@ def boxes_usage(
         except (ProblemError, vmsvc.StoreClientError):
             continue
     return out
+
+
+@router.get(
+    "/report",
+    response_model=list[BoxReportRow],
+    summary="Every box with its messages, oldest new message and how full it is",
+)
+def boxes_report(
+    request: Request,
+    organization_id: uuid.UUID | None = None,
+    format: str = Query("json", pattern="^(json|csv)$"),
+    principal: Principal = Depends(require("voicemail.read")),
+    db: Session = Depends(get_db),
+) -> Any:
+    from datetime import UTC
+
+    stmt = _org_filter(
+        select(VoicemailBox), VoicemailBox.organization_id, principal, "voicemail.read"
+    )
+    if organization_id is not None:
+        stmt = stmt.where(VoicemailBox.organization_id == organization_id)
+    boxes = list(db.scalars(stmt.limit(2000)))
+    outs = {o.id: o for o in _outs(db, boxes)}
+    c = vmsvc.client(request.app.state.settings)
+    rows: list[BoxReportRow] = []
+    for box in boxes:
+        out = outs[box.id]
+        limit = box.max_messages or DEFAULT_MAX_MESSAGES
+        usage: dict[str, int] | None = None
+        try:
+            context, mailbox = vmsvc.location(db, box)
+            usage = c.usage(context, mailbox)
+        except (ProblemError, vmsvc.StoreClientError):
+            usage = None
+        oldest = int((usage or {}).get("oldest_new") or 0)
+        rows.append(
+            BoxReportRow(
+                box_id=box.id,
+                organization_name=out.organization_name,
+                number=out.number,
+                name=out.name,
+                new=usage["new"] if usage else None,
+                messages=usage["messages"] if usage else None,
+                bytes=usage["bytes"] if usage else None,
+                oldest_new_at=datetime.fromtimestamp(oldest, UTC) if oldest else None,
+                max_messages=limit,
+                percent_full=min(100, round(100 * usage["messages"] / limit)) if usage else None,
+                readable=usage is not None,
+            )
+        )
+    rows.sort(key=lambda r: (r.organization_name, r.number))
+    if format == "json":
+        return rows
+    import csv
+    import io
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([label for _, label in REPORT_COLUMNS])
+    for r in rows:
+        d = r.model_dump()
+        w.writerow(
+            [
+                d[k].isoformat() if isinstance(d[k], datetime) else ("" if d[k] is None else d[k])
+                for k, _ in REPORT_COLUMNS
+            ]
+        )
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    return Response(
+        buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="voicemail-{stamp}.csv"'},
+    )
 
 
 @router.get("/{box_id}", response_model=VoicemailBoxOut)
