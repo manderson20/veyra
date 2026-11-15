@@ -36,6 +36,7 @@ def rich_snapshot(org: str = "example") -> dict[str, Any]:
         "installation": {"name": "Test", "multi_tenancy_enabled": False},
         "sip": SipSettings().model_dump(mode="json"),
         "smtp": {"enabled": False, "from_address": "pbx@example.org", "from_name": "PBX"},
+        "caller_name": None,
         "custom_dialplan": "",
         "feature_codes": dict(DEFAULT_CODES),
         "numbering": {"extension_length": 4},

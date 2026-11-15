@@ -108,6 +108,9 @@ ORG_LISTS: tuple[str, ...] = (
 # Dicts whose named members are organization-owned lists.
 ORG_NESTED: dict[str, tuple[str, ...]] = {"paging": ("zones", "pages")}
 SHARED_KEYS: tuple[str, ...] = (
+    # The installation's caller name lookup (issue #392): one service and
+    # token; routes of any organization opt in.
+    "caller_name",
     "custom_dialplan",
     "feature_codes",
     "installation",
