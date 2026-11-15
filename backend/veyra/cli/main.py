@@ -1810,6 +1810,11 @@ def cmd_worker(args: argparse.Namespace) -> int:
 
                 with session_scope() as db:
                     wakeup.tick(db, get_adapter(settings))
+                # VM Notify calls (issue #392).
+                from veyra.voicemail import notify as vm_notify
+
+                with session_scope() as db:
+                    vm_notify.tick(db, get_adapter(settings))
             # Outgoing webhooks (docs/INTEGRATIONS.md §3.5): voicemail
             # notifications in, due deliveries out.
             deliver_webhooks(settings, log)

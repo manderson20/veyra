@@ -4,7 +4,7 @@
 import { useState, type FormEvent } from "react";
 import { CopyButton } from "@/components/common/CopyButton";
 import { MemberListEditor, membersFromIds, type MemberDraft } from "@/components/groups/MemberListEditor";
-import { Button, Callout, Checkbox, ConfirmDialog, Dialog, SelectField, Switch, TextField, useToast } from "@/components/ui";
+import { Button, Callout, Checkbox, ConfirmDialog, Dialog, SelectField, Switch, TextArea, TextField, useToast } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import type { Extension, Page, TimeCondition, VoicemailBox, VoicemailBoxCreated, VoicemailBoxInput } from "@/lib/types";
 import { BoxListPicker, useListedBoxes, type ListedBox } from "./BoxListPicker";
@@ -33,13 +33,18 @@ interface Draft {
   locater_2: string;
   max_messages: string;
   max_message_seconds: string;
+  /** VM Notify (#392): one number per line. */
+  notify_numbers: string;
+  notify_rounds: string;
+  notify_retry_minutes: string;
+  notify_urgent_only: boolean;
   is_enabled: boolean;
 }
 
-const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, keep_days: "", ring_seconds: "20", operator_extension: "", after_hours: "", locater_1: "", locater_2: "", max_messages: "", max_message_seconds: "", is_enabled: true };
+const EMPTY: Draft = { extension_id: "", number: "", name: "", members: [], pin: "", email: "", defaultEmail: true, attach_audio: true, delete_after_email: false, keep_days: "", ring_seconds: "20", operator_extension: "", after_hours: "", locater_1: "", locater_2: "", max_messages: "", max_message_seconds: "", notify_numbers: "", notify_rounds: "2", notify_retry_minutes: "10", notify_urgent_only: false, is_enabled: true };
 
 function fromBox(b: VoicemailBox): Draft {
-  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, keep_days: b.keep_days ? String(b.keep_days) : "", ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", after_hours: b.after_hours_time_condition_id ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", max_messages: b.max_messages ? String(b.max_messages) : "", max_message_seconds: b.max_message_seconds ? String(b.max_message_seconds) : "", is_enabled: b.is_enabled };
+  return { extension_id: b.extension_id ?? "", number: b.shared ? b.number : "", name: b.shared ? b.name : "", members: membersFromIds(b.members ?? []), pin: "", email: b.email ?? "", defaultEmail: false, attach_audio: b.attach_audio, delete_after_email: b.delete_after_email, keep_days: b.keep_days ? String(b.keep_days) : "", ring_seconds: String(b.ring_seconds), operator_extension: b.operator_extension ?? "", after_hours: b.after_hours_time_condition_id ?? "", locater_1: b.locater_1 ?? "", locater_2: b.locater_2 ?? "", max_messages: b.max_messages ? String(b.max_messages) : "", max_message_seconds: b.max_message_seconds ? String(b.max_message_seconds) : "", notify_numbers: (b.notify_numbers ?? []).join("\n"), notify_rounds: String(b.notify_rounds ?? 2), notify_retry_minutes: String(b.notify_retry_minutes ?? 10), notify_urgent_only: b.notify_urgent_only ?? false, is_enabled: b.is_enabled };
 }
 
 /** How a box is named in titles and toasts: its extension, or a shared inbox's name. */
@@ -119,7 +124,12 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
   const quotaOk = (maxMsgs === null || (Number.isInteger(maxMsgs) && maxMsgs >= 1 && maxMsgs <= 9999))
     && (maxSecs === null || (Number.isInteger(maxSecs) && maxSecs >= 10 && maxSecs <= 3600));
   const copyList = copies ?? storedCopies ?? [];
-  const valid = keepOk && quotaOk && (copies !== null || storedCopies !== null || !box?.copy_to_box_ids?.length) && targetOk && Number.isInteger(ring) && ring >= 5 && ring <= 120 && (!draft.pin || /^[0-9]{4,10}$/.test(draft.pin)) && (!draft.delete_after_email || (draft.defaultEmail && !shared) || draft.email.trim());
+  const notifyList = draft.notify_numbers.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+  const rounds = Number(draft.notify_rounds);
+  const retry = Number(draft.notify_retry_minutes);
+  const notifyOk = notifyList.length <= 5 && notifyList.every((x) => /^\+?[0-9 ().-]{2,30}$/.test(x))
+    && Number.isInteger(rounds) && rounds >= 1 && rounds <= 5 && Number.isInteger(retry) && retry >= 1 && retry <= 120;
+  const valid = notifyOk && keepOk && quotaOk && (copies !== null || storedCopies !== null || !box?.copy_to_box_ids?.length) && targetOk && Number.isInteger(ring) && ring >= 5 && ring <= 120 && (!draft.pin || /^[0-9]{4,10}$/.test(draft.pin)) && (!draft.delete_after_email || (draft.defaultEmail && !shared) || draft.email.trim());
 
   const body = (): VoicemailBoxInput => {
     const b: VoicemailBoxInput = {
@@ -136,6 +146,12 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
       max_message_seconds: maxSecs,
       is_enabled: draft.is_enabled,
     };
+    if (editing) {
+      b.notify_numbers = notifyList;
+      b.notify_rounds = rounds;
+      b.notify_retry_minutes = retry;
+      b.notify_urgent_only = draft.notify_urgent_only;
+    }
     if (shared) {
       if (!editing) b.organization_id = orgId;
       b.number = draft.number.trim();
@@ -289,6 +305,22 @@ export function VoicemailBoxDialog({ open, onClose, onSaved, organizationId, ext
           <BoxListPicker label="Also leave every message in" organizationId={orgId} exclude={box?.id} value={copyList} onChange={setCopies}
             help="Each of these boxes gets its own copy as a new message, and lights its lamp. Callers hear this box's greeting. Needs a deployment."
             emptyText="No other boxes: messages stay in this box only." error={errors.fields.copy_to_box_ids} />
+          {editing ? (
+            <>
+              <TextArea label="Call about new messages" rows={3} value={draft.notify_numbers} error={errors.fields.notify_numbers}
+                help="Up to 5 extensions or phone numbers, one per line. On a new message Veyra calls them in order until someone presses 1; they then hear the box's menu and enter its PIN. Listening to the messages stops the calls."
+                onChange={(e) => setDraft({ ...draft, notify_numbers: e.target.value })} />
+              {draft.notify_numbers.trim() ? (
+                <div className="form-grid">
+                  <TextField label="Times through the list" type="number" min={1} max={5} value={draft.notify_rounds} error={errors.fields.notify_rounds}
+                    onChange={(e) => setDraft({ ...draft, notify_rounds: e.target.value })} />
+                  <TextField label="Minutes between rounds" type="number" min={1} max={120} value={draft.notify_retry_minutes} error={errors.fields.notify_retry_minutes}
+                    onChange={(e) => setDraft({ ...draft, notify_retry_minutes: e.target.value })} />
+                  <Checkbox label="Only for urgent messages" checked={draft.notify_urgent_only} onChange={(e) => setDraft({ ...draft, notify_urgent_only: e.target.checked })} />
+                </div>
+              ) : null}
+            </>
+          ) : null}
           <Switch label="Enabled" description="A disabled box keeps its settings and messages, but calls no longer land in it." checked={draft.is_enabled} onChange={(e) => setDraft({ ...draft, is_enabled: e.target.checked })} />
           {editing ? (
             <div className="row">

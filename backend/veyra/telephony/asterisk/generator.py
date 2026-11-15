@@ -1640,6 +1640,7 @@ def _dialplan(
             lines += _fax_contexts(mine(fax_inboxes, ns), fax_dir)
             lines += _disa_contexts(mine(disa_lines, ns))
             lines += _wakeup_context()
+            lines += _vm_notify_context()
             lines += _agent_contexts(codes, mine(queues, ns))
             lines += _parking_contexts(mine(lots, ns))
             lines += _directory_context(_directory_operator(snapshot, ns))
@@ -4572,6 +4573,35 @@ def _wakeup_codes(codes: dict[str, str], cos: Cos | None = None) -> list[str]:
         ]
         lines += _code_block(head, body, cos, "wakeup_cancel")
     return lines
+
+
+VM_NOTIFY_EVENT = "VeyraVmNotify"
+
+
+def _vm_notify_context() -> list[str]:
+    """Where the worker's VM Notify call goes once answered (issue #392): the
+    called person presses 1 to accept, which stops the calls to the others,
+    then hears the box's menu and must enter its PIN."""
+    return [
+        f"[{engine_names.current().vm_notify}]",
+        "exten => s,1,Answer()",
+        " same => n,Wait(1)",
+        " same => n,Set(VEYRA_N=0)",
+        " same => n(ask),Playback(vm-youhave&vm-INBOX&vm-message)",
+        " same => n,Read(VEYRA_KEY,vm-press&digits/1,1,,1,6)",
+        ' same => n,GotoIf($["${VEYRA_KEY}"="1"]?yes)',
+        " same => n,Set(VEYRA_N=$[${VEYRA_N} + 1])",
+        " same => n,GotoIf($[${VEYRA_N} < 3]?ask)",
+        " same => n,Playback(vm-goodbye)",
+        " same => n,Hangup()",
+        f" same => n(yes),UserEvent({VM_NOTIFY_EVENT},Job: ${{VEYRA_VMN_JOB}},Result: accepted)",
+        ' same => n,GotoIf($[!${REGEX("^[0-9]{1,32}$" ${VEYRA_VMN_BOX})}]?bad)',
+        ' same => n,GotoIf($[!${REGEX("^veyra[a-z0-9_]*$" ${VEYRA_VMN_CONTEXT})}]?bad)',
+        " same => n,VoiceMailMain(${VEYRA_VMN_BOX}@${VEYRA_VMN_CONTEXT})",
+        " same => n,Hangup()",
+        " same => n(bad),Hangup()",
+        "",
+    ]
 
 
 def _wakeup_context() -> list[str]:

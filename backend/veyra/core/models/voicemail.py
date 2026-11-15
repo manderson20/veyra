@@ -9,9 +9,19 @@ organization; the mailbox number is the extension number.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -79,6 +89,34 @@ class VoicemailBox(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     # The "alternate" recording plays instead of the unavailable and busy
     # greetings while this is on; applied to the engine at once (AstDB).
     alternate_greeting: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # VM Notify (FreePBX, issue #392): on a new message, call these numbers
+    # in order until someone presses 1 (and then enters the PIN); repeat the
+    # list ``notify_rounds`` times, ``notify_retry_minutes`` apart.
+    notify_numbers: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    notify_rounds: Mapped[int] = mapped_column(Integer, default=2, server_default="2")
+    notify_retry_minutes: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
+    notify_urgent_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class VoicemailNotifyJob(UUIDPrimaryKey, Base):
+    """One round of VM Notify calls for a box (issue #392): the worker calls
+    ``numbers[next_index]`` when ``next_at`` comes; the dialplan reports an
+    accepted call; listening to the messages cancels it."""
+
+    __tablename__ = "voicemail_notify_jobs"
+
+    box_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("voicemail_boxes.id", ondelete="CASCADE"), index=True
+    )
+    numbers: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    next_index: Mapped[int] = mapped_column(Integer, default=0)
+    round: Mapped[int] = mapped_column(Integer, default=0)
+    next_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # pending | accepted | cancelled | exhausted
+    state: Mapped[str] = mapped_column(String(16), default="pending")
+    last_number: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class VoicemailBoxMember(Base):

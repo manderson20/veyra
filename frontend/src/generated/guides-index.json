@@ -663,8 +663,8 @@
    "summary": "Give extensions a voicemail box, set PINs and email delivery, and create shared inboxes that several phones watch.",
    "audience": "admin",
    "section": "Voicemail and fax",
-   "reviewed": "0.27.86",
-   "reviewed_date": "2026-11-04",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/voicemail/"
    ],

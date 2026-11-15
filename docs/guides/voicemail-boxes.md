@@ -4,7 +4,7 @@ summary: Give extensions a voicemail box, set PINs and email delivery, and creat
 audience: admin
 section: Voicemail and fax
 order: 10
-reviewed: 0.27.86
+reviewed: 0.27.87
 checked: 2026-11-07T23:43Z
 pages:
   - /voicemail/
@@ -63,6 +63,7 @@ When you create or edit a box (click its row), these options are available:
 | **Most messages kept** | 1 to 9999. When the box is full, callers hear that it is full and cannot leave a message, and forwarded copies are refused. Empty: 100. |
 | **Longest message (seconds)** | 10 to 3600. The recording stops after this. Empty: 180 seconds. |
 | **Also leave every message in** | Search for other boxes of the same organization. Each gets its own copy of every message as a new message and lights its lamp; callers hear only this box's greeting. Use it for a secretary who should hear the principal's messages, for example. Needs a deployment. |
+| **Call about new messages** | When editing a box: up to 5 extensions or phone numbers. On a new message Veyra calls them one at a time until someone presses 1; that person then hears the box's menu and must enter its PIN, and the others are not called. **Times through the list** repeats the list (1 to 5) with **Minutes between rounds** in between. **Only for urgent messages** limits it to messages marked urgent. Listening to the new messages stops the calls. An outside number goes out through the organization's outbound routes; emergency numbers are refused. |
 | **Enabled** | A disabled box keeps its settings and messages, but calls no longer land in it. |
 
 Unless **Longest message** says otherwise, each message can be up to 3 minutes long. Greetings can be up to 60 seconds.

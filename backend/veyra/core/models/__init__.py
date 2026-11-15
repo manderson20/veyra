@@ -127,6 +127,7 @@ from veyra.core.models.voicemail import (
     Prompt,
     VoicemailBox,
     VoicemailBoxMember,
+    VoicemailNotifyJob,
 )
 
 __all__ = [
@@ -249,6 +250,7 @@ __all__ = [
     "UserSession",
     "VoicemailBox",
     "VoicemailBoxMember",
+    "VoicemailNotifyJob",
     "WakeupCall",
     "Webhook",
     "WebhookDelivery",

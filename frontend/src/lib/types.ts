@@ -1415,6 +1415,11 @@ export interface VoicemailBox {
   max_message_seconds?: number | null;
   /** The alternate greeting plays instead of unavailable and busy (#392). */
   alternate_greeting?: boolean;
+  /** VM Notify (#392). */
+  notify_numbers?: string[];
+  notify_rounds?: number;
+  notify_retry_minutes?: number;
+  notify_urgent_only?: boolean;
   is_enabled: boolean;
   /** Settings → Email delivery is enabled; without it messages stay in the box. */
   email_delivery_enabled: boolean;
@@ -1453,6 +1458,10 @@ export interface VoicemailBoxInput {
   copy_to_box_ids?: string[];
   max_messages?: number | null;
   max_message_seconds?: number | null;
+  notify_numbers?: string[];
+  notify_rounds?: number;
+  notify_retry_minutes?: number;
+  notify_urgent_only?: boolean;
 }
 
 export interface MyVoicemail {

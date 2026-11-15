@@ -393,6 +393,27 @@ def _wakeup(event: dict[str, Any]) -> None:
         log.exception("Could not handle the wake-up event")
 
 
+VM_NOTIFY_EVENT = "VeyraVmNotify"
+
+
+def is_vm_notify_event(event: dict[str, Any]) -> bool:
+    return event.get("type") == "ChannelUserevent" and event.get("eventname") == VM_NOTIFY_EVENT
+
+
+def _vm_notify(event: dict[str, Any]) -> None:
+    """``UserEvent(VeyraVmNotify)``: someone accepted a VM Notify call; the
+    others are not called (issue #392)."""
+    try:
+        from veyra.core.db import session_scope
+        from veyra.voicemail import notify
+
+        job = str((event.get("userevent") or {}).get("Job") or "")
+        with session_scope() as db:
+            notify.accept(db, job)
+    except Exception:
+        log.exception("Could not handle the VM Notify event")
+
+
 FAX_EVENT = "VeyraFax"
 
 
@@ -585,6 +606,8 @@ class AriEventListener:
                             _agent(event)
                         elif is_wakeup_event(event):
                             _wakeup(event)
+                        elif is_vm_notify_event(event):
+                            await asyncio.to_thread(_vm_notify, event)
                         elif is_fax_event(event):
                             _fax(event)
                         elif event.get("type") == "ChannelDestroyed":

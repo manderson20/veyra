@@ -6,6 +6,7 @@ never logged."""
 
 from __future__ import annotations
 
+import re
 import secrets
 import uuid
 from datetime import datetime
@@ -174,6 +175,23 @@ def check_locater(
 MAX_COPIES = 20
 
 
+def _notify_numbers(db: Session, org_id: uuid.UUID, numbers: list[str]) -> list[str]:
+    """VM Notify numbers (issue #392): extensions or outside numbers, each
+    once; never an emergency number."""
+    from veyra.api.v1.conferences import _is_emergency_number
+
+    out: list[str] = []
+    for raw in numbers:
+        n = re.sub(r"[\s().-]", "", raw or "")
+        if not re.fullmatch(r"\+?[0-9]{2,20}", n):
+            raise _validation("notify_numbers", f"{raw!r} is not a number")
+        if n.lstrip("+") in ("911", "933") or _is_emergency_number(db, org_id, n.lstrip("+")):
+            raise _validation("notify_numbers", f"{n} is an emergency number")
+        if n not in out:
+            out.append(n)
+    return out
+
+
 def _copies(
     db: Session, organization_id: uuid.UUID, box_id: uuid.UUID | None, ids: list[uuid.UUID]
 ) -> list[str]:
@@ -258,6 +276,11 @@ class VoicemailBoxPatch(BaseModel):
     copy_to_box_ids: list[uuid.UUID] | None = Field(None, max_length=MAX_COPIES)
     max_messages: int | None = Field(None, ge=1, le=9999)
     max_message_seconds: int | None = Field(None, ge=10, le=3600)
+    # VM Notify (issue #392).
+    notify_numbers: list[str] | None = Field(None, max_length=5)
+    notify_rounds: int | None = Field(None, ge=1, le=5)
+    notify_retry_minutes: int | None = Field(None, ge=1, le=120)
+    notify_urgent_only: bool | None = None
     is_enabled: bool | None = None
 
     @field_validator("pin")
@@ -297,6 +320,10 @@ class VoicemailBoxOut(BaseModel):
     copy_to_box_ids: list[uuid.UUID] = []
     max_messages: int | None = None
     max_message_seconds: int | None = None
+    notify_numbers: list[str] = []
+    notify_rounds: int = 2
+    notify_retry_minutes: int = 10
+    notify_urgent_only: bool = False
     alternate_greeting: bool = False
     is_enabled: bool
     # Email delivery (Settings → Email delivery) is on; without it messages
@@ -417,6 +444,10 @@ def _outs(db: Session, rows: list[VoicemailBox]) -> list[VoicemailBoxOut]:
                 max_messages=r.max_messages,
                 max_message_seconds=r.max_message_seconds,
                 alternate_greeting=r.alternate_greeting,
+                notify_numbers=list(r.notify_numbers or []),
+                notify_rounds=r.notify_rounds,
+                notify_retry_minutes=r.notify_retry_minutes,
+                notify_urgent_only=r.notify_urgent_only,
                 is_enabled=r.is_enabled,
                 email_delivery_enabled=delivery,
                 in_use_by=shared_uses.get(r.id, 0) if shared else uses.get(r.extension_id, 0),
@@ -743,6 +774,15 @@ def update_box(
         details["keep_days"] = box.keep_days
     for field in ("max_messages", "max_message_seconds"):  # None: the defaults
         if field in changes and changes[field] != getattr(box, field):
+            setattr(box, field, changes[field])
+            details[field] = changes[field]
+    if changes.get("notify_numbers") is not None:
+        wanted = _notify_numbers(db, box.organization_id, changes["notify_numbers"])
+        if wanted != list(box.notify_numbers or []):
+            box.notify_numbers = wanted
+            details["notify_numbers"] = wanted
+    for field in ("notify_rounds", "notify_retry_minutes", "notify_urgent_only"):
+        if changes.get(field) is not None and changes[field] != getattr(box, field):
             setattr(box, field, changes[field])
             details[field] = changes[field]
     if changes.get("copy_to_box_ids") is not None:
