@@ -309,3 +309,157 @@ def test_firmware_change_reports_what_it_brings(admin, app, tmp_path):
     assert [f["parameter"] for f in r.json()["config_check"]["firmware"]["new"]] == [
         "features.intercom.barge"
     ]
+
+
+def _release_87(app, tmp_path):
+    """The strict pack plus a V87 release that removes intercom barge."""
+    import uuid as _uuid
+
+    from veyra.core.models import FirmwareImage
+    from veyra.provisioning.capabilities import CapabilityCatalog
+
+    root = tmp_path / "caps"
+    (root / "yealink" / "t4x" / "87.toml").write_text(
+        'schema = 1\n[release]\nversion = "87"\nextends = "86"\n'
+        'models = ["T42U", "T43U", "T44U", "T44W", "T46U", "T48U"]\n'
+        '[release.sources.rn]\ntitle = "Release notes V87"\n'
+        '[removed."features.intercom.barge"]\nsource = { ref = "rn", section = "Removed" }\n'
+    )
+    app.state.capabilities = CapabilityCatalog.from_paths([root])
+    image = _uuid.uuid4()
+    with session_scope() as db:
+        db.add(
+            FirmwareImage(
+                id=image,
+                manufacturer="Yealink",
+                models=["T46U"],
+                version="108.87.0.1",
+                filename="T46U-108.87.0.1.rom",
+                size=1,
+                sha256="0" * 64,
+            )
+        )
+    return str(image)
+
+
+def _ack_all(r, reason="Checked by hand"):
+    return [
+        {"fingerprint": f["fingerprint"], "reason": reason}
+        for f in r.json()["errors"]
+        if f["severity"] == "error"
+    ]
+
+
+def test_template_save_is_checked_on_the_firmware_in_use(admin, app, tmp_path):
+    """A local template is checked on the releases its profiles run, not only
+    on the family's oldest (review of #422)."""
+    org, _profile = _setup(admin, app, tmp_path)
+    image = _release_87(app, tmp_path)
+    r = admin.post(
+        "/api/v1/provisioning/templates/yealink.t4x/customize",
+        json={"key": "local.t4x-fw", "name": "Our T4x", "organization_id": org},
+    )
+    assert r.status_code == 201, r.text
+    body = {"organization_id": org, "name": "Lab", "template_key": "local.t4x-fw"}
+    r = admin.post(PROFILES, json=body)
+    assert r.status_code == 201, r.text
+    pid = r.json()["id"]
+    r = admin.patch(f"{PROFILES}/{pid}", json={"firmware_image_id": image})
+    assert r.status_code == 422, r.text
+    r = admin.patch(
+        f"{PROFILES}/{pid}", json={"firmware_image_id": image, "acknowledge": _ack_all(r)}
+    )
+    assert r.status_code == 200, r.text
+
+    doc = admin.get("/api/v1/provisioning/templates/local.t4x-fw/export").json()
+    r = admin.put(
+        "/api/v1/provisioning/templates/local.t4x-fw",
+        json={"manifest": doc["manifest"], "sources": doc["sources"]},
+    )
+    assert r.status_code == 422, r.text
+    errors = [f for f in r.json()["errors"] if f["severity"] == "error"]
+    assert ("T46U", "features.intercom.barge", "param.removed") in {
+        (f["model"], f["parameter"], f["rule"]) for f in errors
+    }
+
+
+def _site(admin, org, name):
+    r = admin.post("/api/v1/sites", json={"organization_id": org, "name": name})
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def _phone(admin, org, pid, mac, site=None):
+    body = {
+        "organization_id": org,
+        "mac_address": mac,
+        "manufacturer": "Yealink",
+        "model": "T46U",
+        "profile_id": pid,
+        "site_id": site,
+    }
+    r = admin.post("/api/v1/devices", json=body)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def test_site_variable_is_checked_with_its_site(admin, app, tmp_path):
+    """A site variable reaching a phone whose profile has no site is rendered
+    with that site's values (review of #422)."""
+    org, profile = _setup(admin, app, tmp_path)
+    pid = profile["id"]
+    site = _site(admin, org, "North")
+    r = admin.patch(
+        f"{PROFILES}/{pid}",
+        json={"keys": [{"type": "speed_dial", "value": "$front_desk", "label": "Desk"}]},
+    )
+    assert r.status_code == 200, r.text
+    phone = _phone(admin, org, pid, "80:5E:C0:11:22:55", site)
+    body = {"scope": "site", "scope_id": site, "name": "front_desk", "value": "5550100"}
+    r = admin.post("/api/v1/provisioning/variables", json=body)
+    assert r.status_code == 201, r.text
+    var = r.json()
+    r = admin.patch(f"/api/v1/provisioning/variables/{var['id']}", json={"value": "5" * 120})
+    assert r.status_code == 422, r.text
+    assert any(f["parameter"].startswith("linekey.") for f in r.json()["errors"])
+    # Moving the phone to another site is checked too.
+    other = _site(admin, org, "South")
+    r = admin.patch(f"/api/v1/devices/{phone['id']}", json={"site_id": other})
+    assert r.status_code == 200, r.text
+    assert r.json()["config_check"] is not None
+
+
+def test_catalog_change_rechecks_and_marks_overrides_stale(admin, app, tmp_path):
+    """§4.4: after the vendor data changes, the phones' summaries are
+    refreshed and overrides whose finding is gone are stale (review of #422)."""
+    from veyra.api.v1.config_checks import recheck_all
+    from veyra.core.models import ConfigCheckOverride
+    from veyra.provisioning.capabilities import CapabilityCatalog
+
+    org, profile = _setup(admin, app, tmp_path)
+    pid = profile["id"]
+    r = admin.put(f"{PROFILES}/{pid}/base-edits", json={"edits": [BAD]})
+    r = admin.put(f"{PROFILES}/{pid}/base-edits", json={"edits": [BAD], "acknowledge": _ack_all(r)})
+    assert r.status_code == 200, r.text
+    phone = _phone(admin, org, pid, "80:5E:C0:11:22:66")
+    assert phone["config_check_summary"]["overridden"] == 1
+    listed = admin.get("/api/v1/provisioning/check-overrides").json()
+    assert listed["total"] == 1
+
+    strict = app.state.capabilities
+    app.state.capabilities = CapabilityCatalog()  # the strict data is gone
+    with session_scope() as db:
+        counts = recheck_all(app, db)
+    assert counts["stale"] == 1 and counts["phones"] == 1
+    with session_scope() as db:
+        row = db.scalar(select(ConfigCheckOverride))
+        assert row.stale_at is not None
+        assert db.get(Device, phone["id"]).config_check["overridden"] == 0
+    assert admin.get("/api/v1/provisioning/check-overrides").json()["total"] == 0
+    r = admin.get("/api/v1/provisioning/check-overrides", params={"include_stale": True})
+    assert r.json()["total"] == 1
+
+    # The finding comes back with the data: the override covers it again.
+    app.state.capabilities = strict
+    with session_scope() as db:
+        assert recheck_all(app, db)["unstale"] == 1

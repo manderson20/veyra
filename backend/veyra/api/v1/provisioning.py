@@ -54,7 +54,12 @@ class ImportIn(BaseModel):
 
 
 def _catalog(request: Request, db: Session) -> TemplateCatalog:
-    base: TemplateCatalog = request.app.state.templates
+    return catalog_for_app(request.app, db)
+
+
+def catalog_for_app(app: Any, db: Session) -> TemplateCatalog:
+    """The app's catalog with the local templates merged in."""
+    base: TemplateCatalog = app.state.templates
     catalog = TemplateCatalog()
     catalog.records = dict(base.records)
     catalog.load_errors = dict(base.load_errors)

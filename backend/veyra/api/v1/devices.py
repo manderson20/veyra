@@ -74,7 +74,7 @@ def _token(v: str) -> str:
 
 
 # A change of these runs the phone's configuration check (docs/CONFIG_VERIFICATION.md §4.1).
-CHECKED_FIELDS = {"profile_id", "values", "keys", "firmware_image_id", "model"}
+CHECKED_FIELDS = {"profile_id", "values", "keys", "firmware_image_id", "model", "site_id"}
 
 
 class DeviceIn(BaseModel):

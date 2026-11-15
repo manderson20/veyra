@@ -57,11 +57,12 @@ export default function ConfigChecksPage() {
   const [org, setOrg] = useState("");
   const [wrong, setWrong] = useState(false);
   const [revoked, setRevoked] = useState(false);
+  const [stale, setStale] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const effectiveOrg = org || (organizations.length === 1 ? organizations[0]!.id : "");
   const list = useApiData<Page<ConfigCheckOverrideRow>>("/provisioning/check-overrides", {
-    limit: LIMIT, offset, organization_id: org || undefined, checker_wrong: wrong || undefined, include_revoked: revoked || undefined, q: q.trim() || undefined,
+    limit: LIMIT, offset, organization_id: org || undefined, checker_wrong: wrong || undefined, include_revoked: revoked || undefined, include_stale: stale || undefined, q: q.trim() || undefined,
   });
   const revoke = async (row: ConfigCheckOverrideRow) => {
     setBusy(row.id);
@@ -111,6 +112,7 @@ export default function ConfigChecksPage() {
           <TextField label="Setting" value={q} maxLength={100} onChange={(e) => { setQ(e.target.value); setOffset(0); }} />
           <Checkbox label="Checker is wrong" checked={wrong} onChange={(e) => { setWrong(e.target.checked); setOffset(0); }} />
           <Checkbox label="Include revoked" checked={revoked} onChange={(e) => { setRevoked(e.target.checked); setOffset(0); }} />
+          <Checkbox label="Include no longer occurring" checked={stale} onChange={(e) => { setStale(e.target.checked); setOffset(0); }} />
         </div>
         <DataTable columns={columns} rows={list.data?.items} rowKey={(r) => r.id} loading={list.loading} error={list.error} onRetry={list.reload} caption="Configuration check overrides"
           empty={<EmptyState icon="checkCircle" title="No overrides" compact>No setting has been saved past a configuration check.</EmptyState>}

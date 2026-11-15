@@ -22,6 +22,7 @@ Migrations 0093 and 0094 add configuration check overrides and modes, and import
 - **Configuration checker** (configuration verification, slice 2): checks rendered phone files against the capability packs. It reports errors (a value or setting the firmware would refuse), warnings (deprecated, a value that fails only at a field's longest or shortest value, a setting built from several fields) and notes (not checked, or checked only against Veyra's own data). It isn't connected to any page yet.
 
 ### Fixed
+- **Configuration checks (review of the checks):** a local template is now checked on every firmware release its profiles and phones use, not only the oldest. A site variable is checked with that site's values for every phone at the site, even when the phone's profile belongs to no site. Moving a phone to another site checks it again. A module that is turned off no longer adds its vendor data. Importing or removing a pack, or turning a module with packs on or off, checks every profile and phone again in the background, and overrides whose finding went away are marked **No longer occurs** (**Include no longer occurring** on the overrides list shows them).
 - **Long extension names:** a phone whose extension had a name over 80 characters got no configuration at all, because the phone template's name variable stopped at 80. It now takes the full 200 characters an extension name can have. The configuration checker found this.
 
 ### Documentation

@@ -622,6 +622,13 @@ device list, and they never block a phone. Overrides whose finding no
 longer occurs are marked `stale` and drop out of the open list (they stay
 in the history).
 
+Built so far (review of PR #422): the re-check runs after a pack is
+imported or removed in the web interface and after a module that ships
+packs is enabled or disabled (`config_checks.recheck_all`, a background
+task after the response). After a Veyra update, and after `veyra packs
+import | remove` on the console, it does not run yet: summaries catch up as
+configurations are saved.
+
 ## 5. Turning it off
 
 | Mode | Meaning |

@@ -90,7 +90,7 @@ Here you change everything from the registration form, and also:
 - **Setting overrides:** the template's settings for this phone only. A blank field keeps the template's value, which is shown greyed in the field. A yes/no setting is a list: **As the template** (which shows the template's value), **Yes** or **No**. Secret settings, such as passwords, are shown as dots.
 - **Enabled:** a disabled phone is refused its configuration until you turn it back on.
 
-Choose **Save changes**. When you change the template, setting overrides, line keys or firmware, Veyra checks what this phone adds to its template against its firmware (see [Configuration checks](guide:configuration-checks)). The phone takes the change at its next check, or right away if you choose **Reprovision**.
+Choose **Save changes**. When you change the template, site, setting overrides, line keys or firmware, Veyra checks what this phone adds to its template against its firmware (see [Configuration checks](guide:configuration-checks)). The phone takes the change at its next check, or right away if you choose **Reprovision**.
 
 > **Note:** Changing the **Template** clears this phone's setting overrides, because they belong to the old one.
 

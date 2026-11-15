@@ -44,7 +44,7 @@ A name can be defined only once per scope: one `all_call` for the organization, 
 
 To change a value, click the variable in the list, change it and choose **Save**. A sensitive value is not shown again; leave the field empty to keep it, or type a new one.
 
-When you create or change a value, Veyra checks the settings it ends up in for every template the variable reaches, and lists them by template if a phone would refuse one (see [Configuration checks](guide:configuration-checks)).
+When you create or change a value, Veyra checks the settings it ends up in for every template the variable reaches, and lists them by template if a phone would refuse one (see [Configuration checks](guide:configuration-checks)). A site value is checked with that site's other values for every phone at the site.
 
 > **Note:** When you create, change or remove a variable, Veyra asks every phone it reaches to read its configuration again, and tells you how many phones it asked. Phones that are not registered right now get the change at their next daily check.
 

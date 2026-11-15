@@ -92,6 +92,8 @@ Changing a mode needs the **provisioning.check.mode** permission and is recorded
 
 **Revoke** an override when it is no longer right. The next save of that configuration stops at the setting again.
 
+An override whose setting no longer gets a finding (the vendor data was corrected, say) is marked **No longer occurs** and leaves the list. Tick **Include no longer occurring** to see it. If the finding comes back, the override covers it again.
+
 On [Extension Mapping](app:/devices/), a phone's status shows **Check: … errors** when its configuration has open errors, and **Check: overridden** when someone saved past them.
 
 ## Vendor data
@@ -106,7 +108,9 @@ The **Vendor data** card on [Provisioning → Configuration Checks](app:/provisi
 
 A platform administrator can **Import pack** (a ZIP with `pack.toml` at its top) to try vendor data before it is published, and **Remove** it again. An imported pack is used instead of the built-in data for the models it covers. Built-in and module packs cannot be removed here.
 
-From the server console, `sudo veyra packs import <folder>` and `sudo veyra packs remove <id>` do the same. To see the checks refuse a setting, import the example pack that comes with Veyra: `sudo veyra packs import /opt/veyra/current/docs/examples/capability-pack-yealink-strict`. It gives three Yealink T4x settings made-up rules. Remove it afterwards with `sudo veyra packs remove example.yealink-strict`.
+After a pack is imported or removed here, or a module that brings packs is turned on or off, Veyra checks every profile and phone again in the background. Phones' **Check:** status on Extension Mapping is updated, and overrides whose finding went away are marked **No longer occurs**. Nothing is blocked by this check.
+
+From the server console, `sudo veyra packs import <folder>` and `sudo veyra packs remove <id>` do the same. To see the checks refuse a setting, import the example pack that comes with Veyra: `sudo veyra packs import /opt/veyra/current/docs/examples/capability-pack-yealink-strict`. It gives three Yealink T4x settings made-up rules. Remove it afterwards with `sudo veyra packs remove example.yealink-strict`. A console import or removal does not run the background check: phones' status catches up as their configuration is saved.
 
 ## Phones always get their files
 
