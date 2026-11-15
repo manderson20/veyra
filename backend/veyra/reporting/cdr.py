@@ -218,20 +218,26 @@ class Directory:
     routes: list[InboundRoute]
     # The number inventory (docs/MULTI_TENANCY_MSP.md §9): exact owners for billing.
     numbers: list[OrganizationNumber] = field(default_factory=list)
-    # (prefix, match) of every emergency route's patterns.
-    emergency: list[tuple[str, str]] = field(default_factory=list)
+    # (organization or None for every organization, prefix, match) of each
+    # enabled emergency route's patterns.
+    emergency: list[tuple[uuid.UUID | None, str, str]] = field(default_factory=list)
 
     @classmethod
     def load(cls, db: Session) -> Directory:
         return cls(
             {e.endpoint_name: e for e in db.scalars(select(Extension))},
             {TRUNK_PREFIX + t.slug: t for t in db.scalars(select(SipTrunk))},
-            list(db.scalars(select(InboundRoute))),
+            # Oldest first, so a DID routed twice resolves the same way every pass.
+            list(
+                db.scalars(select(InboundRoute).order_by(InboundRoute.created_at, InboundRoute.id))
+            ),
             list(db.scalars(select(OrganizationNumber))),
             [
-                (str(p.get("prefix") or ""), str(p.get("match") or ""))
+                (r.organization_id, str(p.get("prefix") or ""), str(p.get("match") or ""))
                 for r in db.scalars(
-                    select(OutboundRoute).where(OutboundRoute.is_emergency.is_(True))
+                    select(OutboundRoute).where(
+                        OutboundRoute.is_emergency.is_(True), OutboundRoute.is_enabled.is_(True)
+                    )
                 )
                 for p in (r.patterns or [])
             ],
@@ -247,11 +253,15 @@ class Directory:
         held = next((r for r in self.numbers if in_range(n, r.first, r.last)), None)
         return held.organization_id if held is not None else None
 
-    def is_emergency(self, number: str | None) -> bool:
+    def is_emergency(self, number: str | None, organization_id: uuid.UUID | None) -> bool:
+        """``number`` matches an enabled emergency route the calling
+        organization's phones use (its own, or one for every organization)."""
         from veyra.telephony.routing import pattern_matches
 
         return bool(number) and any(
-            pattern_matches(prefix, match, str(number)) for prefix, match in self.emergency
+            pattern_matches(prefix, match, str(number))
+            for org, prefix, match in self.emergency
+            if org is None or org == organization_id
         )
 
     def route_for(self, number: str) -> InboundRoute | None:
@@ -261,9 +271,14 @@ class Directory:
         from veyra.core.numbers import maybe_canonical
 
         exact = maybe_canonical(number)
-        for r in self.routes:
-            if exact and maybe_canonical(r.did) == exact:
-                return r
+        matches = [r for r in self.routes if exact and maybe_canonical(r.did) == exact]
+        if matches:
+            # The inventory owner's route first: two organizations may keep
+            # conflicting routes for one DID (migration 0095).
+            owner = self.owner_of(number) if self.numbers else None
+            if owner is not None:
+                return next((r for r in matches if r.organization_id == owner), None)
+            return matches[0]
         if self.numbers:
             # With an inventory, a number matches exactly or not at all:
             # a suffix match could bill one customer's call to another.
@@ -342,7 +357,7 @@ def fold(call: CallRecord, legs: list[CallLeg], d: Directory, now: datetime) -> 
                 org = d.extensions[e].organization_id
                 break
     call.organization_id = org
-    call.is_emergency = direction == "outbound" and d.is_emergency(call.to_number)
+    call.is_emergency = direction == "outbound" and d.is_emergency(call.to_number, org)
 
     answered = sorted(
         (

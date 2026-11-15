@@ -110,3 +110,59 @@ def test_billing_owner_of_a_number_is_exact(admin, app):
         assert str(d.owner_of("+15735550142")) == a.id
         assert d.owner_of("5550142") is None  # no suffix guessing
         assert d.route_for("9995735550142") is None
+
+
+def _dir(**kw):
+    """A Directory without the database."""
+    from types import SimpleNamespace as NS
+
+    numbers = [NS(**n) for n in kw.pop("numbers", [])]
+    routes = [NS(**r) for r in kw.pop("routes", [])]
+    return Directory({}, {}, routes, numbers, kw.pop("emergency", []))
+
+
+def test_emergency_is_judged_by_the_callers_own_routes():
+    """Another organization's emergency pattern does not make a call an
+    emergency call (review of #440); disabled routes are not loaded."""
+    a, b = uuid.uuid4(), uuid.uuid4()
+    d = _dir(emergency=[(a, "", "933"), (None, "", "911")])
+    assert d.is_emergency("933", a)
+    assert not d.is_emergency("933", b)  # a normal, billable call for b
+    assert d.is_emergency("911", b)  # a route for every organization
+
+
+def test_emergency_routes_loaded_are_enabled_only(admin, app):
+    from veyra.core.models import OutboundRoute
+
+    with session_scope() as db:
+        for slug, enabled in (("e-on", True), ("e-off", False)):
+            db.add(
+                OutboundRoute(
+                    id=uuid.uuid4(),
+                    name=slug,
+                    slug=slug,
+                    is_emergency=True,
+                    is_enabled=enabled,
+                    patterns=[{"prefix": "", "match": "9" + ("1" if enabled else "2") + "1"}],
+                )
+            )
+    with session_scope() as db:
+        d = Directory.load(db)
+        assert d.is_emergency("911", None) and not d.is_emergency("921", None)
+
+
+def test_inbound_route_follows_the_inventory_owner():
+    """Two organizations kept routes for one DID (migration 0095): the
+    inventory owner's is used (review of #440)."""
+    a, b = uuid.uuid4(), uuid.uuid4()
+    num = {"first": "5735550100", "last": "5735550199"}
+    routes = [
+        {"did": "5735550142", "organization_id": b},
+        {"did": "5735550142", "organization_id": a},
+    ]
+    d = _dir(numbers=[{**num, "organization_id": a}], routes=routes)
+    assert d.route_for("5735550142").organization_id == a
+    # The owner has no route for it: none, and the owner is billed (owner_of).
+    d = _dir(numbers=[{**num, "organization_id": a}], routes=routes[:1])
+    assert d.route_for("5735550142") is None
+    assert d.owner_of("5735550142") == a

@@ -95,6 +95,29 @@ def test_one_organization_keeps_todays_callback_key():
     assert f"VEYRA_EMERGENCY_CID={A_NUM}" not in ep  # the site or phone decides, as before
 
 
+def test_a_callback_to_the_organizations_number_returns_to_the_caller():
+    """A phone with no site or own number presents the organization's
+    emergency number; the PSAP's callback to it rings that phone back, and
+    no call limit refuses it (review of #440)."""
+    from test_multi_tenancy import _files
+
+    snap = _two()
+    dp = _files(snap)["extensions.conf"].content
+    for org, num in (("example", A_NUM), ("beta", B_NUM)):
+        assert f"DB(veyra_ecb/{org}/{num})" in dp
+    # The site's own ELIN keeps its callback too.
+    assert "DB(veyra_ecb/beta/5735550299)" in dp
+
+
+def test_an_organization_number_used_by_another_organizations_site_is_refused():
+    from test_multi_tenancy import _files
+
+    snap = _two()
+    snap["sites"][0]["emergency_caller_id_number"] = A_NUM  # beta's site, example's number
+    with pytest.raises(generator.GenerationError, match="of another organization"):
+        _files(snap)
+
+
 # ----------------------------------------------------------------- API
 
 

@@ -1518,6 +1518,7 @@ def _dialplan(
         len(spaces) > 1,
         _org_mains(snapshot),
         _org_limits(snapshot),
+        _org_mains(snapshot, "emergency_caller_id_number"),
     )
     for ns in spaces:
         with engine_names.using(Names(ns)):
@@ -3335,9 +3336,13 @@ def _inbound_contexts(
     tenants: bool = False,
     org_main: dict[str, str] | None = None,
     org_limits: dict[str, int] | None = None,
+    org_ecid: dict[str, str] | None = None,
 ) -> list[str]:
     """``org_limits`` caps each organization's concurrent outside calls
     (docs/MULTI_TENANCY_MSP.md §8); a 911 callback is never refused.
+    ``org_ecid``: each organization's emergency number (§6.1), presented by
+    its phones with no site or own emergency number; a PSAP callback to it
+    returns to the extension that called, like a site's ELIN.
 
     With ``tenants``, each DID sets the organization's VEYRA_ORG and main
     number on the trunk channel (docs/MULTI_TENANCY_MSP.md §2, §5.2).
@@ -3382,6 +3387,25 @@ def _inbound_contexts(
                     f"share the emergency number {elin}"
                 )
             elins[routing.canonical_did(elin)] = site
+    if tenants:
+        for org, number in sorted((org_ecid or {}).items()):
+            elin = routing.normalize_did(number)
+            if not elin:
+                continue
+            seen = elins.get(routing.canonical_did(elin))
+            if seen is not None:
+                if seen.get("organization") != org:
+                    raise GenerationError(
+                        f"organization {org} uses the emergency number {elin} of "
+                        f"site {seen.get('slug')} of another organization"
+                    )
+                continue  # the site's callback (with its responder) applies
+            # No responder: outside the window the number's own route answers.
+            elins[routing.canonical_did(elin)] = {
+                "slug": f"organization {org}",
+                "organization": org,
+                "emergency_caller_id_number": elin,
+            }
 
     def callback_lines(site: dict[str, Any], did: str) -> list[str]:
         window = int(site.get("callback_minutes") or 30) * 60
