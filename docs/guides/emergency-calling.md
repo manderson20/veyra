@@ -5,7 +5,7 @@ audience: admin
 section: Calls and call flows
 order: 80
 reviewed: 0.27.87
-checked: 2026-11-15T17:39Z
+checked: 2026-11-15T18:48Z
 pages:
   - /system/emergency/
 covers:

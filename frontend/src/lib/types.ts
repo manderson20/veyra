@@ -1295,6 +1295,8 @@ export interface OutboundRoute {
   trunks: RouteTrunk[];
   /** "failover" (in order) or "weighted" (start chosen by weight, issue #392). */
   trunk_strategy?: "failover" | "weighted";
+  /** Extension Routing (#392): null = every phone. */
+  allowed_extension_ids?: string[] | null;
   caller_id_number: string | null;
   /** The route's caller ID also replaces an extension's outbound caller ID. */
   caller_id_force?: boolean;
@@ -1320,6 +1322,7 @@ export interface OutboundRouteInput {
   trunk_ids?: string[];
   trunk_strategy?: "failover" | "weighted";
   trunk_weights?: number[];
+  allowed_extension_ids?: string[] | null;
   caller_id_number?: string | null;
   caller_id_force?: boolean;
   organization_id?: string | null;

@@ -292,6 +292,10 @@ class OutboundRoute(UUIDPrimaryKey, Timestamps, Base):
     trunk_strategy: Mapped[str] = mapped_column(
         String(16), default="failover", server_default="failover"
     )
+    # Extension Routing (FreePBX, issue #392): only these extensions (ids)
+    # may use the route, on top of their class of service. None: all.
+    # Emergency routes are never limited.
+    allowed_extension_ids: Mapped[list[str] | None] = mapped_column(JSONB)
     # Only this organization's phones use the route; none: every organization
     # (docs/MULTI_TENANCY.md §4).
     organization_id: Mapped[uuid.UUID | None] = mapped_column(

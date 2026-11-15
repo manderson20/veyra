@@ -3365,6 +3365,7 @@ def _outbound_contexts(
             + (" (emergency)" if emergency else ""),
         ]
         cos_guard = cos.route_guard(slug) if cos else []
+        cos_guard = cos_guard + _route_extensions(slug, r.get("allowed_extensions"))
         cos_limits = cos.route_limits() if cos else []
         cos_quota = cos.period_limits() if cos else []
         for pat in r.get("patterns") or []:
@@ -3744,6 +3745,25 @@ def _inbound_contexts(
             ]
         lines.append("")
     return lines
+
+
+def _route_extensions(route: str, allowed: list[str] | None) -> list[str]:
+    """Extension Routing (FreePBX, issue #392): only these phones
+    (``<organization>/<extension>``) may use the route; the others are refused
+    like a class of service refusal. None: every phone."""
+    if allowed is None:
+        return []
+    items = sorted({str(a) for a in allowed})
+    for a in items:
+        if not re.fullmatch(r"[a-z0-9-]{1,40}/[0-9*#]{1,32}", a):
+            raise GenerationError(f"outbound route {route}: extension {a!r} is not valid")
+    if not items:
+        return [" same => n,Goto(cosdenied)"]
+    pattern = "|".join(re.escape(a) for a in items)
+    return [
+        f' same => n,GotoIf($[!${{REGEX("^({pattern})$" ${{VEYRA_ORG}}/${{VEYRA_EXT}})}}]'
+        "?cosdenied)"
+    ]
 
 
 def _weighted_start(route: str, weights: list[int]) -> list[str]:

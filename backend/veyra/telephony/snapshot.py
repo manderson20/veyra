@@ -1310,6 +1310,8 @@ def _routing(
 ) -> dict[str, Any]:
     """Trunks, routes and time conditions (docs/TRUNKS_ROUTING.md §8)."""
     org_slug = org_slug or {}
+    # Extension Routing (issue #392): "<organization>/<number>" of each phone.
+    phone_key = {str(e.id): f"{org_slug.get(e.organization_id, '')}/{e.number}" for e in extensions}
     trunks = db.scalars(select(SipTrunk).order_by(SipTrunk.slug)).all()
     enabled_trunks = {t.id: t for t in trunks if t.is_enabled}
     conditions = db.scalars(select(TimeCondition).order_by(TimeCondition.name)).all()
@@ -1441,6 +1443,15 @@ def _routing(
                 "site": str(r.site_id) if r.site_id else None,
                 "patterns": list(r.patterns or []),
                 "trunks": route_trunks.get(r.id, []),
+                **(
+                    {
+                        "allowed_extensions": sorted(
+                            phone_key[x] for x in r.allowed_extension_ids if x in phone_key
+                        )
+                    }
+                    if r.allowed_extension_ids is not None and not r.is_emergency
+                    else {}
+                ),
                 "caller_id_number": r.caller_id_number,
                 "caller_id_force": bool(r.caller_id_force),
                 # None: every organization (docs/MULTI_TENANCY.md §4).

@@ -1259,6 +1259,8 @@ class OutboundRouteIn(BaseModel):
     trunk_strategy: Literal["failover", "weighted"] = "failover"
     # One per trunk, in the same order (1-100); none: 1 each.
     trunk_weights: list[int] | None = Field(None, max_length=20)
+    # Issue #392: only these extensions may use the route; None: all.
+    allowed_extension_ids: list[uuid.UUID] | None = Field(None, max_length=500)
     caller_id_number: str | None = Field(None, max_length=32)
     # The route's caller ID also replaces an extension's outbound caller ID
     # (docs/CALL_FEATURES.md §3.5).
@@ -1336,6 +1338,7 @@ class OutboundRoutePatch(BaseModel):
     trunk_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=20)
     trunk_strategy: Literal["failover", "weighted"] | None = None
     trunk_weights: list[int] | None = Field(None, max_length=20)
+    allowed_extension_ids: list[uuid.UUID] | None = Field(None, max_length=500)
     caller_id_number: str | None = Field(None, max_length=32)
     caller_id_force: bool | None = None
     organization_id: uuid.UUID | None = None
@@ -1363,6 +1366,7 @@ class OutboundRouteOut(BaseModel):
     examples: list[str]
     trunks: list[RouteTrunkOut]
     trunk_strategy: str = "failover"
+    allowed_extension_ids: list[uuid.UUID] | None = None
     caller_id_number: str | None
     caller_id_force: bool = False
     organization_id: uuid.UUID | None = None
@@ -1436,6 +1440,11 @@ def _or_outs(db: Session, rows: list[OutboundRoute]) -> list[OutboundRouteOut]:
                 for t in by_route.get(r.id, [])
             ],
             trunk_strategy=r.trunk_strategy or "failover",
+            allowed_extension_ids=(
+                None
+                if r.allowed_extension_ids is None
+                else [uuid.UUID(x) for x in r.allowed_extension_ids]
+            ),
             caller_id_number=r.caller_id_number,
             caller_id_force=r.caller_id_force,
             organization_id=r.organization_id,
@@ -1523,6 +1532,25 @@ def _check_dedicated(
                 f"the trunk {t.name} is dedicated to one organization; only that "
                 "organization's own routes may use it",
             )
+
+
+def _route_extensions(
+    db: Session, route: OutboundRoute, ids: list[uuid.UUID] | None
+) -> list[str] | None:
+    """Extension Routing (issue #392): extensions of the route's organization
+    (any organization for a route for all), each once; None: every phone."""
+    if ids is None:
+        return None
+    if route.is_emergency:
+        raise _validation("allowed_extension_ids", "an emergency route is open to every phone")
+    wanted = list(dict.fromkeys(ids))
+    stmt = select(Extension.id).where(Extension.id.in_(wanted))
+    if route.organization_id is not None:
+        stmt = stmt.where(Extension.organization_id == route.organization_id)
+    found = set(db.scalars(stmt))
+    if len(found) != len(wanted):
+        raise _validation("allowed_extension_ids", "pick extensions of the route's organization")
+    return [str(x) for x in wanted]
 
 
 def _set_trunks(
@@ -1616,6 +1644,7 @@ def create_outbound(
         organization_id=body.organization_id,
         trunk_strategy=body.trunk_strategy,
     )
+    route.allowed_extension_ids = _route_extensions(db, route, body.allowed_extension_ids)
     db.add(route)
     db.flush()
     trunk_names = _set_trunks(db, route, body.trunk_ids, body.weights())
@@ -1747,6 +1776,14 @@ def update_outbound(
         if patterns != route.patterns:
             route.patterns = patterns
             details["patterns"] = len(patterns)
+    if "allowed_extension_ids" in changes or "organization_id" in details:
+        wanted = changes.get("allowed_extension_ids", route.allowed_extension_ids)
+        listed = _route_extensions(
+            db, route, None if wanted is None else [uuid.UUID(str(x)) for x in wanted]
+        )
+        if listed != route.allowed_extension_ids:
+            route.allowed_extension_ids = listed
+            details["allowed_extension_ids"] = None if listed is None else len(listed)
     weights_now = _route_weights(db, [route.id])
     current_weights = [weights_now.get((route.id, t), 1) for t in trunk_ids_now]
     if "trunk_ids" in changes and "trunk_weights" not in changes:

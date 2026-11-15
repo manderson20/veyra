@@ -82,6 +82,7 @@ A route can have up to 50 patterns. Two patterns in one route may not be the sam
    - **For the phones of** (emergency routes only): **Every site**, or one site. A route bound to a site is tried first for that site's phones and hands other phones to the next emergency route.
    - **Dial patterns**: at least one. **Add pattern** adds a row.
    - **Trunks**: choose a trunk and **Add trunk**. Add a second trunk as a backup if you have one, and order them with the arrows. At least one trunk is required. With two or more, **How calls use the trunks** chooses **In order** (the default) or **Spread by weight**, with a **Weight** per trunk.
+   - **Only some extensions may use this route**: tick it and add the extensions that may (for example the principal's office for long distance). Other phones hear that the call is not allowed, as when their class of service refuses it. It works on top of [classes of service](guide:classes-of-service). Emergency routes are always open to every phone.
    - **Description** and **Enabled**.
 3. Choose **Create route**. It is added at the end of its group (emergency or other).
 4. Move it into place with the arrows, then **Deploy changes** in the top bar.
