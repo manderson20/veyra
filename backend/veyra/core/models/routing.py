@@ -283,6 +283,12 @@ class OutboundRoute(UUIDPrimaryKey, Timestamps, Base):
     # The route's caller ID replaces the extension's outbound caller ID too
     # (docs/CALL_FEATURES.md §3.5); otherwise the extension's wins.
     caller_id_force: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # How calls spread over the trunks (issue #392): ``failover`` tries them in
+    # order; ``weighted`` starts on one chosen by the trunks' weights, then
+    # tries the others. Emergency routes always fail over.
+    trunk_strategy: Mapped[str] = mapped_column(
+        String(16), default="failover", server_default="failover"
+    )
     # Only this organization's phones use the route; none: every organization
     # (docs/MULTI_TENANCY.md §4).
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -307,3 +313,5 @@ class OutboundRouteTrunk(Base):
         ForeignKey("sip_trunks.id", ondelete="RESTRICT"), primary_key=True
     )
     position: Mapped[int] = mapped_column(Integer)
+    # Share of a weighted route's calls that start on this trunk (1-100).
+    weight: Mapped[int] = mapped_column(Integer, default=1, server_default="1")

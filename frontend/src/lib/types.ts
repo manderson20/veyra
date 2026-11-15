@@ -1272,6 +1272,8 @@ export interface RouteTrunk {
   name: string;
   slug: string;
   is_enabled: boolean;
+  /** Share of a weighted route's calls that start on this trunk (issue #392). */
+  weight?: number;
 }
 
 export interface OutboundRoute {
@@ -1289,6 +1291,8 @@ export interface OutboundRoute {
   examples: string[];
   /** Failover order. */
   trunks: RouteTrunk[];
+  /** "failover" (in order) or "weighted" (start chosen by weight, issue #392). */
+  trunk_strategy?: "failover" | "weighted";
   caller_id_number: string | null;
   /** The route's caller ID also replaces an extension's outbound caller ID. */
   caller_id_force?: boolean;
@@ -1312,6 +1316,8 @@ export interface OutboundRouteInput {
   is_enabled?: boolean;
   patterns?: OutboundPattern[];
   trunk_ids?: string[];
+  trunk_strategy?: "failover" | "weighted";
+  trunk_weights?: number[];
   caller_id_number?: string | null;
   caller_id_force?: boolean;
   organization_id?: string | null;

@@ -3414,9 +3414,17 @@ def _outbound_contexts(
             timeout = EMERGENCY_DIAL_TIMEOUT if emergency else OUTBOUND_DIAL_TIMEOUT
             if not route_trunks:
                 lines.append(" same => n,Goto(failed)")
+            weights = [int(w) for w in r.get("trunk_weights") or []]
+            weighted = not emergency and len(route_trunks) > 1 and len(weights) == len(route_trunks)
+            if weighted:
+                lines += _weighted_start(slug, weights)
             for i, tslug in enumerate(route_trunks):
-                label = f"t{i + 1}" if i else None
-                nxt = f"t{i + 2}" if i + 1 < len(route_trunks) else "failed"
+                label = f"t{i + 1}" if i or weighted else None
+                if weighted:
+                    # A ring: after the last trunk, the first; each trunk once.
+                    nxt = f"t{i + 2}" if i + 1 < len(route_trunks) else "t1"
+                else:
+                    nxt = f"t{i + 2}" if i + 1 < len(route_trunks) else "failed"
                 trunk = trunks[tslug]
                 cid = cid_override or trunk.get("default_caller_id")
                 if tenants and not emergency:
@@ -3427,7 +3435,14 @@ def _outbound_contexts(
                     own = bool(r.get("organization"))
                     cid = cid_override if own and cid_force else "${VEYRA_ORG_MAIN}"
                 first = f" same => n({label})," if label else " same => n,"
-                step = [f"{first}Set(GROUP(veyra_trunk)={tslug})"]
+                if weighted:
+                    step = [
+                        f"{first}Set(VEYRA_TRIED=$[0${{VEYRA_TRIED}} + 1])",
+                        f" same => n,GotoIf($[${{VEYRA_TRIED}} > {len(route_trunks)}]?failed)",
+                        f" same => n,Set(GROUP(veyra_trunk)={tslug})",
+                    ]
+                else:
+                    step = [f"{first}Set(GROUP(veyra_trunk)={tslug})"]
                 if trunk.get("max_channels") and not emergency:
                     # Channels kept for emergency calls (issue #171): another
                     # call may use only the rest; an emergency call is never
@@ -3685,6 +3700,23 @@ def _inbound_contexts(
             ]
         lines.append("")
     return lines
+
+
+def _weighted_start(route: str, weights: list[int]) -> list[str]:
+    """Issue #392: pick the first trunk at random in proportion to the
+    trunks' weights; the others are tried after it, in order."""
+    if any(not 1 <= w <= 100 for w in weights):
+        raise GenerationError(f"outbound route {route}: trunk weights are 1 to 100")
+    out = [
+        " same => n,Set(VEYRA_TRIED=0)",
+        f" same => n,Set(VEYRA_PICK=${{RAND(1,{sum(weights)})}})",
+    ]
+    upto = 0
+    for i, w in enumerate(weights[:-1]):
+        upto += w
+        out.append(f" same => n,GotoIf($[${{VEYRA_PICK}} <= {upto}]?t{i + 1})")
+    out.append(f" same => n,Goto(t{len(weights)})")
+    return out
 
 
 def _destination_lines(r: dict[str, Any], conditions: dict[str, dict[str, Any]]) -> list[str]:

@@ -1246,6 +1246,10 @@ class OutboundRouteIn(BaseModel):
     is_enabled: bool = True
     patterns: list[PatternIn] = Field(min_length=1, max_length=50)
     trunk_ids: list[uuid.UUID] = Field(min_length=1, max_length=20)
+    # Issue #392: ``weighted`` starts each call on a trunk chosen by weight.
+    trunk_strategy: Literal["failover", "weighted"] = "failover"
+    # One per trunk, in the same order (1-100); none: 1 each.
+    trunk_weights: list[int] | None = Field(None, max_length=20)
     caller_id_number: str | None = Field(None, max_length=32)
     # The route's caller ID also replaces an extension's outbound caller ID
     # (docs/CALL_FEATURES.md §3.5).
@@ -1287,6 +1291,20 @@ class OutboundRouteIn(BaseModel):
             raise ValueError("each trunk may appear once")
         return v
 
+    @model_validator(mode="after")
+    def _weights(self) -> OutboundRouteIn:
+        if self.trunk_weights is not None:
+            if len(self.trunk_weights) != len(self.trunk_ids):
+                raise ValueError("give one weight per trunk")
+            if any(not 1 <= w <= 100 for w in self.trunk_weights):
+                raise ValueError("weights are 1 to 100")
+        if self.is_emergency and self.trunk_strategy != "failover":
+            raise ValueError("an emergency route always tries its trunks in order")
+        return self
+
+    def weights(self) -> list[int]:
+        return list(self.trunk_weights or [1] * len(self.trunk_ids))
+
     @field_validator("caller_id_number")
     @classmethod
     def _cid(cls, v: str | None) -> str | None:
@@ -1307,6 +1325,8 @@ class OutboundRoutePatch(BaseModel):
     is_enabled: bool | None = None
     patterns: list[PatternIn] | None = Field(None, min_length=1, max_length=50)
     trunk_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=20)
+    trunk_strategy: Literal["failover", "weighted"] | None = None
+    trunk_weights: list[int] | None = Field(None, max_length=20)
     caller_id_number: str | None = Field(None, max_length=32)
     caller_id_force: bool | None = None
     organization_id: uuid.UUID | None = None
@@ -1317,6 +1337,7 @@ class RouteTrunkOut(BaseModel):
     name: str
     slug: str
     is_enabled: bool
+    weight: int = 1
 
 
 class OutboundRouteOut(BaseModel):
@@ -1332,6 +1353,7 @@ class OutboundRouteOut(BaseModel):
     patterns: list[PatternIn]
     examples: list[str]
     trunks: list[RouteTrunkOut]
+    trunk_strategy: str = "failover"
     caller_id_number: str | None
     caller_id_force: bool = False
     organization_id: uuid.UUID | None = None
@@ -1369,8 +1391,18 @@ def _route_trunks(db: Session, routes: list[OutboundRoute]) -> dict[uuid.UUID, l
     return out
 
 
+def _route_weights(db: Session, route_ids: list[uuid.UUID]) -> dict[tuple[Any, Any], int]:
+    return {
+        (link.route_id, link.trunk_id): link.weight
+        for link in db.scalars(
+            select(OutboundRouteTrunk).where(OutboundRouteTrunk.route_id.in_(route_ids))
+        )
+    }
+
+
 def _or_outs(db: Session, rows: list[OutboundRoute]) -> list[OutboundRouteOut]:
     by_route = _route_trunks(db, rows)
+    weights = _route_weights(db, [r.id for r in rows]) if rows else {}
     return [
         OutboundRouteOut(
             id=r.id,
@@ -1385,9 +1417,16 @@ def _or_outs(db: Session, rows: list[OutboundRoute]) -> list[OutboundRouteOut]:
             patterns=[PatternIn(**p) for p in (r.patterns or [])],
             examples=[routing.exten_for(p["prefix"], p["match"]) for p in (r.patterns or [])],
             trunks=[
-                RouteTrunkOut(id=t.id, name=t.name, slug=t.slug, is_enabled=t.is_enabled)
+                RouteTrunkOut(
+                    id=t.id,
+                    name=t.name,
+                    slug=t.slug,
+                    is_enabled=t.is_enabled,
+                    weight=weights.get((r.id, t.id), 1),
+                )
                 for t in by_route.get(r.id, [])
             ],
+            trunk_strategy=r.trunk_strategy or "failover",
             caller_id_number=r.caller_id_number,
             caller_id_force=r.caller_id_force,
             organization_id=r.organization_id,
@@ -1477,7 +1516,12 @@ def _check_dedicated(
             )
 
 
-def _set_trunks(db: Session, route: OutboundRoute, trunk_ids: list[uuid.UUID]) -> list[str]:
+def _set_trunks(
+    db: Session,
+    route: OutboundRoute,
+    trunk_ids: list[uuid.UUID],
+    weights: list[int] | None = None,
+) -> list[str]:
     trunks = {t.id: t for t in db.scalars(select(SipTrunk).where(SipTrunk.id.in_(trunk_ids)))}
     missing = [str(t) for t in trunk_ids if t not in trunks]
     if missing:
@@ -1489,7 +1533,8 @@ def _set_trunks(db: Session, route: OutboundRoute, trunk_ids: list[uuid.UUID]) -
         db.delete(link)
     db.flush()
     for i, tid in enumerate(trunk_ids):
-        db.add(OutboundRouteTrunk(route_id=route.id, trunk_id=tid, position=i))
+        weight = weights[i] if weights else 1
+        db.add(OutboundRouteTrunk(route_id=route.id, trunk_id=tid, position=i, weight=weight))
     return [trunks[t].name for t in trunk_ids]
 
 
@@ -1560,10 +1605,11 @@ def create_outbound(
         caller_id_number=body.caller_id_number,
         caller_id_force=body.caller_id_force,
         organization_id=body.organization_id,
+        trunk_strategy=body.trunk_strategy,
     )
     db.add(route)
     db.flush()
-    trunk_names = _set_trunks(db, route, body.trunk_ids)
+    trunk_names = _set_trunks(db, route, body.trunk_ids, body.weights())
     try:
         db.flush()
     except IntegrityError as e:
@@ -1641,6 +1687,7 @@ def update_outbound(
 ) -> OutboundRouteOut:
     route = _get_or(db, route_id)
     changes = body.model_dump(exclude_unset=True)
+    trunk_ids_now = [t.id for t in _route_trunks(db, [route])[route.id]]
     current = {
         "name": route.name,
         "description": route.description,
@@ -1648,7 +1695,8 @@ def update_outbound(
         "time_condition_id": route.time_condition_id,
         "is_enabled": route.is_enabled,
         "patterns": route.patterns,
-        "trunk_ids": [t.id for t in _route_trunks(db, [route])[route.id]],
+        "trunk_ids": trunk_ids_now,
+        "trunk_strategy": route.trunk_strategy or "failover",
         "caller_id_number": route.caller_id_number,
         "caller_id_force": route.caller_id_force,
         "organization_id": route.organization_id,
@@ -1679,6 +1727,7 @@ def update_outbound(
         "caller_id_force",
         "organization_id",
         "site_id",
+        "trunk_strategy",
     ):
         if field in changes and getattr(validated, field) != getattr(route, field):
             value = getattr(validated, field)
@@ -1689,8 +1738,16 @@ def update_outbound(
         if patterns != route.patterns:
             route.patterns = patterns
             details["patterns"] = len(patterns)
-    if "trunk_ids" in changes and validated.trunk_ids != current["trunk_ids"]:
-        details["trunks"] = _set_trunks(db, route, validated.trunk_ids)
+    weights_now = _route_weights(db, [route.id])
+    current_weights = [weights_now.get((route.id, t), 1) for t in trunk_ids_now]
+    if "trunk_ids" in changes and "trunk_weights" not in changes:
+        # Trunks that stay keep their weight; new ones get 1.
+        validated.trunk_weights = [weights_now.get((route.id, t), 1) for t in validated.trunk_ids]
+    if ("trunk_ids" in changes or "trunk_weights" in changes) and (
+        validated.trunk_ids,
+        validated.weights(),
+    ) != (trunk_ids_now, current_weights):
+        details["trunks"] = _set_trunks(db, route, validated.trunk_ids, validated.weights())
     elif "organization_id" in details:
         _check_dedicated(db, route, [t.id for t in _route_trunks(db, [route])[route.id]])
     if not details:

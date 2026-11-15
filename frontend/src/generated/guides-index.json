@@ -817,8 +817,8 @@
    "summary": "See whether everything is running, get emailed when something breaks, and capture SIP traffic or read engine logs to find out why.",
    "audience": "admin",
    "section": "Maintenance",
-   "reviewed": "0.27.44",
-   "reviewed_date": "2026-10-29",
+   "reviewed": "0.27.87",
+   "reviewed_date": null,
    "pages": [
     "/system/health/",
     "/system/alerts/",

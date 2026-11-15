@@ -1300,10 +1300,12 @@ def _routing(
     ).all()
     links = db.scalars(select(OutboundRouteTrunk).order_by(OutboundRouteTrunk.position)).all()
     route_trunks: dict[Any, list[str]] = {}
+    route_weights: dict[Any, list[int]] = {}
     for link in links:
         trunk = enabled_trunks.get(link.trunk_id)
         if trunk is not None:
             route_trunks.setdefault(link.route_id, []).append(trunk.slug)
+            route_weights.setdefault(link.route_id, []).append(link.weight or 1)
     # Time conditions of voicemail after-hours greetings (issue #169).
     used_conditions: set[Any] = set(
         db.scalars(
@@ -1418,6 +1420,12 @@ def _routing(
                 # None: every organization (docs/MULTI_TENANCY.md §4).
                 "organization": org_slug.get(r.organization_id) if r.organization_id else None,
                 "time_condition": str(r.time_condition_id) if r.time_condition_id else None,
+                # Issue #392; only a weighted route carries its weights.
+                **(
+                    {"trunk_weights": route_weights.get(r.id, [])}
+                    if r.trunk_strategy == "weighted" and not r.is_emergency
+                    else {}
+                ),
             }
             for r in outbound
             if r.organization_id is None or r.organization_id in active_orgs

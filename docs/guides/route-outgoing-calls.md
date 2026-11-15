@@ -5,7 +5,7 @@ audience: admin
 section: Calls and call flows
 order: 30
 reviewed: 0.27.87
-checked: 2026-11-07T23:43Z
+checked: 2026-11-15T17:39Z
 pages:
   - /routing/outbound/
   - /routing/outbound/view/
@@ -30,6 +30,7 @@ Outbound routes are at [Telephony → Outbound Routes](app:/routing/outbound/). 
 - Routes are tried **in the order of the list**. The first route with a pattern that matches the dialled number carries the call.
 - **Emergency routes always come first**, and the other routes cannot be moved above them.
 - Within a route, the **trunks are tried in order**. If a trunk is unavailable, full (its **Maximum channels** reached) or rejects the call as congested, the next one is tried. If the far end is busy or does not answer, that is the result: Veyra does not try another trunk.
+- **Spread by weight** (a route that is not an emergency route, with two trunks or more): each call starts on a trunk picked at random in proportion to its **Weight** (1 to 100), then the others are tried in order as above. Weights 3 and 1 send about three calls in four to the first trunk. Use it to share calls between carriers, or to use a cheaper trunk for most calls. Emergency routes always try their trunks in order.
 - If every trunk fails, the caller hears "all circuits are busy".
 - Extensions always win over outbound patterns, so a pattern can never take over an internal number.
 
@@ -80,7 +81,7 @@ A route can have up to 50 patterns. Two patterns in one route may not be the sam
    - **Emergency route**: only for 911 and similar numbers.
    - **For the phones of** (emergency routes only): **Every site**, or one site. A route bound to a site is tried first for that site's phones and hands other phones to the next emergency route.
    - **Dial patterns**: at least one. **Add pattern** adds a row.
-   - **Trunks**: choose a trunk and **Add trunk**. Add a second trunk as a backup if you have one, and order them with the arrows. At least one trunk is required.
+   - **Trunks**: choose a trunk and **Add trunk**. Add a second trunk as a backup if you have one, and order them with the arrows. At least one trunk is required. With two or more, **How calls use the trunks** chooses **In order** (the default) or **Spread by weight**, with a **Weight** per trunk.
    - **Description** and **Enabled**.
 3. Choose **Create route**. It is added at the end of its group (emergency or other).
 4. Move it into place with the arrows, then **Deploy changes** in the top bar.
