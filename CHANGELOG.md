@@ -13,6 +13,7 @@ shipped as `0.1.0-dev.0` before this scheme was adopted.
 Migrations 0093 and 0094 add configuration check overrides and modes, and imported capability packs. Migration 0095 adds the number inventory and dedicated trunks, 0096 the organization's main number, 0097 its emergency number, 0098 each organization's last good configuration data, 0099 limits per organization, 0100 marks emergency calls.
 
 ### Added
+- **Queue log export for QueueMetrics** (issue #392): the Missed queue calls tab downloads the period's queue events in Asterisk's `queue_log` format (`GET /reports/queues/queue_log`).
 - **Missed queue calls** (issue #392, like Q-Xact missed-call detail): a new tab under Reports lists each queue call nobody answered, with the caller, the wait, how it ended and the agents whose phones rang without an answer (`GET /reports/queues/missed`).
 - **Voicemail report** (issue #392, like FreePBX Voicemail Reports): **Report (CSV)** on the Voicemail page lists every box with its new and saved messages, storage, the oldest new message and how full it is; the Messages column shows the oldest new message's age (`GET /voicemail/report`).
 - **Extension Routing** (issue #392, like the FreePBX module): an outbound route can be limited to listed extensions, on top of their class of service; other phones are refused. Emergency routes stay open to every phone. Migration 0107 adds the list.

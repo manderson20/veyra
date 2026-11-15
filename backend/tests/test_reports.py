@@ -276,3 +276,11 @@ def test_missed_queue_calls_detail(admin, app):
     assert m1["agents_rung"][0] == {"agent": "1001 Front Office", "times": 2, "seconds": 30}
     assert m1["agents_rung"][1]["agent"] == "1002 Nurse"
     assert calls[0]["ended"] == "timed out" and calls[0]["agents_rung"] == []
+    # QueueMetrics export: the same events in Asterisk's queue_log format.
+    r = admin.get(f"{REP}/queues/queue_log", params={"organization_id": org["id"]})
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    lines = r.text.splitlines()
+    assert len(lines) == len(log)
+    assert lines[0].startswith(f"{base + 1}|m1|") and lines[0].endswith(
+        "|NONE|ENTERQUEUE||5735551234|1"
+    )

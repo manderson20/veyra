@@ -558,3 +558,52 @@ def missed_queue_calls(
         )
     out.sort(key=lambda c: c["entered_at"], reverse=True)
     return out[:MAX_MISSED]
+
+
+# ------------------------------------------------- QueueMetrics export (#392)
+
+
+def queue_log_lines(
+    db: Session,
+    *,
+    since: datetime,
+    until: datetime,
+    org_ids: set[uuid.UUID] | None,
+    organization_id: uuid.UUID | None,
+) -> list[str]:
+    """The queue events of the period in Asterisk's ``queue_log`` format
+    (``epoch|callid|queue|agent|event|data1|data2|data3``), which QueueMetrics
+    and similar tools read, for the queues the caller may see."""
+    stmt = select(CallQueue)
+    if org_ids is not None:
+        stmt = stmt.where(CallQueue.organization_id.in_(org_ids or {uuid.UUID(int=0)}))
+    if organization_id is not None:
+        stmt = stmt.where(CallQueue.organization_id == organization_id)
+    spaces = tenancy.namespaces(db)
+    names = {Names(spaces.get(q.organization_id, "")).queue_key(q.slug) for q in db.scalars(stmt)}
+    if not names:
+        return []
+    rows = db.scalars(
+        select(QueueEvent)
+        .where(QueueEvent.at >= since, QueueEvent.at < until, QueueEvent.queue.in_(names))
+        .order_by(QueueEvent.at, QueueEvent.id)
+    )
+
+    def clean(v: str) -> str:
+        return (v or "").replace("|", " ").replace("\n", " ").replace("\r", " ")
+
+    return [
+        "|".join(
+            [
+                str(int(e.at.timestamp())),
+                clean(e.callid),
+                clean(e.queue),
+                clean(e.agent) or "NONE",
+                clean(e.event),
+                clean(e.data1),
+                clean(e.data2),
+                clean(e.data3),
+            ]
+        )
+        for e in rows
+    ]

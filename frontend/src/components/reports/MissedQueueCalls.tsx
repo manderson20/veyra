@@ -44,7 +44,8 @@ export function MissedQueueCalls() {
     },
   ];
   return (
-    <Card title="Missed queue calls" subtitle="Each queue call nobody answered: the caller, how long they waited, how the call ended, and the agents whose phones rang without an answer. The newest 500 are shown." flush>
+    <Card title="Missed queue calls" subtitle="Each queue call nobody answered: the caller, how long they waited, how the call ended, and the agents whose phones rang without an answer. The newest 500 are shown." flush
+      actions={<a className="btn btn--secondary btn--sm" href={`/api/v1/reports/queues/queue_log?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`} download>Queue log for QueueMetrics</a>}>
       <div className="table-toolbar">
         <SelectField label="Period" value={days} onChange={(e) => setDays(e.target.value)}
           options={[{ value: "1", label: "Last 24 hours" }, { value: "7", label: "Last 7 days" }, { value: "30", label: "Last 30 days" }]} />
