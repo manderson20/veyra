@@ -1794,6 +1794,31 @@ class Cos:
             )
         return lines
 
+    def period_limits(self) -> list[str]:
+        """Outbound Call Limit (issue #392): each phone of a class may place
+        so many outside calls per period. The count is kept per phone in the
+        AstDB as ``<period>|<count>``, so a new period starts again at 0."""
+        lines: list[str] = []
+        for i, c in enumerate(x for x in self.classes if x.get("calls_per_period")):
+            slug = str(c["slug"])
+            fmt = PERIOD_FORMATS.get(str(c.get("call_period") or "day"))
+            if fmt is None:
+                raise GenerationError(f"class of service {slug}: unknown call period")
+            limit = int(c["calls_per_period"])
+            end = f"ocl{i}"
+            lines += [
+                f' same => n,GotoIf($["${{VEYRA_COS}}"!="{slug}" | "${{VEYRA_EXT}}"=""]?{end})',
+                " same => n,Set(VEYRA_OCLK=veyra/ocl/${VEYRA_ORG}/${VEYRA_EXT})",
+                f" same => n,Set(VEYRA_OCLP=${{STRFTIME(${{EPOCH}},,{fmt})}})",
+                " same => n,Set(VEYRA_OCLV=${DB(${VEYRA_OCLK})})",
+                ' same => n,Set(VEYRA_OCLN=${IF($["${CUT(VEYRA_OCLV,|,1)}"="${VEYRA_OCLP}"]'
+                "?${CUT(VEYRA_OCLV,|,2)}:0)})",
+                f" same => n,GotoIf($[0${{VEYRA_OCLN}} >= {limit}]?cosquota)",
+                " same => n,Set(DB(${VEYRA_OCLK})=${VEYRA_OCLP}|$[0${VEYRA_OCLN} + 1])",
+                f" same => n({end}),NoOp()",
+            ]
+        return lines
+
     def code_guard(self, key: str) -> list[str]:
         return self.guard(
             self._denied(
@@ -1873,6 +1898,14 @@ COS_DENIED = [
     " same => n,Set(CDR(veyra_flag)=denied)",
     " same => n,Answer()",
     " same => n,Playback(pbx-invalid)",
+    " same => n,Hangup(21)",
+]
+PERIOD_FORMATS = {"hour": "%Y%m%d%H", "day": "%Y%m%d", "week": "%G%V", "month": "%Y%m"}
+COS_QUOTA = [
+    " same => n(cosquota),NoOp(Veyra: this phone has used its outside calls for the period)",
+    " same => n,Set(CDR(veyra_flag)=denied)",
+    " same => n,Answer()",
+    " same => n,Playback(cannot-complete-as-dialed)",
     " same => n,Hangup(21)",
 ]
 COS_BUSY = [
@@ -3333,6 +3366,7 @@ def _outbound_contexts(
         ]
         cos_guard = cos.route_guard(slug) if cos else []
         cos_limits = cos.route_limits() if cos else []
+        cos_quota = cos.period_limits() if cos else []
         for pat in r.get("patterns") or []:
             try:
                 prefix, match, prepend = routing.check_pattern(
@@ -3350,6 +3384,7 @@ def _outbound_contexts(
                 # The class of service (docs/CALL_FEATURES.md §3.8) never blocks an emergency route.
                 *(cos_guard if not emergency else []),
                 *(cos_limits if not emergency else []),
+                *(cos_quota if not emergency else []),
                 *(
                     _route_hours((conditions or {}).get(str(r.get("time_condition"))))
                     if not emergency
@@ -3499,6 +3534,7 @@ def _outbound_contexts(
                     " same => n,Hangup(21)",
                     *(COS_DENIED if cos_guard else []),
                     *(COS_BUSY if cos_limits else []),
+                    *(COS_QUOTA if cos_quota and not emergency else []),
                 ]
         lines.append("")
     return lines

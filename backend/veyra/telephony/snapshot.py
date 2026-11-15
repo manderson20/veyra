@@ -590,6 +590,11 @@ def build_snapshot(db: Session, key: InstallationKey | None) -> dict[str, Any]:
                 "allow_monitor": c.allow_monitor,
                 "monitor_protected": c.monitor_protected,
                 "max_outbound_calls": c.max_outbound_calls,
+                **(
+                    {"calls_per_period": c.calls_per_period, "call_period": c.call_period}
+                    if c.calls_per_period
+                    else {}
+                ),
             }
             for c in classes
             if c.organization_id in active

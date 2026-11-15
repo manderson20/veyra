@@ -3490,6 +3490,9 @@ export interface ClassOfService {
   monitor_protected?: boolean;
   allow_fax: boolean;
   max_outbound_calls: number | null;
+  /** Outbound Call Limit (#392): outside calls per phone per period. */
+  calls_per_period?: number | null;
+  call_period?: string;
   /** null: all of them. */
   allowed_ring_group_ids?: string[] | null;
   allowed_queue_ids?: string[] | null;
@@ -3517,6 +3520,9 @@ export interface ClassOfServiceInput {
   allow_fax?: boolean;
   max_outbound_calls?: number | null;
   no_call_limit?: boolean;
+  calls_per_period?: number | null;
+  call_period?: "hour" | "day" | "week" | "month";
+  no_period_limit?: boolean;
   allowed_ring_group_ids?: string[] | null;
   allowed_queue_ids?: string[] | null;
   allowed_conference_ids?: string[] | null;

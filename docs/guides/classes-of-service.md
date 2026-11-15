@@ -4,7 +4,7 @@ summary: Limit what groups of phones may dial, such as local calls only for clas
 audience: admin
 section: Calls and call flows
 order: 60
-reviewed: 0.27.85
+reviewed: 0.27.87
 checked: 2026-11-07T23:43Z
 pages:
   - /routing/classes-of-service/
@@ -54,6 +54,7 @@ The office phones could simply have no class at all.
 | **Never monitored** | Nobody can listen to these phones' calls, with a supervisor code or from the web. Use it for counselors, nurses and others whose calls must stay private |
 
 9. **Outside calls at once (empty: no limit)**: the most outside calls the whole class may have at the same time, counted across all its phones (1 to 500). When the limit is reached, the next caller hears a busy signal.
+   **Outside calls per phone (empty: no limit)** and **Per** (hour, day, week from Monday, or month): how many outside calls each phone of the class may place in that period, for example 20 a day for student phones. The count is per phone and starts again with each period; a phone over its limit hears that the call cannot be completed, and call history shows it as refused. Emergency calls are never counted or refused.
 10. Choose **Create class**, then **Deploy changes** in the top bar.
 
 ## Put phones in a class

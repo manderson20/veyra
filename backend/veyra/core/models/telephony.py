@@ -119,6 +119,10 @@ class ClassOfService(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
     monitor_protected: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Simultaneous outside calls of the class's phones together; None: no limit.
     max_outbound_calls: Mapped[int | None] = mapped_column(Integer)
+    # Outbound Call Limit (FreePBX, issue #392): outside calls each phone of
+    # the class may place per hour, day, week or month; None: no limit.
+    calls_per_period: Mapped[int | None] = mapped_column(Integer)
+    call_period: Mapped[str] = mapped_column(String(8), default="day", server_default="day")
 
 
 class ExtensionTemplate(UUIDPrimaryKey, Timestamps, TenantScoped, Base):
